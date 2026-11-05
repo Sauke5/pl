@@ -497,8 +497,14 @@ func (g *doskaGateway) serveFile(w http.ResponseWriter, r *http.Request, sess se
 	done := make(chan struct{})
 	go func() { defer close(done); g.watchFileSession(leaseCtx, leaseCancel, r, sess, leaseExpires) }()
 	stopBody := context.AfterFunc(leaseCtx, func() { _ = controller.SetWriteDeadline(time.Now()); _ = response.Body.Close() })
-	defer stopBody()
-	defer func() { leaseCancel(); <-done }()
+	defer func() {
+		// A successful body can still be buffered by net/http. Disarm the abort
+		// hook before stopping the lease watcher, so cleanup cannot expire the
+		// downstream write deadline before the server flushes that response.
+		stopBody()
+		leaseCancel()
+		<-done
+	}()
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

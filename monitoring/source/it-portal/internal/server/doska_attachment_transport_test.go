@@ -355,6 +355,31 @@ func TestDoskaAttachmentPostgreSQLSlowUploadCancelAndJSON(t *testing.T) {
 		t.Fatalf("incomplete upload reached backend: %d", calls.Load())
 	}
 }
+func TestDoskaAttachmentPostgreSQLSmallDownloadReachesHTTPClient(t *testing.T) {
+	payload := bytes.Repeat([]byte("x"), 103)
+	s, _, user, _, server := attachmentFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="small.txt"`)
+		w.Header().Set("Content-Length", fmt.Sprint(len(payload)))
+		_, _ = w.Write(payload)
+	}))
+	// net/http buffers small responses until the gateway handler returns. A
+	// successful transfer must leave that final flush possible on the real TCP
+	// connection, including when keep-alive reuses it for the next download.
+	for i := 0; i < 24; i++ {
+		r := attachmentRequest(t, server, s, user, "GET", attachmentPath+"/attachments/a/content", nil)
+		response, err := server.Client().Do(r)
+		if err != nil {
+			t.Fatalf("download %d lost its HTTP response: %v", i, err)
+		}
+		body, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusOK || !bytes.Equal(body, payload) {
+			t.Fatalf("download %d: status=%d bytes=%d error=%v", i, response.StatusCode, len(body), err)
+		}
+	}
+}
+
 func TestDoskaAttachmentPostgreSQLDownloadLeaseAndHeaders(t *testing.T) {
 	var slow atomic.Bool
 	s, g, user, sub, server := attachmentFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
+FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "disaster-recovery.py", "disaster-recovery.ru.md", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
 REQUIRED = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt"}
 
 
@@ -168,8 +168,10 @@ def legacy_worker_handoff(package: Path, candidate: dict) -> None:
     while staging its exact signed target, may promote itself to that worker.
     """
     main = sys.modules.get('__main__')
+    features = candidate.get('features', {})
+    required_capability = 2 if features.get('upgrade_status') or features.get('module_upgrades') else 1
     if (__name__ != 'pl_candidate_bootstrap' or not candidate.get('features', {}).get('icmp_probe')
-            or getattr(main, 'HOST_FEATURE_API', 0) >= 1
+            or getattr(main, 'HOST_FEATURE_API', 0) >= required_capability
             or len(sys.argv) != 6 or sys.argv[1] != 'worker' or sys.argv[2] != '--root' or sys.argv[4] != '--operation-id'):
         return
     root, operation_id = Path(sys.argv[3]), sys.argv[5]
@@ -224,7 +226,7 @@ def legacy_worker_handoff(package: Path, candidate: dict) -> None:
     if candidate.get('database', {}).get('major') != old.get('database', {}).get('major'):
         raise ValueError('Legacy worker handoff requires the same PostgreSQL major')
     checksum = digest(package / 'manifest.json')
-    operation['worker_handoff'] = {'schema': 1, 'capability': 1, 'from_version': old_package.name,
+    operation['worker_handoff'] = {'schema': 1, 'capability': required_capability, 'from_version': old_package.name,
                                    'from_manifest_sha256': operation.get('worker_manifest_sha256', digest(old_package / 'manifest.json')),
                                    'core_from_version': operation['from_version'],
                                    'to_version': candidate['version'], 'to_manifest_sha256': checksum}

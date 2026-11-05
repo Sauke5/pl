@@ -89,6 +89,6 @@ sudo python3 /opt/pl/releases/VERSION/bootstrap.py remove-icmp-helper --root /op
 sudo python3 /opt/pl/releases/VERSION/bootstrap.py status --root /opt/pl
 ```
 
-При ошибке доступны `state/installation.json` и закрытый `private/last-command.log`. Не удаляйте volumes для повторной установки. Для backup используйте `maintenance.py` соответствующей версии и её руководство. Текущий backup contract охватывает core и отказывает при наличии локальных модулей; данные модулей требуют отдельного согласованного плана резервного копирования.
+При ошибке доступны `state/installation.json` и закрытый `private/last-command.log`. Не удаляйте volumes для повторной установки. Для полного backup с локальными native-модулями используйте `disaster-recovery.py` и [его руководство](disaster-recovery.ru.md) из того же пакета. Он восстанавливает ту же установку с прежними root, origin и installation ID на подготовленном Linux. Архив и его SHA256 храните вне исходного сервера. `maintenance.py` сохраняет отдельный core-only контракт и отказывает при наличии локальных модулей.
 
 Поддерживаемые версии ОС и архитектура конкретного пакета проверяются установщиком. Список допустимых платформ сам по себе не подтверждает прохождение всех сценариев на каждой из них.

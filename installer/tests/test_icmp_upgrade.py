@@ -285,6 +285,32 @@ class HandoffTests(unittest.TestCase):
                 self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
                 self.execve.assert_not_called()
 
+    def test_host_api_one_hands_off_upgrade_status_before_mutating_installation(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        before = (self.root / 'state/installation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 1, create=True), \
+                self.assertRaisesRegex(SystemExit, 'verified exec'):
+            self.handoff()
+        journal = d.read(self.delivery.base / 'operation.json')
+        self.assertEqual(journal['worker_handoff']['capability'], 2)
+        self.assertEqual(journal['worker_version'], self.target.name)
+        self.assertEqual(journal['phase'], 'downloading')
+        self.assertNotIn('containers', journal)
+        self.assertEqual((self.root / 'state/installation.json').read_bytes(), before)
+        validator = d.Delivery(types.SimpleNamespace(root=self.root, installation=self.installation), package=self.target)
+        validator.supervisor = self.initial
+        self.assertEqual(validator.validate_worker_entry(journal), self.target)
+
+    def test_host_api_two_keeps_current_worker_for_upgrade_status(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        before = (self.delivery.base / 'operation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 2, create=True):
+            self.handoff()
+        self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
+        self.execve.assert_not_called()
+
     def test_phase_snapshot_handoff_and_unit_fences_fail_before_exec(self):
         for change in ({'phase': 'applying'}, {'containers': []}, {'snapshot': 'anything'}, {'worker_handoff': {}},
                        {'worker_unit': 'foreign.service'}, {'from_version': '0.3.2'}, {'worker_manifest_sha256': 'c' * 64},

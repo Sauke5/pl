@@ -88,6 +88,8 @@ python3 -m unittest discover -s installer/tests
 
 Web upgrade создаёт согласованный snapshot установки, включая данные локальных модулей. При неудаче требуется возвращать и данные, и образы. Отдельная [утилита maintenance](maintenance.ru.md) сохраняет прежний ограниченный контракт backup/restore core и отказывает при локальных модулях; она не заменяет snapshot web upgrade.
 
+Для полной установки с native-модулями предусмотрено [аварийное резервное копирование и восстановление](disaster-recovery.ru.md). `disaster-recovery.py` сохраняет данные, ключи, настройки и нужные образы. Cold restore возвращает ту же установку с прежними root, HTTPS-адресом и installation ID на подготовленном Linux. Архив и его SHA256 храните вне исходного сервера; установленная версия инструмента и руководство находятся в `ROOT/releases/VERSION/`.
+
 Обе standalone-админки, host-agent и Reports доступны как исходные компоненты; они не устанавливаются вместе с core автоматически. Их размещение и доступ задаются для конкретной установки. File Auditor требует отдельной Windows-приёмки службы и сканирования.
 
 Перед публичным экспортом новые выбранные исходники должны быть добавлены в Git index: exporter использует тот же allowlist, что и source builder. `python3 installer/public-export.py` создаёт новый каталог `release/generated/public-pl` с manifest и не переносит историю Git. Отчёт аудита остаётся в `release/private` и не входит в публикуемые файлы.

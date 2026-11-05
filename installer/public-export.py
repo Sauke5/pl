@@ -28,7 +28,7 @@ INSTALLER_FILES = {
     "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py",
     "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py",
     "icmp-install.py", "icmp-probe.py", "nginx.conf", "release-signing-public.pem", "LICENSES.txt",
-    "README.package.ru.md", "README.public.ru.md", "maintenance.ru.md", "license-notices.py",
+    "README.package.ru.md", "README.public.ru.md", "maintenance.ru.md", "disaster-recovery.py", "disaster-recovery.ru.md", "license-notices.py",
     "grafana-build.py", "grafana-plugins.json", "grafana-trust.patch", "grafana-signing/main.go", "grafana-signing/main_test.go",
     "netmap-standalone.py", "netmap-standalone-package.py", "netmap-standalone/nginx.conf.example",
 }
@@ -45,7 +45,7 @@ UNIT_TEST_NAMES = {
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
     "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
-    "test_maintenance_concurrency.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py",
+    "test_maintenance_concurrency.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py",
 }
 REPORT_FILES = {
     "monitoring_daily_summary.py", "monitoring_weekly_report.py", "monitoring_report_api.py", "manage_reports.py",

@@ -41,7 +41,7 @@ HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3
 MAX_RELEASE_NOTES = 24 * 1024
 RESERVE = 512 * 1024**2
-HOST_FEATURE_API = 1
+HOST_FEATURE_API = 2
 _threads = threading.Lock()
 
 
@@ -843,7 +843,7 @@ class Delivery:
         if 'worker_handoff' in operation:
             handoff = operation['worker_handoff']
             if (not isinstance(handoff, dict) or set(handoff) != {'schema', 'capability', 'from_version', 'from_manifest_sha256', 'core_from_version', 'to_version', 'to_manifest_sha256'}
-                    or handoff.get('schema') != 1 or handoff.get('capability') != 1
+                    or handoff.get('schema') != 1 or type(handoff.get('capability')) is not int or handoff.get('capability') not in (1, 2)
                     or handoff.get('to_version') != operation.get('worker_version')
                     or handoff.get('to_version') != operation.get('version')
                     or handoff.get('to_manifest_sha256') != operation.get('worker_manifest_sha256')

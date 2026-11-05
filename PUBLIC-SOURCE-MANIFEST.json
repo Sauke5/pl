@@ -16824,24 +16824,29 @@
       "size": 3351
     },
     {
+      "path": "docs/releases/0.5.1.json",
+      "sha256": "2dafbaec7abdf53ecd71c03c07e95bd2e5338f1597cd6eb77c2a1dadadb9532f",
+      "size": 3864
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
     },
     {
       "path": "installer/README.package.ru.md",
-      "sha256": "e82fa2740476d9da114db073514bd7e117547b582945e90c7ca1874e2e2d1a09",
-      "size": 8214
+      "sha256": "85c212078effbb2c5dadf60ff1048a0e7d09a3ca96c3a50daec5c7c1fc7546d8",
+      "size": 8419
     },
     {
       "path": "installer/README.public.ru.md",
-      "sha256": "b4f31952881bed7a1619a36c0409d852fa479cda1ebc31a88023fb6593486637",
-      "size": 10882
+      "sha256": "21787dd248fb4fe78384701236007c38250ed4eae04a4a1736b65ea41b4aa36c",
+      "size": 11606
     },
     {
       "path": "installer/README.ru.md",
-      "sha256": "b4f31952881bed7a1619a36c0409d852fa479cda1ebc31a88023fb6593486637",
-      "size": 10882
+      "sha256": "21787dd248fb4fe78384701236007c38250ed4eae04a4a1736b65ea41b4aa36c",
+      "size": 11606
     },
     {
       "path": "installer/alertmanager-controller.py",
@@ -16855,8 +16860,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "2cf2c693fd4c4e6758b4fdecb94dbbf6426fd0f5ca27d7c360cf7d189425490a",
-      "size": 92763
+      "sha256": "8c5dcdf7f417c51b693d98b8ebe7b9a432cff375928fe1208a84981df4a1f442",
+      "size": 92999
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -16870,13 +16875,23 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "4cd4d0e69f5fb7e8ae4585c06b37a84ef0b568f208727013671dba009b4e80f9",
-      "size": 99982
+      "sha256": "bde37b3d4983321181fb67ad2d25e5ad7a2c5561976f3ead7f49869d8bae74b6",
+      "size": 100037
     },
     {
       "path": "installer/delivery.ru.md",
       "sha256": "3b66208badcd5de71608eda00651c8fe4cdf192c1f621f9e73d90998e9971339",
       "size": 16505
+    },
+    {
+      "path": "installer/disaster-recovery.py",
+      "sha256": "b22d452aa5cf43a9b32faaf4547cfa34de61f386b9ccaef5b87a706cc4d841da",
+      "size": 108691
+    },
+    {
+      "path": "installer/disaster-recovery.ru.md",
+      "sha256": "f91b4761c231ad1207a97f0030bf2fe983bec9b52414dc3b729c5b3a59a43d35",
+      "size": 14086
     },
     {
       "path": "installer/doska-controller.py",
@@ -16935,8 +16950,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "c8e1f4ab2391c2c86b982fee72b5fb8a0ddcdd9c8027856dcc82dbe87cabe40d",
-      "size": 42976
+      "sha256": "65b1b95d634cca6aad887529994f41c98248b571c582ed1f5e1dd7441e613d0d",
+      "size": 43078
     },
     {
       "path": "installer/installation-settings.py",
@@ -17005,13 +17020,13 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "30d91c3fb52dac3b1e391b3023f041f6530014600287f227d289ff9d7a4445c9",
-      "size": 36931
+      "sha256": "4cf068941d9a39e48a8e47a6f54025b5658d88be72296c675c9d1e4aa19524db",
+      "size": 36982
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "6cf64985281d9046bac338fee7c76e1f7ae82c35505ae93e6b2cf2a0b7ee8aac",
-      "size": 39402
+      "sha256": "3a02f5f28bb6dafb285d9a760c34538058dd226e457aa6585cae733f74ec9c24",
+      "size": 39482
     },
     {
       "path": "installer/release-catalog.py",
@@ -17094,6 +17109,11 @@
       "size": 25070
     },
     {
+      "path": "installer/tests/test_disaster_recovery.py",
+      "sha256": "4203f4cad72f7db0aed37b8602cc2c021e2ca085125360d876e2e3a4313faf81",
+      "size": 48143
+    },
+    {
       "path": "installer/tests/test_doska_controller.py",
       "sha256": "aeb2e8ce924338ad86742b7269e3d96145e56277cfe5b2580477ee16ca2e5403",
       "size": 16103
@@ -17145,8 +17165,8 @@
     },
     {
       "path": "installer/tests/test_icmp_upgrade.py",
-      "sha256": "3c0a610ade6ddbd50d67763ee9bbf982275640a3ebe9a5a959c97ef923841e09",
-      "size": 25531
+      "sha256": "e5b002ce53797ac406bd7932b1e688dc2b4b29b211878e514fc2ae5603c58616",
+      "size": 27174
     },
     {
       "path": "installer/tests/test_install_proxy.py",
@@ -19730,13 +19750,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/doska_attachment_transport.go",
-      "sha256": "291e134cd63972d3a423043e9d93e20c8f4193968de9e0a23549117d1f7e2fe4",
-      "size": 19942
+      "sha256": "d9f5431372e5e2db5a80bf4a96dc77c087bdb13d68cdca916950be156e8a6c82",
+      "size": 20162
     },
     {
       "path": "monitoring/source/it-portal/internal/server/doska_attachment_transport_test.go",
-      "sha256": "5511c106d7045f0b0752ded4a97ded9ae02e43b7a5543e6663acdfb6a7ca1357",
-      "size": 34997
+      "sha256": "1a0ac714ffcb0c02d09eb6e21353ddf9798754d5f7778c5ff01f3c233945dcd9",
+      "size": 36197
     },
     {
       "path": "monitoring/source/it-portal/internal/server/doska_catalog.go",
