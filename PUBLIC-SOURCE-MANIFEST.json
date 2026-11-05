@@ -16815,8 +16815,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "3cf0524f29727b02c4e234a813d5f01b1c5fcac07ee73848d6cbf724da0f1d51",
-      "size": 82441
+      "sha256": "1754fab66e3679517058096877f564eaf8364094673ab628d1e468a711432b8a",
+      "size": 82704
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -17010,8 +17010,8 @@
     },
     {
       "path": "installer/tests/test_bootstrap.py",
-      "sha256": "19b63ef2c0c5fa7e184ca4cd1296fc6336182006db5bed24cfab4e4a6674224b",
-      "size": 25164
+      "sha256": "ba5180118d6903c513a7a5c9a832f7f5f34711d272cff9517816aed2d4c01a3e",
+      "size": 26749
     },
     {
       "path": "installer/tests/test_connector_credentials.py",
@@ -17925,8 +17925,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/RuntimeSettings.tsx",
-      "sha256": "d803bdecb4b607546abd8b7b5b54f0c5df623ab8865edd81025d19450fa49bd4",
-      "size": 13137
+      "sha256": "adf1688af3806551245c9a62304cf018e2d1f1cdb84017251ebe0ae849106d2a",
+      "size": 13068
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/SFTPAdministration.tsx",
@@ -17980,8 +17980,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpdateSettings.tsx",
-      "sha256": "5464fff9692df2a7858c48cbda341c2cf6c0b4d8b78c7a833457843968a81042",
-      "size": 9013
+      "sha256": "9c767c700e226655a2d1067cd4b23d74fbb16b8ae96673e948a1be582a5dff91",
+      "size": 9563
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Wayline.tsx",

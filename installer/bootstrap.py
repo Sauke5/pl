@@ -1100,7 +1100,7 @@ def prepare_module_controller(rt: Runtime) -> None:
     raise ValueError("Module controller socket did not become ready")
 
 
-def check_auth(cfg: dict, root: Path, password: bytes | None) -> dict:
+def check_auth(cfg: dict, root: Path, password: bytes | None, *, allow_configured_ad: bool = False) -> dict:
     jar = http.cookiejar.CookieJar()
     context = ssl.create_default_context(cafile=str(root / "private/tls.crt"))
     context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
@@ -1120,12 +1120,15 @@ def check_auth(cfg: dict, root: Path, password: bytes | None) -> dict:
             return json.loads(raw) if raw else {}
     call("/health/ready")
     initial = call("/api/v1/session")
+    ad_enabled = initial.get("ad_login_enabled")
+    allowed_ad = ad_enabled is False or (allow_configured_ad and ad_enabled is True)
     if (initial.get("demo") is not False or initial.get("authenticated") is not False
-            or initial.get("local_login_enabled") is not True or initial.get("ad_login_enabled") is not False
+            or initial.get("local_login_enabled") is not True or not allowed_ad
             or initial.get("oidc_login_enabled") is not False):
-        raise ValueError("Runtime is not the requested local-only, non-demo profile")
+        raise ValueError("Runtime authentication differs from the non-demo installation profile")
+    checks = {"https_ready": True, "local_only_non_demo": not ad_enabled, "ad_login_enabled": ad_enabled}
     if password is None:
-        return {"https_ready": True, "local_only_non_demo": True, "login": "not_repeated_password_changed_or_removed"}
+        return {**checks, "login": "not_repeated_password_changed_or_removed"}
     call("/auth/local", {"username": cfg["admin_user"], "password": password.decode()})
     logged = call("/api/v1/session")
     if not logged.get("authenticated") or logged.get("user", {}).get("id") != "local-admin" or not logged["user"].get("admin"):
@@ -1133,7 +1136,7 @@ def check_auth(cfg: dict, root: Path, password: bytes | None) -> dict:
     call("/auth/logout", {}, logged["csrf_token"])
     if call("/api/v1/session").get("authenticated"):
         raise ValueError("Logout acceptance failed")
-    return {"https_ready": True, "local_only_non_demo": True, "login": True, "session": True, "logout": True}
+    return {**checks, "login": True, "session": True, "logout": True}
 
 
 def icmp_installer(package: Path):
@@ -1277,7 +1280,8 @@ def install(args) -> None:
             print("Starting isolated PL core (database, API, HTTPS web)...", flush=True)
             rt.compose("up", "--detach", "--pull", "never", "--no-build", "--wait", "--wait-timeout", "150")
             pw = root / "private/initial-admin-password"
-            state["checks"] = check_auth(cfg, root, pw.read_bytes() if initial_password_active and pw.exists() else None)
+            state["checks"] = check_auth(cfg, root, pw.read_bytes() if initial_password_active and pw.exists() else None,
+                                         allow_configured_ad=previous is not None)
             state["phase"] = "ready"
             write_json(statepath, state)
         except BaseException:

@@ -52,6 +52,12 @@ const phases: Record<string, string> = {
   rolled_back: "Предыдущая версия восстановлена",
   recovery_required: "Требуется восстановление установки",
 };
+const configurationPhases: Record<string, string> = {
+  complete: "Параметры применены",
+  failed: "Параметры не применены",
+  rolled_back: "Предыдущие параметры восстановлены",
+  recovery_required: phases.recovery_required,
+};
 function useDelivery(enabled = true) {
   return useQuery({
     queryKey: ["/delivery"],
@@ -176,7 +182,12 @@ export function UpdateSettings() {
           {value.operation && (
             <div role="status" aria-live="polite">
               <Badge
-                value={phases[value.operation.phase] || "Операция обновления"}
+                value={
+                  value.operation.kind === "configuration"
+                    ? configurationPhases[value.operation.phase] ||
+                      "Применение параметров установки"
+                    : phases[value.operation.phase] || "Операция обновления"
+                }
               />
               <p>
                 {value.operation.kind === "configuration"

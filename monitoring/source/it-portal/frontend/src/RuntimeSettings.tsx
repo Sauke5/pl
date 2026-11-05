@@ -335,8 +335,7 @@ export function RuntimeSettings() {
           <div>
             <dt>Через администратора хоста</dt>
             <dd>
-              SSH, firewall, TLS-сертификаты, сетевые allowlists, диски,
-              перезагрузка и обновление ОС.
+              SSH, firewall, диски, перезагрузка и обновление ОС.
             </dd>
           </div>
           <div>

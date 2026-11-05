@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -14,6 +15,29 @@ spec.loader.exec_module(pl)
 
 
 class BootstrapTests(unittest.TestCase):
+    def auth_metadata_acceptance(self, enabled, *, allow_configured_ad):
+        metadata = {"demo": False, "authenticated": False, "local_login_enabled": True,
+                    "ad_login_enabled": enabled, "oidc_login_enabled": False}
+        opener = Mock()
+        opener.open.side_effect = [io.BytesIO(b"{}"), io.BytesIO(json.dumps(metadata).encode())]
+        context = types.SimpleNamespace(verify_flags=0)
+        with patch.object(pl.ssl, "create_default_context", return_value=context), \
+             patch.object(pl.urllib.request, "build_opener", return_value=opener):
+            return pl.check_auth({"public_url": "https://pl.example.test"}, self.root, None,
+                                 allow_configured_ad=allow_configured_ad)
+
+    def test_repeated_auth_acceptance_preserves_configured_ad_profile(self):
+        result = self.auth_metadata_acceptance(True, allow_configured_ad=True)
+        self.assertTrue(result["ad_login_enabled"])
+        self.assertFalse(result["local_only_non_demo"])
+        self.assertEqual(result["login"], "not_repeated_password_changed_or_removed")
+
+    def test_initial_auth_acceptance_stays_local_and_rejects_invalid_ad_flags(self):
+        self.assertTrue(self.auth_metadata_acceptance(False, allow_configured_ad=False)["local_only_non_demo"])
+        for enabled, allow in ((True, False), ("true", True), (None, True)):
+            with self.subTest(enabled=enabled, allow=allow), self.assertRaisesRegex(ValueError, "authentication"):
+                self.auth_metadata_acceptance(enabled, allow_configured_ad=allow)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name).resolve()
