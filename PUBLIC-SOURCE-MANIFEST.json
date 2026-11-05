@@ -25,8 +25,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "48f60331e5275688762d9716f9e5c5d74c911a7d9c3b8b57e2a65e4226fbffd0",
-      "size": 6772
+      "sha256": "f3c635bb00323deab8e6ea6a2abda9ac69c681ff0aed93290a05d9047d64ac01",
+      "size": 8454
     },
     {
       "path": "apps/doska/LICENSE",
@@ -16784,6 +16784,16 @@
       "size": 1050
     },
     {
+      "path": "docs/releases/0.4.0-rc.1.json",
+      "sha256": "94da09b5bfdf2ef0f7fa53ed7689cc2250b8226820ab31e303e5fddbb9d1e613",
+      "size": 2340
+    },
+    {
+      "path": "docs/releases/0.4.0.json",
+      "sha256": "e8c81e99b76b0aa0f8b93b5b7c131807a4efa28562c0ed9864d5867ff5d05d7a",
+      "size": 2304
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16795,13 +16805,13 @@
     },
     {
       "path": "installer/README.public.ru.md",
-      "sha256": "acf9629a37fa74ab5e38dbf0bcd62e375957a9661de68589e26840fe405e0072",
-      "size": 6248
+      "sha256": "bb96146f2a88576bcd145f566a1feda9bc2e31e52e45106ad9ea066f5f417789",
+      "size": 9017
     },
     {
       "path": "installer/README.ru.md",
-      "sha256": "acf9629a37fa74ab5e38dbf0bcd62e375957a9661de68589e26840fe405e0072",
-      "size": 6248
+      "sha256": "bb96146f2a88576bcd145f566a1feda9bc2e31e52e45106ad9ea066f5f417789",
+      "size": 9017
     },
     {
       "path": "installer/alertmanager-controller.py",
@@ -16815,8 +16825,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "1754fab66e3679517058096877f564eaf8364094673ab628d1e468a711432b8a",
-      "size": 82704
+      "sha256": "fec7da299bc3baa056413f302f650344bbab1f1b5a7a58df0c06f9e0de29c4be",
+      "size": 82746
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -16824,14 +16834,19 @@
       "size": 3427
     },
     {
+      "path": "installer/delivery-proxy.py",
+      "sha256": "f4b301c05da4c2fa868455138095484b078deb25388471f5df4dc2a53f24aa6d",
+      "size": 25230
+    },
+    {
       "path": "installer/delivery.py",
-      "sha256": "4192df5555fac3302d16e92164364c8eac40f2fbbd9a18fe62fcba7c061130a0",
-      "size": 56932
+      "sha256": "4c68b47fd25b6d4795281175ace5c8ace8537fe5b1368189103bcc1bdff11c9d",
+      "size": 64827
     },
     {
       "path": "installer/delivery.ru.md",
-      "sha256": "0b5499f9c958d9beacdec7e864ca14a1576e8c3d55a269748c6264b16fa9f6e6",
-      "size": 9484
+      "sha256": "0970d081922f3fb4264f31788ffa5e75ec7c24dd6350a99b0260eacd62c0da42",
+      "size": 15171
     },
     {
       "path": "installer/doska-controller.py",
@@ -16890,8 +16905,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "d677bf800e75c6e83f6deb66033d75124b5661d37175d625c961dbe60a2d0b06",
-      "size": 42343
+      "sha256": "9c4df7b32e7f45dffccacb5450e6200e7aacf20ce5e45f4b68ca086e0ac55132",
+      "size": 42406
     },
     {
       "path": "installer/installation-settings.py",
@@ -16915,8 +16930,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "53ae8fc6a94a7a020747fd8aae6e57b5fb0da2a712cba2276c9fe3837002c9c2",
-      "size": 75509
+      "sha256": "a37587ff4fed46634cf994db0c7c3d8c11310c17d5415e4cfa084b8c96324c55",
+      "size": 76353
     },
     {
       "path": "installer/module-network.py",
@@ -16955,18 +16970,18 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "3addd4bc870f4b0134e733d201bfc1018918dde46d46dd149e74cf83586aac3e",
-      "size": 36760
+      "sha256": "859971ece494af3e111ee15dfee784ad706d05b103739648bb7f0776f2a70e65",
+      "size": 36781
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "0682d18ab16a32605330fc4f37d8c039b653a7eba023e5588e59ac73aa944f21",
-      "size": 36513
+      "sha256": "dc6a065fd5f1a28f78f9d2a5dadff74d768b8ea49f49ac8e8d09469f938ead2a",
+      "size": 38697
     },
     {
       "path": "installer/release-catalog.py",
-      "sha256": "5f2617fce2d4f65c8dd35208c6bccd81d4e5b01749ef733516748342e61eb586",
-      "size": 5174
+      "sha256": "c97be8cf1a49db00262fd64d6d52e5dbc2a14351b486bfdfe705705ad7887433",
+      "size": 5655
     },
     {
       "path": "installer/release-signing-public.pem",
@@ -17020,8 +17035,13 @@
     },
     {
       "path": "installer/tests/test_delivery.py",
-      "sha256": "7e33e02b884d97f3a5bb19846fe2355ce5ebb4aff4c4bde53b576f627173f35a",
-      "size": 26749
+      "sha256": "153c98daec8c12ed818a9e9a27c48bc3deb297cc23f25f25f057ac716f38a11b",
+      "size": 40141
+    },
+    {
+      "path": "installer/tests/test_delivery_proxy.py",
+      "sha256": "10df76d7c2e0b8263229bf3523a2c13c4425856ca4db922888760a889adb78cd",
+      "size": 25070
     },
     {
       "path": "installer/tests/test_doska_controller.py",
@@ -17095,8 +17115,8 @@
     },
     {
       "path": "installer/tests/test_minimal_package.py",
-      "sha256": "f20b3c8340223ca7c3918f47e872436952f05ee71cf4d502adbc9c38a1a52498",
-      "size": 13592
+      "sha256": "1dd930f2a514826a7ff43ea819e6c228dc3657f18720cd21bfc23b5fcac4fd3e",
+      "size": 13771
     },
     {
       "path": "installer/tests/test_module_controller.py",
@@ -17195,8 +17215,8 @@
     },
     {
       "path": "installer/tests/test_public_export.py",
-      "sha256": "43c3296b2491fc7149fc8bd7dbd5579cfd77147a9fa58e2288072c3dfd068bd1",
-      "size": 10173
+      "sha256": "4ff50b6728519021fcfa11199750b28bfb6edc436506f72608cd68b42e6be01d",
+      "size": 15713
     },
     {
       "path": "installer/tests/test_reports_portability.py",
@@ -17730,8 +17750,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/App.tsx",
-      "sha256": "426945957021335d402574f3204c3fe82b7d93ec3954a487af44afb3452b8470",
-      "size": 47899
+      "sha256": "4595988d2487e924b34d1ee67acb9062f528ba94ee5c22cf04b459822949f293",
+      "size": 48822
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AuthScenes.tsx",
@@ -17762,6 +17782,11 @@
       "path": "monitoring/source/it-portal/frontend/src/DashboardLayout.tsx",
       "sha256": "775df1dc948c56cd7c6acf938024a436aeb6a8d50c232a4667f867e5c498e45e",
       "size": 22063
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/DeliveryProxySettings.tsx",
+      "sha256": "81b00c97152a20da848f7d905d05ff2ad98c9e4355fc3409df5a2872f862e6da",
+      "size": 21703
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/DoskaResourceTasks.tsx",
@@ -17800,8 +17825,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/InstallationSettings.tsx",
-      "sha256": "736e4430fe9db0b37cbe82d9019aab88d824fb39bde551483110be51a4beb91c",
-      "size": 16407
+      "sha256": "26fc5d162a9b33331bf007f0b675b5328caa0d433376d5132068a3ad3e7861c6",
+      "size": 16796
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/InstallationTransition.tsx",
+      "sha256": "1a67e51bc5bff043a09779c45ad070078315cd3ce8fb8911c3eae995c8489f27",
+      "size": 3117
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Inventory.tsx",
@@ -17914,6 +17944,11 @@
       "size": 4806
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/ReleaseNotes.tsx",
+      "sha256": "3f119e84f4f45a3552d18ec72d71851300716be4a26e7ed28ca6facb5cb0d04c",
+      "size": 1661
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/ResourceDetails.tsx",
       "sha256": "10447cd3bf776b8b890d688d8670266874f170bfae8089c5ff6b9f4c90528819",
       "size": 19226
@@ -17960,8 +17995,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Settings.tsx",
-      "sha256": "46c2d5e5faecb29cc55dda4e33ead5380b8ad8f295d5ebadddee594b905f4047",
-      "size": 26858
+      "sha256": "f9043525e080eab933d0ddc9d592a3261732119adf5276b51e7aace2ba463744",
+      "size": 27044
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Systems.tsx",
@@ -17980,8 +18015,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpdateSettings.tsx",
-      "sha256": "9c767c700e226655a2d1067cd4b23d74fbb16b8ae96673e948a1be582a5dff91",
-      "size": 9563
+      "sha256": "491f11dbb65658276ea74c1c3c8e9573675246add97c28d03d66a97d109cfebc",
+      "size": 11001
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Wayline.tsx",
@@ -18229,6 +18264,11 @@
       "size": 3046
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/release-notes.css",
+      "sha256": "b2d1eb259ed056156d7321264395fb62f53caf5c97f2244e79e4f6e13500b9d7",
+      "size": 2899
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/resource-details.css",
       "sha256": "3dd78bc01929849926173853f1e6655cca222654ff4cfe1b507302d7159c84a0",
       "size": 9074
@@ -18280,8 +18320,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/model.ts",
-      "sha256": "f82a5ef83b8f9e82928c35fd6ade3799276ebee19214d3e7fcfe4dcd3c14f321",
-      "size": 19015
+      "sha256": "6a394af1f0b53065b229111c6535bbc9724aeb5f1b0ef038a726bfcb087fb502",
+      "size": 19477
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/navigation.ts",
@@ -18404,9 +18444,14 @@
       "size": 13775
     },
     {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/delivery-proxy.spec.ts",
+      "sha256": "096b8daa88691364a3ca866cbfa26cee28d18a8cc264d8462099afd0e10ca30e",
+      "size": 9650
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/delivery.spec.ts",
-      "sha256": "85f1bfc7b2165cb8aa286e510777667fb9fc4ddab35e7fdba5c1aaf9b64e1aac",
-      "size": 4588
+      "sha256": "f0b8e2ba39a87cfa00f774709ac053c35d9e832dd65084562d4e68a3ac3b1637",
+      "size": 8039
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/directory-return.spec.ts",
@@ -18470,8 +18515,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/installation.spec.ts",
-      "sha256": "e94da89d4593c97196c34f4354fcba0a2a5ee457b8abaea7e06e6052ad90a44b",
-      "size": 3842
+      "sha256": "b1f6779b67ce906083a7ce93b4a928fa9d597f7367abdd3e406742bc2959828a",
+      "size": 6633
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/iperf.spec.ts",
@@ -18905,13 +18950,23 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery.go",
-      "sha256": "a5a6ba0d3582c944c2a80934cbd97ce5622cde736c3dd4c8a675b9a04d085a5d",
-      "size": 3907
+      "sha256": "4d2bb42f1c5a3cc24cb6c56f2faa13c17106434c7beab6a6ff7ed6061e62d87a",
+      "size": 4901
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/modules/delivery_proxy.go",
+      "sha256": "4c84529fd3ca3e5fff561bf1016b1209d7ed7d4ec28175f8c6eca2d8bcf8f335",
+      "size": 17779
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/modules/delivery_proxy_test.go",
+      "sha256": "9d3fecba32948cda4bf56ccd386a392be55abc5be9b547a51cd79f8204e2b82c",
+      "size": 11549
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_test.go",
-      "sha256": "76f2a7814cb3b1b8e91532c7eb1056d3b6d2848c2ee5552057687b981e042390",
-      "size": 2529
+      "sha256": "6515c211e5470bc546fe9a23e5786f195c9d5219fa038e0fddd92cfcbace4cab",
+      "size": 6379
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/grafana.go",
@@ -19485,13 +19540,23 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/delivery.go",
-      "sha256": "b7e280ef5354c5bb5555bf6204274f56297737338f3190150f5832b2521a1c54",
-      "size": 2778
+      "sha256": "3bf12dc6ad35dab8aad1355ab522b0d7ea38b89d56952596912237b1a7e2b764",
+      "size": 2812
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/delivery_proxy.go",
+      "sha256": "713921b503e6be02688825cd4630c65ed749784c1129c5323aaec055c74367e2",
+      "size": 3193
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/delivery_proxy_test.go",
+      "sha256": "10f09aac4e7b7cb55044f68f128df3597078216b38a5d4489c7353b2b00b8d77",
+      "size": 6744
     },
     {
       "path": "monitoring/source/it-portal/internal/server/delivery_test.go",
-      "sha256": "23c02bd78797bd9e0f46843dd7fc095d5037e26f03c2c27fde4c863d11eee9b9",
-      "size": 3656
+      "sha256": "643b967020beafc3828f48f80c7b0d904b09aadbed95a97edf5371dfcded2f79",
+      "size": 5729
     },
     {
       "path": "monitoring/source/it-portal/internal/server/directory_fallback.go",

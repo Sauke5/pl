@@ -6,6 +6,7 @@ import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
 import { Badge, ErrorBox, Panel } from "./components/common";
 import { withSettingsNavigation } from "./settings/navigation";
+import { ReleaseNotesArticle, type ReleaseNotes } from "./ReleaseNotes";
 
 export type Delivery = {
   current_version: string;
@@ -15,6 +16,7 @@ export type Delivery = {
   error?: string;
   core_api: number;
   modules: { module_id: string; version: string }[];
+  release_notes?: ReleaseNotes;
   operation?: {
     kind?: string;
     operation_id: string;
@@ -76,6 +78,7 @@ export function UpdateNotification({ enabled }: { enabled: boolean }) {
   return (
     <Button
       variant="ghost"
+      aria-label={`PL ${status.data.latest_version}`}
       title={`Доступна PL ${status.data.latest_version}`}
       onClick={() =>
         withSettingsNavigation(() => {
@@ -84,7 +87,12 @@ export function UpdateNotification({ enabled }: { enabled: boolean }) {
       }
     >
       <Download size={17} />
-      <span>PL {status.data.latest_version}</span>
+      <span className="update-notification-copy">
+        <span>PL {status.data.latest_version}</span>
+        {status.data.release_notes?.version === status.data.latest_version && (
+          <small>{status.data.release_notes.title}</small>
+        )}
+      </span>
     </Button>
   );
 }
@@ -165,18 +173,38 @@ export function UpdateSettings() {
     <Panel title="Версия и обновления PL" icon={<Download size={20} />}>
       {value ? (
         <>
-          <div className="runtime-row">
-            <span>Установленная версия</span>
-            <strong>{value.current_version || "Нет данных"}</strong>
-          </div>
-          {value.latest_version && (
-            <div className="runtime-row">
-              <span>Последняя версия</span>
-              <strong>{value.latest_version}</strong>
+          <div className="release-version-summary">
+            <div>
+              <span
+                className={
+                  value.update_available ? "release-update-available" : ""
+                }
+              >
+                {value.update_available
+                  ? "Доступно обновление"
+                  : "Текущий релиз"}
+              </span>
+              <strong>
+                PL{" "}
+                {value.latest_version || value.current_version || "Нет данных"}
+              </strong>
             </div>
-          )}
+            <span className="muted">
+              Установленная версия: {value.current_version || "Нет данных"}
+            </span>
+          </div>
+          {value.release_notes &&
+          value.release_notes.version === value.latest_version ? (
+            <ReleaseNotesArticle notes={value.release_notes} />
+          ) : value.update_available ? (
+            <p className="muted">
+              Подробное описание этого релиза ещё не опубликовано.
+            </p>
+          ) : null}
           {value.checked_at && (
-            <p className="muted">Проверено {date(value.checked_at)}</p>
+            <p className="muted">
+              Последняя проверка: {date(value.checked_at)}
+            </p>
           )}
           {value.error && <ErrorBox error={new Error(value.error)} />}
           {value.operation && (
@@ -235,6 +263,18 @@ export function UpdateSettings() {
           </Button>
         )}
       </div>
+      <p>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            withSettingsNavigation(() => {
+              location.hash = "settings?section=delivery";
+            })
+          }
+        >
+          Настроить доступ к GitHub
+        </Button>
+      </p>
       {confirm && (
         <Dialog
           title={`Обновление PL до ${value?.latest_version || ""}`}

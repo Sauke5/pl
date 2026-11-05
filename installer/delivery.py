@@ -37,6 +37,7 @@ ROLES = {'wayline': ('api', 'gateway', 'runner'), 'forms': ('adapter', 'engine',
 VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9][A-Za-z0-9.-]*)?\Z')
 HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3
+MAX_RELEASE_NOTES = 24 * 1024
 RESERVE = 512 * 1024**2
 _threads = threading.Lock()
 
@@ -123,22 +124,29 @@ class Redirects(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, message, headers, url)
 
 
-def download(url, destination, size, expected=None):
+def download(url, destination, size, expected=None, *, opener=None, timeout=30, deadline_seconds=1800, absolute_deadline=None):
     asset_url(url)
     if type(size) is not int or not 1 <= size <= MAX_PACKAGE:
         raise ValueError('Invalid release size')
     if shutil.disk_usage(destination.parent).free < size + RESERVE:
         raise ValueError('Insufficient free space for release download')
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), Redirects(),
-                                         urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+    deadline = absolute_deadline if absolute_deadline is not None else time.monotonic() + deadline_seconds
+    opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), Redirects(),
+                                                   urllib.request.HTTPSHandler(context=ssl.create_default_context()))
     checksum, received = hashlib.sha256(), 0
     try:
-        with opener.open(urllib.request.Request(url, headers={'User-Agent': 'PL-delivery/1'}), timeout=30) as response, destination.open('xb') as target:
-            deadline = time.monotonic() + 1800
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Release download timed out')
+        with opener.open(urllib.request.Request(url, headers={'User-Agent': 'PL-delivery/1'}), timeout=min(timeout, remaining)) as response, destination.open('xb') as target:
             while True:
-                if time.monotonic() > deadline:
-                    raise ValueError('Release download timed out')
-                block = response.read(min(1024**2, size + 1 - received))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('Release download timed out')
+                sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+                if sock is not None:
+                    sock.settimeout(min(timeout, remaining))
+                block = getattr(response, 'read1', response.read)(min(64 * 1024, size + 1 - received))
                 if not block:
                     break
                 received += len(block)
@@ -162,6 +170,43 @@ def artifact(value):
             or not 1 <= value['size'] <= MAX_PACKAGE):
         raise ValueError('Invalid signed release artifact')
     asset_url(value['url'])
+    return value
+
+
+def validate_release_notes(value, version):
+    if not isinstance(value, dict) or set(value) != {'version', 'title', 'summary', 'sections'}:
+        raise ValueError('Invalid signed release notes object')
+    if not isinstance(value['version'], str) or value['version'] != version:
+        raise ValueError('Release notes version differs from the signed catalog')
+
+    def text(candidate, limit):
+        if not isinstance(candidate, str) or not candidate or candidate != candidate.strip() or len(candidate) > limit:
+            raise ValueError('Release notes require bounded trimmed plain text')
+
+    text(value['title'], 120)
+    text(value['summary'], 800)
+    if not isinstance(value['sections'], list) or len(value['sections']) > 3:
+        raise ValueError('Invalid release notes sections')
+    seen, total = set(), 0
+    for section in value['sections']:
+        if not isinstance(section, dict) or set(section) != {'kind', 'items'}:
+            raise ValueError('Invalid release notes section')
+        kind = section['kind']
+        if not isinstance(kind, str) or kind not in {'new', 'improved', 'fixed'} or kind in seen:
+            raise ValueError('Release notes section kinds must be known and distinct')
+        seen.add(kind)
+        if not isinstance(section['items'], list):
+            raise ValueError('Invalid release notes items')
+        total += len(section['items'])
+        if total > 8:
+            raise ValueError('Release notes contain too many items')
+        for item in section['items']:
+            if not isinstance(item, dict) or set(item) != {'title', 'description'}:
+                raise ValueError('Invalid release notes item')
+            text(item['title'], 120)
+            text(item['description'], 800)
+    if len(json_bytes(value)) > MAX_RELEASE_NOTES:
+        raise ValueError('Encoded release notes size exceeds 24 KiB')
     return value
 
 
@@ -200,6 +245,8 @@ def verify_catalog(envelope, key, previous=None, *, allow_expired=False):
             raise ValueError('Incompatible module release')
         for info in module['artifacts'].values():
             artifact(info)
+    if 'release_notes' in value:
+        validate_release_notes(value['release_notes'], value['version'])
     if previous is not None:
         if value['sequence'] < previous['sequence'] or value['sequence'] == previous['sequence'] and value != previous:
             raise ValueError('Signed catalog replay or conflicting release sequence')
@@ -260,6 +307,23 @@ class Delivery:
         path = self.base / 'catalog.json'
         return verify_catalog(read(path), self.key, allow_expired=allow_expired) if path.exists() else None
 
+    def github_proxy(self):
+        if not hasattr(self, '_github_proxy'):
+            path = self.package / 'delivery-proxy.py'
+            if path.is_symlink() or not path.is_file():
+                raise ValueError('GitHub delivery controller unavailable')
+            spec = importlib.util.spec_from_file_location('pl_github_delivery_proxy', path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            self._github_proxy = module.DeliveryProxy(self)
+        return self._github_proxy
+
+    def download(self, url, destination, size, expected=None):
+        profile = self.root / 'private/delivery-proxy.json'
+        if not profile.exists() and not profile.is_symlink():
+            return download(url, destination, size, expected)
+        return self.github_proxy().download(url, destination, size, expected)
+
     def status(self, body, refresh=True):
         if body != {}:
             raise ValueError('Delivery status has no parameters')
@@ -289,10 +353,13 @@ class Delivery:
         if operation:
             public_operation = {key: operation[key] for key in ('operation_id', 'kind', 'version', 'phase', 'error', 'next_url', 'started_at', 'finished_at') if key in operation}
             public_operation.setdefault('kind', 'upgrade')
-        return {'current_version': state['version'], 'latest_version': latest,
-                'update_available': bool(latest and newer(latest, state['version'])), 'core_api': 1,
-                'checked_at': cache.get('checked_at', ''), 'error': cache.get('error', ''),
-                'modules': modules, 'operation': public_operation}
+        result = {'current_version': state['version'], 'latest_version': latest,
+                  'update_available': bool(latest and newer(latest, state['version'])), 'core_api': 1,
+                  'checked_at': cache.get('checked_at', ''), 'error': cache.get('error', ''),
+                  'modules': modules, 'operation': public_operation}
+        if catalog and 'release_notes' in catalog:
+            result['release_notes'] = copy.deepcopy(catalog['release_notes'])
+        return result
 
     def architecture(self):
         arch = {'x86_64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine())
@@ -324,7 +391,7 @@ class Delivery:
                     raise ValueError('Invalid release channel configuration')
                 asset_url(cfg['catalog_url'])
                 with tempfile.TemporaryDirectory(dir=self.base) as tmp:
-                    raw = download(cfg['catalog_url'], Path(tmp) / 'catalog.json', 1024**2)
+                    raw = self.download(cfg['catalog_url'], Path(tmp) / 'catalog.json', 1024**2)
                     envelope = load_json(raw)
                     verify_catalog(envelope, self.key, self.catalog(allow_expired=True))
                     atomic(self.base / 'catalog.json', envelope)
@@ -354,7 +421,7 @@ class Delivery:
             with tempfile.TemporaryDirectory(prefix='.module-', dir=self.root / 'releases') as tmp:
                 tmp = Path(tmp)
                 archive = tmp / 'module.tar.gz'
-                download(info['url'], archive, info['size'], info['sha256'])
+                self.download(info['url'], archive, info['size'], info['sha256'])
                 extract_flat(archive, tmp, {'module.json', 'images.tar', 'source.tar.gz'}, {'module.json', 'images.tar', 'source.tar.gz'})
                 meta = read(tmp / 'module.json')
                 self.validate_module(meta, kind, selected['version'], tmp)
@@ -402,10 +469,10 @@ class Delivery:
                 raise ValueError('Loaded release image differs from signed artifact')
 
     @contextmanager
-    def lifecycle_lock(self):
+    def lifecycle_lock(self, exclusive=True, blocking=True):
         fd = os.open(self.root / 'modules/controller.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a') as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
+            fcntl.flock(stream, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | (0 if blocking else fcntl.LOCK_NB))
             yield
 
     @contextmanager
@@ -488,6 +555,7 @@ class Delivery:
         if (self.supervisor != self.supervisor.resolve() or self.supervisor.parent != self.root / 'releases'
                 or not (self.supervisor / 'controller-supervisor.py').is_file()):
             raise ValueError('Immutable host supervisor package is unavailable')
+        package = self.worker_package(operation, recovering=recovering)
         unit = self.installation + '-upgrade-' + uuid.UUID(operation['operation_id']).hex
         operation['worker_unit'] = unit + '.service'
         operation['phase'] = 'queued_recovery' if recovering else 'queued'
@@ -496,7 +564,8 @@ class Delivery:
                    '--property=Type=exec', '--property=TimeoutStartSec=7200', '--property=UMask=0077',
                    '--property=NoNewPrivileges=true', '--property=ProtectSystem=strict', '--property=ProtectHome=true',
                    '--property=PrivateTmp=true', '--property=ReadWritePaths=' + str(self.root),
-                   '/usr/bin/python3', str(self.supervisor / 'delivery.py'), 'worker', '--root', str(self.root),
+                   '--setenv=PL_HOST_SUPERVISOR_PACKAGE=' + str(self.supervisor),
+                   '/usr/bin/python3', str(package / 'delivery.py'), 'worker', '--root', str(self.root),
                    '--operation-id', operation['operation_id']]
         if recovering:
             command.append('--recover')
@@ -504,6 +573,55 @@ class Delivery:
             self.host(command, timeout=20)
         except (ValueError, OSError, subprocess.SubprocessError):
             self.operation('recovery_required' if recovering else 'failed', error='Не удалось запустить отдельный процесс обновления. Данные установки не изменены.')
+
+    def verified_worker_release(self, version, expected=None):
+        if not isinstance(version, str) or not VERSION.fullmatch(version):
+            raise ValueError('Invalid pinned worker version')
+        package = self.root / 'releases' / version
+        if (package != package.resolve() or not package.is_dir() or package.stat().st_uid != os.geteuid()
+                or package.stat().st_mode & 0o022):
+            raise ValueError('Unsafe worker release directory')
+        self.validate_core_files(package, version)
+        manifest = read(package / 'manifest.json')
+        if not manifest.get('features', {}).get('on_demand_modules'):
+            raise ValueError('Worker requires protocol-1 on-demand payload')
+        for name in manifest['files']:
+            path = package / name
+            if path.stat().st_uid != os.geteuid() or path.stat().st_mode & 0o022:
+                raise ValueError('Unsafe worker payload permissions')
+        if expected is not None and (not isinstance(expected, str) or not HEX.fullmatch(expected)
+                                     or digest(package / 'manifest.json') != expected):
+            raise ValueError('Pinned worker manifest differs')
+        return package
+
+    def worker_package(self, operation, *, recovering):
+        identity = read(self.root / 'state/controller-supervisor.json')
+        if (set(identity) != {'schema', 'version'} or identity['schema'] != 1
+                or self.supervisor != self.root / 'releases' / identity['version']):
+            raise ValueError('Immutable supervisor identity differs')
+        self.verified_worker_release(identity['version'])
+        if recovering:
+            version = operation.get('worker_version', identity['version'])
+            if 'worker_version' in operation and 'worker_manifest_sha256' not in operation:
+                raise ValueError('Pinned worker manifest unavailable')
+            return self.verified_worker_release(version, operation.get('worker_manifest_sha256'))
+        # Reuse the immutable supervisor's full active payload validation.
+        spec = importlib.util.spec_from_file_location('pl_worker_supervisor', self.supervisor / 'controller-supervisor.py')
+        supervisor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(supervisor)
+        package = supervisor.selected_package(self.root, self.supervisor)
+        state = self.state()
+        if package.name != state['version']:
+            raise ValueError('Active worker and installed core versions differ')
+        self.verified_worker_release(package.name, state['manifest_sha256'])
+        operation.update(worker_version=package.name, worker_manifest_sha256=state['manifest_sha256'])
+        return package
+
+    def validate_worker_entry(self, operation):
+        package = self.worker_package(operation, recovering=True)
+        if package != self.package.resolve():
+            raise ValueError('Operation requires its exact verified worker release')
+        return package
 
     @staticmethod
     def host(command, timeout=30):
@@ -573,7 +691,7 @@ class Delivery:
             with tempfile.TemporaryDirectory(prefix='.upgrade-', dir=self.root / 'releases') as temporary:
                 folder = Path(temporary)
                 archive = folder / 'core.tar.gz'
-                download(info['url'], archive, info['size'], info['sha256'])
+                self.download(info['url'], archive, info['size'], info['sha256'])
                 payload = folder / 'payload'
                 payload.mkdir(mode=0o750)
                 with tarfile.open(archive, 'r:*') as tar:
@@ -976,12 +1094,27 @@ if __name__ == '__main__':
         root = arguments.root
         if root != root.resolve():
             raise ValueError('Canonical installation root required')
+        identity = read(root / 'state/controller-supervisor.json')
+        if (set(identity) != {'schema', 'version'} or identity['schema'] != 1
+                or not isinstance(identity['version'], str) or not VERSION.fullmatch(identity['version'])):
+            raise ValueError('Invalid immutable worker trust anchor')
+        initial = root / 'releases' / identity['version']
+        if os.environ.get('PL_HOST_SUPERVISOR_PACKAGE', str(initial)) != str(initial):
+            raise ValueError('Worker trust anchor environment differs')
+        installation = read(root / 'state/installation.json')['install_id']
+        import types
+        validator = Delivery(types.SimpleNamespace(root=root, installation=installation))
+        validator.supervisor = initial
+        journal = read(validator.base / 'operation.json')
+        if journal.get('operation_id') != arguments.operation_id:
+            raise ValueError('Operation requires its exact verified worker release')
+        validator.validate_worker_entry(journal)
         spec = importlib.util.spec_from_file_location('pl_recovery_controller', Path(__file__).with_name('module-controller.py'))
         controller_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(controller_module)
-        installation = read(root / 'state/installation.json')['install_id']
         controller = controller_module.Controller(root, installation)
         delivery = Delivery(controller)
+        delivery.supervisor = initial
         with delivery.worker_lock(blocking=False), delivery.lifecycle_lock():
             operation = read(delivery.base / 'operation.json')
             if operation.get('operation_id') != arguments.operation_id or operation.get('phase') in ('complete', 'failed', 'rolled_back'):

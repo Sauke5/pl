@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
@@ -26,6 +27,12 @@ def checksum(body):
     return hashlib.sha256(body).hexdigest()
 
 
+def release_notes(version='0.3.0'):
+    return {'version': version, 'title': 'Что нового в PL', 'summary': 'Изменения для администратора.',
+            'sections': [{'kind': 'new', 'items': [{'title': 'Настройки через PL',
+                                                   'description': 'Параметры установки доступны в настройках.'}]}]}
+
+
 class TrustTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -34,6 +41,7 @@ class TrustTests(unittest.TestCase):
         cls.folder = Path(cls.temp.name)
         cls.private, cls.public = cls.folder / 'private.pem', cls.folder / 'public.pem'
         subprocess.run(['openssl', 'genpkey', '-algorithm', 'ED25519', '-out', str(cls.private)], check=True, capture_output=True)
+        cls.private.chmod(0o600)
         subprocess.run(['openssl', 'pkey', '-in', str(cls.private), '-pubout', '-out', str(cls.public)], check=True, capture_output=True)
 
     def payload(self):
@@ -48,6 +56,29 @@ class TrustTests(unittest.TestCase):
         sig = subprocess.run(['openssl', 'pkeyutl', '-sign', '-inkey', str(self.private), '-rawin', '-in', str(source)], check=True, capture_output=True).stdout
         return {'payload': base64.b64encode(raw).decode(), 'signature': base64.b64encode(sig).decode()}
 
+    def signer_cli(self, notes=None, raw_notes=None):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer = root / 'installer'; installer.mkdir()
+            for name in ('delivery.py', 'release-catalog.py'):
+                shutil.copyfile(Path(__file__).resolve().parents[1] / name, installer / name)
+            shutil.copyfile(self.public, installer / 'release-signing-public.pem')
+            manifest = d.json_bytes({'product': 'PL', 'version': '0.4.0', 'architecture': 'amd64',
+                                     'features': {'on_demand_modules': True}, 'images': {'api': {}, 'web': {}, 'db': {}}})
+            archive = root / 'core.tar.gz'
+            with tarfile.open(archive, 'w:gz') as tar:
+                member = tarfile.TarInfo('manifest.json'); member.size = len(manifest)
+                tar.addfile(member, io.BytesIO(manifest))
+            output = root / 'catalog.json'
+            command = [sys.executable, str(installer / 'release-catalog.py'), '--version', '0.4.0', '--sequence', '11',
+                       '--core', str(archive), '--signing-key-file', str(self.private), '--output', str(output)]
+            if notes is not None or raw_notes is not None:
+                path = root / 'notes.json'
+                path.write_bytes(raw_notes if raw_notes is not None else d.json_bytes(notes))
+                command.extend(['--notes-file', str(path)])
+            result = subprocess.run(command, capture_output=True, text=True)
+            return result, d.load_json(output.read_bytes()) if output.exists() else None
+
     def test_real_ed25519_signature_and_tamper_rejection(self):
         payload = self.payload()
         envelope = self.signed(payload)
@@ -55,6 +86,103 @@ class TrustTests(unittest.TestCase):
         envelope['payload'] = base64.b64encode(d.json_bytes({**payload, 'version': '9.9.9'})).decode()
         with self.assertRaisesRegex(ValueError, 'signature'):
             d.verify_catalog(envelope, self.public)
+
+    def test_release_notes_are_covered_by_the_real_catalog_signature_and_stay_plain_text(self):
+        payload = {**self.payload(), 'release_notes': release_notes()}
+        payload['release_notes']['sections'][0]['items'][0]['description'] = '<b>Настройки</b> & обычный текст.'
+        envelope = self.signed(payload)
+        self.assertEqual(d.verify_catalog(envelope, self.public)['release_notes'], payload['release_notes'])
+        payload['release_notes']['title'] = 'Подменённые заметки'
+        envelope['payload'] = base64.b64encode(d.json_bytes(payload)).decode()
+        with self.assertRaisesRegex(ValueError, 'signature'):
+            d.verify_catalog(envelope, self.public)
+
+    def test_release_notes_character_and_item_limits_are_inclusive_and_encoded_size_is_bounded(self):
+        notes = release_notes()
+        notes.update(title='t' * 120, summary='s' * 800, sections=[])
+        for kind, count in (('new', 3), ('improved', 3), ('fixed', 2)):
+            notes['sections'].append({'kind': kind, 'items': [{'title': 'i' * 120, 'description': 'd' * 800} for _ in range(count)]})
+        payload = {**self.payload(), 'release_notes': notes}
+        self.assertEqual(d.verify_catalog(self.signed(payload), self.public)['release_notes'], notes)
+        for section in notes['sections']:
+            for item in section['items']:
+                item['description'] = 'я' * 800
+        with self.assertRaisesRegex(ValueError, 'notes size'):
+            d.verify_catalog(self.signed(payload), self.public)
+
+    def test_signed_release_notes_reject_wrong_version_shape_types_and_limits(self):
+        invalid = []
+        def changed(change):
+            notes = release_notes(); change(notes); invalid.append(notes)
+        invalid.extend([None, [], {}, {**release_notes(), 'url': 'https://example.test/notes'}])
+        changed(lambda n: n.update(version='0.4.0'))
+        changed(lambda n: n.update(version=True))
+        for field, value in (('title', ''), ('title', ' leading'), ('title', 'trailing '), ('title', 1),
+                             ('title', 't' * 121), ('summary', 's' * 801), ('summary', '\n')):
+            changed(lambda n, f=field, v=value: n.update({f: v}))
+        changed(lambda n: n.update(sections={}))
+        changed(lambda n: n.update(sections=[n['sections'][0]] * 4))
+        changed(lambda n: n['sections'].append(copy.deepcopy(n['sections'][0])))
+        changed(lambda n: n['sections'][0].update(kind='other'))
+        changed(lambda n: n['sections'][0].update(kind=[]))
+        changed(lambda n: n['sections'][0].update(extra=True))
+        changed(lambda n: n['sections'][0].update(items={}))
+        changed(lambda n: n['sections'][0].update(items=['raw item']))
+        changed(lambda n: n['sections'][0].update(items=n['sections'][0]['items'] * 9))
+        changed(lambda n: n['sections'][0]['items'][0].update(title='t' * 121))
+        changed(lambda n: n['sections'][0]['items'][0].update(description='d' * 801))
+        changed(lambda n: n['sections'][0]['items'][0].update(description=False))
+        changed(lambda n: n['sections'][0]['items'][0].update(description=' trailing '))
+        changed(lambda n: n['sections'][0]['items'][0].update(html='<b>unsupported field</b>'))
+        for notes in invalid:
+            with self.subTest(notes=notes), self.assertRaises(ValueError):
+                d.verify_catalog(self.signed({**self.payload(), 'release_notes': notes}), self.public)
+
+    def test_catalogs_without_notes_and_unknown_top_level_metadata_remain_compatible(self):
+        payload = {**self.payload(), 'future_metadata': {'value': 'compatible extension'}}
+        self.assertEqual(d.verify_catalog(self.signed(payload), self.public), payload)
+
+    def test_status_projects_notes_only_from_a_verified_cached_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'state').mkdir(mode=0o700)
+            d.atomic(root / 'state/installation.json', {'product': 'PL', 'install_id': 'pl-notes', 'version': '0.2.0',
+                                                       'release_notes': {'title': 'untrusted installation state'}})
+            delivery = d.Delivery(types.SimpleNamespace(root=root, installation='pl-notes'))
+            delivery.key = self.public
+            delivery.architecture = lambda: 'amd64'
+            d.atomic(delivery.base / 'cache.json', {'release_notes': {'title': 'untrusted check cache'}})
+            self.assertNotIn('release_notes', delivery.status({}, refresh=False))
+            payload = {**self.payload(), 'release_notes': release_notes()}
+            envelope = self.signed(payload)
+            d.atomic(delivery.base / 'catalog.json', envelope)
+            self.assertEqual(delivery.status({}, refresh=False)['release_notes'], payload['release_notes'])
+            payload['release_notes']['title'] = 'Подмена после подписи'
+            envelope['payload'] = base64.b64encode(d.json_bytes(payload)).decode()
+            d.atomic(delivery.base / 'catalog.json', envelope)
+            result = delivery.status({}, refresh=False)
+            self.assertNotIn('release_notes', result)
+            self.assertEqual(result['latest_version'], '')
+            self.assertTrue(result['error'])
+
+    def test_signer_cli_signs_inline_notes_and_supports_omission(self):
+        for notes in (None, release_notes('0.4.0')):
+            with self.subTest(notes=notes):
+                result, envelope = self.signer_cli(notes)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                payload = d.verify_catalog(envelope, self.public)
+                self.assertEqual(payload['version'], '0.4.0')
+                if notes is None:
+                    self.assertNotIn('release_notes', payload)
+                else:
+                    self.assertEqual(payload['release_notes'], notes)
+
+    def test_signer_cli_rejects_invalid_notes_without_writing_a_catalog(self):
+        for raw in (d.json_bytes(release_notes('0.3.0')), b'{"version":"0.4.0","version":"0.4.1"}', b' ' * (512 * 1024 + 1)):
+            with self.subTest(size=len(raw)):
+                result, envelope = self.signer_cli(raw_notes=raw)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIsNone(envelope)
 
     def test_signed_old_or_equivocating_sequence_is_rejected(self):
         payload = self.payload()
@@ -130,6 +258,35 @@ class DeliveryTests(unittest.TestCase):
         self.delivery = d.Delivery(self.parent)
         self.delivery.architecture = lambda: 'amd64'
 
+    def worker_releases(self):
+        initial, active = self.root / 'releases/0.3.0', self.root / 'releases/0.3.1'
+        initial.mkdir(mode=0o700); active.mkdir(mode=0o700)
+        supervisor = (Path(__file__).resolve().parents[1] / 'controller-supervisor.py').read_bytes()
+        for folder in (initial, active):
+            payload = {'controller-supervisor.py': supervisor, 'bootstrap.py': b'fixture bootstrap',
+                       'delivery.py': b'fixture worker', 'module-controller.py': b'fixture controller',
+                       'images.tar': b'fixture images', 'release-signing-public.pem': b'immutable trust key'}
+            for name, body in payload.items(): (folder / name).write_bytes(body)
+            d.atomic(folder / 'manifest.json', {'schema': 2, 'product': 'PL', 'version': folder.name, 'core_api': 1,
+                                               'features': {'on_demand_modules': True},
+                                               'files': {name: checksum(body) for name, body in payload.items()}})
+        d.atomic(self.root / 'state/controller-supervisor.json', {'schema': 1, 'version': initial.name})
+        d.atomic(self.root / 'state/controller-active.json', {'schema': 1, 'version': active.name})
+        state = self.delivery.state(); state.update(version=active.name, manifest_sha256=d.digest(active / 'manifest.json'))
+        d.atomic(self.root / 'state/installation.json', state)
+        self.delivery.supervisor, self.delivery.package = initial, active
+        self.delivery.host = Mock(return_value=b'')
+        if os.geteuid() != 0:
+            original_stat, original_lstat = Path.stat, Path.lstat
+            def as_root(result):
+                values = list(result); values[4] = 0
+                return os.stat_result(values)
+            patches = (patch.object(Path, 'stat', lambda path, *a, **k: as_root(original_stat(path, *a, **k))),
+                       patch.object(Path, 'lstat', lambda path, *a, **k: as_root(original_lstat(path, *a, **k))),
+                       patch.object(d.os, 'geteuid', return_value=0))
+            for change in patches: change.start(); self.addCleanup(change.stop)
+        return initial, active
+
     def module_archive(self):
         source, images = b'selected module source', b'selected Docker archive'
         image = {'id': 'sha256:' + 'a' * 64, 'architecture': 'amd64', 'ref': 'pl/core-prometheus:0.3.0',
@@ -199,20 +356,62 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(self.delivery.status({})['operation']['phase'], 'snapshot')
 
     def test_worker_launch_is_an_independent_finite_systemd_service(self):
-        initial = self.root / 'releases/0.3.0'; initial.mkdir()
-        (initial / 'controller-supervisor.py').touch()
-        self.delivery.supervisor = initial
-        self.delivery.host = Mock(return_value=b'')
-        operation = {'operation_id': str(uuid.uuid4()), 'version': '0.3.1', 'phase': 'queued'}
+        initial, active = self.worker_releases()
+        operation = {'operation_id': str(uuid.uuid4()), 'version': '0.3.2', 'phase': 'queued'}
         self.delivery._launch(operation, recovering=False)
         args = self.delivery.host.call_args.args[0]
         self.assertEqual(args[0], 'systemd-run')
         self.assertIn('--property=ProtectSystem=strict', args)
         self.assertIn('--property=ReadWritePaths=' + str(self.root), args)
         self.assertEqual(args[-5:], ['worker', '--root', str(self.root), '--operation-id', operation['operation_id']])
-        self.assertIn(str(initial / 'delivery.py'), args)
+        self.assertIn(str(active / 'delivery.py'), args)
+        self.assertIn('--setenv=PL_HOST_SUPERVISOR_PACKAGE=' + str(initial), args)
         saved = d.read(self.delivery.base / 'operation.json')
+        self.assertEqual(saved['worker_version'], active.name)
+        self.assertEqual(saved['worker_manifest_sha256'], d.digest(active / 'manifest.json'))
         self.assertEqual(saved['worker_unit'], self.installation + '-upgrade-' + uuid.UUID(operation['operation_id']).hex + '.service')
+
+    def test_recovery_uses_the_recorded_worker_even_when_active_version_changed(self):
+        initial, active = self.worker_releases()
+        operation = {'operation_id': str(uuid.uuid4()), 'worker_version': active.name,
+                     'worker_manifest_sha256': d.digest(active / 'manifest.json'), 'phase': 'recovery_required'}
+        d.atomic(self.root / 'state/controller-active.json', {'schema': 1, 'version': initial.name})
+        self.delivery._launch(operation, recovering=True)
+        args = self.delivery.host.call_args.args[0]
+        self.assertIn(str(active / 'delivery.py'), args)
+        self.assertEqual(args[-1], '--recover')
+        self.assertEqual(self.delivery.validate_worker_entry(operation), active)
+        self.delivery.package = initial
+        with self.assertRaisesRegex(ValueError, 'exact verified worker'):
+            self.delivery.validate_worker_entry(operation)
+
+    def test_legacy_recovery_pins_the_initial_worker_and_never_the_active_release(self):
+        initial, active = self.worker_releases()
+        operation = {'operation_id': str(uuid.uuid4()), 'phase': 'recovery_required'}
+        self.delivery._launch(operation, recovering=True)
+        self.assertIn(str(initial / 'delivery.py'), self.delivery.host.call_args.args[0])
+        self.assertNotIn('worker_version', operation)
+        self.delivery.package = initial
+        self.assertEqual(self.delivery.validate_worker_entry(operation), initial)
+
+    def test_worker_tamper_manifest_mismatch_and_replaced_authority_fail_before_exec(self):
+        initial, active = self.worker_releases()
+        operation = {'operation_id': str(uuid.uuid4()), 'phase': 'queued'}
+        (active / 'delivery.py').write_bytes(b'tampered worker')
+        with self.assertRaisesRegex(ValueError, 'integrity'):
+            self.delivery._launch(operation, recovering=False)
+        self.delivery.host.assert_not_called()
+        pinned = {'worker_version': active.name, 'worker_manifest_sha256': '0' * 64}
+        manifest = d.read(active / 'manifest.json')
+        manifest['files']['delivery.py'] = d.digest(active / 'delivery.py')
+        d.atomic(active / 'manifest.json', manifest)
+        with self.assertRaisesRegex(ValueError, 'manifest differs'):
+            self.delivery.worker_package(pinned, recovering=True)
+        (active / 'release-signing-public.pem').write_bytes(b'replaced trust authority')
+        manifest['files']['release-signing-public.pem'] = d.digest(active / 'release-signing-public.pem')
+        d.atomic(active / 'manifest.json', manifest)
+        with self.assertRaisesRegex(ValueError, 'trust key'):
+            self.delivery.worker_package(pinned, recovering=True)
 
     def test_authenticated_next_host_payload_is_allowed_without_trust_key_rotation(self):
         initial = self.root / 'releases/0.3.0'; candidate = self.root / 'releases/0.3.1'

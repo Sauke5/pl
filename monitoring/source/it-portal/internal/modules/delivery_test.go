@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,13 @@ func TestDeliveryTransportBindsExactFiniteOperation(t *testing.T) {
 		if err != nil || got.CurrentVersion != "0.3.0" || !got.UpdateAvailable {
 			t.Fatalf("%s: %#v %v", action, got, err)
 		}
+		if got.ReleaseNotes != nil {
+			t.Fatal("legacy status acquired release notes")
+		}
+		encoded, err := json.Marshal(got)
+		if err != nil || strings.Contains(string(encoded), `"release_notes"`) {
+			t.Fatal("absent notes changed the legacy JSON projection", err)
+		}
 	}
 	for _, action := range []string{"shell", "/operations", "check?url=other"} {
 		if _, err := client.Delivery(context.Background(), action, nil); err == nil {
@@ -44,6 +52,53 @@ func TestDeliveryTransportBindsExactFiniteOperation(t *testing.T) {
 	}
 	if _, err := client.Delivery(context.Background(), "upgrade", &DeliveryUpgrade{Version: "0.3.1", OperationID: "../x"}); err == nil {
 		t.Fatal("noncanonical operation accepted")
+	}
+}
+
+func TestDeliveryAuthenticatedStatusProjectsNestedReleaseNotes(t *testing.T) {
+	// Raw host JSON is independent of the Go struct tags: a tag or nesting
+	// regression must not silently drop release metadata on its way to the web.
+	wire := `{"core_api":1,"current_version":"0.3.3","latest_version":"0.4.0","update_available":true,"modules":[{"module_id":"forms","version":"1.0.0"}],"release_notes":{"version":"0.4.0","title":"Что нового в PL","summary":"Новые возможности и исправления.\nДанные установки сохраняются.","sections":[{"kind":"new","items":[{"title":"Описание обновления","description":"Изменения видны перед установкой."}]},{"kind":"improved","items":[{"title":"Управление установкой","description":"Параметры доступны в web PL."}]},{"kind":"fixed","items":[{"title":"Повторное подключение","description":"Статус перечитывается после восстановления связи."}]}],"private_host_debug":"must-not-reach-browser"}}`
+	want := &DeliveryReleaseNotes{
+		Version: "0.4.0", Title: "Что нового в PL", Summary: "Новые возможности и исправления.\nДанные установки сохраняются.",
+		Sections: []DeliveryReleaseSection{
+			{Kind: DeliveryReleaseNew, Items: []DeliveryReleaseItem{{Title: "Описание обновления", Description: "Изменения видны перед установкой."}}},
+			{Kind: DeliveryReleaseImproved, Items: []DeliveryReleaseItem{{Title: "Управление установкой", Description: "Параметры доступны в web PL."}}},
+			{Kind: DeliveryReleaseFixed, Items: []DeliveryReleaseItem{{Title: "Повторное подключение", Description: "Статус перечитывается после восстановления связи."}}},
+		},
+	}
+	var client *HostController
+	client = controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/delivery/check" || string(body) != "{}" || r.Header.Get("X-Pl-Timestamp") == "" {
+			t.Error("release metadata request escaped the finite status protocol")
+		}
+		mac := hmac.New(sha256.New, client.key)
+		mac.Write([]byte(r.Header.Get("X-Pl-Timestamp") + "\nPOST\n/v1/delivery/check\n"))
+		mac.Write(body)
+		if r.Header.Get("X-Pl-Signature") != hex.EncodeToString(mac.Sum(nil)) {
+			t.Error("release metadata request signature does not bind timestamp/method/path/body")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, wire)
+	})
+	got, err := client.Delivery(context.Background(), "check", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.ReleaseNotes, want) || got.LatestVersion != want.Version || !got.UpdateAvailable || len(got.Modules) != 1 {
+		t.Fatalf("nested release notes or existing status fields were lost: %#v", got)
+	}
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var browser map[string]json.RawMessage
+	if err = json.Unmarshal(encoded, &browser); err != nil || len(browser["release_notes"]) == 0 {
+		t.Fatal("release_notes snake_case field missing from browser projection", err)
+	}
+	if strings.Contains(string(encoded), "private_host_debug") || strings.Contains(string(encoded), "must-not-reach-browser") {
+		t.Fatal("typed projection forwarded an unknown host-only metadata field")
 	}
 }
 func TestDeliveryTransportRejectsUnconfirmedOrOversizedResponse(t *testing.T) {

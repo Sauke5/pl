@@ -128,3 +128,102 @@ test("interrupted upgrade recovers only its recorded operation", async ({
     { path: "/delivery/recover", body: { operation_id } },
   ]);
 });
+
+test("release story shows benefits before confirmation and renders content as text", async ({
+  page,
+}) => {
+  const state = await fixture(page, {
+    release_notes: {
+      version: "0.3.1",
+      title: "Теперь видно, ради чего обновляться",
+      summary: "Главные изменения собраны рядом с кнопкой установки.",
+      sections: [
+        {
+          kind: "new",
+          items: [
+            {
+              title: "Описание перед установкой",
+              description: "Прочитайте главное до перезапуска платформы.",
+            },
+          ],
+        },
+        {
+          kind: "improved",
+          items: [
+            {
+              title: "Описание под рукой",
+              description: "Вернуться к нему можно в настройках.",
+            },
+          ],
+        },
+        {
+          kind: "fixed",
+          items: [
+            {
+              title: "Переход к новому адресу",
+              description: "<b>Адрес остаётся доступен</b> как обычный текст.",
+            },
+          ],
+        },
+      ],
+    },
+  });
+  await page.goto("/#settings?section=general");
+  const notice = page.getByRole("button", { name: "PL 0.3.1", exact: true });
+  await expect(notice).toContainText("Теперь видно, ради чего обновляться");
+  await notice.click();
+  const release = page.getByRole("article", {
+    name: "Что нового в PL 0.3.1",
+    exact: true,
+  });
+  await expect(
+    release.getByRole("heading", { name: "Новое", exact: true }),
+  ).toBeVisible();
+  await expect(
+    release.getByRole("heading", { name: "Стало удобнее", exact: true }),
+  ).toBeVisible();
+  await expect(
+    release.getByRole("heading", { name: "Исправлено", exact: true }),
+  ).toBeVisible();
+  await expect(
+    release.getByText("<b>Адрес остаётся доступен</b> как обычный текст.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(release.locator("b")).toHaveCount(0);
+  expect(state.writes).toHaveLength(0);
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(
+    release.getByText("Переход к новому адресу", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Обновить до 0.3.1", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Обновление PL до 0.3.1" }),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+});
+
+test("release notes for another version are not offered for this update", async ({
+  page,
+}) => {
+  await fixture(page, {
+    release_notes: {
+      version: "9.0.0",
+      title: "Другая версия",
+      summary: "Чужое описание",
+      sections: [],
+    },
+  });
+  await page.goto("/#settings?section=operations");
+  await expect(page.getByText("Другая версия", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Подробное описание этого релиза ещё не опубликовано.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Обновить до 0.3.1", exact: true }),
+  ).toBeEnabled();
+});

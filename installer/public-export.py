@@ -23,7 +23,7 @@ FORBIDDEN_PARTS = {".git", ".private", "private", "node_modules", "__pycache__",
 TEXT_SUFFIXES = {".py", ".go", ".sql", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".css", ".svg", ".html", ".md", ".txt", ".toml", ".ini", ".sh", ".ps1", ".yaml", ".yml", ".cs", ".csproj", ".sln", ".props", ".targets", ".mako", ".lock"}
 ASSET_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".webmanifest", ".tgz"}
 INSTALLER_FILES = {
-    "package.py", "public-export.py", "release-catalog.py", "get-pl.sh", "install.sh", "bootstrap.py", "delivery.py", "delivery.ru.md", "maintenance.py",
+    "package.py", "public-export.py", "release-catalog.py", "get-pl.sh", "install.sh", "bootstrap.py", "delivery.py", "delivery-proxy.py", "delivery.ru.md", "maintenance.py",
     "module-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
     "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py",
     "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py",
@@ -35,7 +35,7 @@ INSTALLER_FILES = {
 UNIT_TEST_NAMES = {
     "test_alertmanager_controller.py", "test_alertmanager_package.py", "test_application_package.py", "test_application_transport.py",
     "test_bookstack_controller.py", "test_bookstack_package.py", "test_bootstrap.py", "test_connector_credentials.py",
-    "test_delivery.py", "test_doska_controller.py", "test_forms_controller.py", "test_grafana_build.py", "test_grafana_controller.py",
+    "test_delivery.py", "test_delivery_proxy.py", "test_doska_controller.py", "test_forms_controller.py", "test_grafana_build.py", "test_grafana_controller.py",
     "test_grafana_package.py", "test_host_status.py", "test_icmp_install.py", "test_icmp_probe.py", "test_install_proxy.py",
     "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py",
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
@@ -56,6 +56,13 @@ STANDALONE_DOCS = {"docs/production-layout.md"}
 CORE_EXTRAS = {"frontend/playwright.config.ts", "frontend/playwright.webkit.config.ts", "frontend/playwright.components.config.ts", "frontend/vitest.config.ts", "frontend/README.md"}
 CORE_EXTRAS |= {"deploy/doska/prepare-gateway-manifest.py", "docs/ecosystem-ui-workflow.ru.md"}
 PUBLIC_REPORT_ASSETS = {"monitoring/source/nginx/index.html", "monitoring/source/nginx/reports-theme-bridge.js", "monitoring/source/nginx/reports-theme-bridge.css"}
+RELEASE_NUMBER = r"(?:0|[1-9][0-9]*)"
+RELEASE_PRERELEASE = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+RELEASE_NOTE_PATH = re.compile(
+    r"docs/releases/" + r"\.".join([RELEASE_NUMBER] * 3)
+    + r"(?:-" + RELEASE_PRERELEASE + r"(?:\." + RELEASE_PRERELEASE + r")*)?"
+    + r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\.json\Z"
+)
 
 # These expressions deliberately spell out excluded source identifiers.
 LEGACY_ORGANIZATION = re.compile(r"(?i)(?<!\w)psk(?:\b|[-_/.])|PSK(?:Theme|UI)\b|пск|(?:psk|pl)-group\.(?:ru|com)")
@@ -114,6 +121,8 @@ def supplemental_allowed(name: str) -> bool:
         source_name(name)
     except ValueError:
         return False
+    if name.startswith("docs/releases/"):
+        return RELEASE_NOTE_PATH.fullmatch(name) is not None
     if name in PUBLIC_REPORT_ASSETS:
         return True
     if name.startswith(CORE):
@@ -187,7 +196,7 @@ def select_files(root: Path, package=None) -> dict[str, bytes]:
         path = "installer/tests/" + name
         if (root / path).exists():
             put_file(selected, path, read_regular(root, path))
-    for name in tracked_files(root, CORE, "apps/file-auditor", "monitoring/source/monitoring-admin", "monitoring/source/websites-admin", "monitoring/source/monitoring-admin-agent", "monitoring/source/scripts", "monitoring/source/nginx"):
+    for name in tracked_files(root, CORE, "apps/file-auditor", "monitoring/source/monitoring-admin", "monitoring/source/websites-admin", "monitoring/source/monitoring-admin-agent", "monitoring/source/scripts", "monitoring/source/nginx", "docs/releases"):
         if supplemental_allowed(name):
             put_file(selected, name, read_regular(root, name))
     selected["README.md"] = PUBLIC_README.encode()
@@ -435,6 +444,8 @@ PUBLIC_README = """# PL
 
 PL — платформа для каталога ресурсов, карточек сервисов, систем и подключаемых инструментов. Новая установка получает core: Go API, web-интерфейс и PostgreSQL. Образы приложений загружаются отдельно, когда администратор устанавливает модуль из web PL.
 
+Установочный core содержит готовые образы и может занимать сотни MiB. Отдельный архив публичных исходников обычно занимает несколько MiB после сжатия; его состав описывает `PUBLIC-SOURCE-MANIFEST.json`.
+
 ## Установка
 
 На отдельном сервере Ubuntu или Debian с доступом в интернет:
@@ -460,6 +471,10 @@ File Auditor поставляется отдельными исходникам�
 ## Обновления и данные
 
 Администратор получает уведомление о новой версии в PL и запускает обновление в настройках. Host-controller принимает только конечные операции установки и обновления, проверяет подпись каталога, совместимость и hashes артефактов. Docker socket не передаётся в API или web.
+
+Перед подтверждением установки PL показывает описание версии из подписанного каталога: какую пользу приносит обновление, что появилось, что улучшено и какие ошибки исправлены. Описание готовится для пользователей и доступно на странице обновлений.
+
+Доступ к GitHub для каталога и загрузки core/модулей настраивается в web PL. Можно выбрать прямое соединение, внешний HTTP CONNECT или SOCKS5 proxy с DNS через proxy либо существующий inbound установленного PL-модуля Xray. Внешний Xray на том же сервере подключается как внешний proxy по `127.0.0.1`. Перед сохранением доступна проверка подписанного каталога; ошибка выбранного канала останавливает доставку без перехода на прямое соединение. Для первой установки Xray нужен уже работающий канал первоначальной загрузки.
 
 Обновление сохраняет конфигурацию и данные установки. Перед применением создаётся согласованный snapshot core и установленных локальных модулей; при неудаче возвращаются данные и образы. Смена только image не является откатом миграции базы. Прерванная операция отображает своё состояние и требует восстановления перед следующей попыткой. Поддерживаемые переходы и ограничения определяются контрактом конкретного релиза.
 

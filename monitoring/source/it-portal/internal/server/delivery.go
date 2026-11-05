@@ -15,6 +15,7 @@ func (s *Server) RegisterDeliveryRoutes(m *http.ServeMux) {
 	if !s.Config.PortableRelease {
 		return
 	}
+	s.registerDeliveryProxyRoutes(m)
 	m.HandleFunc("GET /api/v1/delivery", s.moduleAuth(s.deliveryStatus))
 	m.HandleFunc("POST /api/v1/delivery/check", s.moduleAuth(s.deliveryCheck))
 	m.HandleFunc("POST /api/v1/delivery/upgrade", s.moduleAuth(s.deliveryUpgrade))

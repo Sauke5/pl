@@ -9,6 +9,7 @@ export type SettingsSection =
   | "system"
   | "operations"
   | "installation"
+  | "delivery"
   | "users"
   | "ad";
 export const sections: {
@@ -50,6 +51,11 @@ export const sections: {
     id: "installation",
     label: "Развёртывание",
     description: "Адрес PL, TLS и сетевая политика",
+  },
+  {
+    id: "delivery",
+    label: "Доступ к GitHub",
+    description: "Прокси для обновлений и загрузки модулей",
   },
   {
     id: "users",
@@ -95,6 +101,13 @@ export type SearchEntry = SettingsLocation & {
   keywords?: string;
 };
 export const searchEntries: SearchEntry[] = [
+  {
+    section: "delivery",
+    title: "Доступ к GitHub",
+    description: "Прокси, Xray и проверка загрузки обновлений",
+    keywords:
+      "HTTP CONNECT SOCKS5 прокси proxy github модули релиз обновления CA",
+  },
   {
     section: "installation",
     title: "Развёртывание PL",

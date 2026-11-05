@@ -1174,7 +1174,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ValueError('Transfer encoding refused')
             length = int(self.headers.get('Content-Length', '0'))
             # Forms embeds up to 3 MiB in base64 plus signed JSON metadata.
-            limit = (384 * 1024 if self.command == 'POST' and self.path == '/v1/installation/configure' else
+            limit = (96 * 1024 if self.command == 'POST' and self.path.startswith('/v1/delivery/proxy/') else
+                     384 * 1024 if self.command == 'POST' and self.path == '/v1/installation/configure' else
                      5 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/forms/request' else
                      24 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/netmap/request' else 1024 * 1024)
             if not 0 <= length <= limit:
@@ -1183,7 +1184,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if len(raw) != length or not authenticated(self.server.key, self.headers, self.command, self.path, raw):
                 self.reply(403, {'error': 'Controller authentication refused'})
                 return
-            if self.command == 'POST' and self.path in ('/v1/delivery/status', '/v1/delivery/check', '/v1/delivery/upgrade', '/v1/delivery/recover'):
+            if self.command == 'POST' and self.path in ('/v1/delivery/proxy/status', '/v1/delivery/proxy/configure', '/v1/delivery/proxy/test'):
+                result = getattr(self.server.controller.delivery().github_proxy(), self.path.rsplit('/', 1)[1])(json.loads(raw))
+            elif self.command == 'POST' and self.path in ('/v1/delivery/status', '/v1/delivery/check', '/v1/delivery/upgrade', '/v1/delivery/recover'):
                 result = getattr(self.server.controller.delivery(), self.path.rsplit('/', 1)[1])(json.loads(raw))
             elif self.command == 'POST' and self.path in ('/v1/installation/status', '/v1/installation/configure'):
                 result = getattr(self.server.controller.delivery().installation_settings(), self.path.rsplit('/', 1)[1])(json.loads(raw))
@@ -1246,6 +1249,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             result = {'state': 'error', 'error': 'Controller operation failed; reconcile or inspect host state'}
             code = getattr(error, 'public_code', None)
+            if self.path.startswith('/v1/delivery/proxy/') and code in {
+                    'delivery_proxy_invalid', 'delivery_proxy_conflict', 'delivery_proxy_busy', 'delivery_proxy_unavailable',
+                    'delivery_proxy_auth', 'delivery_proxy_tls', 'delivery_proxy_timeout', 'delivery_proxy_catalog'}:
+                self.reply(getattr(error, 'status', 400), {'error': {'code': code, 'message': error.public_message}})
+                return
             if self.path.startswith('/v1/installation/') and code in {
                     'installation_invalid', 'installation_conflict', 'installation_origin_modules', 'installation_tls_modules'}:
                 self.reply(getattr(error, 'status', 400), {'error': {'code': code, 'message': error.public_message}})

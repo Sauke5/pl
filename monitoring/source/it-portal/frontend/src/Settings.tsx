@@ -1,5 +1,6 @@
 import { RuntimeSettings } from "./RuntimeSettings";
 import { InstallationSettings } from "./InstallationSettings";
+import { DeliveryProxySettings } from "./DeliveryProxySettings";
 import { ADSettings } from "./ADSettings";
 import { LocalUsers } from "./LocalUsers";
 import { LocalAdminPassword } from "./LocalAdminPassword";
@@ -15,6 +16,7 @@ import {
   BookOpen,
   Clock,
   LayoutDashboard,
+  Network,
   PlugZap,
   Search,
   Server,
@@ -65,6 +67,7 @@ const sectionIcons = {
   system: Server,
   operations: Server,
   installation: Server,
+  delivery: Network,
   users: Users,
   ad: Shield,
 };
@@ -389,6 +392,8 @@ export default function Settings() {
               <RuntimeSettings />
             ) : place.section === "installation" ? (
               <InstallationSettings />
+            ) : place.section === "delivery" ? (
+              <DeliveryProxySettings />
             ) : place.section === "ad" ? (
               <ADSettings />
             ) : place.section === "users" ? (

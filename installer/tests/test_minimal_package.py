@@ -106,7 +106,7 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertTrue(all(command[command.index("--platform") + 1] == "linux/amd64" for command in calls))
         self.assertTrue(manifest["features"]["on_demand_modules"])
         self.assertNotIn("icmp_probe", manifest["features"])
-        self.assertTrue({"delivery.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py"} <= files)
+        self.assertTrue({"delivery.py", "delivery-proxy.py", "installation-settings.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py"} <= files)
         self.assertFalse(any(key.endswith("_module") for key in manifest["features"]))
         bootstrap.validate_bundled_images(manifest)
         self.assertEqual(wrapper.verify_package(args.output, "amd64"), manifest)
@@ -118,7 +118,8 @@ class MinimalBuildTests(unittest.TestCase):
         with patch.object(bootstrap.platform, "machine", return_value="x86_64"):
             self.assertEqual(bootstrap.manifest(extracted), manifest)
             for changed in ({"images": {**manifest["images"], "prometheus": manifest["images"]["db"]}},
-                            {"features": {**manifest["features"], "forms_module": True}}):
+                            {"features": {**manifest["features"], "forms_module": True}},
+                            {"files": {name: value for name, value in manifest["files"].items() if name != "delivery-proxy.py"}}):
                 invalid = {**manifest, **changed}
                 (extracted / "manifest.json").write_text(json.dumps(invalid))
                 with self.assertRaises(ValueError):

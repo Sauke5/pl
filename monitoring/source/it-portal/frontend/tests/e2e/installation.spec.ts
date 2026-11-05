@@ -100,3 +100,86 @@ test("deployment settings protect drafts, confirm restart and persist server pol
     page.getByRole("button", { name: "Применить параметры", exact: true }),
   ).toBeDisabled();
 });
+
+test("accepted address change survives loss of the old origin and a page reload", async ({
+  page,
+}) => {
+  let unavailable = false;
+  const operationID = "4c90ec54-5fd0-442b-8857-d58a9a54fb1b";
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname.replace("/api/v1", "");
+    if (unavailable) return route.abort("connectionrefused");
+    if (path === "/installation") {
+      const status = {
+        core_api: 1,
+        revision: 0,
+        public_url: "https://pl.example.test",
+        bind_address: "0.0.0.0",
+        allowed_cidrs: ["127.0.0.1/32"],
+        allowed_ports: [80, 443],
+        custom_tls: false,
+      };
+      if (request.method() === "GET") return route.fulfill({ json: status });
+      return route.fulfill({
+        json: {
+          ...status,
+          operation: {
+            kind: "configuration",
+            operation_id: operationID,
+            phase: "queued",
+            next_url: "https://new-pl.example.test:8443",
+          },
+        },
+      });
+    }
+    const responses: Record<string, unknown> = {
+      "/session": {
+        authenticated: true,
+        user: { id: "local-admin", admin: true },
+        csrf_token: "transition-csrf",
+      },
+      "/settings": { revision: 1, timezone: "UTC", stale_after_seconds: 180 },
+      "/modules": { items: [] },
+      "/preferences": { favorites: [], hidden_sections: [], section_order: [] },
+      "/help-state": { disabled: true, seen: [] },
+      "/wayline": { sources: [] },
+    };
+    return route.fulfill({ json: responses[path] ?? [] });
+  });
+  await page.goto("/#settings?section=installation");
+  await page.getByLabel(/^Адрес PL/).fill("https://new-pl.example.test:8443");
+  await page
+    .getByRole("button", { name: "Применить параметры", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", {
+      name: "Применить параметры установки?",
+      exact: true,
+    })
+    .getByRole("button", { name: "Проверить и применить", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", {
+      name: "Применить параметры установки?",
+      exact: true,
+    }),
+  ).toBeHidden();
+  unavailable = true;
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Адрес PL изменяется", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "https://new-pl.example.test:8443",
+      exact: true,
+    }),
+  ).toHaveAttribute(
+    "href",
+    "https://new-pl.example.test:8443/#settings?section=installation",
+  );
+  await expect(page.getByText("Failed to fetch", { exact: true })).toHaveCount(
+    0,
+  );
+});

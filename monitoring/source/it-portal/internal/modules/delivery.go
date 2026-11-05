@@ -17,15 +17,44 @@ import (
 // DeliveryStatus is a projection of the finite, authenticated host protocol.
 // Neither image references, download URLs nor executable arguments come from web.
 type DeliveryStatus struct {
-	CurrentVersion  string             `json:"current_version"`
-	LatestVersion   string             `json:"latest_version"`
-	UpdateAvailable bool               `json:"update_available"`
-	CheckedAt       string             `json:"checked_at,omitempty"`
-	Error           string             `json:"error,omitempty"`
-	CoreAPI         int                `json:"core_api"`
-	Modules         []DeliveryModule   `json:"modules"`
-	Operation       *DeliveryOperation `json:"operation,omitempty"`
+	CurrentVersion  string                `json:"current_version"`
+	LatestVersion   string                `json:"latest_version"`
+	UpdateAvailable bool                  `json:"update_available"`
+	CheckedAt       string                `json:"checked_at,omitempty"`
+	Error           string                `json:"error,omitempty"`
+	CoreAPI         int                   `json:"core_api"`
+	Modules         []DeliveryModule      `json:"modules"`
+	Operation       *DeliveryOperation    `json:"operation,omitempty"`
+	ReleaseNotes    *DeliveryReleaseNotes `json:"release_notes,omitempty"`
 }
+
+// DeliveryReleaseNotes contains only the public release description validated
+// against the signed catalog by the host controller. Older controllers may omit it.
+type DeliveryReleaseNotes struct {
+	Version  string                   `json:"version"`
+	Title    string                   `json:"title"`
+	Summary  string                   `json:"summary"`
+	Sections []DeliveryReleaseSection `json:"sections"`
+}
+
+type DeliveryReleaseSectionKind string
+
+const (
+	DeliveryReleaseNew      DeliveryReleaseSectionKind = "new"
+	DeliveryReleaseImproved DeliveryReleaseSectionKind = "improved"
+	DeliveryReleaseFixed    DeliveryReleaseSectionKind = "fixed"
+)
+
+type DeliveryReleaseSection struct {
+	Kind  DeliveryReleaseSectionKind `json:"kind"`
+	Items []DeliveryReleaseItem      `json:"items"`
+}
+
+type DeliveryReleaseItem struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
 type DeliveryModule struct {
 	ModuleID string `json:"module_id"`
 	Version  string `json:"version"`

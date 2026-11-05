@@ -70,6 +70,84 @@ class PublicExportTests(unittest.TestCase):
         for name in denied:
             self.assertFalse(export.supplemental_allowed(name), name)
 
+    def test_release_notes_allow_only_direct_canonical_semver_json_paths(self):
+        for version in ("0.4.0", "1.0.0", "0.4.0-rc.1", "0.4.0-alpha.0", "0.4.0-0", "0.4.0+build.001", "0.4.0-rc.1+build.005"):
+            path = "docs/releases/" + version + ".json"
+            with self.subTest(path=path):
+                self.assertTrue(export.supplemental_allowed(path))
+        for path in (
+            "docs/releases/04.0.0.json", "docs/releases/0.04.0.json", "docs/releases/0.4.00.json",
+            "docs/releases/0.4.json", "docs/releases/v0.4.0.json", "docs/releases/0.4.0.JSON",
+            "docs/releases/0.4.0.md", "docs/releases/0.4.0.json.bak", "docs/releases/0.4.0-01.json",
+            "docs/releases/0.4.0-.json", "docs/releases/0.4.0-alpha..1.json", "docs/releases/0.4.0+build..1.json",
+            "docs/releases/draft/0.4.0.json", "docs/releases/private/0.4.0.json",
+            "docs/releases/../product/0.4.0.json", "docs/product/0.4.0.json",
+            "docs/product/handoff.json",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(export.supplemental_allowed(path))
+
+    def test_tracked_public_release_notes_are_selected_byte_exact_without_private_docs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "LICENSE").write_bytes(b"public license\n")
+            (root / "NOTICE").write_bytes(b"public notices\n")
+            directory = root / "docs/releases"
+            directory.mkdir(parents=True)
+            body = json.dumps({"version": "0.4.0", "title": "PL 0.4.0", "summary": "Описание пользы обновления.",
+                               "sections": [{"kind": "improved", "items": [{"title": "Обновления", "description": "Изменения видны до установки."}]}]}, ensure_ascii=False, indent=2).encode() + b"\n"
+            (directory / "0.4.0.json").write_bytes(body)
+            # An untracked draft is deliberately outside the selection supplied
+            # by Git; private/noncanonical candidates must not even be read.
+            (directory / "0.5.0.json").write_bytes(b"untracked draft")
+            names = ["docs/releases/0.4.0.json", "docs/releases/draft.json", "docs/releases/0.4.0.md",
+                     "docs/product/handoff.json", "apps/inventory/README.ru.md"]
+            with patch.object(export, "source_context_files", return_value={}), patch.object(export, "tracked_files", return_value=names) as tracked:
+                selected = export.select_files(root, package=object())
+            self.assertIn("docs/releases", tracked.call_args.args)
+            self.assertEqual(selected["docs/releases/0.4.0.json"], body)
+            self.assertEqual({name for name in selected if name.startswith("docs/")}, {"docs/releases/0.4.0.json"})
+            self.assertFalse(any(name.startswith("apps/inventory/") for name in selected))
+
+    def test_release_notes_keep_content_audit_and_regular_file_guards(self):
+        name = "docs/releases/0.4.0.json"
+        self.assertFalse(export.audit_files({name: b'{"summary":"Public release notes"}\n'}))
+        token = "ghp_" + "D" * 36
+        findings = export.audit_files({name: json.dumps({"summary": token}).encode()})
+        self.assertTrue(any(item["rule"] == "access-token" and item["severity"] == "error" for item in findings))
+        self.assertNotIn(token, json.dumps(findings))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "private").mkdir()
+            (root / "private/draft.json").write_bytes(b"private draft")
+            (root / "docs/releases").mkdir(parents=True)
+            (root / name).symlink_to(root / "private/draft.json")
+            with self.assertRaises(ValueError):
+                export.read_regular(root, name)
+
+    def test_delivery_proxy_helper_is_selected_with_its_exact_public_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "LICENSE").write_bytes(b"public license\n")
+            (root / "NOTICE").write_bytes(b"public notices\n")
+            (root / "installer").mkdir()
+            body = b'"""Finite delivery proxy transport."""\nMODE = "direct"\n'
+            (root / "installer/delivery-proxy.py").write_bytes(body)
+            with patch.object(export, "source_context_files", return_value={}), patch.object(export, "tracked_files", return_value=[]):
+                selected = export.select_files(root, package=object())
+            self.assertEqual(selected["installer/delivery-proxy.py"], body)
+            self.assertIn("test_delivery_proxy.py", export.UNIT_TEST_NAMES)
+            self.assertFalse([item for item in export.audit_files({"installer/delivery-proxy.py": body}) if item["severity"] == "error"])
+
+    def test_exporter_and_public_update_docs_pass_their_own_content_audit(self):
+        selected = {"installer/public-export.py": (BASE / "public-export.py").read_bytes(),
+                    "installer/tests/test_public_export.py": Path(__file__).read_bytes(),
+                    "README.md": export.PUBLIC_README.encode(),
+                    "installer/README.public.ru.md": (BASE / "README.public.ru.md").read_bytes(),
+                    "installer/delivery.ru.md": (BASE / "delivery.ru.md").read_bytes()}
+        findings = export.audit_files(selected)
+        self.assertFalse([finding for finding in findings if finding["severity"] == "error"], findings)
+
     def test_audit_detects_private_material_site_and_home_without_echoing_values(self):
         # Assemble synthetic forbidden material so this test source itself does
         # not contain a deployment identity or complete private-key marker.

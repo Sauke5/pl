@@ -42,6 +42,7 @@ def main():
     parser.add_argument("--sequence", type=int, required=True)
     parser.add_argument("--core", type=Path, action="append", required=True)
     parser.add_argument("--module", type=Path, action="append", default=[])
+    parser.add_argument("--notes-file", type=Path, help="JSON release notes included in the signed catalog payload")
     parser.add_argument("--signing-key-file", type=Path, required=True)
     parser.add_argument("--expires-days", type=int, default=90)
     parser.add_argument("--output", type=Path, required=True)
@@ -49,6 +50,9 @@ def main():
     if (not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9][A-Za-z0-9.-]*)?", args.version)
             or args.sequence < 1 or not 1 <= args.expires_days <= 366):
         raise ValueError("Invalid catalog identity")
+    spec = importlib.util.spec_from_file_location("pl_catalog_validation", ROOT / "installer/delivery.py")
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
     key = args.signing_key_file.resolve()
     if args.signing_key_file.is_symlink() or not key.is_file() or key.stat().st_mode & 0o077:
         raise ValueError("Signing key must be a private regular file")
@@ -59,6 +63,12 @@ def main():
     value = {"schema": 1, "product": "PL", "sequence": args.sequence, "core_api": 1, "version": args.version,
              "published_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
              "expires_at": int(time.time()) + args.expires_days * 86400, "core": {}, "modules": {}}
+    if args.notes_file is not None:
+        with args.notes_file.open("rb") as source:
+            raw_notes = source.read(512 * 1024 + 1)
+        if len(raw_notes) > 512 * 1024:
+            raise ValueError("Release notes input file exceeds 512 KiB")
+        value["release_notes"] = validator.validate_release_notes(validator.load_json(raw_notes), args.version)
     for path in args.core:
         m = metadata(path, "manifest.json")
         if m.get("product") != "PL" or m.get("version") != args.version or not m.get("features", {}).get("on_demand_modules") or set(m.get("images", {})) != {"api", "web", "db"}:
@@ -83,9 +93,6 @@ def main():
     if len(signature) != 64:
         raise ValueError("Ed25519 signature required")
     envelope = {"payload": base64.b64encode(payload).decode(), "signature": base64.b64encode(signature).decode()}
-    spec = importlib.util.spec_from_file_location("pl_catalog_validation", ROOT / "installer/delivery.py")
-    validator = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(validator)
     validator.verify_catalog(envelope, public_key)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as output:

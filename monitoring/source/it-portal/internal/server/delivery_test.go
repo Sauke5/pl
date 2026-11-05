@@ -4,17 +4,62 @@ import (
 	"context"
 	"encoding/json"
 	"pl/portal/internal/modules"
+	"reflect"
 	"testing"
 )
 
-type deliveryControllerFixture struct{ calls int }
+type deliveryControllerFixture struct {
+	calls int
+	notes *modules.DeliveryReleaseNotes
+}
 
 func (c *deliveryControllerFixture) Apply(context.Context, modules.Operation) (modules.Observation, error) {
 	return modules.Observation{}, nil
 }
 func (c *deliveryControllerFixture) Delivery(_ context.Context, action string, op *modules.DeliveryUpgrade) (modules.DeliveryStatus, error) {
 	c.calls++
-	return modules.DeliveryStatus{CoreAPI: 1, CurrentVersion: "0.3.0", LatestVersion: "0.3.1", UpdateAvailable: true, Modules: []modules.DeliveryModule{{ModuleID: "forms", Version: "1.0.0"}, {ModuleID: "prometheus", Version: "3.15.0"}}}, nil
+	return modules.DeliveryStatus{CoreAPI: 1, CurrentVersion: "0.3.0", LatestVersion: "0.3.1", UpdateAvailable: true, Modules: []modules.DeliveryModule{{ModuleID: "forms", Version: "1.0.0"}, {ModuleID: "prometheus", Version: "3.15.0"}}, ReleaseNotes: c.notes}, nil
+}
+
+func TestDeliveryForwardsOptionalReleaseNotesAndPreservesLegacyStatus(t *testing.T) {
+	s, admin := localUsersFixture(t)
+	s.Config.PortableRelease = true
+	notes := &modules.DeliveryReleaseNotes{
+		Version: "0.3.1", Title: "Новая версия PL", Summary: "Описание доступно до обновления.",
+		Sections: []modules.DeliveryReleaseSection{
+			{Kind: modules.DeliveryReleaseNew, Items: []modules.DeliveryReleaseItem{{Title: "Описание обновления", Description: "Новые возможности показаны в карточке."}}},
+			{Kind: modules.DeliveryReleaseFixed, Items: []modules.DeliveryReleaseItem{{Title: "Проверка состояния", Description: "Сохраняются данные текущей установки."}}},
+		},
+	}
+	controller := &deliveryControllerFixture{}
+	s.Modules = modules.New(s.Store, controller)
+	for _, withNotes := range []bool{false, true} {
+		if withNotes {
+			controller.notes = notes
+		}
+		for _, route := range []struct{ method, path string }{{"GET", "/api/v1/delivery"}, {"POST", "/api/v1/delivery/check"}} {
+			var payload any
+			if route.method == "POST" {
+				payload = map[string]any{}
+			}
+			response := apiCall(s, admin, route.method, route.path, payload, nil)
+			status := apiDecode[modules.DeliveryStatus](t, response, 200)
+			if status.CurrentVersion != "0.3.0" || status.LatestVersion != "0.3.1" || !status.UpdateAvailable || len(status.Modules) != 2 {
+				t.Fatalf("existing status fields changed: %#v", status)
+			}
+			var raw map[string]json.RawMessage
+			if err := json.Unmarshal(response.Body.Bytes(), &raw); err != nil {
+				t.Fatal(err)
+			}
+			if withNotes {
+				if !reflect.DeepEqual(status.ReleaseNotes, notes) || len(raw["release_notes"]) == 0 {
+					t.Fatal("HTTP response lost typed release_notes metadata")
+				}
+			} else if status.ReleaseNotes != nil || raw["release_notes"] != nil {
+				t.Fatal("legacy status unexpectedly contains release_notes")
+			}
+		}
+	}
 }
 func TestDeliveryRequiresCurrentAdminBrowserSessionAndFiniteInput(t *testing.T) {
 	s, admin := localUsersFixture(t)

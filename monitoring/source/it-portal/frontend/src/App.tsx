@@ -4,6 +4,11 @@ import LocalProxy, {
 } from "./LocalProxy";
 import { LocalAdminPassword } from "./LocalAdminPassword";
 import { UpdateNotification } from "./UpdateSettings";
+import {
+  InstallationTransitionNotice,
+  pendingInstallationTransition,
+  settleInstallationTransition,
+} from "./InstallationTransition";
 import Modules from "./Modules";
 import NavNetMap from "./NavNetMap";
 import {
@@ -213,6 +218,23 @@ export default function App() {
   );
   const returningToService = useRef(false);
   useEffect(() => {
+    if (
+      !session.data?.authenticated ||
+      !session.data.user?.admin ||
+      session.error ||
+      !pendingInstallationTransition()
+    )
+      return;
+    const controller = new AbortController();
+    void api<{
+      public_url: string;
+      operation?: { operation_id: string; phase: string };
+    }>("/installation", "GET", undefined, {}, controller.signal)
+      .then(settleInstallationTransition)
+      .catch(() => {});
+    return () => controller.abort();
+  }, [session.data?.authenticated, session.data?.user?.admin, session.error]);
+  useEffect(() => {
     const target = pendingLoginReturn();
     if (!session.data?.authenticated || returningToService.current) return;
     if (successVisible) {
@@ -286,10 +308,16 @@ export default function App() {
     return (
       <AuthScene kind="login">
         <div className="auth-state">
-          <ErrorBox
-            error={session.error}
-            retry={() => void session.refetch()}
-          />
+          {pendingInstallationTransition() ? (
+            <InstallationTransitionNotice
+              retry={() => void session.refetch()}
+            />
+          ) : (
+            <ErrorBox
+              error={session.error}
+              retry={() => void session.refetch()}
+            />
+          )}
         </div>
       </AuthScene>
     );
@@ -919,8 +947,9 @@ function Admin({ session }: { session: Session }) {
         }
         actions={
           <>
-            <UpdateNotification enabled={!!session.user?.admin && !session.demo} />
-            {" "}
+            <UpdateNotification
+              enabled={!!session.user?.admin && !session.demo}
+            />{" "}
             <Button
               className="topbar-search"
               variant="ghost"

@@ -458,7 +458,7 @@ def build(args) -> None:
             return
         payloads = ("bootstrap.py", "nginx.conf", "LICENSES.txt", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "module-network.py")
         if not bundled:
-            payloads += ("install.sh", "delivery.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py")
+            payloads += ("install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py")
         files = {name: (ROOT / "installer" / name) for name in payloads}
         if with_icmp:
             files.update({name: ROOT / "installer" / name for name in ("icmp-probe.py", "icmp-install.py")})

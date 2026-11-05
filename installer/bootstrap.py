@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "release-signing-public.pem"}
+FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
 REQUIRED = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt"}
 
 
@@ -110,7 +110,7 @@ def manifest(package: Path) -> dict:
     if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
     if features.get("on_demand_modules"):
-        payloads = {"install.sh", "delivery.py", "release-signing-public.pem", "module-controller.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py"}
+        payloads = {"install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "module-controller.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py"}
         if (m.get("schema") != 2 or not features.get("module_controller") or not isinstance(m.get("files"), dict) or not payloads <= m["files"].keys()
                 or any(features.get(name + "_module") for name in ("xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack"))):
             raise ValueError("On-demand core requires its finite delivery controllers without bundled modules")

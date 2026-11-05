@@ -6,6 +6,10 @@ import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
 import { ErrorBox, Field, Panel } from "./components/common";
 import { useDraftRegistration } from "./settings/Draft";
+import {
+  rememberInstallationTransition,
+  settleInstallationTransition,
+} from "./InstallationTransition";
 
 type Configuration = {
   revision: number;
@@ -95,6 +99,7 @@ export function InstallationSettings() {
     !!status.data?.operation && !terminal.has(status.data.operation.phase);
   useEffect(() => {
     const value = status.data;
+    if (value) settleInstallationTransition(value);
     if (!value || dirty || running) return;
     const next = form(value);
     setDraft(next);
@@ -102,6 +107,12 @@ export function InstallationSettings() {
     setRevision(value.revision);
   }, [status.data, dirty, running]);
   function accepted(value: Status) {
+    if (value.operation?.next_url && value.operation.operation_id)
+      rememberInstallationTransition(
+        value.operation.operation_id,
+        value.operation.next_url,
+      );
+    settleInstallationTransition(value);
     queryClient.setQueryData(["/installation"], value);
     if (draft) {
       const clean = { ...draft, tls_cert_pem: "", tls_key_pem: "" };
