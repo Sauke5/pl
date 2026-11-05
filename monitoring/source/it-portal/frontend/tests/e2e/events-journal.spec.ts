@@ -705,7 +705,7 @@ test("module operations show instance action actor result and service refresh co
     result: {
       instance: {
         name: "Метрики стенда",
-        observed_state: "connected",
+        observed_state: "running",
         version: "3.11.0",
       },
     },
@@ -760,6 +760,8 @@ test("module operations show instance action actor result and service refresh co
   const result = page.getByLabel("Результат операции");
   await expect(result).toContainText("Метрики стенда");
   await expect(result).toContainText("Версия: 3.11.0");
+  await expect(result).toContainText("Состояние: Работает.");
+  await expect(result).not.toContainText("Состояние: Выполняется");
   await expect(result).toContainText("Операция с модулем завершена");
   await page.screenshot({ path: "artifacts/module-operation-context.png" });
 });

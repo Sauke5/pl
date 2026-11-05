@@ -69,6 +69,17 @@ function operationTarget(
   return "Цель не указана";
 }
 
+const moduleStateLabels: Record<string, string> = {
+  pending: "Ожидает выполнения",
+  running: "Работает",
+  disabled: "Отключён",
+  unavailable: "Недоступен",
+  error: "Ошибка",
+  unknown: "Состояние неизвестно",
+  removing: "Удаляется",
+  absent: "Удалён",
+};
+
 function OperationOutcome({ job }: { job: Job }) {
   if (job.status !== "succeeded") return null;
   if (job.kind === "module") {
@@ -84,7 +95,9 @@ function OperationOutcome({ job }: { job: Job }) {
     return (
       <p className="workspace-operation-outcome">
         {removed ? "Модуль удалён." : "Операция с модулем завершена."}
-        {state ? ` Состояние: ${statusLabel[state] || state}.` : ""}
+        {state
+          ? ` Состояние: ${moduleStateLabels[state] || "Состояние неизвестно"}.`
+          : ""}
         {version ? ` Версия: ${version}.` : ""}
       </p>
     );

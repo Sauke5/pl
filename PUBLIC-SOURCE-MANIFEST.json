@@ -16804,6 +16804,11 @@
       "size": 3705
     },
     {
+      "path": "docs/releases/0.4.3.json",
+      "sha256": "2456cb5748642e5c272f5521f9f6bc935f1b17058c766320269e6654846ff40f",
+      "size": 4101
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -18075,8 +18080,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/WorkspaceOperations.tsx",
-      "sha256": "4cb420460c9597dfb5b4cf2eda468e1f3ff812d46dcdeeee64d457d78214637e",
-      "size": 11976
+      "sha256": "c8017da735bb8ff5755cbf00228c6df4434f4562e30200a2405885e1dde1d792",
+      "size": 12385
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/WorkspaceProblems.tsx",
@@ -18515,8 +18520,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/events-journal.spec.ts",
-      "sha256": "ce763f8a5367e3a4a664812ab55a5388e8538b6288e3aa2cb4645d0245935cd1",
-      "size": 29475
+      "sha256": "ac41c465a4bb5c03d0d5db4706437b91db9992e3e6773e2a7444d6144fd69aca",
+      "size": 29640
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/favorites-layout.spec.ts",
