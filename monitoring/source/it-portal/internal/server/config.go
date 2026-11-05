@@ -45,6 +45,7 @@ type Config struct {
 	LocalAdminUsername, LocalAdminHashFile                                                                      string
 	Addr, DatabaseURL, PublicURL, Issuer, ClientID, ClientSecret, GroupClaim, AllowedGroup, CAFile, ExecutorURL string
 	ICMPExecutorURL                                                                                             string
+	ICMPPolicyMode                                                                                              string
 	ICMPCIDRs                                                                                                   []string
 	Demo                                                                                                        bool
 	LocalAdminPasswordChange                                                                                    bool
@@ -60,6 +61,17 @@ func LoadConfig() (Config, error) {
 	c := Config{Addr: env("PORTAL_ADDR", ":8080"), DatabaseURL: os.Getenv("PORTAL_DATABASE_URL"), PublicURL: env("PORTAL_PUBLIC_URL", "http://localhost:8098"), Issuer: os.Getenv("PORTAL_OIDC_ISSUER"), ClientID: os.Getenv("PORTAL_OIDC_CLIENT_ID"), ClientSecret: os.Getenv("PORTAL_OIDC_CLIENT_SECRET"), GroupClaim: env("PORTAL_OIDC_GROUP_CLAIM", "groups"), AllowedGroup: os.Getenv("PORTAL_OIDC_ALLOWED_GROUP"), CAFile: os.Getenv("PORTAL_CA_FILE"), ExecutorURL: os.Getenv("PORTAL_EXECUTOR_URL"), Demo: os.Getenv("PORTAL_DEMO") == "true", CIDRs: csv(os.Getenv("PORTAL_ALLOWED_CIDRS")), SessionLifetime: 8 * time.Hour}
 	c.ICMPExecutorURL = os.Getenv("PORTAL_ICMP_EXECUTOR_URL")
 	c.ICMPCIDRs = csv(os.Getenv("PORTAL_ICMP_ALLOWED_CIDRS"))
+	c.ICMPPolicyMode = os.Getenv("PORTAL_ICMP_POLICY")
+	if c.ICMPPolicyMode == "" {
+		if _, explicit := os.LookupEnv("PORTAL_ICMP_ALLOWED_CIDRS"); explicit {
+			c.ICMPPolicyMode = "cidr"
+		} else {
+			c.ICMPPolicyMode = "interactive"
+		}
+	}
+	if c.ICMPPolicyMode != "interactive" && c.ICMPPolicyMode != "cidr" || c.ICMPPolicyMode == "interactive" && len(c.ICMPCIDRs) != 0 {
+		return c, errors.New("invalid PORTAL_ICMP_POLICY")
+	}
 	if c.ICMPExecutorURL != "" {
 		u, err := url.Parse(c.ICMPExecutorURL)
 		if err != nil || u.Scheme != "unix" || u.Host != "" || u.User != nil || !filepath.IsAbs(u.Path) || filepath.Clean(u.Path) != u.Path || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {

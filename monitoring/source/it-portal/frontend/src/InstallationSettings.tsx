@@ -17,6 +17,8 @@ type Configuration = {
   bind_address: string;
   allowed_cidrs: string[];
   allowed_ports: number[];
+  icmp_policy_mode?: "interactive" | "cidr";
+  icmp_allowed_cidrs?: string[];
   outbound_ca_pem?: string;
 };
 type Status = Configuration & {
@@ -38,6 +40,8 @@ type Draft = {
   tls_cert_pem: string;
   tls_key_pem: string;
   outbound_ca_pem: string;
+  icmp_policy_mode: "interactive" | "cidr";
+  icmp_cidrs: string;
 };
 const terminal = new Set([
   "complete",
@@ -58,6 +62,10 @@ const form = (value: Configuration): Draft => ({
   tls_cert_pem: "",
   tls_key_pem: "",
   outbound_ca_pem: value.outbound_ca_pem || "",
+  icmp_policy_mode:
+    value.icmp_policy_mode ||
+    (value.icmp_allowed_cidrs === undefined ? "interactive" : "cidr"),
+  icmp_cidrs: (value.icmp_allowed_cidrs || []).join("\n"),
 });
 function nextURL(value?: string) {
   try {
@@ -129,6 +137,8 @@ export function InstallationSettings() {
       ports.some((p) => !Number.isInteger(p) || p < 1 || p > 65535) ||
       ports.length > 64 ||
       split(draft.cidrs).length > 64 ||
+      (draft.icmp_policy_mode === "cidr" &&
+        split(draft.icmp_cidrs).length > 64) ||
       !!draft.tls_cert_pem !== !!draft.tls_key_pem
     ) {
       setError(
@@ -150,6 +160,15 @@ export function InstallationSettings() {
         allowed_cidrs: [...new Set(split(draft.cidrs))],
         allowed_ports: [...new Set(ports)],
         outbound_ca_pem: draft.outbound_ca_pem,
+        ...(status.data?.icmp_policy_mode
+          ? {
+              icmp_policy_mode: draft.icmp_policy_mode,
+              icmp_allowed_cidrs:
+                draft.icmp_policy_mode === "cidr"
+                  ? [...new Set(split(draft.icmp_cidrs))]
+                  : [],
+            }
+          : {}),
         ...(draft.tls_cert_pem
           ? { tls_cert_pem: draft.tls_cert_pem, tls_key_pem: draft.tls_key_pem }
           : {}),
@@ -305,6 +324,52 @@ export function InstallationSettings() {
                   />
                 </Field>
               </div>
+              {status.data?.icmp_policy_mode && (
+                <details>
+                  <summary>ICMP-диагностика</summary>
+                  <p className="muted">
+                    По умолчанию ICMP проверяет адрес, указанный
+                    администратором, как остальные ручные инструменты. При
+                    необходимости можно ограничить его выбранными IPv4-сетями.
+                  </p>
+                  <Field label="Доступные адреса для ICMP">
+                    <select
+                      value={draft.icmp_policy_mode}
+                      onChange={(event) => {
+                        setDraft({
+                          ...draft,
+                          icmp_policy_mode: event.target
+                            .value as Draft["icmp_policy_mode"],
+                        });
+                        operationID.current = undefined;
+                      }}
+                    >
+                      <option value="interactive">
+                        Как в других ручных проверках
+                      </option>
+                      <option value="cidr">Только указанные сети</option>
+                    </select>
+                  </Field>
+                  {draft.icmp_policy_mode === "cidr" && (
+                    <Field
+                      label="Разрешённые IPv4-сети для ICMP"
+                      hint="CIDR по одному на строке, не более 64. Пустой список запрещает ICMP-проверки."
+                    >
+                      <textarea
+                        rows={4}
+                        value={draft.icmp_cidrs}
+                        onChange={(event) => {
+                          setDraft({
+                            ...draft,
+                            icmp_cidrs: event.target.value,
+                          });
+                          operationID.current = undefined;
+                        }}
+                      />
+                    </Field>
+                  )}
+                </details>
+              )}
               <details>
                 <summary>Собственный TLS-сертификат</summary>
                 <p className="muted">

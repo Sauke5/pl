@@ -367,7 +367,8 @@ def build(args) -> None:
             raise ValueError("Connector credential feature requires its complete source and schema")
         module_id = getattr(args, "module_id", None)
         bundled = bool(getattr(args, "bundled", False))
-        with_icmp = bool(getattr(args, "with_icmp", False))
+        # ICMP is part of every core; --with-icmp remains a compatibility alias.
+        with_icmp = module_id is None
         if with_icmp and not (context / "internal/providers/icmp.go").is_file():
             raise ValueError("ICMP helper requires its provider source")
         optional = [name for name in ("wayline", "grafana", *APPLICATION_ROLES) if getattr(args, "with_" + name, False)]
@@ -502,7 +503,7 @@ def main() -> int:
     package.add_argument("--compression-level", type=int, choices=range(1, 10), default=9,
                          help="Gzip compression level (1 fastest, 9 smallest; default: 9)")
     package.add_argument("--bundled", action="store_true", help="Legacy all-in-one artifact; independent installations use the default minimal core")
-    package.add_argument("--with-icmp", action="store_true", help="Explicitly include the optional Linux ICMP host helper")
+    package.add_argument("--with-icmp", action="store_true", help="Compatibility alias: every core already includes the Linux ICMP host helper")
     package.add_argument("--platform", choices=("linux/amd64", "linux/arm64"), help="Build the selected Linux CPU architecture with the local engine")
     package.add_argument("--with-wayline", action="store_true")
     package.add_argument("--with-grafana", action="store_true")

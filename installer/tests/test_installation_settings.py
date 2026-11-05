@@ -26,6 +26,22 @@ def request(**values):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_icmp_mode_omission_explicit_legacy_and_invalid_combinations(self):
+        self.assertNotIn('icmp_policy_mode', s.validate(request()))
+        self.assertEqual(s.icmp_policy({}), {'mode': 'interactive', 'cidrs': []})
+        self.assertEqual(s.icmp_policy({'icmp_allowed_cidrs': []}), {'mode': 'cidr', 'cidrs': []})
+        self.assertEqual(s.icmp_candidate({'icmp_allowed_cidrs': ['10.0.0.0/8']}, {}), {'icmp_allowed_cidrs': ['10.0.0.0/8']})
+        self.assertEqual(s.icmp_candidate({}, {'icmp_allowed_cidrs': []}), {'icmp_policy_mode': 'cidr', 'icmp_allowed_cidrs': []})
+        self.assertEqual(s.icmp_candidate({'icmp_allowed_cidrs': ['10.0.0.0/8']}, {'icmp_policy_mode': 'interactive'}),
+                         {'icmp_policy_mode': 'interactive', 'icmp_allowed_cidrs': []})
+        self.assertEqual(s.icmp_candidate({'icmp_allowed_cidrs': ['10.0.0.0/8']}, {'icmp_policy_mode': 'cidr'})['icmp_allowed_cidrs'], ['10.0.0.0/8'])
+        self.assertEqual(s.validate(request(icmp_policy_mode='cidr', icmp_allowed_cidrs=['0.0.0.0/0']))['icmp_allowed_cidrs'], ['0.0.0.0/0'])
+        for fields in ({'icmp_policy_mode': None}, {'icmp_allowed_cidrs': None}, {'icmp_policy_mode': 'other'},
+                       {'icmp_allowed_cidrs': ['::/0']}, {'icmp_allowed_cidrs': ['10.0.0.1/8']},
+                       {'icmp_allowed_cidrs': ['10.0.0.0/8'] * 2}, {'icmp_allowed_cidrs': ['10.0.0.0/8'] * 65},
+                       {'icmp_policy_mode': 'interactive', 'icmp_allowed_cidrs': ['10.0.0.0/8']}):
+            with self.subTest(fields=fields), self.assertRaises(s.ConfigurationError): s.validate(request(**fields))
+
     def test_canonical_https_origin_ipv6_and_typed_policy(self):
         result = s.validate(request(public_url='https://PL.Example.Test:443/', allowed_ports=[443, 443, 80]))
         self.assertEqual(result['public_url'], 'https://pl.example.test')
@@ -159,9 +175,42 @@ class SettingsTests(unittest.TestCase):
         result = self.service.status({})
         self.assertEqual(result['allowed_cidrs'], ['127.0.0.1/32'])
         self.assertEqual(result['allowed_ports'], [80, 443])
+        self.assertEqual(result['icmp_policy_mode'], 'interactive')
+        self.assertEqual(result['icmp_allowed_cidrs'], [])
         for forbidden in ('CURRENT-PRIVATE-TLS-KEY', 'private-database-url', 'SHOULD-NEVER-BE-PROJECTED'):
             self.assertNotIn(forbidden, json.dumps(result))
             self.assertNotIn(forbidden, json.dumps(self.delivery.status({}, refresh=False)))
+
+    def test_status_and_configuration_preserve_explicit_legacy_icmp_denial(self):
+        self.state['config']['icmp_allowed_cidrs'] = []
+        d.atomic(self.root / 'state/installation.json', self.state)
+        self.assertEqual(self.service.status({})['icmp_policy_mode'], 'cidr')
+        body = request()
+        self.prepare(body)
+        pending = self.root / 'private/installation-configurations' / body['operation_id'] / 'request.json'
+        saved = d.read(pending)['config']
+        self.assertIn('icmp_allowed_cidrs', saved)
+        self.assertEqual(saved['icmp_allowed_cidrs'], [])
+        self.assertNotIn('icmp_policy_mode', saved)
+
+    def test_icmp_policy_apply_failure_restores_external_state_before_core_configuration(self):
+        self.prepare(request(icmp_policy_mode='cidr', icmp_allowed_cidrs=[])); self.runtime()
+        package = self.root / 'releases/0.3.0'; package.mkdir()
+        d.atomic(package / 'manifest.json', {'features': {'icmp_probe': True}})
+        self.delivery.package = package
+        self.delivery.prepare_icmp = Mock(return_value=True)
+        events = []
+        def transition(action):
+            events.append(action)
+            if action == 'apply':
+                raise ValueError('Injected failure after external file replacement')
+            self.assertEqual(d.read(self.root / 'config/compose.json'), self.model)
+        self.delivery.icmp_host = transition
+        self.service.perform()
+        self.assertEqual(events, ['apply', 'restore'])
+        self.assertEqual(self.delivery.state(), self.state)
+        self.assertEqual(d.read(self.delivery.base / 'operation.json')['phase'], 'rolled_back')
+        self.delivery.prepare_icmp.assert_called_once()
 
     def test_active_settings_helper_loads_without_shadowing_installation_identity(self):
         package = self.root / 'releases/0.3.0'; package.mkdir()

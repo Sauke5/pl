@@ -51,7 +51,7 @@ func (r *Registry) icmpCheck(ctx context.Context, target string) (map[string]any
 	if r.icmpGuard == nil {
 		return nil, ErrICMPUnavailable
 	}
-	ips, err := r.icmpGuard.ResolveNetworkTarget(ctx, target)
+	ips, err := r.icmpGuard.ResolveICMPTarget(ctx, target)
 	if err != nil {
 		return nil, classifyEndpointError(err)
 	}

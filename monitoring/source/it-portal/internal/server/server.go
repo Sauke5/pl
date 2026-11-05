@@ -45,6 +45,9 @@ func New(s *store.Store, c Config, p *providers.Registry, client *http.Client) *
 	if p != nil {
 		p.SetICMPExecutor(c.ICMPExecutorURL)
 		if guard, err := netguard.New(c.ICMPCIDRs, nil, ""); err == nil {
+			if c.ICMPPolicyMode == "interactive" {
+				guard = guard.InteractiveChecks()
+			}
 			p.SetICMPGuard(guard)
 		}
 	}

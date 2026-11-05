@@ -105,8 +105,8 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertTrue(all(command[command.index("--platform") + 1] == "linux/amd64" for command in calls))
         self.assertTrue(manifest["features"]["on_demand_modules"])
-        self.assertNotIn("icmp_probe", manifest["features"])
-        self.assertTrue({"delivery.py", "delivery-proxy.py", "installation-settings.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py"} <= files)
+        self.assertTrue(manifest["features"]["icmp_probe"])
+        self.assertTrue({"delivery.py", "delivery-proxy.py", "installation-settings.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py", "icmp-probe.py", "icmp-install.py"} <= files)
         self.assertFalse(any(key.endswith("_module") for key in manifest["features"]))
         bootstrap.validate_bundled_images(manifest)
         self.assertEqual(wrapper.verify_package(args.output, "amd64"), manifest)
@@ -117,14 +117,16 @@ class MinimalBuildTests(unittest.TestCase):
                 (extracted / member.name).write_bytes(archive.extractfile(member).read())
         with patch.object(bootstrap.platform, "machine", return_value="x86_64"):
             self.assertEqual(bootstrap.manifest(extracted), manifest)
-            for changed in ({"images": {**manifest["images"], "prometheus": manifest["images"]["db"]}},
-                            {"features": {**manifest["features"], "forms_module": True}},
-                            {"files": {name: value for name, value in manifest["files"].items() if name != "delivery-proxy.py"}}):
+            invalid_manifests = [{"images": {**manifest["images"], "prometheus": manifest["images"]["db"]}},
+                                 {"features": {**manifest["features"], "forms_module": True}}]
+            invalid_manifests.extend({"files": {name: value for name, value in manifest["files"].items() if name != payload}}
+                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py"))
+            for index, changed in enumerate(invalid_manifests):
                 invalid = {**manifest, **changed}
                 (extracted / "manifest.json").write_text(json.dumps(invalid))
                 with self.assertRaises(ValueError):
                     bootstrap.manifest(extracted)
-                invalid_archive = self.root / ("invalid-" + next(iter(changed)) + ".tar.gz")
+                invalid_archive = self.root / ("invalid-" + str(index) + ".tar.gz")
                 package.write_package_archive(invalid_archive, invalid, {name: extracted / name for name in invalid["files"]})
                 with self.assertRaises(wrapper.InstallError):
                     wrapper.verify_package(invalid_archive, "amd64")
@@ -138,7 +140,33 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertEqual(set(manifest["images"]), {"api", "web", "db", "prometheus", "xray", "alertmanager"})
         self.assertNotIn("on_demand_modules", manifest["features"])
         self.assertTrue(manifest["features"]["xray_module"])
+        self.assertTrue(manifest["features"]["icmp_probe"])
+        self.assertTrue({"icmp-probe.py", "icmp-install.py"} <= files)
         bootstrap.validate_bundled_images(manifest)
+
+    def test_legacy_icmp_flag_is_compatible_with_default_core(self):
+        default_args = self.args()
+        self.execute(default_args)
+        default_manifest, default_files = self.read_manifest(default_args.output)
+        alias_args = self.args(with_icmp=True)
+        alias_args.output = self.root / "with-icmp.tar.gz"
+        calls = self.execute(alias_args)
+        alias_manifest, alias_files = self.read_manifest(alias_args.output)
+        self.assertEqual(alias_manifest, default_manifest)
+        self.assertEqual(alias_files, default_files)
+        self.assertEqual(len(calls), 3)
+
+    def test_default_core_requires_its_icmp_provider_source(self):
+        incomplete_source = self.root / "without-icmp-provider.tar.gz"
+        with tarfile.open(self.source) as original, tarfile.open(incomplete_source, "w:gz") as archive:
+            for member in original.getmembers():
+                if member.name != "internal/providers/icmp.go":
+                    package.add(archive, member.name, original.extractfile(member).read())
+        args = self.args()
+        args.source_archive = incomplete_source
+        with self.assertRaisesRegex(ValueError, "ICMP helper requires its provider source"):
+            self.execute(args)
+        self.assertFalse(self.commands)
 
     def test_each_module_build_contains_only_its_own_roles(self):
         self.assertEqual(set(package.APPLICATION_ROLES), {"forms", "doska", "sftpgo", "netmap", "bookstack"})

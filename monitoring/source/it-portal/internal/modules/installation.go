@@ -15,11 +15,13 @@ import (
 )
 
 type InstallationSettings struct {
-	Revision     int64    `json:"revision"`
-	PublicURL    string   `json:"public_url"`
-	BindAddress  string   `json:"bind_address"`
-	AllowedCIDRs []string `json:"allowed_cidrs"`
-	AllowedPorts []int    `json:"allowed_ports"`
+	Revision         int64     `json:"revision"`
+	PublicURL        string    `json:"public_url"`
+	BindAddress      string    `json:"bind_address"`
+	AllowedCIDRs     []string  `json:"allowed_cidrs"`
+	AllowedPorts     []int     `json:"allowed_ports"`
+	ICMPPolicyMode   *string   `json:"icmp_policy_mode,omitempty"`
+	ICMPAllowedCIDRs *[]string `json:"icmp_allowed_cidrs,omitempty"`
 }
 type InstallationChange struct {
 	InstallationSettings
@@ -28,6 +30,48 @@ type InstallationChange struct {
 	TLSKeyPEM     string  `json:"tls_key_pem,omitempty"`
 	OutboundCAPEM *string `json:"outbound_ca_pem,omitempty"`
 }
+
+// The two optional ICMP fields must preserve omission versus an explicit empty
+// list. Reject null/duplicate policy fields before pointers could erase them on
+// the signed host request; retain strict unknown-field checking for all fields.
+func (v *InstallationChange) UnmarshalJSON(data []byte) error {
+	invalid := func() error { return errors.New("Некорректная политика ICMP") }
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return invalid()
+	}
+	seen := map[string]bool{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok {
+			return invalid()
+		}
+		var raw json.RawMessage
+		if decoder.Decode(&raw) != nil {
+			return invalid()
+		}
+		if key == "icmp_policy_mode" || key == "icmp_allowed_cidrs" {
+			if seen[key] || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				return invalid()
+			}
+			seen[key] = true
+		}
+	}
+	if token, err := decoder.Token(); err != nil || token != json.Delim('}') {
+		return invalid()
+	}
+	type wire InstallationChange
+	var decoded wire
+	decoder = json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&decoded) != nil || decoder.Decode(new(any)) != io.EOF {
+		return invalid()
+	}
+	*v = InstallationChange(decoded)
+	return nil
+}
+
 type InstallationStatus struct {
 	InstallationSettings
 	CoreAPI       int                    `json:"core_api"`

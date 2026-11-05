@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settingsWorkspaceFixture } from "../fixtures/settingsWorkspace";
 
 test("deployment settings protect drafts, confirm restart and persist server policy", async ({
   page,
@@ -85,6 +86,8 @@ test("deployment settings protect drafts, confirm restart and persist server pol
     outbound_ca_pem: "",
   });
   expect(writes[0]).not.toHaveProperty("tls_key_pem");
+  expect(writes[0]).not.toHaveProperty("icmp_policy_mode");
+  expect(writes[0]).not.toHaveProperty("icmp_allowed_cidrs");
   state = {
     ...state,
     revision: 1,
@@ -100,6 +103,97 @@ test("deployment settings protect drafts, confirm restart and persist server pol
     page.getByRole("button", { name: "Применить параметры", exact: true }),
   ).toBeDisabled();
 });
+
+for (const initialMode of ["interactive", "cidr"] as const) {
+  test(`ICMP policy changes from ${initialMode} persist without changing integration networks`, async ({
+    page,
+  }) => {
+    await settingsWorkspaceFixture(page);
+    let status = {
+      core_api: 1,
+      revision: 2,
+      public_url: "https://pl.example.test",
+      bind_address: "0.0.0.0",
+      allowed_cidrs: ["10.20.0.0/16"],
+      allowed_ports: [80, 443],
+      custom_tls: false,
+      icmp_policy_mode: initialMode as "interactive" | "cidr",
+      icmp_allowed_cidrs: initialMode === "cidr" ? ["192.0.2.0/24"] : [],
+      operation: undefined as Record<string, unknown> | undefined,
+    };
+    const writes: Record<string, unknown>[] = [];
+    await page.route("**/api/v1/installation", async (route) => {
+      if (route.request().method() === "GET")
+        return route.fulfill({ json: status });
+      const request = route.request();
+      expect(request.method()).toBe("PUT");
+      expect(request.headers()["x-csrf-token"]).toBe("settings-test");
+      const body = request.postDataJSON();
+      writes.push(body);
+      status = {
+        ...status,
+        ...body,
+        revision: status.revision + 1,
+        operation: {
+          kind: "configuration",
+          operation_id: body.operation_id,
+          phase: "complete",
+        },
+      };
+      return route.fulfill({ json: status });
+    });
+    await page.goto("/#settings?section=installation");
+    await page.getByText("ICMP-диагностика", { exact: true }).click();
+    const policy = page.getByRole("combobox", {
+      name: "Доступные адреса для ICMP",
+      exact: true,
+    });
+    await expect(policy).toHaveValue(initialMode);
+    const nextMode = initialMode === "interactive" ? "cidr" : "interactive";
+    await policy.selectOption(nextMode);
+    const expected =
+      nextMode === "cidr" ? ["10.70.0.0/16", "192.0.2.0/24"] : [];
+    if (nextMode === "cidr")
+      await page
+        .getByLabel(/^Разрешённые IPv4-сети для ICMP/)
+        .fill(expected.join("\n"));
+    await page
+      .getByRole("button", { name: "Применить параметры", exact: true })
+      .click();
+    const confirmation = page.getByRole("dialog", {
+      name: "Применить параметры установки?",
+    });
+    await expect(confirmation).toBeVisible();
+    expect(writes).toHaveLength(0);
+    await confirmation
+      .getByRole("button", { name: "Проверить и применить", exact: true })
+      .click();
+    await expect(confirmation).toBeHidden();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({
+      revision: 2,
+      icmp_policy_mode: nextMode,
+      icmp_allowed_cidrs: expected,
+      allowed_cidrs: ["10.20.0.0/16"],
+      allowed_ports: [80, 443],
+    });
+    await page.reload();
+    await page.getByText("ICMP-диагностика", { exact: true }).click();
+    await expect(
+      page.getByRole("combobox", {
+        name: "Доступные адреса для ICMP",
+        exact: true,
+      }),
+    ).toHaveValue(nextMode);
+    if (nextMode === "cidr")
+      await expect(
+        page.getByLabel(/^Разрешённые IPv4-сети для ICMP/),
+      ).toHaveValue(expected.join("\n"));
+    await expect(
+      page.getByRole("button", { name: "Применить параметры", exact: true }),
+    ).toBeDisabled();
+  });
+}
 
 test("accepted address change survives loss of the old origin and a page reload", async ({
   page,

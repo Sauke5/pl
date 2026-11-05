@@ -1,4 +1,5 @@
 import importlib.util
+import grp
 import json
 import os
 from pathlib import Path
@@ -60,7 +61,7 @@ class InstallTests(unittest.TestCase):
                      'AmbientCapabilities=CAP_NET_RAW', 'RestrictAddressFamilies=AF_UNIX AF_INET AF_PACKET', 'ProtectSystem=strict'):
             self.assertIn(line, service)
         self.assertNotIn('Group=', service)
-        self.assertIn(f'SocketGroup={self.gid}', unit)
+        self.assertIn('SocketGroup=' + grp.getgrgid(self.gid).gr_name, unit)
         self.assertIn('SocketMode=0660', unit)
         self.assertIn('DirectoryMode=0755', unit)
         self.assertIn('RemoveOnStop=yes', unit)

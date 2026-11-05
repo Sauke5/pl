@@ -126,6 +126,22 @@ print('round-trip min/avg/max = 0.1/0.4/1.2 ms')
             link.symlink_to(policy)
             with self.assertRaises(OSError): probe.allowed('10.1.2.3', link)
 
+    def test_interactive_policy_accepts_one_unicast_target_and_always_denies_special_addresses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            policy = Path(directory) / 'policy.json'
+            policy.write_text('{"mode":"interactive"}')
+            for address in ('10.1.2.3', '192.168.44.2', '8.8.8.8', '192.0.2.3', '100.64.0.1', '198.18.0.1'):
+                self.assertTrue(probe.allowed(address, policy), address)
+            for address in ('0.1.2.3', '127.0.0.1', '169.254.1.2', '224.1.2.3', '240.1.2.3',
+                            '255.255.255.255', '100.100.100.200', '168.63.129.16'):
+                self.assertFalse(probe.allowed(address, policy), address)
+            for value in ({'mode': 'interactive', 'cidrs': ['10.0.0.0/8']}, {'mode': 'other'}, {'mode': None}):
+                policy.write_text(json.dumps(value))
+                with self.assertRaises(ValueError): probe.allowed('10.1.2.3', policy)
+            for value in ({'cidrs': []}, {'mode': 'cidr', 'cidrs': []}):
+                policy.write_text(json.dumps(value))
+                self.assertFalse(probe.allowed('10.1.2.3', policy))
+
     def test_closed_stdout_still_obeys_deadline(self):
         with tempfile.TemporaryDirectory() as directory:
             binary = self.fake(directory, "import os,time\nos.close(1)\nos.close(2)\ntime.sleep(3)\n")

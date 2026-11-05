@@ -23,14 +23,16 @@ BINARY = '/usr/sbin/hping3'
 POLICY = '/etc/pl-icmp-probe/cidrs.json'
 POLICY_OWNER = 0
 ACTIVE = threading.Lock()
+DENIED = tuple(ipaddress.IPv4Network(value) for value in (
+    '0.0.0.0/8', '127.0.0.0/8', '169.254.0.0/16', '224.0.0.0/4', '240.0.0.0/4',
+    '100.100.100.200/32', '168.63.129.16/32'))
 STATS = re.compile(r'(\d+) packets transmitted, (\d+) packets received, [-\d.]+% packet loss')
 RTT = re.compile(r'round-trip min/avg/max = ([\d.]+)/([\d.]+)/([\d.]+) ms')
 
 
 def allowed(target, path=None):
     ip = ipaddress.IPv4Address(target)
-    if (ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved
-            or str(ip) in ('100.100.100.200', '168.63.129.16')):
+    if any(ip in network for network in DENIED):
         return False
     fd = os.open(path or POLICY, os.O_RDONLY | os.O_NOFOLLOW)
     try:
@@ -43,7 +45,13 @@ def allowed(target, path=None):
     if len(data) > 32768:
         raise ValueError('oversized policy')
     policy = json.loads(data)
-    if not isinstance(policy, dict) or set(policy) != {'cidrs'} or not isinstance(policy['cidrs'], list) or len(policy['cidrs']) > 128:
+    if not isinstance(policy, dict):
+        raise ValueError('invalid policy')
+    mode = policy.get('mode', 'cidr')
+    if mode == 'interactive' and (set(policy) == {'mode'} or set(policy) == {'mode', 'cidrs'} and policy['cidrs'] == []):
+        return True
+    if (mode != 'cidr' or set(policy) not in ({'cidrs'}, {'mode', 'cidrs'})
+            or not isinstance(policy['cidrs'], list) or len(policy['cidrs']) > 128):
         raise ValueError('invalid policy')
     networks = [ipaddress.ip_network(v, strict=True) for v in policy['cidrs']]
     if any(n.version != 4 for n in networks):

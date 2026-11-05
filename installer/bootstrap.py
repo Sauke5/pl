@@ -155,7 +155,85 @@ def manifest(package: Path) -> dict:
             raise ValueError("Immutable PostgreSQL image required")
     else:
         validate_bundled_images(m)
+    legacy_worker_handoff(package, m)
     return m
+
+
+def legacy_worker_handoff(package: Path, candidate: dict) -> None:
+    """Bridge the one pre-snapshot entry point available to older updaters.
+
+    Ordinary manifest validation is pure. Only PID1's real pinned old worker,
+    while staging its exact signed target, may promote itself to that worker.
+    """
+    main = sys.modules.get('__main__')
+    if (__name__ != 'pl_candidate_bootstrap' or not candidate.get('features', {}).get('icmp_probe')
+            or getattr(main, 'HOST_FEATURE_API', 0) >= 1
+            or len(sys.argv) != 6 or sys.argv[1] != 'worker' or sys.argv[2] != '--root' or sys.argv[4] != '--operation-id'):
+        return
+    root, operation_id = Path(sys.argv[3]), sys.argv[5]
+    main_path = Path(getattr(main, '__file__', ''))
+    # A validation command with incidental worker-shaped argv cannot hand off.
+    if (not root.is_absolute() or root != root.resolve() or root == Path('/')
+            or not main_path.is_absolute() or main_path != main_path.resolve()
+            or main_path.name != 'delivery.py' or main_path.parent.parent != root / 'releases'):
+        return
+    import types
+    spec = importlib.util.spec_from_file_location('pl_candidate_handoff', package / 'delivery.py')
+    delivery = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(delivery)
+    delivery.canonical_id(operation_id)
+    state = delivery.read(root / 'state/installation.json')
+    anchor = delivery.read(root / 'state/controller-supervisor.json')
+    if set(anchor) != {'schema', 'version'} or anchor.get('schema') != 1 or not VERSION.fullmatch(anchor.get('version', '')):
+        raise ValueError('Invalid legacy worker trust anchor')
+    validator = delivery.Delivery(types.SimpleNamespace(root=root, installation=state['install_id']))
+    validator.supervisor = root / 'releases' / anchor['version']
+    operation = delivery.read(validator.base / 'operation.json')
+    if (operation.get('operation_id') != operation_id or operation.get('kind', '') not in ('', 'upgrade')
+            or operation.get('phase') != 'downloading' or 'containers' in operation or 'snapshot' in operation
+            or 'worker_handoff' in operation or operation.get('from_version') != state.get('version')
+            or operation.get('version') != candidate['version'] or package != root / 'releases' / candidate['version']
+            or (root / 'private/upgrade-backups' / operation_id / 'snapshot.json').exists()
+            or main_path.parent.name != operation.get('worker_version', anchor['version'])
+            or candidate.get('core_api', 1) != 1 or candidate.get('schema') != 2
+            or set(candidate.get('images', {})) != {'api', 'web', 'db'}
+            or not candidate.get('features', {}).get('on_demand_modules')
+            or not delivery.newer(candidate['version'], state.get('version', ''))):
+        raise ValueError('Legacy worker handoff is outside the pre-snapshot stage')
+    expected_unit = state['install_id'] + '-upgrade-' + operation_id.replace('-', '') + '.service'
+    if operation.get('worker_unit') != expected_unit:
+        raise ValueError('Legacy worker unit identity differs')
+    groups = Path('/proc/self/cgroup').read_text().splitlines()
+    if not any(line.endswith('/' + expected_unit) for line in groups):
+        raise ValueError('Legacy worker is outside its fixed service unit')
+    if validator.host(['systemctl', 'show', '--property=MainPID', '--value', expected_unit], timeout=5).strip() != str(os.getpid()).encode():
+        raise ValueError('Legacy worker is not the service main process')
+    if os.environ.get('PL_HOST_SUPERVISOR_PACKAGE') != str(validator.supervisor):
+        raise ValueError('Legacy worker immutable anchor differs')
+    old_package = validator.worker_package(operation, recovering=True)
+    if old_package != main_path.parent:
+        raise ValueError('Legacy worker payload differs')
+    validator.verified_worker_release(operation['from_version'], state.get('manifest_sha256'))
+    validator.verified_worker_release(anchor['version'])
+    validator.verified_worker_release(candidate['version'])
+    if (package / '.package-sha256').read_text().strip() != operation['artifact']['sha256']:
+        raise ValueError('Legacy worker signed artifact identity differs')
+    old = delivery.read(root / 'releases' / operation['from_version'] / 'manifest.json')
+    if candidate.get('database', {}).get('major') != old.get('database', {}).get('major'):
+        raise ValueError('Legacy worker handoff requires the same PostgreSQL major')
+    checksum = digest(package / 'manifest.json')
+    operation['worker_handoff'] = {'schema': 1, 'capability': 1, 'from_version': old_package.name,
+                                   'from_manifest_sha256': operation.get('worker_manifest_sha256', digest(old_package / 'manifest.json')),
+                                   'core_from_version': operation['from_version'],
+                                   'to_version': candidate['version'], 'to_manifest_sha256': checksum}
+    operation.update(worker_version=candidate['version'], worker_manifest_sha256=checksum)
+    delivery.atomic(validator.base / 'operation.json', operation)
+    # CLOEXEC closes the old lifecycle/worker lock descriptors. The durable
+    # nonterminal operation keeps every controller mutation blocked meanwhile.
+    os.execve('/usr/bin/python3', ['/usr/bin/python3', str(package / 'delivery.py'), 'worker', '--root', str(root),
+                                  '--operation-id', operation_id],
+              {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root', 'LANG': 'C.UTF-8',
+               'PL_HOST_SUPERVISOR_PACKAGE': str(validator.supervisor)})
 
 
 def validate_bundled_images(m: dict) -> None:
@@ -577,6 +655,40 @@ def icmp_cidrs(values: list[str] | None) -> list[str]:
     return sorted(selected)
 
 
+def icmp_policy(cfg: dict) -> dict:
+    """An explicit legacy list, including [], retains its strict meaning."""
+    mode = cfg.get('icmp_policy_mode', 'cidr' if 'icmp_allowed_cidrs' in cfg else 'interactive')
+    values = icmp_cidrs(cfg.get('icmp_allowed_cidrs', []))
+    if mode not in ('interactive', 'cidr') or mode == 'interactive' and values:
+        raise ValueError('Invalid ICMP diagnostic policy')
+    return {'mode': mode, 'cidrs': values}
+
+
+def apply_icmp_model(root: Path, model: dict, generated: dict) -> None:
+    """Copy only the new trusted ICMP recipe into an existing used core."""
+    source, api = generated['services']['api'], model['services']['api']
+    for name in ('PORTAL_ICMP_EXECUTOR_URL', 'PORTAL_ICMP_POLICY', 'PORTAL_ICMP_ALLOWED_CIDRS'):
+        if name in source['environment']:
+            api['environment'][name] = source['environment'][name]
+        else:
+            api['environment'].pop(name, None)
+    target = '/run/pl-icmp-probe'
+    for mount in api.get('volumes', []):
+        if isinstance(mount, str) and target in mount:
+            raise ValueError('Unsupported existing ICMP mount')
+    api['volumes'] = [mount for mount in api.get('volumes', [])
+                      if not isinstance(mount, dict) or mount.get('target') != target]
+    api['volumes'] += [mount for mount in source.get('volumes', [])
+                       if isinstance(mount, dict) and mount.get('target') == target]
+    gid = str(read_json(root / '.pl-installation.json')['gid'])
+    if gid not in source.get('group_add', []):
+        raise ValueError('Generated ICMP socket group is missing')
+    groups = list(api.get('group_add', []))
+    if gid not in groups:
+        groups.append(gid)
+    api['group_add'] = groups
+
+
 def configuration(url: str, bind: str, username: str, cidr: str | None = None, module_cidr: str | None = None,
                   integration: dict | None = None, allowed_icmp_cidrs: list[str] | None = None) -> dict:
     if any(ord(x) < 33 or ord(x) > 126 for x in url):
@@ -926,8 +1038,11 @@ def compose_model(root: Path, m: dict, cfg: dict, install_id: str) -> dict:
         if type(gid) is not int or not 1 <= gid <= 2**31 - 1:
             raise ValueError("Invalid ICMP service group")
         api = model["services"]["api"]
+        policy = icmp_policy(cfg)
         api["environment"].update({"PORTAL_ICMP_EXECUTOR_URL": "unix:///run/pl-icmp-probe/probe.sock",
-                                   "PORTAL_ICMP_ALLOWED_CIDRS": ",".join(icmp_cidrs(cfg.get("icmp_allowed_cidrs", [])))})
+                                   "PORTAL_ICMP_POLICY": policy['mode']})
+        if policy['mode'] == 'cidr':
+            api['environment']['PORTAL_ICMP_ALLOWED_CIDRS'] = ','.join(policy['cidrs'])
         api["volumes"].append(mount("run/icmp-probe", "/run/pl-icmp-probe"))
         api["group_add"] = sorted(set(api.get("group_add", []) + [str(gid)]))
     if "integration_config" in cfg:
@@ -1197,9 +1312,7 @@ def install(args) -> None:
             selected_cidr = Runtime(root, package, m).choose_network_cidr()
     cfg = configuration(args.public_url, args.bind_address, args.admin_user, selected_cidr,
                         args.module_network_cidr, policy, supplied_icmp)
-    if m.get("features", {}).get("icmp_probe"):
-        cfg.setdefault("icmp_allowed_cidrs", [])
-    elif supplied_icmp is not None:
+    if not m.get("features", {}).get("icmp_probe") and supplied_icmp is not None:
         raise ValueError("Selected package does not include the ICMP helper")
     if m.get("features", {}).get("connector_credentials") and "network_cidr" not in cfg:
         raise ValueError("Connector credentials require explicit --network-cidr for isolated egress IPAM")
@@ -1213,7 +1326,7 @@ def install(args) -> None:
     if existing_state.exists():
         previous = read_json(existing_state)
         if m.get("features", {}).get("on_demand_modules"):
-            for name in ("allowed_cidrs", "allowed_ports", "custom_tls", "outbound_ca_pem"):
+            for name in ("allowed_cidrs", "allowed_ports", "custom_tls", "outbound_ca_pem", "icmp_policy_mode", "icmp_allowed_cidrs"):
                 if name in previous.get("config", {}):
                     cfg[name] = previous["config"][name]
         if (previous.get("config") != cfg or previous.get("version") != m["version"]
@@ -1271,7 +1384,7 @@ def install(args) -> None:
                 directory(root / "run", 0o750)
                 existed = (root / "private/icmp-helper.json").exists()
                 gid = read_json(root / ".pl-installation.json")["gid"]
-                icmp_installer(package).prepare(root, package, rt.install_id, cfg["icmp_allowed_cidrs"], gid, rt.run)
+                icmp_installer(package).prepare(root, package, rt.install_id, icmp_policy(cfg), gid, rt.run)
                 new_icmp = not existed
             write_json(root / "config/compose.json", compose_model(root, m, cfg, rt.install_id))
             rt.compose("config", "--quiet")

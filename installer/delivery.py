@@ -39,6 +39,7 @@ HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3
 MAX_RELEASE_NOTES = 24 * 1024
 RESERVE = 512 * 1024**2
+HOST_FEATURE_API = 1
 _threads = threading.Lock()
 
 
@@ -621,6 +622,17 @@ class Delivery:
         package = self.worker_package(operation, recovering=True)
         if package != self.package.resolve():
             raise ValueError('Operation requires its exact verified worker release')
+        if 'worker_handoff' in operation:
+            handoff = operation['worker_handoff']
+            if (not isinstance(handoff, dict) or set(handoff) != {'schema', 'capability', 'from_version', 'from_manifest_sha256', 'core_from_version', 'to_version', 'to_manifest_sha256'}
+                    or handoff.get('schema') != 1 or handoff.get('capability') != 1
+                    or handoff.get('to_version') != operation.get('worker_version')
+                    or handoff.get('to_version') != operation.get('version')
+                    or handoff.get('to_manifest_sha256') != operation.get('worker_manifest_sha256')
+                    or handoff.get('core_from_version') != operation.get('from_version')
+                    or not isinstance(handoff.get('from_manifest_sha256'), str) or not HEX.fullmatch(handoff['from_manifest_sha256'])):
+                raise ValueError('Invalid pre-snapshot worker handoff ledger')
+            self.verified_worker_release(handoff['from_version'], handoff.get('from_manifest_sha256'))
         return package
 
     @staticmethod
@@ -645,6 +657,67 @@ class Delivery:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def icmp_installer(self, package):
+        self.verified_worker_release(package.name)
+        spec = importlib.util.spec_from_file_location('pl_delivery_icmp', package / 'icmp-install.py')
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        return helper
+
+    def prepare_icmp(self, package, manifest, config):
+        if not manifest.get('features', {}).get('icmp_probe'):
+            return False
+        operation = read(self.base / 'operation.json')
+        helper = self.icmp_installer(package)
+        policy = self.bootstrap().icmp_policy(config)
+        fingerprint = helper.transaction(self.root, package, self.installation, operation['operation_id'], policy, self.host)
+        self.operation('preparing_host', icmp_package=package.name, icmp_package_manifest_sha256=digest(package / 'manifest.json'),
+                       icmp_host_plan_sha256=fingerprint)
+        self.icmp_host('dependency')
+        return True
+
+    def icmp_host(self, action):
+        if action not in ('dependency', 'apply', 'restore'):
+            raise ValueError('Invalid ICMP provision action')
+        operation = read(self.base / 'operation.json')
+        if not operation.get('icmp_host_plan_sha256'):
+            return
+        package = self.verified_worker_release(operation['icmp_package'], operation['icmp_package_manifest_sha256'])
+        unit_prefix = self.installation + '-icmp-' + uuid.UUID(operation['operation_id']).hex + '-'
+        for pending in ('dependency', 'apply', 'restore'):
+            try:
+                active = self.host(['systemctl', 'show', '--property=ActiveState', '--value', unit_prefix + pending + '.service'], timeout=5)
+            except (ValueError, OSError, subprocess.SubprocessError):
+                continue
+            if active.strip() in (b'active', b'activating', b'deactivating', b'reloading'):
+                raise ValueError('ICMP provisioner is still running; wait before recovery')
+        unit = unit_prefix + action
+        # PID1 starts a separate finite provisioner. The updater retains its
+        # root-only ReadWritePaths. Only apt prerequisites need OS package paths.
+        writable = [str(self.root), '/usr', '/etc', '/var', '/run'] if action == 'dependency' else [
+            str(self.root), '/usr/local/lib/pl/icmp', '/etc/pl/icmp', '/etc/systemd/system']
+        command = ['systemd-run', '--quiet', '--wait', '--pipe', '--collect', '--unit', unit,
+                   '--property=Type=exec', '--property=TimeoutStartSec=1000', '--property=RuntimeMaxSec=1000',
+                   '--property=KillMode=control-group', '--property=UMask=0077',
+                   '--property=NoNewPrivileges=true', '--property=ProtectSystem=strict', '--property=ProtectHome=true',
+                   '--property=PrivateTmp=true', '--property=RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6',
+                   '--property=InaccessiblePaths=-/run/docker.sock', '--property=ReadWritePaths=' + ' '.join(writable),
+                   '/usr/bin/python3', str(package / 'icmp-install.py'), action, '--root', str(self.root),
+                   '--operation-id', operation['operation_id']]
+        self.host(command, timeout=1020)
+
+    def upgraded_model(self, destination, manifest, state):
+        model = read(self.root / 'config/compose.json')
+        for name in ('api', 'web', 'db'):
+            model['services'][name]['image'] = manifest['images'][name]['id']
+        if manifest.get('features', {}).get('icmp_probe'):
+            spec = importlib.util.spec_from_file_location('pl_upgrade_compose', destination / 'bootstrap.py')
+            bootstrap = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(bootstrap)
+            generated = bootstrap.compose_model(self.root, manifest, state['config'], self.installation)
+            bootstrap.apply_icmp_model(self.root, model, generated)
+        return model
 
     def installation_settings(self):
         active = read(self.root / 'state/controller-active.json')
@@ -872,7 +945,7 @@ class Delivery:
         files = {}
         with tarfile.open(destination / 'installation.tar', 'w', format=tarfile.PAX_FORMAT) as tar:
             for name in ('.pl-installation.json', 'config', 'private', 'state', 'modules'):
-                add_tree(tar, self.root / name, name, exclude={'private/upgrade-backups', 'state/delivery', 'state/install.lock', 'modules/controller.lock'})
+                add_tree(tar, self.root / name, name, exclude={'private/upgrade-backups', 'state/delivery', 'state/install.lock', 'state/icmp-host.lock', 'modules/controller.lock'})
         (destination / 'installation.tar').chmod(0o600)
         files['installation.tar'] = digest(destination / 'installation.tar')
         for index, volume in enumerate(volumes):
@@ -893,6 +966,9 @@ class Delivery:
         try:
             self.operation('downloading')
             destination, manifest = self.stage_core(request)
+            state = self.state()
+            icmp = self.prepare_icmp(destination, manifest, state['config'])
+            model = self.upgraded_model(destination, manifest, state)
             containers = self.inventory()
             self.operation('quiescing', containers=containers)
             self.stop(containers)
@@ -900,11 +976,9 @@ class Delivery:
             snapshot = self.snapshot(request, containers)
             self.operation('applying', snapshot=str(snapshot))
             changed = True
-            model = read(self.root / 'config/compose.json')
-            for name in ('api', 'web', 'db'):
-                model['services'][name]['image'] = manifest['images'][name]['id']
+            if icmp:
+                self.icmp_host('apply')
             atomic(self.root / 'config/compose.json', model)
-            state = self.state()
             state.update(version=manifest['version'], manifest_sha256=digest(destination / 'manifest.json'), phase='upgrading')
             atomic(self.root / 'state/installation.json', state)
             registry = read(self.root / 'private/module-images.json')
@@ -943,6 +1017,7 @@ class Delivery:
             if set(meta.get('files', {})) != {'installation.tar', *[v['archive'] for v in meta['volumes']]}:
                 raise ValueError('Incomplete recovery snapshot')
             self.stop(self.inventory(require_core=False))
+            self.icmp_host('restore')
             actual = {v['name']: v['path'] for v in self.volumes()}
             helper = read(self.root / 'releases' / operation['from_version'] / 'manifest.json')['images']['web']['id']
             for volume in meta['volumes']:
@@ -957,7 +1032,7 @@ class Delivery:
                     '--mount', 'type=volume,source=' + volume['name'] + ',target=/host' + volume['path'],
                     '--entrypoint', '/bin/busybox', helper, 'chroot', '/host', '/usr/bin/python3', str(self.package / 'delivery.py'),
                     '--restore-volume', str(path / volume['archive']), '--target', volume['path'], timeout=1800)
-            restore_tree(path / 'installation.tar', self.root, preserve={'private/upgrade-backups', 'state/delivery', 'modules/controller.lock', 'state/install.lock'})
+            restore_tree(path / 'installation.tar', self.root, preserve={'private/upgrade-backups', 'state/delivery', 'modules/controller.lock', 'state/install.lock', 'state/icmp-host.lock'})
             if operation.get('kind') == 'configuration' and operation.get('module_origin_plan'):
                 helper = self.installation_settings().origin_helper()
                 if helper is None:
@@ -967,7 +1042,10 @@ class Delivery:
             self.restart(meta['containers'])
         elif operation.get('containers'):
             # No complete snapshot means no schema-changing stage was allowed.
+            self.icmp_host('restore')
             self.restart(operation['containers'])
+        else:
+            self.icmp_host('restore')
         self.readiness()
         if not (path / 'snapshot.json').exists():
             self.activate_host(operation['from_version'])

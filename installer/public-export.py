@@ -36,7 +36,7 @@ UNIT_TEST_NAMES = {
     "test_alertmanager_controller.py", "test_alertmanager_package.py", "test_application_package.py", "test_application_transport.py",
     "test_bookstack_controller.py", "test_bookstack_package.py", "test_bootstrap.py", "test_connector_credentials.py",
     "test_delivery.py", "test_delivery_proxy.py", "test_doska_controller.py", "test_forms_controller.py", "test_grafana_build.py", "test_grafana_controller.py",
-    "test_grafana_package.py", "test_host_status.py", "test_icmp_install.py", "test_icmp_probe.py", "test_install_proxy.py",
+    "test_grafana_package.py", "test_host_status.py", "test_icmp_install.py", "test_icmp_probe.py", "test_icmp_upgrade.py", "test_install_proxy.py",
     "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py",
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
     "test_netmap_controller.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
@@ -445,6 +445,8 @@ PUBLIC_README = """# PL
 PL — платформа для каталога ресурсов, карточек сервисов, систем и подключаемых инструментов. Новая установка получает core: Go API, web-интерфейс и PostgreSQL. Образы приложений загружаются отдельно, когда администратор устанавливает модуль из web PL.
 
 Установочный core содержит готовые образы и может занимать сотни MiB. Отдельный архив публичных исходников обычно занимает несколько MiB после сжатия; его состав описывает `PUBLIC-SOURCE-MANIFEST.json`.
+
+Ручная диагностика входит в core: ICMP, DNS, PTR, HTTP, TCP, TLS, проверка портов и клиент iperf3. Установка и обновление автоматически подготавливают компоненты ICMP. Режим ICMP и ограничения по сетям меняются через web PL.
 
 ## Установка
 

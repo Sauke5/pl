@@ -614,6 +614,53 @@ class UpgradeTransactionTests(unittest.TestCase):
         self.assertEqual(self.restarted[0], self.containers)
         self.assertEqual(d.load_json((self.volume_roots[0] / 'database').read_bytes()), self.original)
 
+    def test_icmp_upgrade_patches_only_its_recipe_and_restores_external_state_before_old_tree(self):
+        state = self.delivery.state()
+        state['config'].update(admin_user='admin', bind_address='0.0.0.0', port=443, hostname='pl.example.test')
+        d.atomic(self.root / 'state/installation.json', state)
+        original = d.read(self.root / 'config/compose.json')
+        original['services']['api'].update(environment={'PORTAL_DATABASE_URL': 'preserved-credential-ref',
+            'PORTAL_CHECK_ALLOWED_CIDRS': '198.51.100.0/24', 'PORTAL_OUTBOUND_CA_FILE': '/existing/roots.pem'},
+            volumes=['local-auth:/run/pl-auth', {'source': '/existing/roots.pem', 'target': '/existing/roots.pem', 'read_only': True}],
+            cap_drop=['ALL'])
+        original['services']['web']['ports'] = ['192.0.2.10:443:8443']
+        d.atomic(self.root / 'config/compose.json', original)
+        self.new_manifest['features'] = {'icmp_probe': True}
+        self.new_manifest.update(schema=2, database={'pgdata': '/var/lib/postgresql/18/docker'})
+        destination = self.root / 'releases/0.3.1'
+        d.atomic(destination / 'manifest.json', self.new_manifest)
+        shutil.copyfile(Path(__file__).resolve().parents[1] / 'bootstrap.py', destination / 'bootstrap.py')
+        self.delivery.prepare_icmp = Mock(return_value=True)
+        external = {'version': 'old'}
+        def icmp(action):
+            if action == 'apply':
+                self.assertTrue((self.root / 'private/upgrade-backups' / self.operation_id / 'snapshot.json').exists())
+                external['version'] = 'new'
+            elif action == 'restore':
+                self.assertEqual(self.delivery.state()['version'], '0.3.1', 'external restore precedes old root tree restoration')
+                external['version'] = 'old'
+        self.delivery.icmp_host = icmp
+        def readiness():
+            if self.delivery.state()['version'] == '0.3.1':
+                actual = d.read(self.root / 'config/compose.json')
+                api = actual['services']['api']
+                self.assertEqual(api['environment']['PORTAL_DATABASE_URL'], 'preserved-credential-ref')
+                self.assertEqual(api['environment']['PORTAL_CHECK_ALLOWED_CIDRS'], '198.51.100.0/24')
+                self.assertEqual(api['environment']['PORTAL_OUTBOUND_CA_FILE'], '/existing/roots.pem')
+                self.assertEqual(actual['services']['web']['ports'], original['services']['web']['ports'])
+                self.assertEqual(api['cap_drop'], ['ALL'])
+                self.assertEqual(api['environment']['PORTAL_ICMP_POLICY'], 'interactive')
+                self.assertNotIn('PORTAL_ICMP_ALLOWED_CIDRS', api['environment'])
+                self.assertTrue(api['volumes'][-1]['read_only'])
+                raise ValueError('Injected post-upgrade ICMP/core failure')
+        self.delivery.readiness = readiness
+        self.delivery.perform_upgrade()
+        self.assertEqual(external['version'], 'old')
+        self.assertEqual(d.read(self.root / 'config/compose.json'), original)
+        self.assertEqual(self.delivery.state()['version'], '0.3.0')
+        self.assertEqual(d.load_json((self.volume_roots[0] / 'database').read_bytes()), self.original)
+        self.assertEqual(d.read(self.delivery.base / 'operation.json')['phase'], 'rolled_back')
+
     def test_configuration_rollback_restores_data_before_rebuilding_native_containers(self):
         op = d.read(self.delivery.base / 'operation.json')
         plan = {'snapshot_operation_id': self.operation_id, 'schema': 1, 'instances': []}

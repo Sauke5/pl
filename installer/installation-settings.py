@@ -67,7 +67,7 @@ def origin(value):
 
 def validate(body):
     required = {'operation_id', 'revision', 'public_url', 'bind_address', 'allowed_cidrs', 'allowed_ports'}
-    optional = {'tls_cert_pem', 'tls_key_pem', 'outbound_ca_pem'}
+    optional = {'tls_cert_pem', 'tls_key_pem', 'outbound_ca_pem', 'icmp_policy_mode', 'icmp_allowed_cidrs'}
     if not isinstance(body, dict) or not required <= body.keys() <= required | optional:
         raise ConfigurationError()
     try:
@@ -98,6 +98,12 @@ def validate(body):
             raise ValueError()
         if 'outbound_ca_pem' in body and (not isinstance(body['outbound_ca_pem'], str) or len(body['outbound_ca_pem'].encode()) > 64 * 1024):
             raise ValueError()
+        if 'icmp_policy_mode' in body and body['icmp_policy_mode'] not in ('interactive', 'cidr'):
+            raise ValueError()
+        if 'icmp_allowed_cidrs' in body:
+            values = icmp_policy({'icmp_policy_mode': 'cidr', 'icmp_allowed_cidrs': body['icmp_allowed_cidrs']})['cidrs']
+            if body.get('icmp_policy_mode') == 'interactive' and values:
+                raise ValueError()
     except ConfigurationError:
         raise
     except (ValueError, TypeError, AttributeError):
@@ -105,6 +111,31 @@ def validate(body):
     return {**body, 'public_url': public, 'hostname': host, 'port': port,
             'allowed_cidrs': sorted(set(networks)), 'allowed_ports': sorted(set(ports)),
             'tls_cert_pem': cert, 'tls_key_pem': key}
+
+
+def icmp_policy(config):
+    mode = config.get('icmp_policy_mode', 'cidr' if 'icmp_allowed_cidrs' in config else 'interactive')
+    values = config.get('icmp_allowed_cidrs', [])
+    if mode not in ('interactive', 'cidr') or not isinstance(values, list) or len(values) > 64:
+        raise ConfigurationError()
+    try:
+        if (any(not isinstance(v, str) or str(ipaddress.IPv4Network(v, strict=True)) != v for v in values)
+                or len(set(values)) != len(values) or mode == 'interactive' and values):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ConfigurationError() from None
+    return {'mode': mode, 'cidrs': sorted(values)}
+
+
+def icmp_candidate(previous, value):
+    candidate = dict(previous)
+    if 'icmp_policy_mode' in value or 'icmp_allowed_cidrs' in value:
+        current = icmp_policy(previous)
+        mode = value.get('icmp_policy_mode', 'cidr' if 'icmp_allowed_cidrs' in value else current['mode'])
+        values = value.get('icmp_allowed_cidrs', current['cidrs'] if mode == 'cidr' else [])
+        policy = icmp_policy({'icmp_policy_mode': mode, 'icmp_allowed_cidrs': values})
+        candidate.update(icmp_policy_mode=policy['mode'], icmp_allowed_cidrs=policy['cidrs'])
+    return candidate
 
 
 class InstallationSettings:
@@ -156,6 +187,7 @@ class InstallationSettings:
         return {'core_api': 1, 'public_url': state['config']['public_url'], 'bind_address': state['config']['bind_address'],
                 'allowed_cidrs': cidrs, 'allowed_ports': ports, 'custom_tls': self.custom_tls(state),
                 'outbound_ca_pem': ca_pem, 'outbound_ca_sha256': hashlib.sha256(ca_pem.encode()).hexdigest() if ca_pem else '',
+                'icmp_policy_mode': icmp_policy(state['config'])['mode'], 'icmp_allowed_cidrs': icmp_policy(state['config'])['cidrs'],
                 'revision': self.revision(state), 'operation': projection}
 
     def configure(self, body):
@@ -186,6 +218,7 @@ class InstallationSettings:
             try:
                 custom, changed = self.prepare_tls(folder, value, state)
                 candidate = {**state['config'], **{k: value[k] for k in ('public_url', 'hostname', 'port', 'bind_address', 'allowed_cidrs', 'allowed_ports')}, 'custom_tls': custom}
+                candidate = icmp_candidate(candidate, value)
                 if 'outbound_ca_pem' in value:
                     candidate['outbound_ca_pem'] = value['outbound_ca_pem']
                 if candidate.get('outbound_ca_pem'):
@@ -363,6 +396,15 @@ class InstallationSettings:
                     mounts = [m for m in actual.get('Mounts', []) if m.get('Destination') == expected_ca]
                     if len(mounts) != 1 or mounts[0].get('Source') != str(self.root / 'private/outbound-ca.pem') or mounts[0].get('RW'):
                         raise ValueError('Configured outbound CA mount differs from runtime')
+                expected_icmp = model['services']['api']['environment'].get('PORTAL_ICMP_EXECUTOR_URL')
+                if expected_icmp:
+                    for name in ('PORTAL_ICMP_EXECUTOR_URL', 'PORTAL_ICMP_POLICY', 'PORTAL_ICMP_ALLOWED_CIDRS'):
+                        if env.get(name) != model['services']['api']['environment'].get(name):
+                            raise ValueError('Configured ICMP policy differs from runtime')
+                    mounts = [m for m in actual.get('Mounts', []) if m.get('Destination') == '/run/pl-icmp-probe']
+                    if (len(mounts) != 1 or mounts[0].get('Source') != str(self.root / 'run/icmp-probe') or mounts[0].get('RW')
+                            or any(cap.upper().removeprefix('CAP_') == 'NET_RAW' for cap in actual.get('HostConfig', {}).get('CapAdd') or [])):
+                        raise ValueError('Configured ICMP capability boundary differs from runtime')
             else:
                 bindings = actual.get('HostConfig', {}).get('PortBindings') or {}
                 if bindings != {'8443/tcp': [{'HostIp': config['bind_address'], 'HostPort': str(config['port'])}]}:
@@ -380,6 +422,7 @@ class InstallationSettings:
             if request['revision'] != self.revision(state):
                 raise ConfigurationError('installation_conflict', 'Настройки уже изменились. Обновите данные перед сохранением.', 409)
             config = request['config']
+            icmp_changed = icmp_policy(config) != icmp_policy(state['config'])
             self.delivery.operation('validating_configuration')
             self.preflight_port(config, state['config'])
             self.validate_tls(pending / 'tls.crt', pending / 'tls.key', config['hostname'])
@@ -390,6 +433,12 @@ class InstallationSettings:
             plan = self.origin_plan(state['config'], config, request['tls_changed'])
             if plan != request['module_plan']:
                 raise ConfigurationError('installation_conflict', 'Состав модулей изменился. Повторите сохранение настроек.', 409)
+            icmp_manifest = None
+            if icmp_changed:
+                icmp_manifest = files.read(self.delivery.package / 'manifest.json')
+                if not icmp_manifest.get('features', {}).get('icmp_probe'):
+                    raise ConfigurationError(message='Настройки ICMP требуют обновления host helper.')
+                self.delivery.prepare_icmp(self.delivery.package, icmp_manifest, config)
             containers = None
             if plan:
                 containers = self.delivery.inventory()
@@ -411,6 +460,11 @@ class InstallationSettings:
                       'PORTAL_CHECK_ALLOWED_CIDRS': ','.join(config['allowed_cidrs']), 'PORTAL_CHECK_ALLOWED_PORTS': ','.join(map(str, config['allowed_ports']))}
             api['environment'].update(policy)
             changed = True
+            if icmp_changed:
+                self.delivery.icmp_host('apply')
+                bootstrap = self.delivery.bootstrap()
+                generated = bootstrap.compose_model(self.root, icmp_manifest, config, self.delivery.installation)
+                bootstrap.apply_icmp_model(self.root, model, generated)
             if 'outbound_ca_pem' in config:
                 api['volumes'] = [mount for mount in api.get('volumes', []) if not isinstance(mount, dict) or mount.get('target') != '/run/secrets/outbound-ca.pem']
                 if config['outbound_ca_pem']:
@@ -480,6 +534,7 @@ class InstallationSettings:
                     raise ValueError('Configuration recovery snapshot integrity differs')
             self.delivery.operation('restoring_configuration')
             self.delivery.compose('stop', '--timeout', '30', 'api', 'web')
+            self.delivery.icmp_host('restore')
             for name, meta in snapshot['files'].items():
                 path = self.root / name
                 if meta.get('present') is False:

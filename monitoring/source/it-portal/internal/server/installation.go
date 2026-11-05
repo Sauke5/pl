@@ -78,5 +78,22 @@ func validInstallationChange(v modules.InstallationChange) bool {
 			return false
 		}
 	}
+	if v.ICMPPolicyMode != nil && *v.ICMPPolicyMode != "interactive" && *v.ICMPPolicyMode != "cidr" {
+		return false
+	}
+	if v.ICMPAllowedCIDRs != nil {
+		cidrs := *v.ICMPAllowedCIDRs
+		if len(cidrs) > 64 || v.ICMPPolicyMode != nil && *v.ICMPPolicyMode == "interactive" && len(cidrs) != 0 {
+			return false
+		}
+		seen := map[string]bool{}
+		for _, cidr := range cidrs {
+			ip, network, err := net.ParseCIDR(cidr)
+			if err != nil || ip.To4() == nil || network.String() != cidr || seen[cidr] {
+				return false
+			}
+			seen[cidr] = true
+		}
+	}
 	return true
 }

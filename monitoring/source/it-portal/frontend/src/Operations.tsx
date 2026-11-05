@@ -724,7 +724,7 @@ export const toolsList = [
     name: "Проверить ping (ICMP)",
     description: "2000 пакетов с интервалом 2 мс",
     icon: Activity,
-    hint: "IPv4-адрес или hostname из разрешённых сетей. 2000 пакетов, интервал 2 мс; параметры фиксированы.",
+    hint: "IPv4-адрес или hostname. 2000 пакетов, интервал 2 мс; параметры фиксированы.",
   },
   {
     kind: "iperf",

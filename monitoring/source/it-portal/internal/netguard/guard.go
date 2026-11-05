@@ -295,6 +295,50 @@ func (g *Guard) ResolveNetworkTarget(ctx context.Context, host string) ([]net.IP
 	copy := *g
 	copy.publicWeb = false
 	copy.interactive = false
+	return copy.resolveIPv4Target(ctx, host, false)
+}
+
+// ResolveICMPTarget applies the ICMP-only interactive or explicit CIDR policy.
+// Every A answer is validated before the caller pins one numeric address; AAAA
+// answers never become raw-packet destinations. Other check policies are unchanged.
+func (g *Guard) ResolveICMPTarget(ctx context.Context, host string) ([]net.IP, error) {
+	copy := *g
+	copy.publicWeb = false
+	return copy.resolveIPv4Target(ctx, host, true)
+}
+
+func (g *Guard) icmpAddressAllowed(ip net.IP) bool {
+	if ip[0] == 0 || ip[0] >= 240 || !g.allowed(ip) {
+		return false
+	}
+	if g.interactive {
+		return true
+	}
+	// Match the helper: a /31 or /32 is explicit, while broader networks do not
+	// authorize their network or directed-broadcast address.
+	for _, network := range g.networks {
+		if !network.Contains(ip) {
+			continue
+		}
+		ones, bits := network.Mask.Size()
+		if bits != 32 {
+			continue
+		}
+		if ones >= 31 {
+			return true
+		}
+		broadcast := make(net.IP, net.IPv4len)
+		for index, value := range network.IP.To4() {
+			broadcast[index] = value | ^network.Mask[index]
+		}
+		if !ip.Equal(network.IP) && !ip.Equal(broadcast) {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Guard) resolveIPv4Target(ctx context.Context, host string, icmp bool) ([]net.IP, error) {
 	if host == "" || strings.ContainsAny(host, "/%@\\\x00") {
 		return nil, fmt.Errorf("%w: invalid hostname", ErrPolicyDenied)
 	}
@@ -303,7 +347,7 @@ func (g *Guard) ResolveNetworkTarget(ctx context.Context, host string) ([]net.IP
 		values = []net.IPAddr{{IP: ip}}
 	} else {
 		var err error
-		values, err = copy.resolver.LookupIPAddr(ctx, host)
+		values, err = g.resolver.LookupIPAddr(ctx, host)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrDNS, err)
 		}
@@ -311,7 +355,7 @@ func (g *Guard) ResolveNetworkTarget(ctx context.Context, host string) ([]net.IP
 	ips := []net.IP{}
 	for _, value := range values {
 		if ip := value.IP.To4(); ip != nil {
-			if !copy.allowed(ip) {
+			if !g.allowed(ip) || icmp && !g.icmpAddressAllowed(ip) {
 				return nil, fmt.Errorf("%w: destination is outside allowed networks", ErrPolicyDenied)
 			}
 			ips = append(ips, ip)
