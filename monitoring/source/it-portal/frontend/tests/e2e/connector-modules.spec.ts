@@ -83,13 +83,40 @@ for (const { kind, managedCredentials } of [
         .getByRole("textbox", { name: /^Логин Wayline/ })
         .fill("connector-user");
     if (kind === "mailcow") {
-      await dialog
-        .getByText("Где взять адрес и API-ключ", { exact: true })
-        .click();
-      await expect(dialog.getByText(/Configuration → Access/)).toBeVisible();
-      await expect(
-        dialog.getByText(/В разрешённые адреса API добавьте IP сервера PL/),
-      ).toBeVisible();
+      const guide = dialog.locator("details").filter({
+        has: page.getByText("Как подключить Mailcow", { exact: true }),
+      });
+      const summary = guide.locator("summary");
+      await expect(guide).not.toHaveAttribute("open", "");
+      await summary.focus();
+      await page.keyboard.press("Enter");
+      await expect(guide).toHaveAttribute("open", "");
+      await expect(guide.getByRole("listitem")).toHaveCount(5);
+      await expect(guide.locator("ol")).toHaveCSS("list-style-type", "decimal");
+      await expect(guide).toContainText("Система → Конфигурация");
+      await expect(guide).toContainText("Настройки доступа → Администраторы");
+      await expect(guide).toContainText("Доступ только для чтения");
+      await expect(guide).toContainText("Включить API");
+      await expect(guide).toContainText("Список IP-адресов для доступа к API");
+      await expect(guide).toContainText("после NAT");
+      await expect(guide).toContainText("Сохранить изменения");
+      await expect(guide).toContainText("Ключ API");
+      await expect(guide).toContainText("без /admin и /api/v1");
+      await expect(guide).toContainText("Сбор данных");
+      await expect(guide).not.toContainText("Edit administrator details");
+      if (managedCredentials && process.env.PL_MAILCOW_GUIDE_REVIEW_DIR) {
+        await guide.scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: `${process.env.PL_MAILCOW_GUIDE_REVIEW_DIR}/guide-1920.png`,
+        });
+        await page.setViewportSize({ width: 3440, height: 1440 });
+        await page.screenshot({
+          path: `${process.env.PL_MAILCOW_GUIDE_REVIEW_DIR}/guide-3440.png`,
+        });
+        await page.setViewportSize({ width: 1920, height: 1080 });
+      }
+      await summary.press("Enter");
+      await expect(guide).not.toHaveAttribute("open", "");
       await expect(
         dialog.getByRole("combobox", { name: /^API-ключ/ }),
       ).toHaveValue(managedCredentials ? "key" : "reference");

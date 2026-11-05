@@ -16809,6 +16809,11 @@
       "size": 4101
     },
     {
+      "path": "docs/releases/0.4.4.json",
+      "sha256": "41b4e28b074bc34d73d3745a52c3d98a0430109f2e1e007b050ff1e7f85c9ad7",
+      "size": 4629
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16945,8 +16950,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "1e055aeaa2be9c498068b411bcec31bf372a2c574d287f76fd6b7a35b90b1402",
-      "size": 77438
+      "sha256": "091a32bc6b0e5154dcdb32b4f2277b2deba8cdf9feb04705faa4b038973978c9",
+      "size": 77624
     },
     {
       "path": "installer/module-network.py",
@@ -16990,8 +16995,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "e96b85c8cd2066d5e2d24e1464520be8c7086311f3f1fc7e644d0f13db160784",
-      "size": 39187
+      "sha256": "9612365d6e1bead447f8db609e3bc6e69cadc659b2f82ac708ef42fa282b11d4",
+      "size": 39224
     },
     {
       "path": "installer/release-catalog.py",
@@ -17052,6 +17057,11 @@
       "path": "installer/tests/test_connector_credentials.py",
       "sha256": "affed843683f2d4658317eb6fe1a38ee4b7b0f60d0fe631f25e4ab362a28cfd9",
       "size": 30437
+    },
+    {
+      "path": "installer/tests/test_controller_listen_backlog.py",
+      "sha256": "45d447a1655bc8372676405263b04ac7c78b577a3dfd2a80515b433476e2aeb1",
+      "size": 2212
     },
     {
       "path": "installer/tests/test_delivery.py",
@@ -17895,8 +17905,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/MailcowModule.tsx",
-      "sha256": "de0f5932217f6e7d936f759de8e93bc3fc60bc8dab1166224810d8a9e96ab2eb",
-      "size": 31063
+      "sha256": "88a73c9597f962a902e4f61eb54d0f6f9d6dc55a8df0913e9190f7a0c657454f",
+      "size": 31740
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ModuleActionMenu.tsx",
@@ -17910,8 +17920,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Modules.tsx",
-      "sha256": "6917f1746089a250b65f66578791bc9e240f5c37a1d0e4d995150338b9289979",
-      "size": 87171
+      "sha256": "e516b63935927c615b66cd6684f710c39c3c64042de048eea9fe7ae32df72daf",
+      "size": 87909
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Monitoring.tsx",
@@ -18470,8 +18480,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/connector-modules.spec.ts",
-      "sha256": "7bf7d3d8bff49327c5577bca4e1c48342d9cae0cdc3aba1fc4bad9587dd8ace2",
-      "size": 5406
+      "sha256": "7f1d04113c9eb2fa16344bf57246e54464b14d18fe0c9b76b0b7def82ce94d4f",
+      "size": 7046
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/dashboard-layout.spec.ts",
@@ -18570,8 +18580,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/mailcow-module.spec.ts",
-      "sha256": "b41f3f3d1f56e5cb82b56dbe7f4b18fbe181916064a6419162df01a3105d6c35",
-      "size": 34286
+      "sha256": "68217d6eabd3eb21a57205b529b086488539b4cd729dbd6481f47f952fdcab33",
+      "size": 35561
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/module-initial-login.spec.ts",
@@ -18855,13 +18865,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/model/module_timeouts.go",
-      "sha256": "3a5a30d7072aa1c8f8ddfed71298a30c72e88dc29f0c983882dd3b727a3a9107",
-      "size": 425
+      "sha256": "b4162227c1d66dfbecb76d97c80f03aea057c1f8423ab35aa5493862e3007d2f",
+      "size": 994
     },
     {
       "path": "monitoring/source/it-portal/internal/model/module_timeouts_test.go",
-      "sha256": "4828596831355cd0a20dddade054e6eb876babd2027d688783b93ec31deb3fa5",
-      "size": 605
+      "sha256": "145cb518b6c3d9d27b1a7c30ae56bb28f44a92497c4ef145b893016b37e87296",
+      "size": 885
     },
     {
       "path": "monitoring/source/it-portal/internal/model/modules.go",
@@ -18975,8 +18985,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/controller_startup_test.go",
-      "sha256": "b8964a5b4191686bcfc5cd7cb25ae5ceabfeb6237dad80e5a123d8a8811030ca",
-      "size": 2392
+      "sha256": "dfb23962029e27363be77b4238e98c5bcf3aeb00965753650c609a18aec006ce",
+      "size": 3777
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/controller_test.go",
@@ -19280,13 +19290,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/mailcow.go",
-      "sha256": "0ae8d752b16a0e918cdd92056550f966f81a690ce78542b3ee254a7fbacfa42f",
-      "size": 17618
+      "sha256": "057d697db2a767b82c1eb9e1bc766de1eb85ed5721d86ff80190fb76142e5f83",
+      "size": 19344
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/mailcow_test.go",
-      "sha256": "8acbd74ccbce3eb2d11e5e10c92b18c09b0ba3d9244e807a7d15a420136b0162",
-      "size": 21147
+      "sha256": "d6070c38d62f93ca624d4bcee5c480f810d1c7f1d0125280262c70976dfb8ee2",
+      "size": 23085
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/managed_grafana_test.go",
@@ -19565,8 +19575,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/connector_credentials_test.go",
-      "sha256": "86f9cfee6f36e2b188b054c022ce6b903c322a157c4507eacb8a6906f07f8dcc",
-      "size": 5458
+      "sha256": "40d04211467d339675a8bc2d99de65b97d55b46666fdf321ee9820d13a8d2ec8",
+      "size": 5446
     },
     {
       "path": "monitoring/source/it-portal/internal/server/dashboard_layout.go",
@@ -20089,9 +20099,19 @@
       "size": 1341
     },
     {
+      "path": "monitoring/source/it-portal/internal/server/mailcow_connection.go",
+      "sha256": "a7895d130da9d36845e25c3f95466cb31fe0a4ad832858d42760e38a9045df7a",
+      "size": 2377
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/mailcow_connection_test.go",
+      "sha256": "3c37bf9186f8d154101fc3013cea98a16e524255e872d52c601d6bda2cb95bff",
+      "size": 10337
+    },
+    {
       "path": "monitoring/source/it-portal/internal/server/mailcow_test.go",
-      "sha256": "48b17bd18e00101cfb9b58b97a7407c727e7305d131eb6f5c39817c8875fd99a",
-      "size": 17690
+      "sha256": "6e26dbf2966dd7a893aa60e00743310a3d80213c7bda380a11a5c4e49eae4185",
+      "size": 17784
     },
     {
       "path": "monitoring/source/it-portal/internal/server/managed_applications.go",
@@ -20165,8 +20185,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/modules.go",
-      "sha256": "0e302934dedd2ee9736ab4d22c888454cc4204abb270559ca88a2402398e3efa",
-      "size": 12694
+      "sha256": "a48856146e58d51094cda585c37fae50478972051325b167ed5a0abe6aa062fb",
+      "size": 13362
     },
     {
       "path": "monitoring/source/it-portal/internal/server/modules_test.go",
@@ -20815,8 +20835,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules.go",
-      "sha256": "e086ce60186529eca251a3a99310eff6f6839edd4c6268ea4c18821a8345a381",
-      "size": 16317
+      "sha256": "1a7fa94e41d4a79d81c3c6e0ab9a4ee563ca0b155ef817107228c82a75736104",
+      "size": 17930
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules_integration_test.go",
@@ -21020,8 +21040,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/worker/module_timeout_test.go",
-      "sha256": "a1cc9d23d60a937f4576336e4aaa2885d77185834186a276b0c1ff9f86330b79",
-      "size": 2631
+      "sha256": "9f34c3a6bbb79fa53b01fa9c02f661a41b361f1ac2ee5c14900eec75a5c66b76",
+      "size": 3226
     },
     {
       "path": "monitoring/source/it-portal/internal/worker/worker.go",

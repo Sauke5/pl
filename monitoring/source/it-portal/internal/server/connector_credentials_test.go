@@ -37,15 +37,13 @@ func TestMailcowWriteOnlyKeyRegistrationAndBoundCollection(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v1/get/status/version":
-			_, _ = w.Write([]byte(`{"version":"test-fixture"}`))
-		case "/api/v1/get/domain/all":
-			_, _ = w.Write([]byte(`[]`))
-		default:
+		value, ok := mailcowConnectionResponses()[strings.TrimPrefix(r.URL.Path, "/api/v1/get/")]
+		if !ok {
 			t.Error("unexpected upstream endpoint")
 			w.WriteHeader(http.StatusNotFound)
+			return
 		}
+		_, _ = w.Write([]byte(value))
 	}))
 	defer upstream.Close()
 	upstreamURL, _ := url.Parse(upstream.URL)
@@ -88,8 +86,8 @@ func TestMailcowWriteOnlyKeyRegistrationAndBoundCollection(t *testing.T) {
 	if err = json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.Instance.Endpoint != "http://mail.example.test:18080" || upstreamCalls != 0 {
-		t.Fatal("registration failed to normalize origin or polled an opt-out source")
+	if created.Instance.Endpoint != "http://mail.example.test:18080" || upstreamCalls != 7 {
+		t.Fatal("registration failed to normalize origin or skipped the native preflight")
 	}
 	if w := apiCall(s, admin, http.MethodPost, "/api/v1/modules", body, nil); w.Code != 202 || !strings.Contains(w.Body.String(), created.Job.ID) {
 		t.Fatal("repeated request did not reuse its operation", w.Code)
@@ -106,18 +104,19 @@ func TestMailcowWriteOnlyKeyRegistrationAndBoundCollection(t *testing.T) {
 		t.Fatal("managed credential reference was not bound to the integration", err)
 	}
 	data, err := s.Providers.MailcowCollect(context.Background(), integration, "inventory")
-	if err != nil || !strings.Contains(string(data), "test-fixture") || strings.Contains(string(data), token) || upstreamCalls != 2 {
+	if err != nil || !strings.Contains(string(data), "test-fixture") || strings.Contains(string(data), token) || upstreamCalls != 9 {
 		t.Fatal("bound provider did not collect through its stored credential", err, upstreamCalls)
 	}
 	copy := integration
 	copy.URL = "http://other.example.test:18080"
-	if _, err = s.Providers.MailcowCollect(context.Background(), copy, "inventory"); providers.MailcowErrorCode(err) != "policy" || upstreamCalls != 2 {
+	if _, err = s.Providers.MailcowCollect(context.Background(), copy, "inventory"); providers.MailcowErrorCode(err) != "policy" || upstreamCalls != 9 {
 		t.Fatal("credential followed an integration URL change", err, upstreamCalls)
 	}
 }
 
 func TestMailcowWriteOnlyKeyCapabilityAndAmbiguousInput(t *testing.T) {
 	s, admin, _, _ := mailcowHTTPFixture(t)
+	s.connectorCredentials = nil
 	body := mailcowCreateBody("mailcow:write-only:unavailable", "")
 	body["api_key"] = "private-fixture-key"
 	if w := apiCall(s, admin, http.MethodPost, "/api/v1/modules", body, nil); w.Code != 409 {

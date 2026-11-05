@@ -144,6 +144,10 @@ func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 	}
 	var credential *store.ModuleCredential
 	if input.ModuleID == "mailcow" {
+		if s.Providers == nil {
+			problem(w, 503, "connector_unavailable", "Проверка API Mailcow на этой установке недоступна")
+			return
+		}
 		origin, err := connectorcredentials.CanonicalOrigin(input.Endpoint)
 		if err != nil || (input.APIKey == "" && !validMailcowSecretRef(input.SecretRef)) {
 			problem(w, 400, "invalid_mailcow", "Укажите адрес Mailcow и read-only API-ключ")
@@ -171,6 +175,21 @@ func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 	if input.ModuleID == "wayline" && ((input.SecretRef != "") != (input.Config["basic_username"] != "")) {
 		problem(w, 400, "invalid_config", "Укажите вместе логин и ссылку на пароль Wayline")
 		return
+	}
+	if input.ModuleID == "mailcow" {
+		instance, job, replayed, err := s.Store.ReplayModuleRequest(r.Context(), current(r).User.ID, input.Key, input.ModuleRequest, credential)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		if replayed {
+			respond(w, 202, map[string]any{"instance": instance, "job": job})
+			return
+		}
+		if err := s.probeMailcowConnection(r.Context(), input.Endpoint, input.SecretRef, input.APIKey, credential); err != nil {
+			mailcowConnectionProblem(w, err)
+			return
+		}
 	}
 	if input.ModuleID == "bookstack" && input.Mode == "external" {
 		if !s.Config.PortableRelease || s.Modules.BookStack == nil {

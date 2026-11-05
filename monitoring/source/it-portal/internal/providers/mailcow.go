@@ -31,6 +31,23 @@ type mailcowError string
 
 func (e mailcowError) Error() string { return "mailcow: " + string(e) }
 
+type mailcowHTTPError struct {
+	cause  mailcowError
+	status int
+}
+
+func (e *mailcowHTTPError) Error() string { return e.cause.Error() }
+func (e *mailcowHTTPError) Unwrap() error { return e.cause }
+
+// MailcowHTTPStatus exposes a finite upstream status, never its private body.
+func MailcowHTTPStatus(err error) int {
+	var e *mailcowHTTPError
+	if errors.As(err, &e) {
+		return e.status
+	}
+	return 0
+}
+
 // MailcowErrorCode exposes only a finite cause, never an upstream body, URL or key.
 func MailcowErrorCode(err error) string {
 	if err == nil {
@@ -66,32 +83,82 @@ func (r *Registry) MailcowCollect(ctx context.Context, i model.Integration, grou
 	default:
 		return nil, mailcowError("unsupported")
 	}
+	get, cancel, err := r.mailcowReader(ctx, i, "")
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+	data, err := mailcowAggregate(group, get, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	result, err := json.Marshal(data)
+	if err != nil {
+		return nil, mailcowError("schema")
+	}
+	return result, nil
+}
+
+// MailcowProbe validates native data before registration. A supplied key stays
+// transient and uses the caller's origin-bound guard; refs use the poll resolver.
+// No snapshots, configuration or credentials are persisted by this operation.
+func (r *Registry) MailcowProbe(ctx context.Context, i model.Integration, apiKey string) error {
+	get, cancel, err := r.mailcowReader(ctx, i, apiKey)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	var containers any
+	cached := func(path string) (any, error) {
+		if path == "status/containers" && containers != nil {
+			return containers, nil
+		}
+		value, err := get(path)
+		if err == nil && path == "status/containers" {
+			containers = value
+		}
+		return value, err
+	}
+	for _, group := range model.MailcowGroups() {
+		if _, err := mailcowAggregate(group, cached, time.Now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Registry) mailcowReader(ctx context.Context, i model.Integration, apiKey string) (func(string) (any, error), context.CancelFunc, error) {
 	u, err := url.Parse(i.URL)
-	if err != nil || u.Host == "" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.RawPath != "" || (u.Path != "" && u.Path != "/") || (u.Scheme != "http" && u.Scheme != "https") || i.Kind != "mailcow" || !i.Enabled || (i.ManagedModuleID != "" && i.Config["module_mode"] != "external") || r.guard == nil {
-		return nil, mailcowError("policy")
+	if err != nil || u.Host == "" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.RawPath != "" || (u.Path != "" && u.Path != "/") || (u.Scheme != "http" && u.Scheme != "https") || i.Kind != "mailcow" || !i.Enabled || (i.ManagedModuleID != "" && i.Config["module_mode"] != "external") || r == nil || r.guard == nil {
+		return nil, nil, mailcowError("policy")
 	}
 	guard := r.guard
 	var key string
-	if strings.HasPrefix(i.SecretRef, "managed:") {
+	if apiKey != "" {
+		if i.SecretRef != "" {
+			return nil, nil, mailcowError("secret")
+		}
+		key = apiKey
+	} else if strings.HasPrefix(i.SecretRef, "managed:") {
 		if r.MailcowCredential == nil {
-			return nil, mailcowError("secret")
+			return nil, nil, mailcowError("secret")
 		}
 		key, guard, err = r.MailcowCredential(ctx, i)
 	} else {
 		key, err = secret(i.SecretRef)
 	}
 	if errors.Is(err, netguard.ErrPolicyDenied) || guard == nil {
-		return nil, mailcowError("policy")
+		return nil, nil, mailcowError("policy")
 	}
 	if validationErr := guard.ValidateURL(u); validationErr != nil {
-		return nil, mailcowError("policy")
+		return nil, nil, mailcowError("policy")
 	}
 	if err != nil || key == "" || len(key) > 4096 {
-		return nil, mailcowError("secret")
+		return nil, nil, mailcowError("secret")
 	}
 	for _, ch := range key {
 		if ch < 0x21 || ch > 0x7e {
-			return nil, mailcowError("secret")
+			return nil, nil, mailcowError("secret")
 		}
 	}
 	budget := mailcowBudget
@@ -99,7 +166,6 @@ func (r *Registry) MailcowCollect(ctx context.Context, i model.Integration, grou
 		budget = time.Duration(i.TimeoutSeconds) * time.Second
 	}
 	ctx, cancel := context.WithTimeout(ctx, budget)
-	defer cancel()
 	client := guard.Client(budget)
 	// Even a same-origin redirect cannot widen the finite API capability or carry
 	// X-API-Key to an endpoint selected by an upstream Location header.
@@ -126,7 +192,7 @@ func (r *Registry) MailcowCollect(ctx context.Context, i model.Integration, grou
 		defer resp.Body.Close()
 		switch {
 		case resp.StatusCode == 401 || resp.StatusCode == 403:
-			return nil, mailcowError("auth")
+			return nil, &mailcowHTTPError{cause: "auth", status: resp.StatusCode}
 		case resp.StatusCode == 404 || resp.StatusCode == 501:
 			return nil, mailcowError("unsupported")
 		case resp.StatusCode >= 300 && resp.StatusCode < 400:
@@ -169,15 +235,7 @@ func (r *Registry) MailcowCollect(ctx context.Context, i model.Integration, grou
 		}
 		return value, nil
 	}
-	data, err := mailcowAggregate(group, get, time.Now())
-	if err != nil {
-		return nil, err
-	}
-	result, err := json.Marshal(data)
-	if err != nil {
-		return nil, mailcowError("schema")
-	}
-	return result, nil
+	return get, cancel, nil
 }
 
 func mailcowUpstreamError(value any) bool {

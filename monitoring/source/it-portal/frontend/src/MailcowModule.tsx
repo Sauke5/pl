@@ -647,7 +647,21 @@ function MailcowDetails({ instanceID }: { instanceID: string }) {
             )}
           </section>
           {tab === "overview" ? (
-            <MailSummary snapshot={snapshot} />
+            <>
+              {snapshot.enabled &&
+                groups.every(([id]) => !snapshot.groups[id].enabled) && (
+                  <Panel title="Сбор данных не включён">
+                    <p className="module-hint">
+                      Подключение сохранено. Включите нужные группы, чтобы
+                      получать данные Mailcow.
+                    </p>
+                    <Button onClick={() => setTab("collection")}>
+                      Настроить сбор данных
+                    </Button>
+                  </Panel>
+                )}
+              <MailSummary snapshot={snapshot} />
+            </>
           ) : (
             <>
               <Panel title="Источник и сбор данных">

@@ -1339,6 +1339,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    # A scheduler pause must not overflow the legacy five-connection default
+    # before the independent 4/8/32 native lanes can apply their own admission.
+    request_queue_size = 128
     daemon_threads = True
 
 

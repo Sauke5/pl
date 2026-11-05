@@ -433,6 +433,41 @@ for (const viewport of [
   }
 }
 
+test("disabled collection is explained in the overview and opens settings without enabling groups", async ({
+  page,
+}, testInfo) => {
+  const state = await fixture(page);
+  await open(page);
+  await expect(
+    page.getByRole("heading", { name: "Сбор данных не включён", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("collection-disabled.png"),
+  });
+  await page
+    .getByRole("button", { name: "Настроить сбор данных", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Сбор данных", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  for (const label of [
+    "Домены и версия",
+    "Почтовые ящики",
+    "Очередь",
+    "Службы",
+    "Хранилище",
+    "Rspamd",
+  ]) {
+    await expect(
+      page.getByRole("checkbox", { name: label, exact: true }),
+    ).not.toBeChecked();
+  }
+  await expect(
+    page.getByRole("button", { name: "Сохранить настройки", exact: true }),
+  ).toBeDisabled();
+  expect(state.writes).toEqual([]);
+});
+
 test("connected Mailcow opens from its own sidebar page and survives reload", async ({
   page,
 }) => {
@@ -648,6 +683,9 @@ test("disabled and pending groups have no invented business zeros; refresh reads
     groups: { mailboxes: { enabled: true, status: "pending" } },
   });
   await open(page);
+  await expect(
+    page.getByRole("heading", { name: "Сбор данных не включён", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.locator(".mailcow-overview dd").filter({ hasText: /^0(?:\s|$)/ }),
   ).toHaveCount(0);

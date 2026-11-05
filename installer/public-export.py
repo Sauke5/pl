@@ -37,7 +37,7 @@ UNIT_TEST_NAMES = {
     "test_bookstack_controller.py", "test_bookstack_package.py", "test_bootstrap.py", "test_connector_credentials.py",
     "test_delivery.py", "test_delivery_concurrency.py", "test_delivery_proxy.py", "test_child_read_isolation.py", "test_doska_controller.py", "test_doska_stream_cancellation.py", "test_forms_controller.py", "test_grafana_build.py", "test_grafana_controller.py",
     "test_grafana_package.py", "test_host_status.py", "test_icmp_install.py", "test_icmp_probe.py", "test_icmp_upgrade.py", "test_install_proxy.py",
-    "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py",
+    "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py", "test_controller_listen_backlog.py",
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
     "test_netmap_controller.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
     "test_netmap_instance_descriptor.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",

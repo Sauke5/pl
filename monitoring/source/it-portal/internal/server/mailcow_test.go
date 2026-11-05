@@ -22,12 +22,12 @@ import (
 )
 
 // These tests use the same real PostgreSQL and browser-session fixture as the
-// other module tests. They never start a worker or contact a Mailcow server.
+// other module tests. They never start a worker or contact a deployed Mailcow server.
 func mailcowHTTPFixture(t *testing.T) (*Server, apiIdentity, *int, *int) {
 	t.Helper()
 	s, admin := localUsersFixture(t)
 	s.Modules = modules.New(s.Store, nil)
-	s.Providers = nil
+	mailcowNativeConnectionFixture(t, s, "mailcow-read-only-fixture-key-never-for-browser", nil)
 	probes, polls := 0, 0
 	s.Modules.Probe = moduleProbeFunc(func(context.Context, string) (modules.Observation, error) {
 		probes++
@@ -43,7 +43,7 @@ func mailcowHTTPFixture(t *testing.T) (*Server, apiIdentity, *int, *int) {
 func mailcowCreateBody(key, secretRef string) map[string]any {
 	return map[string]any{
 		"module_id": "mailcow", "name": "Почта лаборатории", "mode": "external",
-		"endpoint": "https://mail.example.test", "secret_ref": secretRef,
+		"endpoint": "http://mail.example.test:18080", "secret_ref": secretRef,
 		"idempotency_key": key,
 	}
 }
@@ -249,7 +249,7 @@ func TestMailcowHTTPSettingsRevisionAndCacheOnlySnapshot(t *testing.T) {
 		return apiDecode[model.MailcowSnapshot](t, w, http.StatusOK)
 	}
 	initial := read()
-	if initial.InstanceID != instance.ID || initial.IntegrationID != instance.IntegrationID || initial.URL != "https://mail.example.test" || initial.Name != instance.Name || !initial.Enabled || len(initial.Groups) != 6 {
+	if initial.InstanceID != instance.ID || initial.IntegrationID != instance.IntegrationID || initial.URL != "http://mail.example.test:18080" || initial.Name != instance.Name || !initial.Enabled || len(initial.Groups) != 6 {
 		t.Fatalf("incomplete source identity: %+v", initial)
 	}
 	for _, id := range model.MailcowGroups() {

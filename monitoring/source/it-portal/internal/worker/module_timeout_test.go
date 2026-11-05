@@ -14,24 +14,24 @@ func TestModuleJobTimeoutUsesPersistedInstance(t *testing.T) {
 	s := workerStore(t)
 	w := &Worker{Store: s}
 	ctx := context.Background()
-	for _, module := range []string{"netmap", "prometheus"} {
+	for _, module := range []string{"netmap", "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "bookstack"} {
 		instance, job, err := s.QueueModule(ctx, "test", uuid.NewString(), "", "install", model.ModuleRequest{ModuleID: module, Mode: "local", Name: module})
 		if err != nil {
 			t.Fatal(err)
 		}
 		// A caller-provided module name must never grant a longer deadline.
-		job.Parameters["module_id"] = "netmap"
-		want := 360 * time.Second
+		job.Parameters["module_id"] = "unknown"
+		want := 56 * time.Minute
 		if module == "netmap" {
-			want = 22*time.Minute + 50*time.Second
+			want = 72*time.Minute + 50*time.Second
 		}
 		if got := w.moduleJobTimeout(ctx, job); got != want {
 			t.Fatalf("%s: got %v want %v", module, got, want)
 		}
-		for _, action := range []string{"enable", "refresh", "disable", "remove"} {
+		for _, action := range []string{"enable", "refresh", "disable", "remove", "configure", "read"} {
 			job.Parameters["action"] = action
 			actionWant := 360 * time.Second
-			if module == "netmap" && action == "enable" {
+			if action == "enable" {
 				actionWant = want
 			}
 			if got := w.moduleJobTimeout(ctx, job); got != actionWant {
@@ -65,5 +65,14 @@ func TestModuleJobTimeoutUnavailableInstanceKeepsNormalBudget(t *testing.T) {
 	}
 	if got := w.moduleJobTimeout(context.Background(), job); got != 360*time.Second {
 		t.Fatal("external instance granted extended timeout")
+	}
+	instance := model.ModuleInstance{ID: uuid.NewString(), ModuleID: "unknown", Mode: "local", LastJobID: job.ID}
+	if _, err = w.Store.Save(context.Background(), "module_instance", instance.ID, 0, instance, "test"); err != nil {
+		t.Fatal(err)
+	}
+	job.Parameters["instance_id"] = instance.ID
+	job.Parameters["module_id"] = "grafana"
+	if got := w.moduleJobTimeout(context.Background(), job); got != 360*time.Second {
+		t.Fatal("caller-supplied module name granted an unknown stored instance extended timeout")
 	}
 }

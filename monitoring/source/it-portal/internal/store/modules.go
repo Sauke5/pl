@@ -13,6 +13,49 @@ import (
 	"pl/portal/internal/model"
 )
 
+func moduleRequestFingerprint(id, action string, input model.ModuleRequest, credential string) string {
+	sum := sha256.Sum256(encode(struct {
+		ID, Action string
+		Input      model.ModuleRequest
+		Credential string `json:",omitempty"`
+	}{id, action, input, credential}))
+	return hex.EncodeToString(sum[:])
+}
+
+// ReplayModuleRequest reads an existing operation without creating state. New
+// connections may perform remote validation before entering QueueModule's write
+// transaction; accepted retries retain their original idempotency semantics.
+func (s *Store) ReplayModuleRequest(ctx context.Context, actor, key string, input model.ModuleRequest, credential *ModuleCredential) (model.ModuleInstance, model.Job, bool, error) {
+	var instance model.ModuleInstance
+	var job model.Job
+	var body []byte
+	var oldFP string
+	err := s.Pool.QueryRow(ctx, "SELECT body,fingerprint FROM jobs WHERE actor=$1 AND idempotency_key=$2", actor, key).Scan(&body, &oldFP)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return instance, job, false, nil
+	}
+	if err != nil {
+		return instance, job, false, err
+	}
+	fingerprint := ""
+	if credential != nil {
+		fingerprint = credential.Fingerprint
+	}
+	if oldFP != moduleRequestFingerprint("", "install", input, fingerprint) {
+		return instance, job, true, ErrConflict
+	}
+	job, err = Decode[model.Job](body)
+	if err != nil {
+		return instance, job, true, err
+	}
+	instanceID, _ := job.Parameters["instance_id"].(string)
+	err = s.Pool.QueryRow(ctx, "SELECT body || jsonb_build_object('id',id,'revision',revision) FROM documents WHERE kind IN ('module_instance','module_tombstone') AND id=$1", instanceID).Scan(&body)
+	if err == nil {
+		instance, err = Decode[model.ModuleInstance](body)
+	}
+	return instance, job, true, translate(err)
+}
+
 // QueueModule atomically commits desired state and the durable operation. The
 // request fingerprint excludes generated IDs so retried creations reuse both IDs.
 func (s *Store) QueueModule(ctx context.Context, actor, key, id, action string, input model.ModuleRequest) (model.ModuleInstance, model.Job, error) {
@@ -44,12 +87,7 @@ func (s *Store) QueueModuleWithCredential(ctx context.Context, actor, key, id, a
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", actor+":"+key); err != nil {
 		return instance, job, err
 	}
-	sum := sha256.Sum256(encode(struct {
-		ID, Action string
-		Input      model.ModuleRequest
-		Credential string `json:",omitempty"`
-	}{id, action, input, credentialFingerprint}))
-	fp := hex.EncodeToString(sum[:])
+	fp := moduleRequestFingerprint(id, action, input, credentialFingerprint)
 	var body []byte
 	var oldFP string
 	err = tx.QueryRow(ctx, "SELECT body,fingerprint FROM jobs WHERE actor=$1 AND idempotency_key=$2", actor, key).Scan(&body, &oldFP)

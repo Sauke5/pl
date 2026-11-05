@@ -163,6 +163,9 @@ func TestMailcowNativeFiniteErrorsIgnoreUpstreamText(t *testing.T) {
 				_, _ = w.Write([]byte(mailcowTestKey + " private-error-body"))
 			})
 			raw, err := r.MailcowCollect(context.Background(), i, "storage")
+			if (tc.status == 401 || tc.status == 403) && MailcowHTTPStatus(err) != tc.status {
+				t.Fatal("upstream authentication status was lost")
+			}
 			if raw != nil || MailcowErrorCode(err) != tc.code || strings.Contains(err.Error(), mailcowTestKey) || strings.Contains(err.Error(), "private-") {
 				t.Fatalf("data=%s err=%v", raw, err)
 			}
@@ -470,4 +473,50 @@ func TestMailcowNativeManagedExternalAndIntegrationAdmission(t *testing.T) {
 	if len(*calls) != 1 {
 		t.Fatalf("standalone integration not collected: calls=%v", *calls)
 	}
+}
+
+func TestMailcowPreflightUsesSevenReadsAndOneBudget(t *testing.T) {
+	responses := map[string]string{
+		"status/version": `{"version":"2026-10"}`, "domain/all": `[]`, "mailbox/all": `[]`, "mailq/all": `[]`,
+		"status/containers": mailcowTestServices, "status/vmail": `{"used_percent":"0%","used":"0G","total":"16G"}`, "logs/rspamd-stats": `{"scanned":0,"actions":{}}`,
+	}
+	t.Run("zero data and transient credential", func(t *testing.T) {
+		i := mailcowTestIntegration(t)
+		i.SecretRef = ""
+		r, calls := mailcowTestRegistry(t, responses)
+		if err := r.MailcowProbe(context.Background(), i, mailcowTestKey); err != nil {
+			t.Fatal(err)
+		}
+		if len(*calls) != 7 {
+			t.Fatal("expected seven unique native GET requests", *calls)
+		}
+	})
+	t.Run("one total timeout", func(t *testing.T) {
+		i := mailcowTestIntegration(t)
+		i.TimeoutSeconds = 1
+		calls := 0
+		r := registry(t, func(w http.ResponseWriter, req *http.Request) {
+			calls++
+			select {
+			case <-time.After(300 * time.Millisecond):
+			case <-req.Context().Done():
+				return
+			}
+			_, _ = w.Write([]byte(responses[strings.TrimPrefix(req.URL.Path, "/api/v1/get/")]))
+		})
+		started := time.Now()
+		err := r.MailcowProbe(context.Background(), i, "")
+		if MailcowErrorCode(err) != "timeout" || calls >= 7 || time.Since(started) > 2*time.Second {
+			t.Fatal("preflight did not retain a single finite budget", err, calls, time.Since(started))
+		}
+	})
+	t.Run("policy before transient credential", func(t *testing.T) {
+		i := mailcowTestIntegration(t)
+		i.URL = "http://127.0.0.1"
+		i.SecretRef = ""
+		r, calls := mailcowTestRegistry(t, responses)
+		if err := r.MailcowProbe(context.Background(), i, mailcowTestKey); MailcowErrorCode(err) != "policy" || len(*calls) != 0 {
+			t.Fatal("probe bypassed target policy", err, *calls)
+		}
+	})
 }
