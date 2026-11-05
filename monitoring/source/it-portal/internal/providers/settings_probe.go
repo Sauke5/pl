@@ -46,7 +46,7 @@ func (r *Registry) ProbeIntegration(ctx context.Context, i model.Integration) (o
 		"oxidized":     "/nodes.json",
 	}[i.Kind]
 	managed := i.ManagedModuleID != ""
-	if managed && i.Kind != "prometheus" && i.Kind != "alertmanager" && i.Kind != "grafana" && i.Kind != "wayline" && i.Kind != "fileauditor" && i.Kind != "forms" && i.Kind != "doska" && i.Kind != "sftpgo" && i.Kind != "netmap" && i.Kind != "bookstack" && i.Kind != "inventory" {
+	if managed && i.Kind != "prometheus" && i.Kind != "alertmanager" && i.Kind != "grafana" && i.Kind != "wayline" && i.Kind != "fileauditor" && i.Kind != "forms" && i.Kind != "doska" && i.Kind != "sftpgo" && i.Kind != "netmap" && i.Kind != "bookstack" {
 		return IntegrationProbe{Status: "unsupported", Message: "Проверка для этого управляемого модуля недоступна."}
 	}
 	if path == "" && !managed {
@@ -67,7 +67,7 @@ func (r *Registry) ProbeIntegration(ctx context.Context, i model.Integration) (o
 	}
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	if managed && (i.Kind == "forms" || i.Kind == "doska" || i.Kind == "sftpgo" || i.Kind == "netmap" || i.Kind == "bookstack" || i.Kind == "inventory") {
+	if managed && (i.Kind == "forms" || i.Kind == "doska" || i.Kind == "sftpgo" || i.Kind == "netmap" || i.Kind == "bookstack") {
 		if r.ManagedHealth == nil {
 			return IntegrationProbe{Status: "unreachable", Message: "Проверка установленного приложения недоступна."}
 		}

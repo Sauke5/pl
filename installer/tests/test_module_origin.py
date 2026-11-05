@@ -269,8 +269,8 @@ class CoreLinkSQLTests(unittest.TestCase):
         sql('CREATE SCHEMA '+schema)
         self.addCleanup(lambda:sql('DROP SCHEMA '+schema+' CASCADE'))
         sql('CREATE TABLE '+schema+'.documents(kind text,id text,body jsonb,revision bigint default 1,search_text text default \'\',updated_at timestamptz default now(),primary key(kind,id))')
-        old,new='https://old.example:8443','https://new.example:9443';url=old+'/inventory/'
-        module={'module_id':'inventory','mode':'local','desired_state':'enabled','integration_id':'integration'}
+        old,new='https://old.example:8443','https://new.example:9443';url=old+'/wayline/'
+        module={'module_id':'wayline','mode':'local','desired_state':'enabled','integration_id':'integration'}
         rows=[('module_instance','owner',module,''),('module_instance','external',{**module,'mode':'external'},''),
               ('resource','managed',{'name':'Demo','description':'Keep '+url,'type':'Приложение','url':url,'source':'module','managed_module_id':'owner','links':[{'url':url}]},('Demo Keep '+url+' Приложение '+url+' Collection').lower()),
               ('resource','custom',{'url':old+'/custom/','source':'module','managed_module_id':'owner'},''),
@@ -284,10 +284,10 @@ class CoreLinkSQLTests(unittest.TestCase):
         self.assertEqual(sql(prefix+origin.core_link_sql(old)).strip(),'SET\n2')
         sql(prefix+origin.core_link_sql(old,new))
         data=json.loads(sql(prefix+"SELECT json_object_agg(id,json_build_object('body',body,'revision',revision,'search',search_text)) FROM documents").split('\n')[-2])
-        self.assertEqual(data['managed']['body']['url'],new+'/inventory/');self.assertEqual(data['managed']['body']['links'],[{'url':url}])
-        self.assertEqual(data['managed']['search'],('Demo Keep '+url+' Приложение '+new+'/inventory/ Collection').lower())
+        self.assertEqual(data['managed']['body']['url'],new+'/wayline/');self.assertEqual(data['managed']['body']['links'],[{'url':url}])
+        self.assertEqual(data['managed']['search'],('Demo Keep '+url+' Приложение '+new+'/wayline/ Collection').lower())
         self.assertEqual(data['managed']['revision'],2)
-        self.assertEqual(data['integration']['body']['config'],{'public_url':new+'/inventory/','custom':url})
+        self.assertEqual(data['integration']['body']['config'],{'public_url':new+'/wayline/','custom':url})
         self.assertEqual(data['manual']['body']['url'],url);self.assertEqual(data['external-resource']['body']['url'],url)
         self.assertEqual(data['custom']['body']['url'],old+'/custom/')
 

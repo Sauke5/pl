@@ -41,14 +41,14 @@ func (m *Manager) applicationInstance(ctx context.Context, id string) (model.Mod
 		return model.ModuleInstance{}, ErrApplicationUnavailable
 	}
 	v, err := store.Get[model.ModuleInstance](ctx, m.Store, "module_instance", id)
-	if err != nil || (v.Mode != "local" && (v.ModuleID != "netmap" || v.Mode != "external")) || v.DesiredState != "enabled" || (v.ModuleID != "forms" && v.ModuleID != "doska" && v.ModuleID != "netmap" && v.ModuleID != "inventory") {
+	if err != nil || (v.Mode != "local" && (v.ModuleID != "netmap" || v.Mode != "external")) || v.DesiredState != "enabled" || (v.ModuleID != "forms" && v.ModuleID != "doska" && v.ModuleID != "netmap") {
 		return model.ModuleInstance{}, ErrApplicationUnavailable
 	}
 	return v, nil
 }
 
 func (m *Manager) FindApplication(ctx context.Context, kind string) (model.ModuleInstance, error) {
-	if m == nil || m.Store == nil || (kind != "forms" && kind != "doska" && kind != "netmap" && kind != "inventory") {
+	if m == nil || m.Store == nil || (kind != "forms" && kind != "doska" && kind != "netmap") {
 		return model.ModuleInstance{}, ErrApplicationUnavailable
 	}
 	rows, err := store.List[model.ModuleInstance](ctx, m.Store, "module_instance")
@@ -86,7 +86,7 @@ func (m *Manager) FindApplication(ctx context.Context, kind string) (model.Modul
 }
 
 func (c *HostController) ApplicationKey(id, kind string) ([]byte, error) {
-	if !canonicalID(id) || (kind != "forms" && kind != "doska" && kind != "netmap" && kind != "inventory") {
+	if !canonicalID(id) || (kind != "forms" && kind != "doska" && kind != "netmap") {
 		return nil, ErrApplicationUnavailable
 	}
 	mac := hmac.New(sha256.New, c.key)
@@ -171,9 +171,6 @@ func (m *Manager) ApplicationTransport(id, kind string) http.RoundTripper {
 var applicationHeaders = []string{"X-PL-Gateway-Assertion", "X-PL-Gateway-Signature", "X-CSRF-Token", "Idempotency-Key", "Last-Event-ID", "Accept", "Accept-Language", "If-None-Match", "If-Modified-Since", "Range", "If-Range", "Content-Range"}
 
 func (t *applicationTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	if t.kind == "inventory" {
-		return t.inventoryRoundTrip(request)
-	}
 	v, err := t.manager.applicationInstance(request.Context(), t.id)
 	if err != nil || v.ModuleID != t.kind || v.ObservedState != "running" {
 		return nil, ErrApplicationUnavailable

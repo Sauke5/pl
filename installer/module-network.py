@@ -5,11 +5,11 @@ from pathlib import Path
 import re
 import subprocess
 
-MODULES = {'forms', 'doska', 'wayline', 'grafana', 'sftpgo', 'netmap', 'bookstack', 'inventory'}
+MODULES = {'forms', 'doska', 'wayline', 'grafana', 'sftpgo', 'netmap', 'bookstack'}
 ROLES = {'forms': ('mongo', 'keydb', 'engine', 'adapter', 'engine-bootstrap'),
          'doska': ('database', 'api', 'web'), 'wayline': ('runner', 'api', 'gateway'),
          'netmap': ('database', 'cache', 'netbox', 'netbox-worker', 'oxidized', 'gitea', 'adapter'),
-         'bookstack': ('database', 'web'), 'inventory': ('server',)}
+         'bookstack': ('database', 'web')}
 PRIVATE = tuple(ipaddress.IPv4Network(v) for v in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
 
 
@@ -56,7 +56,7 @@ def owned_network(obj, installation, available, inspect_container, *, prometheus
     except (ValueError, IndexError, KeyError, TypeError):
         return None
     if (not re.fullmatch(r'[0-9a-f]{64}', obj.get('Id', '')) or obj.get('Name') != prefix + '-net' or obj.get('Driver') != 'bridge' or obj.get('Scope') != 'local'
-            or obj.get('Ingress') or obj.get('Internal', False) != (module in ('forms', 'inventory')) or obj.get('Options')
+            or obj.get('Ingress') or obj.get('Internal', False) != (module == 'forms') or obj.get('Options')
             or obj.get('IPAM', {}).get('Driver') != 'default' or obj.get('IPAM', {}).get('Options') or len(configs) != 1
             or configs[0].get('Gateway') != str(subnet.network_address + 1)
             or configs[0].get('IPRange') or configs[0].get('AuxiliaryAddresses')

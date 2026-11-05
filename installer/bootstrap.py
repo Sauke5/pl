@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "inventory-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "release-signing-public.pem"}
+FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "release-signing-public.pem"}
 REQUIRED = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt"}
 
 
@@ -107,12 +107,12 @@ def manifest(package: Path) -> dict:
     if m.get("architecture") != arch:
         raise ValueError("Package CPU architecture does not match this host")
     features = m.get("features", {})
-    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "inventory_module", "connector_credentials", "icmp_probe", "on_demand_modules"} or any(type(v) is not bool for v in features.values()):
+    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
     if features.get("on_demand_modules"):
-        payloads = {"install.sh", "delivery.py", "release-signing-public.pem", "module-controller.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "inventory-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py"}
+        payloads = {"install.sh", "delivery.py", "release-signing-public.pem", "module-controller.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py"}
         if (m.get("schema") != 2 or not features.get("module_controller") or not isinstance(m.get("files"), dict) or not payloads <= m["files"].keys()
-                or any(features.get(name + "_module") for name in ("xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack", "inventory"))):
+                or any(features.get(name + "_module") for name in ("xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack"))):
             raise ValueError("On-demand core requires its finite delivery controllers without bundled modules")
     if features.get("connector_credentials") and m.get("schema") != 2:
         raise ValueError("Connector credentials require a schema-2 package")
@@ -133,7 +133,7 @@ def manifest(package: Path) -> dict:
     if features.get("grafana_module") and (m.get("schema") != 2 or not features.get("module_controller")
             or not isinstance(files, dict) or not {"grafana-controller.py", "xray-controller.py"} <= files.keys()):
         raise ValueError("Grafana module requires its controller and trusted file primitives")
-    for module in ("forms", "doska", "sftpgo", "netmap", "bookstack", "inventory"):
+    for module in ("forms", "doska", "sftpgo", "netmap", "bookstack"):
         if features.get(module + "_module") and (m.get("schema") != 2 or not features.get("module_controller")
                 or not isinstance(files, dict) or not {module + "-controller.py", "xray-controller.py"} <= files.keys()):
             raise ValueError("Application module requires its controller and trusted file primitives")
@@ -221,7 +221,7 @@ def validate_bundled_images(m: dict) -> None:
                 raise ValueError("Wayline image versions differ")
             version = current
             expected[name] = {key: value for key, value in labels.items() if key != "pl.source.sha256"}
-    for module, roles in (("forms", ("adapter", "engine", "mongo", "keydb")), ("doska", ("api", "web")), ("sftpgo", ("server",)), ("netmap", ("database", "cache", "netbox", "netbox-worker", "oxidized", "gitea", "adapter")), ("bookstack", ("web", "database")), ("inventory", ("server",))):
+    for module, roles in (("forms", ("adapter", "engine", "mongo", "keydb")), ("doska", ("api", "web")), ("sftpgo", ("server",)), ("netmap", ("database", "cache", "netbox", "netbox-worker", "oxidized", "gitea", "adapter")), ("bookstack", ("web", "database"))):
         if not m.get("features", {}).get(module + "_module"):
             continue
         version = None
@@ -250,7 +250,7 @@ def validate_bundled_images(m: dict) -> None:
     for name, labels in expected.items():
         image = images[name]
         application = name.split("-", 1)[0]
-        recipe = "deploy/images/" + application + ".Dockerfile" if application in ("forms", "doska", "sftpgo", "netmap", "bookstack", "inventory") else "deploy/images/wayline.Dockerfile" if name.startswith("wayline-") else {"db": "deploy/images/postgres.Dockerfile", "prometheus": "deploy/images/prometheus.Dockerfile", "xray": "deploy/images/xray.Dockerfile", "alertmanager": "deploy/images/alertmanager.Dockerfile", "grafana": "deploy/images/grafana.Dockerfile"}.get(name, "Dockerfile")
+        recipe = "deploy/images/" + application + ".Dockerfile" if application in ("forms", "doska", "sftpgo", "netmap", "bookstack") else "deploy/images/wayline.Dockerfile" if name.startswith("wayline-") else {"db": "deploy/images/postgres.Dockerfile", "prometheus": "deploy/images/prometheus.Dockerfile", "xray": "deploy/images/xray.Dockerfile", "alertmanager": "deploy/images/alertmanager.Dockerfile", "grafana": "deploy/images/grafana.Dockerfile"}.get(name, "Dockerfile")
         if (not isinstance(image, dict) or set(image) != {"id", "architecture", "ref", "recipe", "labels"}
                 or not SHA.fullmatch(image.get("id", "")) or image.get("architecture") != m["architecture"]
                 or image.get("recipe") != recipe
@@ -914,7 +914,7 @@ def compose_model(root: Path, m: dict, cfg: dict, install_id: str) -> dict:
                                        **({"wayline": m["images"]["wayline-api"]["labels"]["org.opencontainers.image.version"]}
                                           if m.get("features", {}).get("wayline_module") else {}),
                                        **{module: m["images"][module + "-" + role]["labels"]["org.opencontainers.image.version"]
-                                          for module, role in (("forms", "adapter"), ("doska", "api"), ("sftpgo", "server"), ("netmap", "adapter"), ("bookstack", "web"), ("inventory", "server"))
+                                          for module, role in (("forms", "adapter"), ("doska", "api"), ("sftpgo", "server"), ("netmap", "adapter"), ("bookstack", "web"))
                                           if m.get("features", {}).get(module + "_module")}})})
         api["volumes"] += [mount("run/module-controller", "/run/pl-module-controller"),
                               mount("private/module-controller-key", "/run/secrets/module-controller-key")]
@@ -994,7 +994,7 @@ def module_image_descriptor(m: dict, installation: str, manifest_sha256: str) ->
                           ("forms", ("adapter", "engine", "mongo", "keydb")),
                           ("doska", ("api", "web")), ("sftpgo", ("server",)),
                           ("netmap", ("database", "cache", "netbox", "netbox-worker", "oxidized", "gitea", "adapter")),
-                          ("bookstack", ("web", "database")), ("inventory", ("server",))):
+                          ("bookstack", ("web", "database"))):
         if m.get("features", {}).get(module + "_module"):
             descriptor[module] = {role: m["images"][module + "-" + role] for role in roles}
     if "doska" in descriptor:
@@ -1019,7 +1019,7 @@ def prepare_module_image_descriptor(rt: Runtime) -> None:
         if path.exists():
             existing = read_json(path)
             if rt.m.get("features", {}).get("on_demand_modules"):
-                modules = {"prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack", "inventory"}
+                modules = {"prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack"}
                 if (any(existing.get(key) != value for key, value in descriptor.items())
                         or set(existing) - set(descriptor) - modules):
                     raise ValueError("Module image descriptor differs; upgrade is a separate operation")
@@ -1072,7 +1072,7 @@ def prepare_module_controller(rt: Runtime) -> None:
                 raise ValueError("Invalid controller release pointer")
         else:
             write_json(active, {"schema": 1, "version": rt.m["version"]})
-    needs_netlink = features.get("on_demand_modules") or any(features.get(module + "_module") for module in ("xray", "forms", "doska", "wayline", "grafana", "sftpgo", "netmap", "bookstack", "inventory"))
+    needs_netlink = features.get("on_demand_modules") or any(features.get(module + "_module") for module in ("xray", "forms", "doska", "wayline", "grafana", "sftpgo", "netmap", "bookstack"))
     writable = str(rt.root) if features.get("on_demand_modules") else str(rt.root / "modules") + " " + str(rt.root / "run/module-controller")
     families = "AF_UNIX AF_INET AF_INET6" + (" AF_NETLINK" if needs_netlink else "")
     unit_name = rt.install_id + "-module-controller.service"

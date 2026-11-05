@@ -60,22 +60,6 @@ class SignedTransportTests(unittest.TestCase):
                 handler.server.controller.application.assert_called_once_with('forms')
                 handler.server.controller.application.return_value.request.assert_called_once_with(payload)
 
-    def test_inventory_settings_accepts_json_escaped_password_without_expanding_other_routes(self):
-        path = '/v1/inventory/settings'
-        # Go encodes each '<' as six ASCII bytes. The decoded password remains
-        # within the controller's independent 4096-byte secret limit.
-        raw = ('{"instance_id":"123e4567-e89b-42d3-a456-426614174000",'
-               '"operation_id":"123e4567-e89b-42d3-a456-426614174001",'
-               '"archive_password":"' + '\\u003c' * 4096 + '"}').encode()
-        handler = self.forms_handler(raw, path=path)
-        handler.server.controller.application.return_value.settings.return_value = {'archive_password_configured': True}
-        handler.handle_request()
-        handler.reply.assert_called_once_with(200, {'archive_password_configured': True})
-        self.assertEqual(handler.server.controller.application.return_value.settings.call_args.args[0]['archive_password'], '<' * 4096)
-        oversized = self.forms_handler(b' ' * (32 * 1024 + 1), path=path)
-        oversized.handle_request()
-        oversized.server.controller.application.assert_not_called()
-
     def test_installation_settings_use_signed_finite_routes_and_typed_safe_errors(self):
         path = '/v1/installation/configure'
         handler = self.forms_handler(b'{}', path=path)

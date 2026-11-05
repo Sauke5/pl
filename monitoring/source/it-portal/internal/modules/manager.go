@@ -37,7 +37,7 @@ func (m *Manager) LocalAvailable() bool { return m != nil && m.Controller != nil
 // ManagedHealth observes local native applications through the authenticated
 // controller and external Wiki through its persisted bound connector.
 func (m *Manager) ManagedHealth(ctx context.Context, i model.Integration) error {
-	if m == nil || m.Store == nil || !canonicalID(i.ManagedModuleID) || !i.Enabled || (i.Kind != "forms" && i.Kind != "doska" && i.Kind != "sftpgo" && i.Kind != "netmap" && i.Kind != "bookstack" && i.Kind != "inventory") {
+	if m == nil || m.Store == nil || !canonicalID(i.ManagedModuleID) || !i.Enabled || (i.Kind != "forms" && i.Kind != "doska" && i.Kind != "sftpgo" && i.Kind != "netmap" && i.Kind != "bookstack") {
 		return errors.New("Управляемое приложение недоступно")
 	}
 	instance, err := store.Get[model.ModuleInstance](ctx, m.Store, "module_instance", i.ManagedModuleID)

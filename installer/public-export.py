@@ -26,7 +26,7 @@ INSTALLER_FILES = {
     "package.py", "public-export.py", "release-catalog.py", "get-pl.sh", "install.sh", "bootstrap.py", "delivery.py", "delivery.ru.md", "maintenance.py",
     "module-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
     "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py",
-    "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "inventory-controller.py",
+    "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py",
     "icmp-install.py", "icmp-probe.py", "nginx.conf", "release-signing-public.pem", "LICENSES.txt",
     "README.package.ru.md", "README.public.ru.md", "maintenance.ru.md", "license-notices.py",
     "grafana-build.py", "grafana-plugins.json", "grafana-trust.patch", "grafana-signing/main.go", "grafana-signing/main_test.go",
@@ -44,7 +44,7 @@ UNIT_TEST_NAMES = {
     "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_network_stack_install.py", "test_package.py",
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
-    "test_inventory_controller.py", "test_inventory_package.py", "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
+    "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
 }
 REPORT_FILES = {
     "monitoring_daily_summary.py", "monitoring_weekly_report.py", "monitoring_report_api.py", "manage_reports.py",
@@ -83,7 +83,7 @@ def source_name(name: str) -> str:
     path = PurePosixPath(name)
     if (not name or path.is_absolute() or ".." in path.parts or name != path.as_posix()
             or "\\" in name or set(path.parts) & FORBIDDEN_PARTS
-            or path.parts[0] == "ci" or path.name in {".env", ".DS_Store", "SOURCE-SNAPSHOT.json"}
+            or path.parts[0] == "ci" or name.startswith("apps/inventory/") or path.name in {".env", ".DS_Store", "SOURCE-SNAPSHOT.json"}
             or path.name.startswith(("._", "acceptance."))
             or path.suffix.lower() in {".db", ".sqlite", ".sqlite3", ".dump", ".key", ".bak", ".log"}
             or path.suffix.lower() == ".pem" and name != "installer/release-signing-public.pem"):
@@ -124,9 +124,6 @@ def supplemental_allowed(name: str) -> bool:
     if name.startswith("apps/file-auditor/"):
         relative = name[len("apps/file-auditor/"):]
         return relative in AUDITOR_EXACT or relative.startswith(("src/", "tests/", "scripts/", "docs/")) and path.suffix in TEXT_SUFFIXES | ASSET_SUFFIXES
-    if name.startswith("apps/inventory/"):
-        relative = name[len("apps/inventory/"):]
-        return relative in {"README.ru.md", "LICENSE", "NOTICE", "requirements.txt", "Dockerfile"} or relative.startswith(("inventory_service/", "web/", "tests/")) and path.suffix in TEXT_SUFFIXES | ASSET_SUFFIXES
     for component in ("monitoring-admin", "websites-admin", "monitoring-admin-agent"):
         prefix = "monitoring/source/" + component + "/"
         if name.startswith(prefix):
@@ -190,7 +187,7 @@ def select_files(root: Path, package=None) -> dict[str, bytes]:
         path = "installer/tests/" + name
         if (root / path).exists():
             put_file(selected, path, read_regular(root, path))
-    for name in tracked_files(root, CORE, "apps/inventory", "apps/file-auditor", "monitoring/source/monitoring-admin", "monitoring/source/websites-admin", "monitoring/source/monitoring-admin-agent", "monitoring/source/scripts", "monitoring/source/nginx"):
+    for name in tracked_files(root, CORE, "apps/file-auditor", "monitoring/source/monitoring-admin", "monitoring/source/websites-admin", "monitoring/source/monitoring-admin-agent", "monitoring/source/scripts", "monitoring/source/nginx"):
         if supplemental_allowed(name):
             put_file(selected, name, read_regular(root, name))
     selected["README.md"] = PUBLIC_README.encode()
@@ -216,8 +213,6 @@ def allowed_match(name: str, line: str, rule: str, value: str) -> str | None:
             return "exclusion rule or standard TLS-PSK protocol token in the source auditor"
     if rule == "organization" and name == "installer/tests/test_portable_ui_icmp.py":
         return "negative source-audit fixtures proving former identifiers are rejected"
-    if rule == "organization" and name == "apps/inventory/tests/shell-browser.test.mjs" and "assert.doesNotMatch(source," in line:
-        return "negative browser-source audit expression, not product branding"
     if rule == "access-token" and digest(value.encode()) in REVIEWED_TEST_TOKENS.get(name, set()):
         return "reviewed exact synthetic token fixture used by validation/redaction tests"
     if rule == "personal-home" and value == "/home/oxidized":
@@ -458,7 +453,7 @@ Bootstrap определяет адрес сервера, проверяет п�
 
 В web PL создаются карточки и системы, пользователи и внешние подключения. Раздел Active Directory позволяет задать сервер, домен входа, Base DN, группу администраторов, учётную запись чтения и сертификаты CA, проверить соединение и сохранить настройки. Пароль чтения хранится зашифрованным. Локальная учётная запись администратора доступна для восстановления.
 
-В каталоге представлены Prometheus, Alertmanager, Xray, Wayline, Grafana, Forms, Doska, SFTPGo, NetMap, BookStack и Inventory. Доступность установки конкретной версии определяется подписанным каталогом релиза и архитектурой сервера. Исходники модулей и зафиксированные зависимости входят в этот репозиторий; их runtime-образы не скачиваются при установке core. Внешний сервис можно подключить отдельно, если для него доступен connector.
+В каталоге представлены Prometheus, Alertmanager, Xray, Wayline, Grafana, Forms, Doska, SFTPGo, NetMap и BookStack. Доступность установки конкретной версии определяется подписанным каталогом релиза и архитектурой сервера. Исходники модулей и зафиксированные зависимости входят в этот репозиторий; их runtime-образы не скачиваются при установке core. Внешний сервис можно подключить отдельно, если для него доступен connector.
 
 File Auditor поставляется отдельными исходниками Windows-службы и интерфейса в `apps/file-auditor`. Для рабочего сканирования нужен Windows-сервер и явные корни сканирования. Компиляция и тесты в Linux SDK не подтверждают работу службы и Windows API.
 

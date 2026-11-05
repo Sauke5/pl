@@ -92,7 +92,7 @@ func syncModuleLinks(ctx context.Context, tx pgx.Tx, instance *model.ModuleInsta
 		integration.Status = "error"
 		integration.Error = instance.Error
 	}
-	if instance.ModuleID == "wayline" || instance.ModuleID == "grafana" || instance.ModuleID == "fileauditor" || instance.ModuleID == "forms" || instance.ModuleID == "doska" || instance.ModuleID == "sftpgo" || instance.ModuleID == "netmap" || instance.ModuleID == "bookstack" || instance.ModuleID == "inventory" {
+	if instance.ModuleID == "wayline" || instance.ModuleID == "grafana" || instance.ModuleID == "fileauditor" || instance.ModuleID == "forms" || instance.ModuleID == "doska" || instance.ModuleID == "sftpgo" || instance.ModuleID == "netmap" || instance.ModuleID == "bookstack" {
 		integration.LastSuccess = instance.LastSuccess
 	}
 	if _, err = save(ctx, tx, "integration", integration.ID, integration.Revision, integration); err != nil {

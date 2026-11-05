@@ -103,7 +103,7 @@ func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 		problem(w, 409, "module_unavailable", "В каталоге поставки нет совместимой версии модуля. Проверьте обновления в настройках PL.")
 		return
 	}
-	if (input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack" || input.ModuleID == "inventory") && input.AdditionalInstance {
+	if (input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack") && input.AdditionalInstance {
 		problem(w, 400, "additional_instance_unsupported", "На этой установке поддерживается один экземпляр этого приложения")
 		return
 	}

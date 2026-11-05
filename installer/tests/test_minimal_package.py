@@ -140,6 +140,7 @@ class MinimalBuildTests(unittest.TestCase):
         bootstrap.validate_bundled_images(manifest)
 
     def test_each_module_build_contains_only_its_own_roles(self):
+        self.assertEqual(set(package.APPLICATION_ROLES), {"forms", "doska", "sftpgo", "netmap", "bookstack"})
         for module in ("prometheus", "xray", "alertmanager", "grafana", "wayline", *package.APPLICATION_ROLES):
             with self.subTest(module=module):
                 args = self.args(module)

@@ -46,7 +46,7 @@ def wayline_source_allowed(name: str) -> bool:
         return bool(UI_VENDOR_NAME.fullmatch(Path(name).name)) and len(Path(name).parts) == 5
     return False
 
-APPLICATION_ROLES = {"forms": ("adapter", "engine", "mongo", "keydb"), "doska": ("api", "web"), "sftpgo": ("server",), "inventory": ("server",),
+APPLICATION_ROLES = {"forms": ("adapter", "engine", "mongo", "keydb"), "doska": ("api", "web"), "sftpgo": ("server",),
                      "netmap": ("database", "cache", "netbox", "netbox-worker", "oxidized", "gitea", "adapter"),
                      "bookstack": ("web", "database")}
 APPLICATION_UPSTREAM_ROLES = {"forms": {"engine", "mongo", "keydb"},
@@ -60,7 +60,6 @@ NETMAP_STACK_REQUIRED = {"apps/netmap-stack/" + name for name in (
     "cache-start.sh", "gateway.py", "gitea-start.sh", "known-hosts-source.rb", "netbox-bootstrap.py",
     "netbox-extra.py", "netbox-start.sh", "oxidized-start.rb", "service.py")}
 APPLICATION_REQUIRED = {"forms": FORMS_REQUIRED, "doska": DOSKA_REQUIRED, "sftpgo": set(),
-                        "inventory": {"apps/inventory/" + name for name in ("LICENSE", "requirements.txt", "inventory_service/app.py", "inventory_service/gateway.py", "inventory_service/importer.py", "inventory_service/store.py", "inventory_service/__init__.py", "web/index.html", "web/platform.css", "web/report.js", "web/bootstrap.js", "web/shared-shell.js", "web/theme-init.js")},
                         "bookstack": {"apps/wiki/bootstrap-admin.php"},
                         "netmap": NETMAP_STACK_REQUIRED | {"apps/netmap/app.py", "apps/netmap/web/index.html", "apps/netmap/web/app.js", "apps/netmap/web/office-view.js", "apps/netmap/web/style.css", "apps/netmap/web/theme-init.js"}}
 APPLICATION_SOURCE_PREFIXES = {"bookstack": ("apps/wiki/",), "netmap": ("apps/netmap/", "apps/netmap-stack/")}
@@ -76,8 +75,6 @@ def application_source_allowed(module: str, name: str) -> bool:
         return False
     if module == "forms":
         return name in FORMS_REQUIRED
-    if module == "inventory":
-        return name in APPLICATION_REQUIRED[module] or name == "apps/inventory/web/software-page.js"
     if module == "bookstack":
         return name in APPLICATION_REQUIRED[module]
     if module == "netmap":
@@ -137,6 +134,8 @@ ORGANIZATION_REFERENCE = re.compile(r"(?i)(?<!\w)psk(?:\b|[-_/.])|PSK(?:Theme|UI
 
 def audit_source_file(name: str, body: bytes) -> None:
     path = Path(name)
+    if path.parts[:2] == ("apps", "inventory"):
+        raise ValueError("Excluded service in source context: " + name)
     if (path.is_absolute() or ".." in path.parts or set(path.parts[:-1]) & FORBIDDEN_DIRS
             or path.name.startswith((".env", "._")) or path.suffix.lower() in {".log", ".db", ".sqlite", ".sqlite3", ".bak", ".dump", ".key"}
             or (path.suffix.lower() == ".pem" and path.name != "release-signing-public.pem")):
@@ -234,10 +233,10 @@ def grafana_build_arguments(metadata: dict, args, context: Path) -> list[str]:
     return ["--secret", "id=pl-grafana-signing-key,src=" + str(key), "--build-arg", "PL_SIGNING_FINGERPRINT=" + fingerprint]
 
 
-def source_context(destination: Path, with_wayline: bool = False, with_grafana: bool = False, with_forms: bool = False, with_doska: bool = False, with_sftpgo: bool = False, with_netmap: bool = False, with_bookstack: bool = False, with_inventory: bool = False) -> None:
+def source_context(destination: Path, with_wayline: bool = False, with_grafana: bool = False, with_forms: bool = False, with_doska: bool = False, with_sftpgo: bool = False, with_netmap: bool = False, with_bookstack: bool = False) -> None:
     if destination.exists():
         raise ValueError("Source snapshot already exists")
-    applications = [name for name, enabled in (("forms", with_forms), ("doska", with_doska), ("sftpgo", with_sftpgo), ("netmap", with_netmap), ("bookstack", with_bookstack), ("inventory", with_inventory)) if enabled]
+    applications = [name for name, enabled in (("forms", with_forms), ("doska", with_doska), ("sftpgo", with_sftpgo), ("netmap", with_netmap), ("bookstack", with_bookstack)) if enabled]
     application_exact = {value for name in applications for value in (APPLICATION_RECIPES[name], APPLICATION_METADATA[name])}
     names = run(["git", "ls-files", "-z", PREFIX]).split("\0")
     selected = {}
@@ -459,7 +458,7 @@ def build(args) -> None:
             return
         payloads = ("bootstrap.py", "nginx.conf", "LICENSES.txt", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "module-network.py")
         if not bundled:
-            payloads += ("install.sh", "delivery.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "inventory-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py")
+            payloads += ("install.sh", "delivery.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py")
         files = {name: (ROOT / "installer" / name) for name in payloads}
         if with_icmp:
             files.update({name: ROOT / "installer" / name for name in ("icmp-probe.py", "icmp-install.py")})
@@ -515,7 +514,6 @@ def main() -> int:
         parser.add_argument("--with-sftpgo", action="store_true")
         parser.add_argument("--with-netmap", action="store_true")
         parser.add_argument("--with-bookstack", action="store_true")
-        parser.add_argument("--with-inventory", action="store_true")
     module = sub.add_parser("module", help="Build exactly one independently delivered module")
     module.add_argument("--module-id", required=True, choices=("prometheus", "xray", "alertmanager", "grafana", "wayline", *APPLICATION_ROLES))
     module.add_argument("--source-archive", type=Path, required=True)
@@ -529,7 +527,7 @@ def main() -> int:
     if args.action == "module":
         setattr(args, "with_" + args.module_id, True)
     try:
-        source_context(args.output, args.with_wayline, args.with_grafana, args.with_forms, args.with_doska, args.with_sftpgo, args.with_netmap, args.with_bookstack, args.with_inventory) if args.action == "context" else build(args)
+        source_context(args.output, args.with_wayline, args.with_grafana, args.with_forms, args.with_doska, args.with_sftpgo, args.with_netmap, args.with_bookstack) if args.action == "context" else build(args)
         return 0
     except (ValueError, OSError, KeyError, tarfile.TarError) as e:
         print("Packaging failed: " + str(e), file=sys.stderr)

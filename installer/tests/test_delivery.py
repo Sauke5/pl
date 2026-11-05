@@ -328,7 +328,7 @@ class UpgradeTransactionTests(unittest.TestCase):
             missing = patch.object(d.os, 'listxattr', return_value=[], create=True)
             missing.start(); self.addCleanup(missing.stop)
         self.original = {'cards': ['card-1'], 'systems': ['system-1'], 'users': ['admin', 'engineer'],
-                         'connections': ['external-prometheus'], 'modules': ['prometheus', 'inventory'], 'schema': 15}
+                         'connections': ['external-prometheus'], 'modules': ['prometheus', 'forms'], 'schema': 15}
         self.volume_roots = []
         for name in ('db-volume', 'auth-volume', 'module-volume'):
             folder = self.root / name; folder.mkdir()
@@ -340,7 +340,7 @@ class UpgradeTransactionTests(unittest.TestCase):
         (self.root / 'modules/installed.json').write_text('two local modules')
         self.volumes = [{'name': 'owned-' + str(i), 'path': str(path)} for i, path in enumerate(self.volume_roots)]
         self.containers = [{'name': 'core-' + name, 'running': True, 'core': True, 'service': name} for name in ('web', 'api', 'db')]
-        self.containers += [{'name': 'inventory-native', 'running': True, 'core': False, 'service': ''}]
+        self.containers += [{'name': 'forms-native', 'running': True, 'core': False, 'service': ''}]
         self.old_manifest = {'images': {name: {'id': 'sha256:' + 'a' * 64} for name in ('api', 'web', 'db')}}
         self.new_manifest = {'version': '0.3.1', 'images': {name: {'id': 'sha256:' + 'c' * 64} for name in ('api', 'web', 'db')}}
         for version, manifest in (('0.3.0', self.old_manifest), ('0.3.1', self.new_manifest)):

@@ -1,1 +1,0 @@
-"""PL software inventory service."""

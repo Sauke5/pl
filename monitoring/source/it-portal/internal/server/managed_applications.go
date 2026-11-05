@@ -139,8 +139,6 @@ func (s *Server) applicationHandler(ctx context.Context, v model.ModuleInstance)
 	var handler http.Handler
 	if v.ModuleID == "forms" {
 		handler, err = s.newFormsGateway(&FormsGatewayConfig{Key: key, Upstream: "http://module-forms", Transport: tr})
-	} else if v.ModuleID == "inventory" {
-		handler = s.newInventoryGateway(key, tr)
 	} else if v.ModuleID == "doska" {
 		raw, e := s.Modules.ApplicationManifest(ctx, v.ID)
 		if e != nil {

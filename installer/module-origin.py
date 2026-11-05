@@ -34,7 +34,7 @@ ROLES={'forms':('mongo','keydb','engine','adapter'),'doska':('database','api','w
 RECREATE={'forms':(), 'doska':('api',), 'netmap':('netbox','netbox-worker','gitea','adapter'),
           'bookstack':('web',),'grafana':('',)}
 PREFIXES={'forms':('/forms/',),'doska':('/doska/',),'netmap':('/netmap/','/netmap/netbox/','/netmap/oxidized/','/netmap/gitea/'),
-          'bookstack':('/wiki/',),'grafana':('/grafana/',),'inventory':('/inventory/',),'wayline':('/wayline/',),'sftpgo':('/sftpgo/',)}
+          'bookstack':('/wiki/',),'grafana':('/grafana/',),'wayline':('/wayline/',),'sftpgo':('/sftpgo/',)}
 BOOKSTACK_TOOL_HASH='28ae1490e681654d57448727270d18ac244f22aba0e10d7c97264df3cee2d193'
 
 

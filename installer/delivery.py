@@ -30,10 +30,10 @@ import urllib.request
 import uuid
 
 CATALOG_URL = 'https://github.com/Sauke5/pl/releases/download/channel-stable/catalog.json'
-MODULES = {'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'inventory'}
+MODULES = {'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'}
 ROLES = {'wayline': ('api', 'gateway', 'runner'), 'forms': ('adapter', 'engine', 'mongo', 'keydb'),
          'doska': ('api', 'web'), 'sftpgo': ('server',), 'netmap': ('database', 'cache', 'netbox', 'netbox-worker', 'oxidized', 'gitea', 'adapter'),
-         'bookstack': ('web', 'database'), 'inventory': ('server',)}
+         'bookstack': ('web', 'database')}
 VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9][A-Za-z0-9.-]*)?\Z')
 HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3

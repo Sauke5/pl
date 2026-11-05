@@ -80,8 +80,8 @@ APT_KEY = Path('/etc/apt/keyrings/pl-docker.asc')
 MAX_PACKAGE = 8 * 1024**3
 MIN_DISK = 20 * 1024**3
 MIN_MEMORY_KIB = 4 * 1024**2
-ALLOWED = {'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'inventory-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'release-signing-public.pem'}
-REQUIRED = ALLOWED - {'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'inventory-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'release-signing-public.pem'}
+ALLOWED = {'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'release-signing-public.pem'}
+REQUIRED = ALLOWED - {'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'release-signing-public.pem'}
 DOCKER_FINGERPRINT = '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
 
 
@@ -364,13 +364,13 @@ def verify_package(package, arch):
             if manifest.get('schema') not in (1, 2) or manifest.get('product') not in ('PL', 'Pl') or manifest.get('architecture') != arch:
                 fail('Package schema, product or architecture mismatch.')
             features = manifest.get('features', {})
-            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'inventory_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules'} or any(type(value) is not bool for value in features.values()):
+            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules'} or any(type(value) is not bool for value in features.values()):
                 fail('Unsupported core package features.')
             if features.get('on_demand_modules'):
-                payloads = {'install.sh', 'delivery.py', 'release-signing-public.pem', 'module-controller.py', 'module-network.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'netmap-controller.py', 'bookstack-controller.py', 'inventory-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py'}
+                payloads = {'install.sh', 'delivery.py', 'release-signing-public.pem', 'module-controller.py', 'module-network.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py'}
                 if (manifest.get('schema') != 2 or not features.get('module_controller')
                         or not payloads <= set(names) or set(manifest.get('images', {})) != {'api', 'web', 'db'}
-                        or any(features.get(name + '_module') for name in ('xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'inventory'))):
+                        or any(features.get(name + '_module') for name in ('xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'))):
                     fail('On-demand core requires its finite delivery controllers without bundled module images.')
             if features.get('connector_credentials') and manifest.get('schema') != 2:
                 fail('Connector credentials require a schema-2 package.')
@@ -389,11 +389,11 @@ def verify_package(package, arch):
             if features.get('wayline_module') and (manifest.get('schema') != 2 or not features.get('module_controller')
                     or not {'wayline-controller.py', 'xray-controller.py'} <= set(names)):
                 fail('Wayline feature requires its controller and trusted file primitives.')
-            for module in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'inventory'):
+            for module in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
                 if features.get(module + '_module') and (manifest.get('schema') != 2 or not features.get('module_controller')
                         or not {module + '-controller.py', 'xray-controller.py'} <= set(names)):
                     fail('Application feature requires its controller and trusted file primitives.')
-            if (features.get('netmap_module') or features.get('bookstack_module') or features.get('inventory_module')) and 'module-network.py' not in names:
+            if (features.get('netmap_module') or features.get('bookstack_module')) and 'module-network.py' not in names:
                 fail('Network stack and Wiki require the trusted module network allocator.')
             files = manifest.get('files')
             if not isinstance(files, dict) or set(files) != set(names) - {'manifest.json'}:

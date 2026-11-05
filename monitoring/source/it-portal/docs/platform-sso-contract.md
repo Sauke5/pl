@@ -22,7 +22,7 @@
 | Остальные разрешённые GET/HEAD этих gateways, кроме Doska | 4 | 16 | до 5 с |
 | Doska normal lane | 4 | 16 | до 5 с |
 
-Static использует отдельные slots. У ServiceGateway, Forms и Wayline read lane разделяет существующие operation slots с unsafe-запросами; unsafe не ставятся в новую очередь. POST остаётся unsafe и для read-only расчёта Forms. Doska сохраняет отдельные lanes для attachments и SSE. Directory сохраняет прежний admission contract. NetMap и самостоятельный Inventory service не входят в перечисленные gateway lanes этой PL-реализации.
+Static использует отдельные slots. У ServiceGateway, Forms и Wayline read lane разделяет существующие operation slots с unsafe-запросами; unsafe не ставятся в новую очередь. POST остаётся unsafe и для read-only расчёта Forms. Doska сохраняет отдельные lanes для attachments и SSE. Directory сохраняет прежний admission contract. NetMap не входит в перечисленные gateway lanes этой PL-реализации.
 
 Переполнение, истечение времени ожидания и отмена не должны отправлять запрос upstream или оставлять занятые slots. При подключении consumer проверяются параллельная загрузка CSS/JS с API, finite overflow, timeout/cancel и освобождение capacity. Браузерная приёмка также проверяет MIME и байты assets, сворачивание меню, тему после reload и logout.
 

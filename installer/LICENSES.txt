@@ -1,6 +1,6 @@
 PL — software notices
 
-Original PL code, including the PL Inventory service, is licensed under MIT.
+Original PL code is licensed under MIT.
 Copyright (c) 2026 Sauke5 and PL contributors. The complete MIT text is included
 in source.tar.gz as LICENSE and in the public source repository.
 

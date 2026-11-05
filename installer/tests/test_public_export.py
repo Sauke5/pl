@@ -28,23 +28,22 @@ class PublicExportTests(unittest.TestCase):
                 export.source_name(name)
 
     def test_runtime_context_uses_every_supported_module_flag(self):
-        def source_context(destination, with_forms=False, with_inventory=False):
+        def source_context(destination, with_forms=False, with_doska=False):
             self.assertTrue(with_forms)
-            self.assertTrue(with_inventory)
+            self.assertTrue(with_doska)
             with tarfile.open(destination, "w:gz") as archive:
-                for name in ("internal/main.go", "apps/forms/app.py", "apps/inventory/web/index.html", "apps/netmap/SOURCE-SNAPSHOT.json"):
+                for name in ("internal/main.go", "apps/forms/app.py", "apps/doska/apps/web/src/main.tsx", "apps/netmap/SOURCE-SNAPSHOT.json"):
                     value = b"public source"
                     member = tarfile.TarInfo(name)
                     member.size = len(value)
                     archive.addfile(member, io.BytesIO(value))
         files = export.source_context_files(Path("unused"), types.SimpleNamespace(source_context=source_context))
-        self.assertEqual(set(files), {"monitoring/source/it-portal/internal/main.go", "apps/forms/app.py", "apps/inventory/web/index.html"})
+        self.assertEqual(set(files), {"monitoring/source/it-portal/internal/main.go", "apps/forms/app.py", "apps/doska/apps/web/src/main.tsx"})
 
     def test_allowlist_excludes_runtime_metadata_receipts_and_build_outputs(self):
         allowed = (
             "apps/file-auditor/src/Auditor.Api/Program.cs",
             "apps/file-auditor/tests/Auditor.Tests/GatewayTests.cs",
-            "apps/inventory/tests/test_gateway.py",
             "monitoring/source/websites-admin/app/static/ecosystem/ui-v1.js",
             "monitoring/source/scripts/monitoring_summary/collector.py",
             "monitoring/source/nginx/index.html",
@@ -53,6 +52,10 @@ class PublicExportTests(unittest.TestCase):
         for name in allowed:
             self.assertTrue(export.supplemental_allowed(name), name)
         denied = (
+            "apps/inventory/inventory_service/app.py",
+            "apps/inventory/web/index.html",
+            "apps/inventory/README.ru.md",
+            "apps/inventory/LICENSE",
             "apps/inventory/SOURCE-SNAPSHOT.json",
             "apps/file-auditor/src/Auditor.Api/bin/Release/Auditor.Api.dll",
             "apps/file-auditor/src/Auditor.Web/node_modules/index.js",

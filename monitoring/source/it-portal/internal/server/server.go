@@ -148,7 +148,6 @@ func (s *Server) Handler() http.Handler {
 	s.RegisterSettingsWorkspace(m)
 	s.RegisterADSettingsRoutes(m)
 	s.RegisterDeliveryRoutes(m)
-	s.RegisterInventoryRoutes(m)
 	s.RegisterInstallationRoutes(m)
 	s.RegisterSettingsProbe(m)
 	s.RegisterConfigurationHistoryRoutes(m)

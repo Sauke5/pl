@@ -265,29 +265,6 @@
       "data_preservation": "Локальное отключение сохраняет данные. Внешнее подключение управляет только доступом через Pl; BookStack и его данные остаются на своём хосте.",
       "external_auth": "none",
       "public_path": "/wiki/"
-    },
-    {
-      "id": "inventory",
-      "name": "Inventory",
-      "description": "Инвентаризация ПО, проверка комплектов и лицензий через общую сессию PL.",
-      "modes": [
-        "local"
-      ],
-      "actions": [
-        "enable",
-        "disable",
-        "refresh",
-        "remove"
-      ],
-      "integration_kind": "inventory",
-      "capabilities": [
-        "health",
-        "links"
-      ],
-      "direction": "Управление",
-      "view": "nativeapp",
-      "public_path": "/inventory/",
-      "data_preservation": "Отключение сохраняет импортированные сведения, историю и настройки Inventory."
     }
   ]
 }

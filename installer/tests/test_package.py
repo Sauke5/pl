@@ -15,6 +15,22 @@ spec.loader.exec_module(package)
 
 
 class PackageTests(unittest.TestCase):
+    def test_build_rejects_internal_service_from_previous_source_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "previous-source.tar.gz"
+            with tarfile.open(source, "w:gz") as archive:
+                body = b"internal service\n"
+                entry = tarfile.TarInfo("apps/inventory/inventory_service/app.py")
+                entry.size = len(body)
+                archive.addfile(entry, io.BytesIO(body))
+            args = types.SimpleNamespace(source_archive=source, output=root / "candidate.tar.gz", version="fixture")
+            with patch.object(package, "engine"), patch.object(package.subprocess, "run") as build:
+                with self.assertRaisesRegex(ValueError, "Excluded service"):
+                    package.build(args)
+                build.assert_not_called()
+            self.assertFalse(args.output.exists())
+
     def test_bundle_compression_preserves_verified_payloads(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

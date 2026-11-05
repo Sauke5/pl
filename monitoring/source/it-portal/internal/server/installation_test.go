@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"pl/portal/internal/modules"
@@ -80,7 +81,7 @@ func TestInstallationSettingsRechecksSessionAfterReadingCertificateBody(t *testi
 	s.Modules = modules.New(s.Store, c)
 	admin := apiUser(t, s, "installation-revoked-admin", true)
 	body, _ := json.Marshal(installationFixtureChange())
-	reader := &inventoryRevokingBody{reader: bytes.NewReader(body), revoke: func() {
+	reader := &installationRevokingBody{reader: bytes.NewReader(body), revoke: func() {
 		if _, err := s.Store.Pool.Exec(context.Background(), "DELETE FROM sessions WHERE user_id='installation-revoked-admin'"); err != nil {
 			t.Fatal(err)
 		}
@@ -95,4 +96,18 @@ func TestInstallationSettingsRechecksSessionAfterReadingCertificateBody(t *testi
 	if w.Code != 403 || c.changes != 0 {
 		t.Fatal("revoked administrator changed installation", w.Code, c.changes)
 	}
+}
+
+type installationRevokingBody struct {
+	reader io.Reader
+	revoke func()
+}
+
+func (b *installationRevokingBody) Read(p []byte) (int, error) {
+	if b.revoke != nil {
+		revoke := b.revoke
+		b.revoke = nil
+		revoke()
+	}
+	return b.reader.Read(p)
 }

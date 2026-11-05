@@ -272,7 +272,7 @@ class Controller:
             raise ValueError('Unsafe module image descriptor')
         value = json.loads(path.read_text())
         required = {'schema', 'installation', 'manifest_sha256'} | (set() if self.on_demand else {'prometheus'})
-        if (not isinstance(value, dict) or not required <= set(value) or set(value) - {'schema', 'installation', 'manifest_sha256', 'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'inventory'}
+        if (not isinstance(value, dict) or not required <= set(value) or set(value) - {'schema', 'installation', 'manifest_sha256', 'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'}
                 or value.get('schema') != 1 or value.get('installation') != self.installation
                 or not re.fullmatch(r'[0-9a-f]{64}', value.get('manifest_sha256', ''))):
             raise ValueError('Invalid module image installation identity')
@@ -866,7 +866,7 @@ class Controller:
         return self._grafana_controller
 
     def application(self, kind):
-        if kind not in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'inventory'):
+        if kind not in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
             raise ValueError('Unsupported application module')
         attribute = '_' + kind + '_controller'
         if not hasattr(self, attribute):
@@ -927,7 +927,7 @@ class Controller:
                 if self.delivery().ensure_module(body.get('module_id')):
                     self.image = self.resolve_image()
                     for name in ('_xray_controller', '_grafana_controller', '_wayline_controller', '_alertmanager_controller',
-                                 '_forms_controller', '_doska_controller', '_sftpgo_controller', '_netmap_controller', '_bookstack_controller', '_inventory_controller'):
+                                 '_forms_controller', '_doska_controller', '_sftpgo_controller', '_netmap_controller', '_bookstack_controller'):
                         if hasattr(self, name):
                             delattr(self, name)
             with self.delivery_guard():
@@ -935,8 +935,6 @@ class Controller:
         return self._execute(body)
 
     def _execute(self, body):
-        if isinstance(body, dict) and body.get('module_id') == 'inventory':
-            return self.application('inventory').execute(body)
         if isinstance(body, dict) and body.get('module_id') in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
             return self.application(body['module_id']).execute(body)
         if isinstance(body, dict) and body.get('module_id') == 'xray':
@@ -1002,7 +1000,7 @@ class Controller:
 
     def get(self, instance):
         identifier(instance)
-        for kind in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'inventory'):
+        for kind in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
             path = self.base / kind / 'instances' / instance
             if path.exists() or path.is_symlink():
                 return self.application(kind).get(instance)
@@ -1177,8 +1175,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length', '0'))
             # Forms embeds up to 3 MiB in base64 plus signed JSON metadata.
             limit = (384 * 1024 if self.command == 'POST' and self.path == '/v1/installation/configure' else
-                     90 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/inventory/request' else
-                     32 * 1024 if self.command == 'POST' and self.path == '/v1/inventory/settings' else
                      5 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/forms/request' else
                      24 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/netmap/request' else 1024 * 1024)
             if not 0 <= length <= limit:
@@ -1197,10 +1193,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 result = self.server.controller.application('sftpgo').request(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/netmap/request':
                 result = self.server.controller.application('netmap').request(json.loads(raw))
-            elif self.command == 'POST' and self.path == '/v1/inventory/request':
-                result = self.server.controller.application('inventory').request(json.loads(raw))
-            elif self.command == 'POST' and self.path == '/v1/inventory/settings':
-                result = self.server.controller.application('inventory').settings(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/native/initial-login':
                 payload = json.loads(raw)
                 if (not isinstance(payload, dict) or set(payload) != {'instance_id', 'module_id', 'service'}
