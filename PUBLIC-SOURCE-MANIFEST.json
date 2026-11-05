@@ -16810,8 +16810,8 @@
     },
     {
       "path": "docs/releases/0.4.4.json",
-      "sha256": "41b4e28b074bc34d73d3745a52c3d98a0430109f2e1e007b050ff1e7f85c9ad7",
-      "size": 4629
+      "sha256": "cbeaabca241eca286a9c4cf6c046d0af11e060e25931df9e33cf39f1085ffe70",
+      "size": 4643
     },
     {
       "path": "installer/LICENSES.txt",
