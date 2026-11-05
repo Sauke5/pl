@@ -16815,8 +16815,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "12bdaf7d4375246d2121f5640d36b2ac497b124f9413023b7ed049971eac65c9",
-      "size": 82437
+      "sha256": "3cf0524f29727b02c4e234a813d5f01b1c5fcac07ee73848d6cbf724da0f1d51",
+      "size": 82441
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -17095,8 +17095,8 @@
     },
     {
       "path": "installer/tests/test_minimal_package.py",
-      "sha256": "9133e40b2ad7aa57b5e42113f43634496e42f334a75e08c78191687ad3bcf881",
-      "size": 12502
+      "sha256": "f20b3c8340223ca7c3918f47e872436952f05ee71cf4d502adbc9c38a1a52498",
+      "size": 13592
     },
     {
       "path": "installer/tests/test_module_controller.py",

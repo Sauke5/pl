@@ -675,7 +675,7 @@ class Runtime:
             values = json.loads(self.docker("network", "inspect", identity))
             if not isinstance(values, list) or len(values) != 1 or values[0].get("Id") != identity:
                 raise ValueError("Docker network identity changed during allocation")
-            occupied.extend(entry["Subnet"] for entry in values[0].get("IPAM", {}).get("Config", []) if entry.get("Subnet"))
+            occupied.extend(entry["Subnet"] for entry in (values[0].get("IPAM", {}).get("Config") or []) if entry.get("Subnet"))
         routes = json.loads(self.run(["ip", "-j", "-4", "route", "show", "table", "all"], timeout=30))
         if not isinstance(routes, list):
             raise ValueError("Invalid IPv4 route inventory")

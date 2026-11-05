@@ -166,6 +166,23 @@ class MinimalBuildTests(unittest.TestCase):
 
 
 class MinimalBootstrapTests(unittest.TestCase):
+    def test_allocator_accepts_builtin_networks_without_ipam_configuration(self):
+        identities = [str(number) * 64 for number in (1, 2, 3)]
+        networks = {
+            identities[0]: {"Id": identities[0], "Name": "host", "IPAM": {"Config": None}},
+            identities[1]: {"Id": identities[1], "Name": "none", "IPAM": {"Config": None}},
+            identities[2]: {"Id": identities[2], "Name": "bridge", "IPAM": {"Config": [{"Subnet": "10.240.0.0/24"}]}},
+        }
+        runtime = bootstrap.Runtime(Path("/unused-fixture"), Path("/unused-package"), {})
+        def docker(*args):
+            if args == ("network", "ls", "--quiet", "--no-trunc"):
+                return "\n".join(identities).encode()
+            self.assertEqual(args[:2], ("network", "inspect"))
+            return json.dumps([networks[args[2]]]).encode()
+        with patch.object(runtime, "docker", side_effect=docker), \
+             patch.object(runtime, "run", return_value=b'[{"dst":"default"},{"dst":"192.0.2.0/24"}]'):
+            self.assertEqual(runtime.choose_network_cidr(), "10.240.1.0/24")
+
     def test_allocator_skips_host_routes_and_docker_pools(self):
         self.assertEqual(bootstrap.choose_network_cidr(["10.240.0.0/24", "10.240.1.0/24", "0.0.0.0/0", "::/0"]), "10.240.2.0/24")
         self.assertEqual(bootstrap.choose_network_cidr(["10.0.0.0/8"]), "172.16.0.0/24")
