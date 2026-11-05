@@ -1,0 +1,38 @@
+/* Home-specific spacing keeps the shared shell and personal section order intact. */
+.app-body .home-intro {
+  align-items: center;
+  margin-bottom: 24px;
+}
+.home-intro .greeting {
+  min-width: 0;
+  align-self: center;
+}
+.home-intro .greeting h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.home-favorites .section-heading {
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.home-favorites .section-heading > .button {
+  flex-shrink: 0;
+}
+.app-body .home-sections-toolbar {
+  margin: -8px 0 12px;
+}
+.app-body .dashboard-grid.home-sections {
+  row-gap: 20px;
+}
+.app-body .home-intro .home-server-clock {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 10px 0 0;
+}
+.home-intro .home-server-clock time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

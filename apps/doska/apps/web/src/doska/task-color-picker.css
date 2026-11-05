@@ -1,0 +1,9 @@
+.doska-color-picker { position:relative; }
+.doska-app .doska-color-picker-trigger { width:32px;height:32px;min-width:32px;min-height:32px;flex:0 0 32px;display:grid;place-items:center;padding:0;border:0;background:transparent;color:var(--muted);border-radius:7px;cursor:pointer; }
+.doska-app .doska-color-picker-trigger:hover,.doska-app .doska-color-picker-trigger[aria-expanded=true] {background:var(--surface);color:var(--text)}
+.doska-color-picker-panel { position:absolute;right:0;top:calc(100% + 8px);z-index:30;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px #0003;width:190px; }
+.doska-color-picker-panel fieldset {border:0;padding:0;margin:0;min-width:0;}
+.doska-color-picker-panel legend {font-size:12px;color:var(--muted);margin-bottom:12px;}
+.doska-color-picker-panel .doska-task-color-palette {gap:12px;}
+
+.doska-app .doska-color-picker-trigger > svg { width:18px;height:18px;flex:none; }

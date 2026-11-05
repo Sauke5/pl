@@ -1,0 +1,16 @@
+.doska-app .doska-members { width:min(860px,calc(100vw - 30px)); }
+.doska-app .doska-members-heading { display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:22px; }
+.doska-app .doska-members-heading h2 { margin:0; }
+.doska-app .doska-members-section + .doska-members-section { border-top:1px solid var(--border);padding-top:18px;margin-top:24px; }
+.doska-app .doska-member-list { list-style:none;padding:0;margin:0; }
+.doska-app .doska-member-list > li { display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--border); }
+.doska-app .doska-member-list strong { font-size:14px;font-weight:550;overflow-wrap:anywhere; }
+.doska-app .doska-member-list .doska-meta { display:block;margin-top:3px; }
+.doska-app .doska-member-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.doska-app .doska-member-actions label { display:flex;align-items:center;gap:10px; }
+.doska-app .doska-member-invite { padding:16px;border:1px solid var(--border);border-radius:10px;margin-bottom:16px; }
+.doska-app .doska-member-selected { display:flex;align-items:center;gap:16px;margin-bottom:16px; }
+.doska-app .doska-employee-options { max-height:240px;overflow-y:auto;margin-bottom:12px; }
+.doska-app .doska-employee-options > li { padding:4px 0; }
+.doska-app .doska-employee-options button { width:100%;justify-content:flex-start; }
+@media(max-width:600px) { .doska-app .doska-member-list > li { align-items:flex-start;flex-direction:column; }.doska-app .doska-member-actions { width:100%; }.doska-app .doska-member-actions button { flex:1; } }

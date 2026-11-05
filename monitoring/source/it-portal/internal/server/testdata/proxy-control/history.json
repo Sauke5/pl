@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "history": [
+    {
+      "at": "2026-10-15T09:19:30+00:00",
+      "from": "relay",
+      "to": "final185",
+      "reason": "auto_health",
+      "actor": "automatic"
+    }
+  ]
+}

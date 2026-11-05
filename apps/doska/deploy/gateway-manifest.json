@@ -1,0 +1,1022 @@
+{
+  "version": "pl-doska-2.46.2",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/doska/",
+      "kind": "page"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/projects",
+      "kind": "page",
+      "query": {
+        "resourceId": {
+          "kind": "id",
+          "max_bytes": 128
+        },
+        "sourceKind": {
+          "kind": "text",
+          "enum": [
+            "platform",
+            "netbox"
+          ]
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/projects/{projectId}",
+      "kind": "page",
+      "query": {
+        "taskId": {
+          "required": false,
+          "kind": "id",
+          "allow_empty": false,
+          "max_bytes": 128
+        },
+        "panel": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "members"
+          ]
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/invitations",
+      "kind": "page"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/management",
+      "kind": "page"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/search",
+      "kind": "page"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/my-tasks",
+      "kind": "page"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments",
+      "kind": "write"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments/{commentId}",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments/{commentId}",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists",
+      "kind": "read"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists",
+      "kind": "write"
+    },
+    {
+      "method": "PUT",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/order",
+      "kind": "write"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items",
+      "kind": "write"
+    },
+    {
+      "method": "PUT",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/order",
+      "kind": "write"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/{itemId}",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/{itemId}",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}",
+      "kind": "read"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/context",
+      "kind": "read"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/my-tasks",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "archived": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/access",
+      "kind": "read"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "q": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": true,
+          "max_chars": 200,
+          "max_bytes": 800
+        },
+        "archived": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/archive",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/owner",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/management",
+      "kind": "read"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/invitations",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/invitations",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/invitations",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/invitations/{invitationId}/respond",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/invitations/{invitationId}/revoke",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/join-requests",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/join-requests",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/join-requests/{requestId}/resolve",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/join-requests/{requestId}/cancel",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/members",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/members/{memberId}",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/members/{memberId}",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/managed-projects",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "q": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": true,
+          "max_chars": 200,
+          "max_bytes": 800
+        },
+        "archived": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/employee-options",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "q": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": true,
+          "max_chars": 200,
+          "max_bytes": 800
+        },
+        "purpose": {
+          "required": true,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "invitation",
+            "ownership"
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "archived": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "parentTaskId": {
+          "required": false,
+          "kind": "id",
+          "allow_empty": false,
+          "max_bytes": 128
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}",
+      "kind": "read"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/archive",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/history",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/columns",
+      "kind": "read"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/columns",
+      "kind": "write"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/columns/{columnId}",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/columns/{columnId}",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/columns/reorder",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/relations",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/relations",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/relations/{relationId}",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/task-search",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "q": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": true,
+          "max_chars": 200,
+          "max_bytes": 800
+        },
+        "projectId": {
+          "required": false,
+          "kind": "id",
+          "allow_empty": false,
+          "max_bytes": 128
+        },
+        "assigneeId": {
+          "required": false,
+          "kind": "subjectid",
+          "allow_empty": false,
+          "max_bytes": 128
+        },
+        "coexecutorId": {
+          "required": false,
+          "kind": "subjectid",
+          "allow_empty": false,
+          "max_bytes": 128
+        },
+        "state": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "planned",
+            "active",
+            "completed"
+          ]
+        },
+        "priority": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "no-priority",
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "dueFrom": {
+          "required": false,
+          "kind": "date",
+          "allow_empty": false,
+          "max_bytes": 10
+        },
+        "dueTo": {
+          "required": false,
+          "kind": "date",
+          "allow_empty": false,
+          "max_bytes": 10
+        },
+        "unassigned": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "overdue": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "archived": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "resourceId": {
+          "kind": "id",
+          "max_bytes": 128
+        },
+        "sourceKind": {
+          "kind": "text",
+          "enum": [
+            "platform",
+            "netbox"
+          ]
+        },
+        "open": {
+          "required": false,
+          "kind": "boolean",
+          "allow_empty": false
+        },
+        "upcoming": {
+          "required": false,
+          "kind": "boolean",
+          "allow_empty": false
+        },
+        "labelName": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "max_chars": 100,
+          "max_bytes": 400
+        },
+        "customFieldId": {
+          "required": false,
+          "kind": "id",
+          "allow_empty": false,
+          "max_bytes": 128
+        },
+        "customFieldValue": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "max_chars": 2000,
+          "max_bytes": 4096
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/templates",
+      "kind": "read",
+      "query": {
+        "page": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/templates/{id}",
+      "kind": "read"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/templates",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/templates/{id}/projects",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/template-selection",
+      "kind": "read"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/template-selection/{taskId}",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/template-preview",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/notifications",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": false,
+          "max_chars": 1024,
+          "max_bytes": 4096
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/notifications/unread-count",
+      "kind": "read"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/notifications/{id}/read",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/notifications/read-all",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/notifications/preferences",
+      "kind": "read"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/notifications/preferences",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/preferences",
+      "kind": "read"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/preferences",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachments",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      },
+      "schema": "attachment-list-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads",
+      "kind": "write",
+      "schema": "attachment-reserve-v1"
+    },
+    {
+      "method": "PUT",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}/content",
+      "kind": "upload",
+      "schema": "attachment-content-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}/finalize",
+      "kind": "write",
+      "schema": "attachment-finalize-v1"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}",
+      "kind": "write",
+      "schema": "attachment-empty-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachments/{attachmentId}/content",
+      "kind": "download",
+      "schema": "attachment-download-v1"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachments/{attachmentId}",
+      "kind": "write",
+      "schema": "attachment-empty-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/events",
+      "kind": "events",
+      "schema": "events-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/fields",
+      "kind": "read"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/labels",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "required": false,
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "q": {
+          "required": false,
+          "kind": "text",
+          "allow_empty": true,
+          "max_chars": 100,
+          "max_bytes": 400
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/fields/settings",
+      "kind": "write"
+    },
+    {
+      "method": "PATCH",
+      "path": "/doska/api/doska/projects/{id}/fields/{fieldId}",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/fields",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/fields/reorder",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/overview",
+      "kind": "read",
+      "query": {
+        "limit": {
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "kind": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/task-imports",
+      "kind": "write",
+      "schema": "task-import-v1"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/resource-links",
+      "kind": "read"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/resource-links",
+      "kind": "write"
+    },
+    {
+      "method": "DELETE",
+      "path": "/doska/api/doska/projects/{id}/tasks/{taskId}/resource-links/{linkId}",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/projects/{id}/tasks/from-resource",
+      "kind": "write"
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/catalog/task-links",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/api/doska/catalog/search",
+      "kind": "read",
+      "query": {
+        "projectId": {
+          "kind": "id",
+          "required": true,
+          "max_chars": 128
+        },
+        "q": {
+          "kind": "text",
+          "required": true,
+          "max_chars": 128,
+          "max_bytes": 512
+        },
+        "limit": {
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "cursor": {
+          "kind": "text",
+          "max_chars": 512,
+          "max_bytes": 2048
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/doska/api/doska/catalog/resolve",
+      "kind": "write"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/overview",
+      "kind": "page"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/pl-brand.svg",
+      "kind": "asset"
+    },
+    {
+      "method": "GET",
+      "path": "/doska/doska-theme-init.js",
+      "kind": "asset"
+    }
+  ]
+}

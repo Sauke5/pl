@@ -1,0 +1,96 @@
+.action-notifications {
+  position: fixed;
+  z-index: 1200;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  width: min(420px, calc(100vw - 2rem));
+  pointer-events: none;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.action-notifications > ul {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.action-notification {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #384759);
+  border-radius: 0.8rem;
+  background: var(--surface-solid, var(--surface));
+  color: inherit;
+  box-shadow: 0 8px 30px #0004;
+  pointer-events: auto;
+  animation: action-notification-enter 160ms ease-out;
+}
+.action-notification-icon {
+  margin-top: 0.1rem;
+}
+.action-notification-success .action-notification-icon {
+  color: var(--green, #68c6a5);
+}
+.action-notification-error .action-notification-icon {
+  color: var(--danger);
+}
+.action-notification-info .action-notification-icon {
+  color: var(--blue);
+}
+.action-notification-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.action-notification-content strong {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.action-notification-content p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0.35rem 0 0;
+  max-height: min(28vh, 14rem);
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+.action-notification-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -0.25rem -0.25rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--muted, #a2b3c6);
+  cursor: pointer;
+}
+.action-notification-close:hover {
+  background: #8090a026;
+  color: inherit;
+}
+.action-notification-close:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+@keyframes action-notification-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .action-notification {
+    animation: none;
+  }
+}

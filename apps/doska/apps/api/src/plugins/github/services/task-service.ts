@@ -1,0 +1,183 @@
+import type { InferSelectModel } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import db from "../../../database";
+import {
+  columnTable,
+  integrationTable,
+  taskTable,
+} from "../../../database/schema";
+import { type GitHubConfig, hasVerifiedGitHubBinding } from "../config";
+import { extractTaskLinks } from "../utils/task-references";
+
+import type { IntegrationDatabase } from "./integration-task-scope";
+
+export type TaskRow = InferSelectModel<typeof taskTable>;
+
+export type UpdateTaskStatusResult =
+  | { applied: false }
+  | { applied: true; before: TaskRow; after: TaskRow };
+
+const NON_COLUMN_STATUSES = new Set(["planned", "archived"]);
+
+export async function findTaskByNumber(
+  projectId: string,
+  taskNumber: number,
+  database: Pick<typeof db, "query"> = db,
+) {
+  return database.query.taskTable.findFirst({
+    where: and(
+      eq(taskTable.projectId, projectId),
+      eq(taskTable.number, taskNumber),
+    ),
+  });
+}
+
+export async function findTaskByLink(
+  projectId: string,
+  texts: (string | null | undefined)[],
+  database: Pick<typeof db, "query"> = db,
+) {
+  const links = extractTaskLinks(...texts);
+  const link = links.length === 1 ? links[0] : undefined;
+  if (link?.projectId !== projectId) return;
+
+  return database.query.taskTable.findFirst({
+    where: and(
+      eq(taskTable.projectId, projectId),
+      eq(taskTable.id, link.taskId),
+    ),
+  });
+}
+
+export async function findTaskById(
+  taskId: string,
+  database: Pick<typeof db, "query"> = db,
+) {
+  return database.query.taskTable.findFirst({
+    where: eq(taskTable.id, taskId),
+  });
+}
+
+export async function updateTaskStatus(
+  taskId: string,
+  newStatus: string,
+  database: IntegrationDatabase = db,
+): Promise<UpdateTaskStatusResult> {
+  const task = await database.query.taskTable.findFirst({
+    where: eq(taskTable.id, taskId),
+  });
+
+  if (!task) {
+    return { applied: false };
+  }
+
+  let columnId: string | null = null;
+
+  const column = await database.query.columnTable.findFirst({
+    where: and(
+      eq(columnTable.projectId, task.projectId),
+      eq(columnTable.slug, newStatus),
+    ),
+  });
+
+  if (column) {
+    columnId = column.id;
+  } else if (!NON_COLUMN_STATUSES.has(newStatus)) {
+    console.warn(
+      `[GitHub] Skipping status update for task ${taskId}: column "${newStatus}" not found in project ${task.projectId}`,
+    );
+    return { applied: false };
+  }
+
+  const [after] = await database
+    .update(taskTable)
+    .set({ status: newStatus, columnId })
+    .where(
+      and(eq(taskTable.id, taskId), eq(taskTable.projectId, task.projectId)),
+    )
+    .returning();
+
+  if (!after) {
+    return { applied: false };
+  }
+
+  return { applied: true, before: task, after };
+}
+
+export async function isTaskInFinalState(
+  task: {
+    projectId: string;
+    status: string;
+    columnId: string | null;
+  },
+  database: Pick<typeof db, "query"> = db,
+): Promise<boolean> {
+  if (task.columnId) {
+    const columnById = await database.query.columnTable.findFirst({
+      where: and(
+        eq(columnTable.id, task.columnId),
+        eq(columnTable.projectId, task.projectId),
+      ),
+    });
+
+    if (columnById) {
+      return columnById.isFinal;
+    }
+  }
+
+  const columnByStatus = await database.query.columnTable.findFirst({
+    where: and(
+      eq(columnTable.projectId, task.projectId),
+      eq(columnTable.slug, task.status),
+    ),
+  });
+
+  if (columnByStatus) {
+    return columnByStatus.isFinal;
+  }
+
+  return task.status === "done";
+}
+
+export async function getIntegrationWithProject(integrationId: string) {
+  return db.query.integrationTable.findFirst({
+    where: eq(integrationTable.id, integrationId),
+    with: {
+      project: true,
+    },
+  });
+}
+
+export type GitHubWebhookSource = {
+  installation?: { id: number };
+  repository: { id: number };
+};
+
+export async function findAllIntegrationsByRepo(source: GitHubWebhookSource) {
+  const installationId = source.installation?.id;
+  const repositoryId = source.repository.id;
+  if (
+    !Number.isSafeInteger(installationId) ||
+    !Number.isSafeInteger(repositoryId)
+  )
+    return [];
+  const integrations = await db.query.integrationTable.findMany({
+    where: and(
+      eq(integrationTable.type, "github"),
+      eq(integrationTable.isActive, true),
+    ),
+    with: { project: true },
+  });
+  return integrations.filter((integration) => {
+    try {
+      const config = JSON.parse(integration.config) as GitHubConfig;
+      return (
+        hasVerifiedGitHubBinding(config) &&
+        config.installationId === installationId &&
+        config.repositoryId === repositoryId
+      );
+    } catch {
+      return false;
+    }
+  });
+}

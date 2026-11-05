@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0c1522">
+  <script src="/ecosystem/theme-catalog.js"></script>
+  <script src="/ecosystem/theme-runtime.js"></script>
+  <link rel="stylesheet" href="/ecosystem/theme-menu.css">
+  <script src="./theme-init.js"></script>
+  <script src="./config.js"></script>
+  <title>NetMap · Инфраструктура</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./office-view.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+  <aside id="sidebar" class="sidebar" aria-label="Разделы инфраструктуры">
+    <a class="sidebar-brand" href="./" aria-label="PL · Инфраструктура"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span><span><strong>PL</strong><small>PLATFORM</small></span></a>
+    <button id="sidebar-toggle" class="icon-button sidebar-toggle" aria-label="Свернуть меню" aria-expanded="true" aria-controls="sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
+    <nav id="scope-navigation" class="sidebar-nav" aria-label="Сети и площадки"></nav>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav"><a id="platform-link" href="/" title="Платформа" aria-label="Платформа"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg><span>Платформа</span></a></nav>
+    <div class="sidebar-footer">Инфраструктура · PL</div>
+  </aside>
+  <div class="app-body">
+  <main>
+    <div class="workspace">
+      <div class="map-header" id="map-header" aria-label="Площадка и поиск">
+        <h1 id="site-name">Сеть</h1><span id="page-subtitle" hidden></span>
+        <label class="search-field"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Найти устройство, IP или MAC" aria-label="Найти устройство, IP или MAC"><kbd>/</kbd></label>
+        <label class="layout-mode">Компоновка<select id="layout-mode" aria-label="Компоновка карты"><option value="graph">Граф</option><option value="groups">Группы подключений</option></select></label>
+        <div class="view-tabs" role="tablist" aria-label="Представление инфраструктуры">
+        <button id="tab-rack" role="tab" aria-selected="false" aria-controls="rack-view">▥ Стойка</button>
+        <button id="tab-topology" role="tab" aria-selected="true" aria-controls="topology-view">⌘ Топология</button>
+      </div>
+        <button id="refresh" class="icon-button" aria-label="Обновить карту" title="Обновить карту">↻</button>
+        <details class="map-status" id="map-status">
+          <summary id="map-status-summary">Состояние</summary>
+          <div class="map-status-content">
+            <div class="freshness"><span id="freshness-label">Ожидание данных</span><time id="updated-at">—</time><span id="refresh-note" class="muted">Автообновление каждые 30 секунд</span></div>
+            <div id="counts" class="counts">Загрузка…</div>
+            <span id="coverage" class="coverage" hidden></span>
+            <details id="data-warnings" class="data-warnings" hidden><summary id="warnings-summary">Замечания к данным</summary><ul id="warnings-list"></ul></details>
+            <p id="footer-status" class="muted">Данные ещё не получены</p>
+          </div>
+        </details>
+        <button id="theme-toggle" class="icon-button button-ghost" aria-label="Светлая тема"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
+      </div>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <div id="demo-banner" class="notice demo" hidden>Демонстрационные данные</div>
+      <aside id="context-panel" class="context-panel" hidden aria-label="Параметры карты">
+        <button id="context-close" class="detail-close" aria-label="Закрыть панель">×</button>
+        <section id="panel-filters" hidden>
+          <h2>Фильтры</h2>
+          <fieldset id="kind-filters" class="kind-filters">
+            <legend>Типы оборудования</legend>
+            <div class="kind-filter-actions"><button id="types-all" class="text-button" type="button">Все устройства</button><button id="types-none" class="text-button" type="button">Снять выбор</button></div>
+            <label class="check-row kind-option"><input id="kind-camera" type="checkbox" data-kind="camera" value="camera" checked><span>Камеры</span><span id="kind-count-camera" data-kind-count="camera" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-recorder" type="checkbox" data-kind="recorder" value="recorder" checked><span>Видеорегистраторы</span><span id="kind-count-recorder" data-kind-count="recorder" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-computer" type="checkbox" data-kind="computer" value="computer" checked><span>Компьютеры</span><span id="kind-count-computer" data-kind-count="computer" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-printer" type="checkbox" data-kind="printer" value="printer" checked><span>Принтеры</span><span id="kind-count-printer" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-hub" type="checkbox" data-kind="hub" value="hub" checked><span>Хабы</span><span id="kind-count-hub" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-phone" type="checkbox" data-kind="phone" value="phone" checked><span>Телефоны</span><span id="kind-count-phone" data-kind-count="phone" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-switch" type="checkbox" data-kind="switch" value="switch" checked><span>Коммутаторы</span><span id="kind-count-switch" data-kind-count="switch" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-router" type="checkbox" data-kind="router" value="router" checked><span>Маршрутизаторы</span><span id="kind-count-router" data-kind-count="router" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-firewall" type="checkbox" data-kind="firewall" value="firewall" checked><span>Шлюзы и firewall</span><span id="kind-count-firewall" data-kind-count="firewall" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-server" type="checkbox" data-kind="server" value="server" checked><span>Серверы</span><span id="kind-count-server" data-kind-count="server" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-storage" type="checkbox" data-kind="storage" value="storage" checked><span>СХД</span><span id="kind-count-storage" data-kind-count="storage" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-esxi" type="checkbox" data-kind="esxi" value="esxi" checked><span>Хосты ESXi</span><span id="kind-count-esxi" data-kind-count="esxi" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-vm" type="checkbox" data-kind="vm" value="vm" checked><span>Виртуальные машины</span><span id="kind-count-vm" data-kind-count="vm" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-vswitch" type="checkbox" data-kind="vswitch" value="vswitch" checked><span>Виртуальные коммутаторы</span><span id="kind-count-vswitch" data-kind-count="vswitch" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-unknown" type="checkbox" data-kind="unknown" value="unknown" checked><span>Другие устройства</span><span id="kind-count-unknown" data-kind-count="unknown" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-passive" type="checkbox" data-kind="passive" value="passive" checked><span>Оборудование стойки</span><span id="kind-count-passive" data-kind-count="passive" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-subnet" type="checkbox" data-kind="subnet" value="subnet" checked><span>Подсети</span><span id="kind-count-subnet" data-kind-count="subnet" class="pill">0</span></label>
+            <label class="check-row kind-option"><input id="kind-next_hop" type="checkbox" data-kind="next_hop" value="next_hop" checked><span>Следующие узлы маршрута</span><span id="kind-count-next_hop" data-kind-count="next_hop" class="pill">0</span></label>
+          </fieldset>
+          <label class="check-row"><input id="show-observations" type="checkbox" checked><span>Сводки MAC по портам</span><span id="observation-count" class="pill">0</span></label>
+          <label id="show-all-links-row" class="check-row" hidden><input id="show-all-links" type="checkbox" checked><span>Все связи</span></label>
+          <button id="clear-filters" class="text-button">Сбросить фильтры</button>
+        </section>
+        <section id="panel-legend" class="legend" hidden><h2>Связи</h2><p>Зарегистрированные кабели — NetBox. Текущие наблюдения — опрос устройств.</p><p><span class="line-sample physical"></span>Физическая / LAG</p><p><span class="line-sample tunnel"></span>Туннель между площадками</p><p><span class="line-sample virtual"></span>Виртуальная</p><p><span class="line-sample virtual"></span>Маршрутизация из конфигурации</p><p><span class="line-sample observed"></span>Наблюдение коллектора</p><p><span class="status-dot stale"></span>Устаревшие данные</p></section>
+        <section id="panel-sources" class="sources-section" hidden><h2>Источники <span id="source-count"></span></h2><div id="sources" class="sources"><p class="muted">Ожидание первого ответа</p></div></section>
+      </aside>
+      <section class="canvas-panel">
+        <div id="topology-view" role="tabpanel" aria-labelledby="tab-topology">
+          <div class="canvas-heading map-controls"><div class="context-actions" role="group" aria-label="Панели карты">
+            <button id="context-filters" class="button compact" data-context="filters" aria-expanded="false" aria-controls="panel-filters" title="Фильтры">Фильтры</button>
+            <button id="context-legend" class="button compact" data-context="legend" aria-expanded="false" aria-controls="panel-legend" title="Легенда связей">Легенда</button>
+            <button id="context-sources" class="button compact" data-context="sources" aria-expanded="false" aria-controls="panel-sources" title="Источники данных">Источники</button>
+            <span id="graph-description" class="graph-description"></span>
+          </div><div class="canvas-actions"><button id="expand-map" class="icon-button" aria-label="Развернуть карту на весь экран страницы" title="Развернуть карту"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button><button id="office-overview" class="button compact" hidden>Обзор</button><button id="office-collapse" class="button compact" hidden>Свернуть группы</button><button id="show-all" class="button compact" hidden>Вся карта</button><button id="zoom-out" class="icon-button" aria-label="Уменьшить масштаб">−</button><span id="zoom-value">100%</span><button id="zoom-in" class="icon-button" aria-label="Увеличить масштаб">+</button><button id="fit" class="button compact">Вписать</button><button id="general-plan" class="button compact" title="Снять выбор и вернуться к общему плану">Общий план</button><button id="reset-layout" class="icon-button" aria-label="Сбросить расположение узлов" title="Сбросить расположение узлов">↺</button></div></div>
+          <p id="path-summary" class="path-summary" role="status" hidden></p>
+          <div id="graph-wrap" class="graph-wrap"><svg id="graph" aria-label="Интерактивная схема связей оборудования" role="img"><defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" class="grid-dot"></circle></pattern><filter id="node-shadow" x="-15%" y="-30%" width="130%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#233653" flood-opacity="0.07"/></filter></defs><rect width="100%" height="100%" fill="url(#grid)"></rect><g id="viewport"><g id="edges"></g><g id="nodes"></g></g></svg><div id="graph-empty" class="empty-state" hidden><span aria-hidden="true">⌘</span><strong>Устройства не найдены</strong><p>Измените фильтры или проверьте состояние источников.</p></div><div id="graph-tooltip" class="graph-tooltip" role="tooltip" hidden></div><div class="graph-help">Перетаскивание — перемещение · Ctrl + колесо — масштаб</div></div>
+        </div>
+        <div id="rack-view" role="tabpanel" aria-labelledby="tab-rack" hidden><div class="canvas-heading"><div><strong id="rack-view-title">Размещение в стойке</strong><span>Положение в U · передняя и задняя стороны</span></div><span class="small-tag">По данным схемы стойки</span></div><div id="rack-content" class="rack-content"></div><div id="unplaced" class="unplaced"></div></div>
+      </section>
+
+    </div>
+  </main>
+  </div>
+  </div>
+      <aside id="inspector" class="inspector" aria-label="Сведения об устройстве"><div class="inspector-empty"><span class="inspect-symbol" aria-hidden="true">⌖</span><h2>Оборудование в деталях</h2><p>Выберите устройство на карте или в стойке.</p></div></aside>
+</body>
+</html>

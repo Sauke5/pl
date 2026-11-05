@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading-row">
+  <div><a class="back-link" href="{{ url_for('home') }}">← Все сайты</a><h1 class="page-title">{{ target.title }}</h1><p class="url-text">{{ target.url }}</p></div>
+  <div class="heading-actions">
+    <a class="button button-primary pl-ui-button pl-ui-button-default" href="{{ url_for('target_update_get', site_id=target.site_id) }}">{{ 'Обновить сайт' if target.content_enabled else 'Включить content-check' }}</a>
+    <a class="button button-danger-subtle" href="{{ url_for('target_delete_get', site_id=target.site_id) }}">Удалить</a>
+  </div>
+</div>
+{% if message %}<div class="notice notice-success">{{ message }}</div>{% endif %}
+{% if warning %}<div class="notice notice-warning">{{ warning }}</div>{% endif %}
+{% if target.config_error %}<div class="notice notice-error">{{ target.config_error }}</div>{% endif %}
+
+<section class="panel status-panel state-{{ status.state_class }}">
+  <div><span class="status-dot"></span><strong>{{ status.state }}</strong></div><p>{{ status.description }}</p>
+</section>
+
+<section class="detail-grid">
+  <div class="panel metrics-panel">
+    <h2>Текущая проверка</h2>
+    <dl class="definition-grid">
+      <div><dt>HTTP-код</dt><dd>{{ status.http_status if status.http_status is not none else '—' }}</dd></div>
+      <div><dt>Content-check</dt><dd>{{ 'Включён' if target.content_enabled else 'Выключен' }}</dd></div>
+      <div><dt>SSL</dt><dd>{{ status.ssl_days ~ ' дней' if status.ssl_days is not none else '—' }}</dd></div>
+      <div><dt>Время ответа</dt><dd>{{ '%.3f с'|format(status.latency_seconds) if status.latency_seconds is not none else '—' }}</dd></div>
+      <div><dt>Размер ответа</dt><dd>{{ '%.1f KB'|format(status.response_bytes / 1024) if status.response_bytes is not none else '—' }}</dd></div>
+      <div><dt>Последняя проверка</dt><dd>{{ status.checked_at.astimezone().strftime('%d.%m.%Y %H:%M:%S') if status.checked_at else '—' }}</dd></div>
+    </dl>
+  </div>
+  <div class="panel fragments-panel">
+    <h2>Контрольные фрагменты</h2>
+    {% if target.content_enabled %}
+      <p class="service-note">Проверка успешна только тогда, когда на странице найдены все выбранные контрольные фрагменты.</p>
+      {% if fragment_error %}<div class="inline-warning">Не удалось проверить страницу сейчас: {{ fragment_error }}</div>{% endif %}
+      <ul class="fragment-list">
+      {% for fragment in target.fragments %}
+        <li><span class="presence presence-{{ 'yes' if fragment_presence.get(fragment) else 'no' if fragment_presence else 'unknown' }}">{{ 'Найден' if fragment_presence.get(fragment) else 'Не найден' if fragment_presence else 'Нет данных' }}</span><span>{{ fragment }}</span></li>
+      {% endfor %}
+      </ul>
+      <h3>Системные отрицательные фрагменты</h3>
+      <ul class="readonly-list">{% for fragment in target.negative_fragments %}<li>{{ fragment }}</li>{% endfor %}</ul>
+      <button class="button button-secondary pl-ui-button pl-ui-button-secondary" type="button" data-dialog-open="disable-dialog">Выключить content-check</button>
+    {% else %}
+      <div class="empty-state compact">HTTP-проверка работает. Контроль содержимого выключен.</div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel history-preview">
+  <div class="panel-heading"><h2>История цели</h2><a href="{{ url_for('history') }}?url={{ target.url|urlencode }}">Вся история</a></div>
+  {% for event in history %}
+    <article class="history-row"><div><strong>{{ event.operation }}</strong><span>{{ event.reason }}</span></div><div><span class="result result-{{ 'success' if event.success else 'failed' }}">{{ 'Успешно' if event.success else 'Ошибка' }}</span><time>{{ event.created_at.astimezone().strftime('%d.%m.%Y %H:%M') }}</time></div></article>
+  {% else %}<div class="empty-state compact">Изменений через интерфейс ещё не было.</div>{% endfor %}
+</section>
+
+{% if target.content_enabled %}
+<dialog id="disable-dialog" class="confirm-dialog pl-ui-native-dialog" aria-labelledby="disable-dialog-title" aria-describedby="disable-dialog-description">
+  <form method="post" action="{{ url_for('target_disable_content', site_id=target.site_id) }}" data-reason-form>
+    <button class="dialog-close pl-ui-button pl-ui-button-ghost pl-ui-button-icon" type="button" data-dialog-close aria-label="Закрыть">×</button>
+    <h2 id="disable-dialog-title">Выключить content-check?</h2>
+    <p id="disable-dialog-description">HTTP-проверка останется. Алерты на изменение содержимого перестанут поступать.</p>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <input type="hidden" name="revision" value="{{ revision }}" />
+    <input type="hidden" name="operation_token" value="{{ disable_token }}" />
+    <label>Причина<textarea class="pl-ui-textarea" name="reason" minlength="3" required></textarea></label>
+    <div class="dialog-actions"><button class="button pl-ui-button pl-ui-button-secondary" type="button" data-dialog-close>Отмена</button><button class="button button-danger" type="submit">Выключить</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+.doska-task-subtasks { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.doska-task-subtasks > header, .doska-task-subtasks > header > div, .doska-subtask-actions, .doska-task-subtasks nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.doska-task-subtasks > header { justify-content: space-between; }
+.doska-task-subtasks h3 { margin: 0; font-size: 14px; }
+.doska-app .doska-task-subtasks button { min-height: 30px; padding: 5px 8px; font-size: 12px; }
+.doska-task-subtasks ul { list-style: none; padding: 0; margin: 10px 0; }
+.doska-task-subtasks li { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--border); padding: 9px 0; }
+.doska-task-subtasks li > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.doska-task-subtasks small, .doska-subtask-muted { color: var(--muted); font-size: 12px; }
+.doska-task-subtasks a { color: var(--text); text-decoration: none; font-size: 13px; overflow-wrap: anywhere; }
+.doska-task-subtasks a:hover { color: var(--accent); text-decoration: underline; }
+.doska-subtask-form { border: 1px solid var(--border); border-radius: 9px; padding: 12px; margin-top: 10px; font-size: 13px; }
+.doska-app .doska-subtask-form label { display: grid; gap: 5px; margin-bottom: 10px; font-size: 12px; }
+.doska-app .doska-subtask-form input { width: 100%; min-width: 0; min-height: 34px; padding: 6px 8px; font-size: 13px; }
+.doska-subtask-results { display: grid; gap: 3px; max-height: 190px; overflow-y: auto; }
+.doska-app .doska-subtask-results button { text-align: left; overflow-wrap: anywhere; }
+.doska-app .doska-subtask-results button[aria-pressed="true"] { border-color: var(--accent); background: var(--border); }
+.doska-subtask-actions { margin-top: 10px; }

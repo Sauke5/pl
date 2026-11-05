@@ -1,0 +1,15 @@
+PL
+Copyright (c) 2026 Sauke5 and PL contributors
+
+The MIT license at the repository root covers original PL code, including
+the PL Inventory service, unless a file or directory states another license.
+It does not replace the licenses of dependencies, third-party applications,
+fonts, icons, or other upstream materials. Preserve their notices.
+
+Doska includes Kaneo-derived code under its existing MIT license;
+see apps/doska/LICENSE and the source provenance metadata.
+Grafana, HeyForm, SFTPGo, NetBox, BookStack and other separately installed
+modules retain their upstream licenses and source distribution obligations.
+The exact sources, versions, image identities and licenses of each shipped
+module are recorded in its deploy/images/*.sources.json and source archive.
+The runtime recipes preserve upstream notices. See installer/LICENSES.txt.

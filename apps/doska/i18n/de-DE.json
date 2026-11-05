@@ -1,0 +1,3759 @@
+{
+	"common": {
+		"appName": "Kaneo",
+		"actions": {
+			"cancel": "Abbrechen",
+			"close": "Schließen",
+			"clearAll": "Alle löschen",
+			"delete": "Löschen",
+			"deleting": "Wird gelöscht...",
+			"markAllRead": "Alle als gelesen markieren",
+			"remove": "Entfernen",
+			"reset": "Zurücksetzen",
+			"filter": "Filter"
+		},
+		"a11y": {
+			"toggleSidebar": "Sidebar umschalten"
+		},
+		"sidebar": {
+			"title": "Sidebar",
+			"mobileDescription": "Zeigt die mobile Sidebar an."
+		},
+		"empty": {
+			"loading": "Lädt..."
+		},
+		"pagination": {
+			"label": "Seitennavigation",
+			"previous": "Zurück",
+			"next": "Weiter",
+			"previousPage": "Zur vorherigen Seite",
+			"nextPage": "Zur nächsten Seite",
+			"morePages": "Weitere Seiten"
+		},
+		"breadcrumb": {
+			"label": "Brotkrümelnavigation",
+			"more": "Mehr"
+		},
+		"language": {
+			"english": "Englisch",
+			"german": "Deutsch",
+			"greek": "Griechisch",
+			"macedonian": "Mazedonisch",
+			"french": "Französisch",
+			"spanish": "Spanisch",
+			"dutch": "Niederländisch",
+			"korean": "Koreanisch",
+			"chinese": "Chinesisch",
+			"italian": "Italienisch"
+		},
+		"people": {
+			"someone": "Jemand",
+			"unknown": "Unbekannt"
+		},
+		"error": {
+			"title": "Etwas ist schiefgelaufen",
+			"troubleshooting": "Schritte zur Fehlerbehebung:",
+			"tryAgain": "Erneut versuchen",
+			"viewDeploymentGuide": "Bereitstellungsanleitung ansehen",
+			"refreshPage": "Seite neu laden",
+			"description": "The page crashed unexpectedly. Refreshing usually fixes it.",
+			"messages": {
+				"auth": "Authentication failed. Please sign in again.",
+				"cors": "Unable to connect to the server. This might be due to CORS configuration issues.",
+				"network": "Network error. Please check your internet connection and try again.",
+				"server": "Server error. Please try again later.",
+				"unknown": "An unexpected error occurred."
+			},
+			"troubleshootingSteps": {
+				"cors": {
+					"checkAccessibility": "Check that your API server is accessible from your browser",
+					"checkApiRunning": "Make sure your API server is running",
+					"checkApiUrl": "Check that VITE_API_URL in your frontend .env matches your API server URL",
+					"checkProtocol": "Ensure both frontend and API are using the same protocol (http/https)",
+					"verifyCorsOrigins": "Verify CORS_ORIGINS in your API .env includes your frontend URL"
+				},
+				"network": {
+					"checkConnection": "Check your internet connection",
+					"checkFirewall": "Check if there are any firewall or proxy issues",
+					"tryRefresh": "Try refreshing the page",
+					"verifyApiRunning": "Verify the API server is running and accessible"
+				}
+			}
+		},
+		"modals": {
+			"createProject": {
+				"title": "Neues Projekt erstellen",
+				"breadcrumbNew": "Neues Projekt erstellen",
+				"workspaceFallback": "WORKSPACE",
+				"description": "Erstelle ein neues Projekt in deinem Workspace, indem du einen Namen, einen Schlüssel und ein Symbol auswählst.",
+				"pickIcon": "Symbol auswählen",
+				"searchIcons": "Symbole suchen...",
+				"projectName": "Projektname",
+				"keyLabel": "Schlüssel:",
+				"keyHint": "Wird für Ticket-IDs verwendet (z. B. {{example}}-123)",
+				"createButton": "Projekt erstellen",
+				"successToast": "Projekt erfolgreich erstellt",
+				"errorToast": "Projekt konnte nicht erstellt werden"
+			},
+			"createWorkspace": {
+				"breadcrumbKaneo": "KANEO",
+				"title": "Neuen Workspace erstellen",
+				"description": "Erstelle einen neuen Workspace, indem du einen Namen dafür angibst.",
+				"namePlaceholder": "Workspace-Name",
+				"descriptionPlaceholder": "Beschreibung hinzufügen...",
+				"createButton": "Workspace erstellen",
+				"successToast": "Workspace erfolgreich erstellt",
+				"errorToast": "Workspace konnte nicht erstellt werden"
+			},
+			"createTask": {
+				"breadcrumbTask": "AUFGABE",
+				"selectProject": "Projekt auswählen",
+				"title": "Neue Aufgabe",
+				"description": "Erstelle eine neue Aufgabe, indem du einen Titel, eine Beschreibung und weitere Details angibst.",
+				"taskTitlePlaceholder": "Aufgabentitel",
+				"descriptionPlaceholder": "Füge eine Beschreibung für deine Aufgabe hinzu...",
+				"chooseProjectForImages": "Wähle ein Projekt aus, bevor du Bilder hochlädst.",
+				"prepareTaskError": "Aufgabe konnte nicht vorbereitet werden",
+				"successCreated": "Aufgabe erfolgreich erstellt",
+				"successUpdated": "Aufgabe erfolgreich aktualisiert",
+				"createError": "Aufgabe konnte nicht erstellt werden",
+				"priority": "Priorität",
+				"statusFallback": "In Bearbeitung",
+				"startDate": "Startdatum",
+				"dueDate": "Fälligkeitsdatum",
+				"clearStartDate": "Startdatum entfernen",
+				"clearDueDate": "Fälligkeitsdatum entfernen",
+				"assign": "Zuweisen",
+				"assignUnassigned": "Nicht zugewiesen",
+				"assignUnassignedTitle": "Nicht zugewiesen",
+				"labels": "Labels",
+				"searchLabels": "Labels suchen...",
+				"noLabelsFound": "Keine Labels gefunden",
+				"createLabel": "\"{{name}}\" erstellen",
+				"chooseColor": "Farbe auswählen",
+				"labelCreated": "Label erstellt",
+				"labelCreateError": "Label konnte nicht erstellt werden",
+				"createMore": "Weitere erstellen",
+				"createButton": "Aufgabe erstellen",
+				"discardTitle": "Aufgabe verwerfen?",
+				"discardDescription": "Deine ungespeicherten Aufgabendetails gehen verloren.",
+				"discardButton": "Aufgabe verwerfen",
+				"untitledTask": "Unbenannte Aufgabe",
+				"labelColors": {
+					"stone": "Stein",
+					"slate": "Schiefer",
+					"lavender": "Lavendel",
+					"sage": "Salbei",
+					"forest": "Wald",
+					"amber": "Bernstein",
+					"terracotta": "Terrakotta",
+					"rose": "Rosa",
+					"crimson": "Karmesinrot"
+				},
+				"statusLoadError": "Project statuses couldn’t be loaded."
+			}
+		},
+		"editor": {
+			"link": {
+				"label": "Link-URL",
+				"placeholder": "Link einfügen oder eingeben…",
+				"apply": "Link übernehmen",
+				"remove": "Link entfernen"
+			}
+		}
+	},
+	"auth": {
+		"signIn": {
+			"pageTitle": "Anmelden",
+			"subtitle": {
+				"emailOrProvider": "Nutze deine E-Mail-Adresse oder ein verknüpftes Konto.",
+				"email": "Gib deine E-Mail-Adresse ein, und wir senden dir einen Anmeldecode.",
+				"password": "Nutze deine E-Mail-Adresse und dein Passwort.",
+				"passwordOrProvider": "Nutze dein Passwort oder ein verknüpftes Konto.",
+				"providers": "Wähle, wie du dich anmelden möchtest.",
+				"sso": "Die Anmeldung wird hier von deiner Organisation verwaltet."
+			},
+			"lastUsed": "Zuletzt verwendet",
+			"guestError": "Anmeldung als Gast fehlgeschlagen",
+			"errors": {
+				"account_not_linked": "Diese Identität konnte nicht mit dem bestehenden Konto verknüpft werden. Melde dich per E-Mail an, um das Konto zu bestätigen, und versuche SSO danach erneut. Falls die Anmeldung per E-Mail nicht verfügbar ist, wende dich an deinen Administrator.",
+				"oauth_code_verification_failed": "OAuth-Verifizierung fehlgeschlagen. Bitte versuche es erneut.",
+				"registration_is_currently_disabled_you_need_a_valid_invitation_to_create_an_account_": "Die Registrierung ist derzeit deaktiviert. Du benötigst eine gültige Einladung, um ein Konto zu erstellen.",
+				"use_a_permanent_email_address_disposable_addresses_cannot_create_accounts_": "Verwende eine dauerhafte E-Mail-Adresse. Mit Wegwerfadressen können keine Konten erstellt werden."
+			},
+			"instanceStatusError": "Der Server konnte nicht erreicht werden. Bitte versuche es gleich noch einmal.",
+			"heading": "Bei Kaneo anmelden",
+			"submitPassword": "Anmelden",
+			"invitation": {
+				"title": "{{inviterName}} hat dich zu {{workspaceName}} eingeladen",
+				"fallbackTitle": "Du wurdest eingeladen",
+				"description": "Melde dich mit der E-Mail-Adresse an, an die die Einladung ging. Danach trittst du dem Workspace direkt bei."
+			},
+			"footer": {
+				"newHere": "Neu bei Kaneo?",
+				"createAccount": "Konto erstellen",
+				"inviteOnly": "Konten gibt es hier nur auf Einladung. Bitte deinen Administrator um eine Einladung.",
+				"providerSignUp": "Neu hier? Melde dich oben mit einem Anbieter an, um ein Konto zu erstellen.",
+				"anyProvider": "Neu hier? Mit jeder Option oben wird dein Konto erstellt.",
+				"contactAdmin": "Probleme bei der Anmeldung? Wende dich an deinen Administrator.",
+				"justLooking": "Willst du dich nur umsehen?"
+			},
+			"autoLogin": {
+				"title": "Du wirst angemeldet",
+				"subtitle": "Du wirst zur Anmeldeseite deiner Organisation weitergeleitet.",
+				"opening": "{{provider}} wird geöffnet…",
+				"stuck": "Geht es nicht weiter?",
+				"continue": "Weiter zu {{provider}}"
+			}
+		},
+		"providers": {
+			"google": "Google",
+			"discord": "Discord",
+			"github": "GitHub",
+			"sso": "SSO",
+			"continueWith": "Weiter mit {{provider}}",
+			"error": "Anmeldung mit {{provider}} fehlgeschlagen. Versuche es erneut."
+		},
+		"forms": {
+			"or": "oder",
+			"email": "E-Mail",
+			"password": "Passwort",
+			"emailPlaceholder": "me@example.com",
+			"passwordPlaceholder": "••••••••",
+			"showPassword": "Passwort anzeigen",
+			"hidePassword": "Passwort ausblenden",
+			"name": "Name",
+			"namePlaceholder": "Erika Mustermann",
+			"invalidEmail": "Gib eine vollständige E-Mail-Adresse ein, z. B. name@firma.de.",
+			"nameRequired": "Gib deinen Namen ein.",
+			"passwordRequired": "Gib dein Passwort ein.",
+			"passwordTooShort": "Verwende mindestens 8 Zeichen.",
+			"disposableEmail": "Verwende eine dauerhafte E-Mail-Adresse. Mit Wegwerfadressen können keine Konten erstellt werden.",
+			"continueWithEmail": "Weiter mit E-Mail"
+		},
+		"checkEmail": {
+			"pageTitle": "Prüfe deine E-Mails",
+			"title": "Prüfe deine E-Mails",
+			"inboxMessage": "Wir haben dir einen temporären Anmeldelink gesendet. Bitte prüfe dein Postfach unter <email>{{email}}</email>.",
+			"emailFallback": "deine E-Mail-Adresse",
+			"backToLogin": "Zurück zur Anmeldung"
+		},
+		"signUp": {
+			"pageTitle": "Konto erstellen",
+			"registrationDisabledAlert": "Die Registrierung ist derzeit deaktiviert. Wenn du eingeladen wurdest, gib die E-Mail-Adresse ein, die die Einladung erhalten hat, um dein Konto zu erstellen.",
+			"continueAsGuest": "Als Gast fortfahren",
+			"toggleMessage": "Du hast bereits ein Konto?",
+			"toggleLink": "Anmelden",
+			"instanceStatusError": "Der Server konnte nicht erreicht werden. Bitte versuche es gleich noch einmal.",
+			"instanceAdminTitle": "Richte deine Kaneo-Instanz ein",
+			"instanceAdminSubtitle": "Dieses Konto wird zum Instanz-Administrator mit vollem Zugriff.",
+			"heading": "Erstelle dein Konto",
+			"submitPassword": "Konto erstellen",
+			"failed": "Dein Konto konnte nicht erstellt werden. Versuche es erneut.",
+			"subtitle": {
+				"email": "Starte mit deiner E-Mail-Adresse. Wir senden dir einen Code, kein Passwort nötig.",
+				"password": "Gib deinen Namen, deine E-Mail-Adresse und ein Passwort ein, um loszulegen.",
+				"providers": "Nutze ein verknüpftes Konto, um deins zu erstellen."
+			},
+			"invitation": {
+				"description": "Verwende die E-Mail-Adresse, an die die Einladung ging. Danach trittst du dem Workspace direkt bei."
+			}
+		},
+		"verifyOtp": {
+			"pageTitle": "Code verifizieren",
+			"validation": {
+				"codeLength": "Der Code muss 6 Ziffern haben"
+			},
+			"toast": {
+				"invalidCode": "Ungültiger Bestätigungscode",
+				"verifyFailed": "Code konnte nicht verifiziert werden",
+				"resendFailed": "Code konnte nicht erneut gesendet werden",
+				"resendSuccess": "Neuer Bestätigungscode gesendet!"
+			},
+			"heading": "Prüfe deine E-Mails",
+			"description": "Wir haben einen 6-stelligen Code an {{email}} gesendet. Er läuft in {{minutes}} Minuten ab.",
+			"label": "Bestätigungscode",
+			"submit": "Bestätigen und weiter",
+			"didntGetIt": "Nichts erhalten?",
+			"resendCode": "Code erneut senden",
+			"useDifferentEmail": "Andere E-Mail-Adresse verwenden",
+			"expired": "Dieser Code ist abgelaufen. Fordere einen neuen an.",
+			"tooManyAttempts": "Zu viele Versuche. Fordere einen neuen Code an."
+		},
+		"otpSignIn": {
+			"sendFailed": "Bestätigungscode konnte nicht gesendet werden"
+		},
+		"signInForm": {
+			"failedSignIn": "Anmeldung fehlgeschlagen"
+		},
+		"invitation": {
+			"pageTitleAccept": "Einladung annehmen",
+			"pageTitleError": "Einladungsfehler",
+			"pageTitleInvalid": "Ungültige Einladung",
+			"joinWorkspace": "{{workspaceName}} beitreten",
+			"createAccount": "Konto erstellen",
+			"signIn": "Anmelden",
+			"toast": {
+				"acceptFailed": "Einladung konnte nicht angenommen werden",
+				"acceptSuccess": "Einladung angenommen! Willkommen im Team."
+			},
+			"description": "{{inviterName}} hat dich zu diesem Workspace auf Kaneo eingeladen.",
+			"invitedBy": "Eingeladen von",
+			"sentTo": "Gesendet an",
+			"signedInAs": "Angemeldet als",
+			"expires": "Läuft ab am",
+			"notNow": "Nicht jetzt",
+			"join": "Workspace beitreten",
+			"switchAccount": "Konto wechseln",
+			"goToKaneo": "Zu Kaneo",
+			"mismatch": {
+				"title": "Mit einer anderen E-Mail-Adresse angemeldet",
+				"description": "Diese Einladung wurde an {{invitedEmail}} gesendet. Du bist als {{email}} angemeldet."
+			},
+			"expired": {
+				"title": "Diese Einladung ist abgelaufen",
+				"description": "Bitte {{inviterName}}, dir eine neue Einladung für {{workspaceName}} zu senden."
+			},
+			"invalid": {
+				"title": "Diese Einladung ist nicht mehr gültig",
+				"description": "Sie wurde möglicherweise bereits angenommen oder widerrufen. Bitte einen Workspace-Admin um eine neue Einladung."
+			},
+			"loadFailed": {
+				"title": "Einladung konnte nicht geladen werden",
+				"description": "Prüfe deine Verbindung und lade die Seite neu."
+			}
+		},
+		"onboarding": {
+			"pageTitle": "Willkommen bei Kaneo",
+			"workspaceName": "Workspace-Name",
+			"workspaceNamePlaceholder": "z. B. Acme Inc, Mein Team",
+			"toast": {
+				"createFailed": "Workspace konnte nicht erstellt werden"
+			},
+			"validation": {
+				"workspaceNameRequired": "Workspace-Name ist erforderlich",
+				"projectNameRequired": "Gib deinem ersten Projekt einen Namen"
+			},
+			"restrictedSubtitle": "Nur eine Instanzadministration kann hier Workspaces anlegen. Bitte um eine Einladung und lade diese Seite neu.",
+			"restrictedCheckInvitations": "Einladungen prüfen",
+			"restrictedTitle": "Du brauchst eine Einladung",
+			"cloud": {
+				"invite": {
+					"addAnother": "Add another",
+					"emailLabel": "Teammate email {{index}}",
+					"emailPlaceholder": "teammate@company.com",
+					"failed": "Couldn't invite {{email}}: {{message}}",
+					"invalidEmail": "Enter a valid email address",
+					"remove": "Remove email {{index}}",
+					"sent_one": "Invitation sent",
+					"sent_other": "{{count}} invitations sent",
+					"skip": "Skip for now"
+				},
+				"plan": {
+					"continueTrial": "Start free trial",
+					"recommended": "Recommended",
+					"trialUsed": "You've already used your free trial. Pick a plan to start creating projects and tasks."
+				},
+				"usageLabel": "Who will use this workspace?",
+				"usageSolo": "Just me",
+				"usageSoloDescription": "Keep track of your own work",
+				"usageTeam": "My team",
+				"usageTeamDescription": "Plan and ship work together"
+			},
+			"projectNameDefault": "Mein erstes Projekt",
+			"starterTasks": {
+				"drag": {
+					"title": "Zieh diese Karte in die nächste Spalte",
+					"description": "Karten wandern von Spalte zu Spalte, während die Arbeit vorankommt. Zieh diese Karte in die nächste Spalte oder öffne sie und ändere ihren Status."
+				},
+				"details": {
+					"title": "Öffne diese Aufgabe und füge eine Unteraufgabe hinzu",
+					"description": "Eine Aufgabe kann eine Beschreibung, Unteraufgaben, Labels, eine zuständige Person und ein Fälligkeitsdatum haben. Füge dieser Aufgabe zum Ausprobieren eine Unteraufgabe hinzu."
+				},
+				"invite": {
+					"title": "Lade dein Team ein",
+					"description": "Kaneo funktioniert am besten, wenn alle dabei sind. Öffne **Mitglieder** in der Seitenleiste, um Leute per E-Mail einzuladen."
+				},
+				"integrations": {
+					"title": "Verbinde GitHub, GitLab oder Gitea",
+					"description": "Synchronisiere Issues und verschiebe Aufgaben automatisch, wenn Pull Requests geöffnet und gemergt werden. Richte das unter **Projekteinstellungen** ein."
+				},
+				"create": {
+					"title": "Erstelle deine eigene Aufgabe",
+					"description": "Nutze das **+** neben einem Spaltennamen oder drücke **T** und dann **C**. Lösch diese Starter-Aufgaben, sobald du bereit bist."
+				}
+			},
+			"progress": "Schritt {{current}} von {{total}}",
+			"welcome": "Willkommen, {{name}}",
+			"settingUp": "{{name}} wird eingerichtet",
+			"continue": "Weiter",
+			"signedInAs": "Angemeldet als {{email}}",
+			"signOut": "Abmelden",
+			"workspace": {
+				"title": "Benenne deinen Workspace",
+				"description": "Hier leben deine Projekte. Verwende den Namen deines Teams oder Unternehmens, du kannst ihn später ändern."
+			},
+			"usage": {
+				"title": "Für wen ist er?",
+				"description": "Wir richten {{name}} passend ein. Du kannst jederzeit später Leute einladen."
+			},
+			"project": {
+				"title": "Starte dein erstes Projekt",
+				"description": "Wir fügen ein paar Startaufgaben hinzu, damit du dich zurechtfindest. Du kannst sie jederzeit umbenennen oder löschen.",
+				"label": "Projektname",
+				"numbered": "Aufgaben werden nummeriert als"
+			},
+			"invite": {
+				"title": "Hol dein Team dazu",
+				"description": "Sie erhalten eine E-Mail, um {{name}} beizutreten. Überspringe diesen Schritt, wenn du dich lieber zuerst umsehen möchtest.",
+				"label": "E-Mail-Adressen deiner Teammitglieder",
+				"send_one": "{{count}} Einladung senden",
+				"send_other": "{{count}} Einladungen senden",
+				"sendNone": "Einladungen senden"
+			},
+			"plan": {
+				"title": "Wie möchtest du starten?",
+				"descriptionTrial_one": "Jeder Plan enthält unbegrenzt viele Projekte und Aufgaben. Teste {{name}} {{count}} Tag kostenlos oder schließe jetzt ein Abo ab.",
+				"descriptionTrial_other": "Jeder Plan enthält unbegrenzt viele Projekte und Aufgaben. Teste {{name}} {{count}} Tage kostenlos oder schließe jetzt ein Abo ab.",
+				"choose": "Wähle einen Plan",
+				"description": {
+					"team": "Unbegrenzt viele Mitglieder, Rollen und Berechtigungen",
+					"personal": "Für eine Person"
+				},
+				"perUserMonth": "pro Nutzer / Monat",
+				"perMonth": "pro Monat",
+				"subscribe": "{{plan}} abonnieren",
+				"checkout": "Weiter zur Kasse",
+				"trialNote": "Für die Testphase ist keine Karte nötig. Zahlungen werden von Creem abgewickelt.",
+				"paymentNote": "Zahlungen werden von Creem abgewickelt."
+			},
+			"ready": {
+				"eyebrow": "Alles bereit",
+				"title": "{{name}} ist bereit",
+				"description": "Das haben wir eingerichtet. Du kannst alles später ändern.",
+				"workspace": "Workspace",
+				"project": "Erstes Projekt",
+				"projectValue_one": "{{name}}, mit {{count}} Startaufgabe",
+				"projectValue_other": "{{name}}, mit {{count}} Startaufgaben",
+				"invitations": "Einladungen",
+				"invitationsValue_one": "An {{count}} Person gesendet",
+				"invitationsValue_other": "An {{count}} Personen gesendet",
+				"open": "{{name}} öffnen"
+			},
+			"preview": {
+				"live": "Live-Vorschau von {{name}}",
+				"liveNoName": "Live-Vorschau",
+				"ready": "{{name}} ist bereit",
+				"untitled": "Dein Workspace"
+			}
+		},
+		"profileSetup": {
+			"pageTitle": "Profil vervollständigen",
+			"completeTitle": "Vervollständige dein Profil",
+			"subtitle": "Bitte gib deinen Namen ein, um loszulegen",
+			"yourName": "Dein Name",
+			"namePlaceholder": "z. B. Max Mustermann",
+			"saving": "Wird gespeichert...",
+			"continue": "Weiter",
+			"welcome": "Willkommen, {{name}}!",
+			"redirecting": "Du wirst zu deinem Dashboard weitergeleitet...",
+			"toast": {
+				"updateSuccess": "Profil erfolgreich aktualisiert",
+				"updateFailed": "Profil konnte nicht aktualisiert werden"
+			},
+			"validation": {
+				"nameRequired": "Name ist erforderlich",
+				"nameShort": "Der Name muss mindestens 2 Zeichen lang sein"
+			}
+		},
+		"passwordReset": {
+			"forgotPassword": "Passwort vergessen?",
+			"requestTitle": "Passwort zurücksetzen",
+			"requestSubtitle": "Gib deine E-Mail-Adresse ein. Wir senden dir einen Link zum Zurücksetzen deines Passworts.",
+			"sendLink": "Link senden",
+			"requestError": "Der Link konnte nicht angefordert werden. Bitte versuche es erneut.",
+			"unavailable": "Das Zurücksetzen des Passworts ist nicht verfügbar. Wende dich an die Administration deiner Instanz.",
+			"configError": "Der Server ist nicht erreichbar. Lade die Seite neu, um es erneut zu versuchen.",
+			"resetTitle": "Neues Passwort wählen",
+			"newPassword": "Neues Passwort",
+			"confirmPassword": "Neues Passwort bestätigen",
+			"passwordMismatch": "Die Passwörter stimmen nicht überein.",
+			"passwordLength": "Verwende zwischen 8 und 128 Zeichen.",
+			"invalidLink": "Dieser Link ist ungültig oder abgelaufen. Fordere einen neuen Link an.",
+			"requestNewLink": "Neuen Link anfordern",
+			"resetError": "Das Passwort konnte nicht zurückgesetzt werden. Bitte versuche es erneut.",
+			"success": "Dein Passwort wurde zurückgesetzt. Melde dich mit deinem neuen Passwort an.",
+			"backToSignIn": "Zurück zur Anmeldung",
+			"sentTitle": "Prüfe dein Postfach",
+			"sentDescription": "Falls ein Konto für {{email}} existiert, ist ein Link zum Zurücksetzen deines Passworts unterwegs. Er läuft in 1 Stunde ab.",
+			"sentHelpTitle": "Nichts erhalten?",
+			"sentHelpDescription": "Sieh in deinem Spam-Ordner nach oder fordere in einer Minute einen neuen Link an.",
+			"rememberedIt": "Doch wieder eingefallen?",
+			"resetDescription": "Verwende 8 bis 128 Zeichen. Andere Geräte werden abgemeldet.",
+			"updatePassword": "Passwort aktualisieren",
+			"changedMind": "Doch anders überlegt?",
+			"invalidLinkTitle": "Dieser Link ist abgelaufen",
+			"successTitle": "Passwort aktualisiert"
+		},
+		"page": {
+			"terms": "Nutzungsbedingungen",
+			"privacy": "Datenschutz"
+		},
+		"device": {
+			"connect": {
+				"title": "Gerät verbinden",
+				"description": "Gib den Code ein, der in deinem Terminal oder deiner App angezeigt wird, um das Gerät mit deinem Kaneo-Konto zu verknüpfen.",
+				"label": "Gerätecode",
+				"submit": "Weiter",
+				"noCode": "Noch keinen Code? Starte die Anmeldung zuerst in deiner App.",
+				"codeRequired": "Gib den Code ein, der auf deinem Gerät angezeigt wird.",
+				"invalidCode": "Dieser Code ist ungültig oder abgelaufen."
+			},
+			"approve": {
+				"pageTitle": "Gerät genehmigen",
+				"title": "Dieses Gerät verbinden?",
+				"description": "Ein Gerät möchte sich als {{email}} anmelden. Genehmige es nur, wenn du das selbst gestartet hast.",
+				"matchCode": "Prüfe, ob dieser Code mit dem auf deinem Gerät übereinstimmt",
+				"deny": "Ablehnen",
+				"approve": "Genehmigen",
+				"failed": "Die Anfrage konnte nicht aktualisiert werden. Versuche es erneut."
+			},
+			"approved": {
+				"title": "Gerät verbunden",
+				"description": "Kehre zu deinem Terminal oder deiner App zurück. Du kannst diesen Tab schließen."
+			},
+			"denied": {
+				"title": "Anfrage abgelehnt",
+				"description": "Es wurde nichts verbunden. Du kannst diesen Tab schließen."
+			},
+			"missing": {
+				"title": "Kein Gerätecode",
+				"description": "Öffne diese Seite von deinem Gerät aus oder gib den Code selbst ein.",
+				"enterCode": "Code eingeben"
+			},
+			"signIn": {
+				"title": "Melde dich an, um dein Gerät zu verbinden",
+				"description": "Danach kommst du direkt hierher zurück, um es zu genehmigen.",
+				"submit": "Anmelden"
+			}
+		},
+		"mcp": {
+			"authorize": {
+				"title": "MCP-Client autorisieren",
+				"description": "Er kann in jedem Workspace, auf den du Zugriff hast, in deinem Namen handeln. Fahre nur fort, wenn du diese Verbindung selbst gestartet hast.",
+				"client": "Client",
+				"unknownClient": "MCP-Client",
+				"selfReported": "Eigenangabe",
+				"redirect": "Leitet dich zurück zu",
+				"signedInAs": "Angemeldet als",
+				"deny": "Ablehnen",
+				"allow": "Zugriff erlauben"
+			},
+			"expired": {
+				"title": "Diese Anfrage ist abgelaufen",
+				"description": "Kehre zu deinem MCP-Client zurück und verbinde dich erneut."
+			},
+			"signIn": {
+				"title": "Melde dich an, um diesen Client zu autorisieren",
+				"description": "Danach kommst du direkt hierher zurück, um ihn zu prüfen.",
+				"submit": "Anmelden"
+			}
+		}
+	},
+	"settings": {
+		"advancedSettings": "Erweiterte Einstellungen",
+		"account": "Konto",
+		"administration": "Administration",
+		"developer": "Entwicklung",
+		"information": "Profil",
+		"notifications": "Benachrichtigungen",
+		"preferences": "Einstellungen",
+		"apiKeys": "API-Schlüssel",
+		"adminUsers": {
+			"title": "Benutzer",
+			"subtitle": "Alle mit einem Konto auf dieser Kaneo-Instanz.",
+			"directoryTitle": "Alle Benutzer",
+			"searchCount_one": "{{count}} passender Benutzer",
+			"searchCount_other": "{{count}} passende Benutzer",
+			"refreshing": "Benutzer werden aktualisiert",
+			"searchPlaceholder": "Nach Name oder E-Mail suchen",
+			"searchLabel": "Benutzer suchen",
+			"loadError": "Benutzer konnten nicht geladen werden.",
+			"retry": "Erneut versuchen",
+			"emptyTitle": "Keine Benutzer gefunden",
+			"emptyDescription": "Versuche einen anderen Namen oder eine andere E-Mail-Adresse.",
+			"clearSearch": "Suche löschen",
+			"you": "Du",
+			"previous": "Zurück",
+			"next": "Weiter",
+			"pagination": "Seite {{current}} von {{total}}",
+			"columns": {
+				"user": "Benutzer",
+				"role": "Rolle",
+				"status": "Status",
+				"joined": "Registriert",
+				"actions": "Aktionen"
+			},
+			"roles": {
+				"admin": "Administrator",
+				"user": "Benutzer"
+			},
+			"status": {
+				"active": "Aktiv",
+				"deactivated": "Deaktiviert"
+			},
+			"actions": {
+				"open": "Aktionen für {{name}}",
+				"edit": "Bearbeiten",
+				"deactivate": "Deaktivieren",
+				"reactivate": "Reaktivieren"
+			},
+			"edit": {
+				"title": "Benutzer bearbeiten",
+				"description": "Aktualisiere die Identität und den instanzweiten Zugriff dieses Kontos.",
+				"name": "Vollständiger Name",
+				"email": "E-Mail-Adresse",
+				"role": "Globale Rolle",
+				"selfRoleHint": "Du kannst deine eigene globale Rolle nicht ändern.",
+				"save": "Änderungen speichern",
+				"saving": "Wird gespeichert…"
+			},
+			"confirm": {
+				"working": "Wird ausgeführt…",
+				"deactivate": {
+					"title": "Dieses Konto deaktivieren?",
+					"description": "{{name}} wird abgemeldet und kann sich erst wieder anmelden, nachdem ein Administrator das Konto reaktiviert hat.",
+					"action": "Konto deaktivieren"
+				},
+				"reactivate": {
+					"title": "Dieses Konto reaktivieren?",
+					"description": "{{name}} kann sich danach wieder anmelden und auf die eigenen Arbeitsbereiche zugreifen.",
+					"action": "Konto reaktivieren"
+				},
+				"delete": {
+					"title": "Dieses Konto endgültig löschen?",
+					"description": "Dadurch werden {{name}}, alle Sitzungen, Mitgliedschaften und zugehörigen Daten endgültig gelöscht. Dies kann nicht rückgängig gemacht werden.",
+					"action": "Endgültig löschen"
+				}
+			},
+			"toast": {
+				"updated": "Benutzer aktualisiert",
+				"updateError": "Benutzer konnte nicht aktualisiert werden",
+				"deactivated": "Benutzer deaktiviert",
+				"reactivated": "Benutzer reaktiviert",
+				"deleted": "Benutzer gelöscht",
+				"actionError": "Benutzerstatus konnte nicht aktualisiert werden"
+			}
+		},
+		"informationPage": {
+			"pageTitle": "Profil",
+			"title": "Profil",
+			"subtitle": "So sehen dich deine Teammitglieder.",
+			"sectionTitle": "Angaben",
+			"profilePicture": "Profilbild",
+			"fullName": "Name",
+			"fullNamePlaceholder": "Gib deinen Namen ein",
+			"email": "E-Mail",
+			"updateError": "Profil konnte nicht aktualisiert werden",
+			"validation": {
+				"nameRequired": "Name ist erforderlich",
+				"nameShort": "Der Name muss mindestens 2 Zeichen lang sein"
+			},
+			"avatar": {
+				"hint": "Quadratische Bilder sehen am besten aus.",
+				"remove": "Entfernen",
+				"removeError": "Failed to remove profile picture",
+				"removeSuccess": "Profile picture removed",
+				"updateError": "Failed to update profile picture",
+				"updateSuccess": "Profile picture updated",
+				"upload": "Hochladen"
+			},
+			"deleteAccount": {
+				"confirm": "Delete account",
+				"confirmLabel": "Confirm your email address",
+				"description": "Workspaces only you belong to are deleted with your account. Elsewhere, your tasks stay and become unassigned, and your comments are removed.",
+				"error": "Failed to delete account",
+				"modalDescription": "This cannot be undone. Type {{email}} to confirm.",
+				"modalTitle": "Delete your account?",
+				"sectionTitle": "Danger zone",
+				"success": "Your account has been deleted",
+				"title": "Delete account",
+				"sessionTooOld": "For security, sign out and sign back in before deleting your account."
+			},
+			"emailHint": "Mit dieser Adresse meldest du dich an."
+		},
+		"notificationsPage": {
+			"pageTitle": "Benachrichtigungen",
+			"title": "Benachrichtigungen",
+			"subtitle": "Worüber Kaneo dich informiert und wo es dich erreicht.",
+			"statusConnected": "Verbunden",
+			"statusPaused": "Pausiert",
+			"emailTitle": "E-Mail",
+			"accountEmailNoAddress": "Keine Konten-E-Mail vorhanden",
+			"saveChanges": "Änderungen speichern",
+			"disconnect": "Trennen",
+			"ntfyTitle": "ntfy",
+			"ntfyDescription": "Veröffentliche in einem ntfy-Thema auf deinem Handy oder Desktop.",
+			"serverUrl": "Server-URL",
+			"topic": "Thema",
+			"token": "Token",
+			"ntfyServerPlaceholder": "https://ntfy.example.com",
+			"ntfyTopicPlaceholder": "team-alerts",
+			"ntfyTokenPlaceholder": "Nur falls dein Server einen benötigt",
+			"ntfyTokenHintConfigured": "Ein Token ist bereits konfiguriert ({{masked}}). Gib einen neuen Token ein, um ihn zu ersetzen.",
+			"ntfyTokenHintOptional": "Verwende einen, wenn dein ntfy-Server eine Authentifizierung verlangt.",
+			"connectNtfy": "ntfy verbinden",
+			"gotifyTitle": "Gotify",
+			"gotifyDescription": "Sende Benachrichtigungen an deinen Gotify-Server.",
+			"gotifyTokenLabel": "App-Token",
+			"gotifyServerPlaceholder": "https://gotify.example.com",
+			"gotifyTokenPlaceholder": "Gotify-App-Token",
+			"gotifyTokenHintConfigured": "Ein App-Token ist bereits konfiguriert ({{masked}}). Gib ein neues Token ein, um es zu ersetzen.",
+			"gotifyTokenHintRequired": "Erforderlich. Verwende ein Anwendungstoken von deinem Gotify-Server.",
+			"connectGotify": "Gotify verbinden",
+			"webhookTitle": "Benutzerdefinierter Webhook",
+			"webhookDescription": "Sende jede Benachrichtigung als JSON an deinen eigenen Endpunkt.",
+			"endpointUrl": "Endpunkt-URL",
+			"signingSecret": "Signatur-Geheimnis",
+			"webhookUrlPlaceholder": "https://example.com/webhooks/kaneo",
+			"webhookSecretPlaceholder": "Optionales gemeinsames Geheimnis",
+			"webhookSecretHintConfigured": "Ein Signatur-Geheimnis ist bereits konfiguriert ({{masked}}). Gib ein neues ein, um es zu ersetzen.",
+			"webhookSecretHintOptional": "Kaneo signiert den Anfragetext, wenn ein Geheimnis gesetzt ist.",
+			"connectWebhook": "Webhook verbinden",
+			"eventPreferencesTitle": "Benachrichtige mich über",
+			"eventPreferencesDescription": "Über deine eigenen Kommentare, Erwähnungen und Statusänderungen wirst du nie benachrichtigt.",
+			"eventTaskAssignments": "Zuweisungen",
+			"eventComments": "Kommentare und Erwähnungen",
+			"eventCommentsHint": "Neue Kommentare zu deinen Aufgaben und wenn dich jemand @erwähnt.",
+			"eventStatusChanges": "Statusänderungen",
+			"eventDueDateReminders": "Fälligkeitserinnerungen",
+			"reminderLeadTimeLabel": "Vor dem Fälligkeitsdatum erinnern",
+			"reminderLeadTimeInvalid": "Gib eine ganze Zahl zwischen 1 und {{max}} ein.",
+			"saveEventPreferences": "Benachrichtigungstypen speichern",
+			"allProjects": "Alle Projekte",
+			"noProjectsInWorkspace": "Für diesen Arbeitsbereich sind noch keine Projekte vorhanden.",
+			"toastEmailSaved": "E-Mail-Benachrichtigungseinstellungen gespeichert",
+			"toastEmailSaveFailed": "E-Mail-Einstellungen konnten nicht gespeichert werden",
+			"toastNtfySaved": "ntfy-Einstellungen gespeichert",
+			"toastNtfySaveFailed": "ntfy-Einstellungen konnten nicht gespeichert werden",
+			"toastNtfyDisconnected": "ntfy getrennt",
+			"toastNtfyDisconnectFailed": "ntfy konnte nicht getrennt werden",
+			"toastGotifySaved": "Gotify-Einstellungen gespeichert",
+			"toastGotifySaveFailed": "Gotify-Einstellungen konnten nicht gespeichert werden",
+			"toastGotifyDisconnected": "Gotify getrennt",
+			"toastGotifyDisconnectFailed": "Gotify konnte nicht getrennt werden",
+			"toastWebhookSaved": "Webhook-Einstellungen gespeichert",
+			"toastWebhookSaveFailed": "Webhook-Einstellungen konnten nicht gespeichert werden",
+			"toastWebhookDisconnected": "Webhook getrennt",
+			"toastWebhookDisconnectFailed": "Webhook konnte nicht getrennt werden",
+			"toastRuleSaved": "Benachrichtigungsregel für {{workspaceName}} gespeichert",
+			"toastRuleSaveFailed": "Arbeitsbereichs-Benachrichtigungsregel konnte nicht gespeichert werden",
+			"toastRuleRemoved": "Benachrichtigungsregel für {{workspaceName}} entfernt",
+			"toastRuleRemoveFailed": "Arbeitsbereichs-Benachrichtigungsregel konnte nicht entfernt werden",
+			"toastPreferencesSaved": "Benachrichtigungseinstellungen gespeichert",
+			"toastPreferencesSaveFailed": "Benachrichtigungseinstellungen konnten nicht gespeichert werden",
+			"toastRuleSavedGeneric": "Arbeitsbereichs-Benachrichtigungsregel gespeichert",
+			"toastRuleRemovedGeneric": "Arbeitsbereichs-Benachrichtigungsregel entfernt",
+			"channelNotConnected": "Nicht verbunden",
+			"channelOff": "Aus",
+			"channelsDescription": "Benachrichtigungen erscheinen immer in Kaneo. Verbinde einen Kanal, um sie zusätzlich woanders zu erhalten.",
+			"channelsTitle": "Kanäle",
+			"configure": "Konfigurieren",
+			"configureChannel": "{{channel}} konfigurieren",
+			"configureWorkspace": "Benachrichtigungen für {{workspaceName}} konfigurieren",
+			"connect": "Verbinden",
+			"connectChannel": "{{channel}} verbinden",
+			"disconnectDescription": "Benachrichtigungen werden nicht mehr an {{channel}} gesendet und die gespeicherten Einstellungen werden entfernt.",
+			"disconnecting": "Wird getrennt...",
+			"disconnectTitle": "{{channel}} trennen?",
+			"done": "Fertig",
+			"emailToggleLabel": "Benachrichtigungen per E-Mail senden",
+			"eventDueDateRemindersHint": "Bevor eine deiner Aufgaben fällig ist. Über überfällige Aufgaben wirst du separat benachrichtigt.",
+			"eventStatusChangesHint": "Wenn eine deiner Aufgaben in eine andere Spalte verschoben wird.",
+			"eventTaskAssignmentsHint": "Wenn dir jemand eine Aufgabe zuweist.",
+			"loadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
+			"onlyInKaneo": "Nur in Kaneo",
+			"optional": "Optional",
+			"projectCount_one": "{{count}} Projekt",
+			"projectCount_other": "{{count}} Projekte",
+			"reminderLeadTimeUnitDaysBefore_one": "Tag vorher",
+			"reminderLeadTimeUnitDaysBefore_other": "Tage vorher",
+			"reminderLeadTimeUnitHoursBefore_one": "Stunde vorher",
+			"reminderLeadTimeUnitHoursBefore_other": "Stunden vorher",
+			"reminderLeadTimeUnitLabel": "Zeiteinheit für Erinnerungen",
+			"ruleActiveDescription": "Ausschalten, um diesen Workspace zu pausieren und die Einrichtung zu behalten.",
+			"ruleActiveLabel": "Senden",
+			"ruleChannels": "Kanäle",
+			"ruleDialogDescription": "Wohin Benachrichtigungen aus diesem Workspace gesendet werden dürfen.",
+			"ruleDialogTitle": "Benachrichtigungen für {{workspaceName}}",
+			"ruleProjects": "Projekte",
+			"ruleSummary": "{{channels}} · {{projects}}",
+			"save": "Speichern",
+			"sendingDescription": "Ausschalten, um diesen Kanal zu pausieren und seine Einstellungen zu behalten.",
+			"sendingLabel": "Senden",
+			"setUp": "Einrichten",
+			"setUpWorkspace": "Benachrichtigungen für {{workspaceName}} einrichten",
+			"someProjects": "Nur ausgewählte",
+			"statusOn": "An",
+			"statusSending": "Sendet",
+			"stopping": "Wird beendet...",
+			"stopSending": "Senden beenden",
+			"stopSendingDescription": "Benachrichtigungen aus diesem Workspace erscheinen dann nur noch in Kaneo.",
+			"stopSendingTitle": "Senden aus {{workspaceName}} beenden?",
+			"workspacesDescription": "Wähle, welche Workspaces und Projekte deine Kanäle nutzen dürfen.",
+			"workspacesTitle": "Workspaces"
+		},
+		"preferencesPage": {
+			"title": "Einstellungen",
+			"subtitle": "Wie Kaneo für dich aussieht und funktioniert.",
+			"appearanceTitle": "Allgemein",
+			"theme": "Design",
+			"selectTheme": "Design auswählen",
+			"themeLight": "Hell",
+			"themeDark": "Dunkel",
+			"themeSystem": "Systemeinstellung",
+			"language": "Sprache",
+			"selectLanguage": "Sprache auswählen",
+			"firstDayOfWeek": "Erster Wochentag",
+			"firstDayOfWeekDescription": "Für Kalender und Datumsauswahl.",
+			"selectFirstDayOfWeek": "Ersten Tag auswählen",
+			"weekStartsOnSunday": "Sonntag",
+			"weekStartsOnMonday": "Montag",
+			"weekStartsOnSaturday": "Samstag",
+			"defaultView": "Standardansicht",
+			"defaultViewDescription": "Die Ansicht, in der sich Projekte öffnen.",
+			"selectViewMode": "Ansicht auswählen",
+			"board": "Board",
+			"list": "Liste",
+			"gantt": "Gantt",
+			"sidebarDefault": "Sidebar geöffnet lassen",
+			"sidebarDefaultDescription": "Mit ausgeklappter Sidebar starten.",
+			"displayOptions": "Aufgabendetails",
+			"displayOptionsDescription": "Was auf Karten und Zeilen in deinen Boards und Listen angezeigt wird.",
+			"taskNumbers": "Aufgabennummern",
+			"assignees": "Zugewiesene",
+			"dueDates": "Fälligkeitsdaten",
+			"labels": "Labels",
+			"priority": "Priorität",
+			"projectBackgrounds": "Project backgrounds",
+			"projectBackgroundsDescription": "Das Hintergrundbild eines Projekts hinter seinem Board anzeigen.",
+			"advancedTitle": "Erweitert"
+		},
+		"developerPage": {
+			"pageTitle": "API-Schlüssel",
+			"title": "API-Schlüssel",
+			"subtitle": "Lass Skripte, die CLI und MCP-Clients Kaneo in deinem Namen nutzen.",
+			"unnamedKey": "Unbenannt",
+			"emptyDescription": "Erstelle einen Schlüssel, um die CLI, einen MCP-Client oder eigene Skripte zu nutzen.",
+			"emptyTitle": "Noch keine API-Schlüssel",
+			"keysNote": "Ein Schlüssel kann alles, was du kannst. Lösche Schlüssel, die du nicht mehr verwendest.",
+			"keysTitle": "Schlüssel",
+			"loadError": "API-Schlüssel konnten nicht geladen werden. Bitte versuche es erneut.",
+			"newKey": "Neuer Schlüssel"
+		},
+		"apiKey": {
+			"createdModal": {
+				"title": "Kopiere deinen Schlüssel",
+				"description": "Nach dem Schließen siehst du ihn nicht mehr.",
+				"copy": "Kopieren",
+				"copied": "Kopiert",
+				"done": "Fertig",
+				"copyError": "Der Schlüssel konnte nicht kopiert werden. Markiere ihn und kopiere ihn manuell."
+			},
+			"table": {
+				"deleteConfirmTitle": "„{{name}}“ löschen?",
+				"deleteConfirmDescription": "Alles, was diesen Schlüssel verwendet, funktioniert dann nicht mehr. Das kann nicht rückgängig gemacht werden.",
+				"delete": "Schlüssel löschen",
+				"deleting": "Wird gelöscht…",
+				"toastDeleted": "API-Schlüssel gelöscht",
+				"toastDeleteError": "API-Schlüssel konnte nicht gelöscht werden"
+			},
+			"createDialog": {
+				"title": "Neuer API-Schlüssel",
+				"description": "Der Schlüssel kann alles, was du kannst.",
+				"nameLabel": "Name",
+				"namePlaceholder": "Mein API-Schlüssel",
+				"nameDescription": "Damit du weißt, wo er verwendet wird.",
+				"expirationLabel": "Läuft ab",
+				"expiration1d": "1 Tag",
+				"expiration7d": "7 Tage",
+				"expiration30d": "30 Tage",
+				"expiration90d": "90 Tage",
+				"expirationNever": "Nie",
+				"create": "Schlüssel erstellen",
+				"creating": "Wird erstellt…",
+				"failedCreate": "API-Schlüssel konnte nicht erstellt werden",
+				"validation": {
+					"nameRequired": "Gib einen Namen ein",
+					"nameShort": "Verwende mindestens 3 Zeichen"
+				}
+			},
+			"row": {
+				"actions": "Aktionen für {{name}}",
+				"created": "Erstellt am {{date}}",
+				"expired": "Abgelaufen am {{date}}",
+				"expiredBadge": "Abgelaufen",
+				"expires": "Läuft am {{date}} ab",
+				"neverExpires": "Läuft nie ab"
+			}
+		},
+		"workspaceGeneral": {
+			"pageTitle": "Allgemeine Einstellungen",
+			"title": "Allgemein",
+			"subtitle": "Der Name von {{name}} und wem der Workspace gehört.",
+			"workspaceInfoTitle": "Workspace",
+			"nameLabel": "Name",
+			"namePlaceholder": "Workspace-Name eingeben",
+			"descriptionLabel": "Beschreibung",
+			"descriptionPlaceholder": "Woran arbeitet dein Team?",
+			"dangerZone": "Gefahrenbereich",
+			"deleteWorkspace": "Workspace löschen",
+			"deleteWorkspaceDescription": "Löscht {{name}} mit allen Projekten und Aufgaben dauerhaft.",
+			"deleteModalTitle": "Workspace löschen?",
+			"deleteModalDescription": "Dadurch werden {{name}} und alle zugehörigen Projekte und Aufgaben dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
+			"deleteModalConfirm": "Workspace löschen",
+			"toastUpdateError": "Workspace konnte nicht aktualisiert werden",
+			"toastDeleted": "Workspace erfolgreich gelöscht",
+			"toastDeleteError": "Workspace konnte nicht gelöscht werden",
+			"validation": {
+				"nameRequired": "Workspace-Name ist erforderlich",
+				"nameShort": "Der Workspace-Name muss mindestens 2 Zeichen lang sein"
+			},
+			"transferOwnership": {
+				"toastSuccess": "Eigentümerschaft übertragen",
+				"toastError": "Eigentümerschaft konnte nicht übertragen werden",
+				"title": "Eigentümerschaft übertragen",
+				"pickerLabel": "Neuer Eigentümer",
+				"noEligibleMembers": "Lade mindestens ein weiteres Mitglied ein, bevor du die Eigentümerschaft übertragen kannst.",
+				"pickerHint": "Der neue Eigentümer übernimmt. Du bleibst als Admin dabei.",
+				"pickerPlaceholder": "Mitglied auswählen",
+				"button": "Übertragen",
+				"dialogTitle": "Eigentümerschaft übertragen?",
+				"dialogDescription": "{{name}} wird alleiniger Eigentümer von {{workspace}}. Du behältst Admin-Zugriff, verlierst aber Rechte, die nur Eigentümern vorbehalten sind, etwa das Löschen des Workspaces oder eine erneute Übertragung.",
+				"transferring": "Wird übertragen…",
+				"confirm": "Eigentümerschaft übertragen"
+			},
+			"ownershipSubtitle": "Nur der Eigentümer sieht das.",
+			"ownershipTitle": "Eigentümerschaft"
+		},
+		"projectGeneral": {
+			"pageTitle": "Projekteinstellungen",
+			"title": "Allgemein",
+			"subtitle": "Name, Schlüssel und Aussehen von {{name}}.",
+			"projectInfoTitle": "Projekt",
+			"iconLabel": "Symbol",
+			"iconHint": "Wird in der Sidebar und in Projektlisten angezeigt.",
+			"pickIconTitle": "Symbol auswählen",
+			"searchIconsPlaceholder": "Symbole suchen...",
+			"projectNameLabel": "Name",
+			"projectNamePlaceholder": "Projektname",
+			"keyLabel": "Schlüssel",
+			"keyHint": "Steht am Anfang jeder Aufgaben-ID, z. B. {{slug}}-123.",
+			"keyPlaceholder": "PRO",
+			"descriptionLabel": "Beschreibung",
+			"descriptionPlaceholder": "Wofür ist dieses Projekt?",
+			"dangerZone": "Gefahrenbereich",
+			"deleteProject": "Projekt löschen",
+			"deleteProjectDescription": "Löscht {{name}} und alle zugehörigen Aufgaben dauerhaft.",
+			"deleteModalTitle": "Projekt löschen?",
+			"deleteModalDescription": "Dadurch werden {{name}} und alle zugehörigen Aufgaben dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
+			"deleteModalConfirm": "Projekt löschen",
+			"toastUpdateError": "Projekt konnte nicht aktualisiert werden",
+			"toastDeleted": "Projekt erfolgreich gelöscht",
+			"toastDeleteError": "Projekt konnte nicht gelöscht werden",
+			"validation": {
+				"nameRequired": "Projektname ist erforderlich",
+				"keyRequired": "Schlüssel ist erforderlich",
+				"keyMax": "Der Schlüssel darf höchstens 8 Zeichen lang sein",
+				"iconRequired": "Symbol ist erforderlich"
+			},
+			"backgroundHint": "Ein Bild hinter dem Board. Jede Person kann Hintergründe ausblenden.",
+			"backgroundUnavailable": "Bild-Uploads sind auf dieser Instanz nicht eingerichtet.",
+			"backgroundLabel": "Board background",
+			"backgroundRemove": "Remove image",
+			"backgroundRemoveError": "Failed to remove project background",
+			"backgroundRemoveSuccess": "Project background removed",
+			"backgroundReplace": "Ersetzen",
+			"backgroundUpload": "Hochladen",
+			"backgroundUploadError": "Failed to update project background",
+			"backgroundUploadSuccess": "Project background updated",
+			"moveModalConfirm": "Projekt verschieben",
+			"moveProject": "In anderen Workspace verschieben",
+			"moveProjectAction": "Verschieben",
+			"moveProjectDescription": "Aufgaben, Spalten und Labels werden mit verschoben.",
+			"moveProjectPlaceholder": "Workspace auswählen",
+			"toastMoved": "Projekt erfolgreich verschoben",
+			"toastMovedWithUnassigned": "Projekt erfolgreich verschoben. Bei {{taskCount}} Aufgabe(n) wurde die Zuweisung aufgehoben.",
+			"toastMoveError": "Projekt konnte nicht verschoben werden",
+			"moveTargetsError": "Es konnte nicht geprüft werden, in welche Workspaces du dieses Projekt verschieben kannst. Lade die Seite neu, um es erneut zu versuchen.",
+			"moveDialogDescription": "Aufgaben, die Personen außerhalb des neuen Workspaces zugewiesen sind, verlieren ihre Zuweisung, und Benachrichtigungsabos für dieses Projekt werden entfernt.",
+			"moveDialogTitle": "In anderen Workspace verschieben?",
+			"moveTargetLabel": "Workspace",
+			"moving": "Wird verschoben...",
+			"tasksTitle": "Aufgaben"
+		},
+		"projectIntegrations": {
+			"pageTitle": "Integrationen",
+			"title": "Integrationen",
+			"subtitle": "Verbinde dieses Projekt mit deinem Code-Hosting und dem Chat deines Teams.",
+			"githubSectionTitle": "GitHub-Integration",
+			"githubSectionSubtitle": "Synchronisiere Aufgaben mit GitHub-Issues und aktiviere die bidirektionale Synchronisierung.",
+			"giteaSectionTitle": "Gitea-Integration",
+			"giteaSectionSubtitle": "Synchronisiere Aufgaben mit einer selbst gehosteten Gitea-Instanz (Issues, PRs, Webhooks).",
+			"discordSectionTitle": "Discord-Integration",
+			"discordSectionSubtitle": "Sende Projektaktualisierungen per Webhook in einen Discord-Kanal.",
+			"genericWebhookSectionTitle": "Webhooks",
+			"genericWebhookSectionSubtitle": "Sende Projektaufgabenereignisse als JSON an einen beliebigen HTTP-Endpunkt.",
+			"slackSectionTitle": "Slack-Integration",
+			"slackSectionSubtitle": "Sende Projektaktualisierungen per Incoming Webhook in einen Slack-Kanal.",
+			"telegramSectionTitle": "Telegram-Integration",
+			"telegramSectionSubtitle": "Sende Projektaktualisierungen mit einem Bot in einen Telegram-Chat oder ein Thema.",
+			"mattermostSectionSubtitle": "Send project task updates into a Mattermost channel with an incoming webhook.",
+			"mattermostSectionTitle": "Mattermost Integration",
+			"gitlabSectionSubtitle": "Synchronisiere Aufgaben mit GitLab.com oder einer selbst verwalteten Instanz.",
+			"gitlabSectionTitle": "GitLab Integration",
+			"codeHostingTitle": "Code-Hosting",
+			"chatTitle": "Chat und Webhooks",
+			"statusConnected": "Verbunden",
+			"statusPaused": "Pausiert",
+			"connect": "Verbinden",
+			"configure": "Konfigurieren",
+			"done": "Fertig"
+		},
+		"projectVisibility": {
+			"pageTitle": "Projektsichtbarkeit",
+			"title": "Sichtbarkeit",
+			"subtitle": "Lege fest, wer {{project}} außerhalb von {{workspace}} sehen kann.",
+			"sectionTitle": "Zugriff",
+			"publicAccess": "Öffentlicher Link",
+			"publicAccessHint": "Alle mit dem Link können das Board und seine Aufgaben ansehen, aber nichts ändern.",
+			"publicUrl": "Öffentliche URL",
+			"copy": "Link kopieren",
+			"toastUpdated": "Sichtbarkeit aktualisiert",
+			"toastUpdateError": "Sichtbarkeit konnte nicht aktualisiert werden",
+			"always": "Immer",
+			"copied": "Kopiert",
+			"copyError": "Link konnte nicht kopiert werden",
+			"membersDescription": "Alle im Workspace, mit den Rechten ihrer Rolle.",
+			"membersTitle": "Mitglieder von {{workspace}}",
+			"offNote": "Wenn du den öffentlichen Link deaktivierst, funktioniert er sofort nicht mehr.",
+			"on": "An",
+			"openPublicPage": "Öffentliche Seite öffnen",
+			"thisWorkspace": "diesem Workspace"
+		},
+		"projectWorkflow": {
+			"pageTitle": "Workflow-Einstellungen",
+			"title": "Workflow",
+			"subtitle": "Die Spalten auf deinem Board und was Aufgaben zwischen ihnen verschiebt.",
+			"columnsTitle": "Spalten",
+			"columnsDescription": "Ziehen zum Neuordnen. Aufgaben in einer Erledigt-Spalte gelten als abgeschlossen.",
+			"automationTitle": "Automatisierungen",
+			"automationDescription": "Verschiebe eine verknüpfte Aufgabe, wenn in einem verbundenen Repository etwas passiert."
+		},
+		"projectSwitcher": {
+			"selectProject": "Projekt auswählen",
+			"noProjects": "Keine Projekte"
+		},
+		"columnEditor": {
+			"toastCreateError": "Spalte konnte nicht erstellt werden",
+			"toastRenameError": "Spalte konnte nicht aktualisiert werden",
+			"toastUpdateError": "Spalte konnte nicht aktualisiert werden",
+			"toastDeleteError": "Spalte konnte nicht gelöscht werden",
+			"pickIconTitle": "Spaltenicon auswählen",
+			"searchIconsPlaceholder": "Icons suchen...",
+			"markDoneAria": "{{name}} als fertige Spalte markieren",
+			"newColumnPlaceholder": "Spaltenname",
+			"deleteAria": "Spalte {{name}} löschen",
+			"renameAria": "Spalte {{name}} umbenennen",
+			"addColumn": "Spalte hinzufügen",
+			"columnHeader": "Spalte",
+			"deleteConfirm": "Spalte löschen",
+			"deleteDescription": "Spalten, die noch Aufgaben enthalten, können nicht gelöscht werden. Verschiebe diese Aufgaben zuerst.",
+			"deleteTitle": "„{{name}}“ löschen?",
+			"doneHeader": "Erledigt",
+			"dragAria": "{{name}} verschieben",
+			"reorderError": "Spalten konnten nicht neu angeordnet werden"
+		},
+		"githubIntegration": {
+			"toast": {
+				"verifyError": "GitHub-Installation konnte nicht überprüft werden",
+				"installAppFirst": "Bitte installiere zuerst die GitHub-App für dieses Repository",
+				"missingPermsDetail": "Der GitHub-App fehlen erforderliche Berechtigungen: {{list}}. Bitte aktualisiere die App-Berechtigungen.",
+				"updated": "GitHub-Integration erfolgreich aktualisiert",
+				"updateError": "GitHub-Integration konnte nicht aktualisiert werden",
+				"removed": "GitHub-Integration erfolgreich entfernt",
+				"removeError": "GitHub-Integration konnte nicht entfernt werden",
+				"issuesImported": "Issues erfolgreich importiert",
+				"importError": "Issues konnten nicht importiert werden",
+				"commentOnEnabled": "Kaneo kommentiert bei neuen Issues mit einem Aufgabenlink",
+				"commentOnDisabled": "Aufgabenlink-Kommentare bei neuen Issues sind deaktiviert",
+				"settingsUpdateError": "GitHub-Integration konnte nicht aktualisiert werden"
+			},
+			"commentTaskLinkTitle": "Kaneo-Link bei neuen Issues kommentieren",
+			"commentTaskLinkHint": "Damit Leute auf GitHub direkt zur Aufgabe springen können.",
+			"updatePermissions": "Berechtigungen aktualisieren",
+			"installGithubApp": "GitHub-App installieren",
+			"importSectionHint": "Importiere die offenen Issues des Repositorys als Aufgaben.",
+			"importDisabledHint": "Verbinde das Repository erneut, um den Import zu aktivieren.",
+			"accountVerificationHint": "Verbinde dein GitHub-Konto, damit deine Administrationsrechte für dieses Repository geprüft werden können.",
+			"enableGithubSignInHint": "Bitte die Administration deiner Instanz, die GitHub-Anmeldung zu aktivieren.",
+			"reverifyHint": "Verbinde dieses Repository erneut, um den Zugriff zu bestätigen und die Synchronisierung fortzusetzen.",
+			"resumeImport": "Import fortsetzen",
+			"importPaused": "Der Fortschritt dieses Imports ist gespeichert. Du kannst ihn fortsetzen.",
+			"importSummary": "Erstellt: {{imported}} · Aktualisiert: {{updated}} · Übersprungen: {{skipped}}",
+			"chooseRepositoryDescription": "Issues und Pull Requests daraus werden hier mit Aufgaben verknüpft.",
+			"linkAccountDescription": "Bestätigt, dass du das Repository verwalten darfst.",
+			"linkAccountTitle": "GitHub-Konto verknüpfen",
+			"linked": "Verknüpft",
+			"linkGithub": "GitHub verknüpfen",
+			"verifyMissingPermissions": "Der Kaneo GitHub App fehlen Berechtigungen: {{list}}.",
+			"verifyNotInstalled": "Die Kaneo GitHub App ist für dieses Repository nicht installiert.",
+			"verifyReady": "Die Kaneo GitHub App ist mit den benötigten Berechtigungen installiert.",
+			"workflowHint": "Aufgaben verschieben, wenn Pull Requests geöffnet oder gemergt werden, unter",
+			"workflowLink": "Workflow"
+		},
+		"giteaIntegration": {
+			"validation": {
+				"baseUrlRequired": "Gitea-Basis-URL ist erforderlich",
+				"baseUrlInvalid": "Gib eine gültige URL ein (z. B. https://gitea.example.com)"
+			},
+			"toast": {
+				"verifyError": "Gitea-Zugriff konnte nicht überprüft werden",
+				"verifyFirst": "Zugriffsprüfung fehlgeschlagen. Prüfe URL, Token und Repository",
+				"updated": "Gitea-Integration gespeichert",
+				"updateError": "Gitea-Integration konnte nicht gespeichert werden",
+				"removed": "Gitea-Integration entfernt",
+				"removeError": "Gitea-Integration konnte nicht entfernt werden",
+				"issuesImported": "Issues erfolgreich importiert",
+				"importError": "Issues konnten nicht importiert werden",
+				"commentOnEnabled": "Kaneo kommentiert bei neuen Issues mit einem Aufgabenlink",
+				"commentOnDisabled": "Aufgabenlink-Kommentare bei neuen Issues sind deaktiviert",
+				"settingsUpdateError": "Gitea-Integration konnte nicht aktualisiert werden"
+			},
+			"commentTaskLinkTitle": "Kaneo-Link bei neuen Issues kommentieren",
+			"commentTaskLinkHint": "Damit Leute auf Gitea direkt zur Aufgabe springen können.",
+			"webhookHint": "Füge diesen Webhook in den Repository-Einstellungen hinzu, damit Änderungen zurück an Kaneo gehen.",
+			"baseUrlLabel": "Gitea URL",
+			"tokenLabel": "Persönlicher Zugriffstoken",
+			"tokenPlaceholder": "Paste token",
+			"tokenPlaceholderUpdate": "Neuen Token einfügen, um ihn zu ersetzen",
+			"importSectionHint": "Importiere offene Issues und Pull Requests als Aufgaben.",
+			"importDisabledHint": "Der Import erfordert einen bestätigten Zugriff. Prüfe oben den Token-Status.",
+			"browseModalHint": "Repositories, auf die dein Token zugreifen kann.",
+			"browseNeedsCredentials": "Gib die Gitea-URL und einen Token ein, um zu durchsuchen.",
+			"browseEmpty": "Dieser Token sieht keine Repositories.",
+			"chooseRepositoryDescription": "Gib owner/name ein oder wähle eines aus der Liste.",
+			"webhookEvents": "Aktiviere die Ereignisse Push, Pull Request, Issue, Issue-Kommentar und Create."
+		},
+		"slackIntegration": {
+			"validation": {
+				"webhookInvalid": "Gib eine gültige Slack-Webhook-URL ein"
+			},
+			"toast": {
+				"saved": "Slack-Integration erfolgreich gespeichert",
+				"saveError": "Slack-Integration konnte nicht gespeichert werden",
+				"enabled": "Slack-Benachrichtigungen aktiviert",
+				"disabled": "Slack-Benachrichtigungen pausiert",
+				"updateError": "Slack-Integration konnte nicht aktualisiert werden",
+				"removed": "Slack-Integration erfolgreich entfernt",
+				"removeError": "Slack-Integration konnte nicht entfernt werden"
+			},
+			"webhookPlaceholder": "https://hooks.slack.com/services/...",
+			"webhookHint": "Erstelle in Slack einen Incoming Webhook und füge ihn hier ein.",
+			"connect": "Slack verbinden",
+			"update": "Slack aktualisieren"
+		},
+		"discordIntegration": {
+			"validation": {
+				"webhookInvalid": "Gib eine gültige Discord-Webhook-URL ein"
+			},
+			"toast": {
+				"saved": "Discord-Integration erfolgreich gespeichert",
+				"saveError": "Discord-Integration konnte nicht gespeichert werden",
+				"enabled": "Discord-Benachrichtigungen aktiviert",
+				"disabled": "Discord-Benachrichtigungen pausiert",
+				"updateError": "Discord-Integration konnte nicht aktualisiert werden",
+				"removed": "Discord-Integration erfolgreich entfernt",
+				"removeError": "Discord-Integration konnte nicht entfernt werden"
+			},
+			"webhookPlaceholder": "https://discord.com/api/webhooks/...",
+			"webhookHint": "Erstelle in Discord einen Kanal-Webhook und füge ihn hier ein.",
+			"connect": "Discord verbinden",
+			"update": "Discord aktualisieren"
+		},
+		"genericWebhookIntegration": {
+			"validation": {
+				"webhookInvalid": "Gib eine gültige Webhook-URL ein",
+				"leadTimeRange": "Wähle eine Zeit zwischen 5 Minuten und 720 Stunden."
+			},
+			"toast": {
+				"saved": "Generische Webhook-Integration erfolgreich gespeichert",
+				"saveError": "Generische Webhook-Integration konnte nicht gespeichert werden",
+				"enabled": "Generische Webhook-Benachrichtigungen aktiviert",
+				"disabled": "Generische Webhook-Benachrichtigungen pausiert",
+				"updateError": "Generische Webhook-Integration konnte nicht aktualisiert werden",
+				"removed": "Generische Webhook-Integration erfolgreich entfernt",
+				"removeError": "Generische Webhook-Integration konnte nicht entfernt werden"
+			},
+			"webhookLabel": "Endpunkt-URL",
+			"webhookPlaceholder": "https://example.com/webhooks/kaneo",
+			"webhookHint": "Kaneo sendet POST-Anfragen mit einer JSON-Nutzlast für jedes aktivierte Ereignis.",
+			"secretLabel": "Signatur-Secret",
+			"secretPlaceholder": "Gemeinsames Secret",
+			"secretHint": "Kaneo signiert damit jede Anfrage und sendet den Digest im Header X-Kaneo-Signature.",
+			"secretHintConfigured": "Aktuelles Secret: {{secret}}. Füge ein neues ein, um es zu ersetzen.",
+			"eventsTitle": "Senden bei",
+			"events": {
+				"taskCreated": "Aufgabe erstellt",
+				"taskStatusChanged": "Status geändert",
+				"taskPriorityChanged": "Priorität geändert",
+				"taskTitleChanged": "Titel geändert",
+				"taskDescriptionChanged": "Beschreibung geändert",
+				"taskCommentCreated": "Neuer Kommentar",
+				"taskDeleted": "Aufgabe gelöscht",
+				"taskMoved": "Aufgabe verschoben",
+				"taskDueDateChanged": "Fälligkeitsdatum geändert",
+				"taskAssigneeChanged": "Zuweisung geändert",
+				"taskUnassigned": "Zuweisung entfernt",
+				"dueDateReminder": "Fälligkeitserinnerung"
+			},
+			"reminderLeadTimeLabel": "Stunden vor Fälligkeit einer Aufgabe",
+			"connect": "Webhook verbinden",
+			"activeTitle": "Ereignisse senden",
+			"disconnectDescription": "Kaneo sendet keine Ereignisse mehr und entfernt den gespeicherten Endpunkt und das Secret.",
+			"disconnectTitle": "Webhook trennen?",
+			"reminderLeadTimeAfter": "Stunden vor Fälligkeit einer Aufgabe senden",
+			"reminderLeadTimeBefore": "Erinnerungen"
+		},
+		"telegramIntegration": {
+			"validation": {
+				"botTokenInvalid": "Gib einen gültigen Telegram-Bot-Token ein",
+				"chatIdRequired": "Chat-ID ist erforderlich",
+				"threadIdInvalid": "Gib eine gültige Themen-ID ein"
+			},
+			"toast": {
+				"saved": "Telegram-Integration erfolgreich gespeichert",
+				"saveError": "Telegram-Integration konnte nicht gespeichert werden",
+				"enabled": "Telegram-Benachrichtigungen aktiviert",
+				"disabled": "Telegram-Benachrichtigungen pausiert",
+				"updateError": "Telegram-Integration konnte nicht aktualisiert werden",
+				"removed": "Telegram-Integration erfolgreich entfernt",
+				"removeError": "Telegram-Integration konnte nicht entfernt werden"
+			},
+			"botTokenLabel": "Bot-Token",
+			"botTokenPlaceholder": "123456789:AAExampleBotToken",
+			"botTokenHint": "Erstelle mit BotFather einen Bot und füge seinen Token hier ein.",
+			"botTokenHintConfigured": "Aktueller Token: {{token}}",
+			"chatIdLabel": "Chat-ID",
+			"chatIdPlaceholder": "-1001234567890 oder @team_updates",
+			"threadIdLabel": "Themen-ID",
+			"threadIdPlaceholder": "Für Forenthemen",
+			"chatLabelLabel": "Chatname",
+			"chatLabelPlaceholder": "Engineering Updates",
+			"connect": "Telegram verbinden",
+			"botTokenSavedPlaceholder": "Gespeichert. Füge einen neuen Token ein, um ihn zu ersetzen.",
+			"loadError": "Die Telegram-Einstellungen konnten nicht geladen werden."
+		},
+		"repositoryBrowser": {
+			"title": "Repository auswählen",
+			"description": "Repositories, auf die die Kaneo GitHub App zugreifen kann.",
+			"searchPlaceholder": "Repositories suchen",
+			"loadError": "Repositories konnten nicht geladen werden.",
+			"tryAgain": "Erneut versuchen",
+			"emptyTitle": "Noch keine Repositories",
+			"emptyHint": "Installiere die GitHub-App in deinen Repositories, damit sie hier angezeigt werden.",
+			"installGithubApp": "GitHub-App installieren",
+			"noSearchMatchTitle": "Keine passenden Repositories",
+			"noSearchMatchHint": "Versuche einen anderen Namen oder lösche die Suche.",
+			"emptyPageHint": "Keine auf dieser Seite. Lade mehr, um weiterzusuchen.",
+			"loadMore": "Mehr laden",
+			"manageAccess": "App-Zugriff verwalten",
+			"missingOne": "Fehlt eines?",
+			"searching": "Wird gesucht…",
+			"updated": "Aktualisiert {{time}}",
+			"useRepository": "Repository verwenden"
+		},
+		"tasksImportExport": {
+			"exportTasks": "Aufgaben exportieren",
+			"importTasks": "Aufgaben importieren",
+			"dialogTitle": "Aufgaben importieren",
+			"dialogDescription": "Lade eine JSON-Datei mit Aufgaben hoch, die in dieses Projekt importiert werden sollen.",
+			"expectedFormat": "Erwartetes Format:",
+			"dropHint": "Ziehe deine JSON-Datei hierher",
+			"selectFile": "Datei auswählen",
+			"exporting": "Aufgaben werden exportiert...",
+			"exportSuccess": "Aufgaben erfolgreich exportiert",
+			"exportError": "Aufgaben konnten nicht exportiert werden",
+			"importing": "Aufgaben werden importiert...",
+			"importSuccess": "{{count}} Aufgaben erfolgreich importiert",
+			"importPartialError": "{{count}} Aufgaben konnten nicht importiert werden",
+			"importError": "Aufgaben konnten nicht importiert werden",
+			"invalidFormat": "Ungültiges Importdateiformat",
+			"noFileDropped": "Keine Datei abgelegt",
+			"notJsonFile": "Bitte lade eine JSON-Datei hoch",
+			"export": "Exportieren",
+			"exportDescription": "Lade alle Aufgaben dieses Projekts als Datei herunter.",
+			"import": "Importieren",
+			"importDescription": "Füge Aufgaben aus einer zuvor exportierten Datei hinzu."
+		},
+		"workflowEditor": {
+			"toastError": "Workflow-Regel konnte nicht aktualisiert werden",
+			"events": {
+				"branch_push": "Branch gepusht",
+				"pr_opened": "Pull Request geöffnet",
+				"pr_merged": "Pull Request gemergt",
+				"issue_opened": "Issue geöffnet",
+				"issue_closed": "Issue geschlossen"
+			},
+			"connectMore": "Verbinde {{providers}} unter <link>Integrationen</link>, um sie ebenfalls zu automatisieren.",
+			"dontMove": "Nicht verschieben",
+			"emptyDescription": "Automatisierungen benötigen ein verbundenes GitHub-, Gitea- oder GitLab-Repository.",
+			"emptyTitle": "Keine verbundenen Repositories",
+			"openIntegrations": "Integrationen öffnen"
+		},
+		"externalLinks": {
+			"resources": "Ressourcen",
+			"issue": "Issue",
+			"branch": "Branch",
+			"merged": "Zusammengeführt",
+			"draft": "Entwurf",
+			"open": "Offen",
+			"adding": "Adding...",
+			"addResource": "Add resource",
+			"cancel": "Cancel",
+			"empty": "No resources linked to this task.",
+			"titleOptional": "Title (optional)",
+			"url": "URL",
+			"remove": "Remove {{title}}",
+			"removeError": "Failed to remove the resource link."
+		},
+		"workspaceRoles": {
+			"pageTitle": "Rollen",
+			"title": "Rollen",
+			"subtitle": "Lege fest, welche Aktionen Mitglieder in {{workspaceName}} ausführen können.",
+			"thisWorkspace": "diesem Workspace",
+			"noAccess": "Du benötigst Admin- oder Eigentümerrechte, um Workspace-Rollen zu verwalten.",
+			"sectionTitle": "Workspace-Rollen",
+			"sectionSubtitle": "Bearbeite die Standardrollen oder füge eine maßgeschneiderte hinzu. Mitglieder behalten ihren zugewiesenen Rollennamen über Änderungen hinweg.",
+			"newRole": "Neue Rolle",
+			"loading": "Lädt…",
+			"loadError": "Rollen konnten nicht geladen werden.",
+			"emptyTitle": "Noch keine Rollen",
+			"emptyDescription": "Standardrollen erscheinen hier, sobald sie für diesen Workspace angelegt wurden.",
+			"defaultBadge": "Standard",
+			"permissionCount_one": "{{count}} Berechtigung",
+			"permissionCount_other": "{{count}} Berechtigungen",
+			"nameLabel": "Name",
+			"nameHint": "Kleinbuchstaben. Kann später nicht geändert werden.",
+			"namePlaceholder": "z. B. reviewer",
+			"discard": "Verwerfen",
+			"createRole": "Rolle erstellen",
+			"deleteRole": "Rolle löschen",
+			"defaultRoleHelp": "Standardrolle: Der Name ist reserviert und die Zeile kann nicht gelöscht werden.",
+			"unsavedChanges": "Du hast ungespeicherte Änderungen",
+			"allChangesSaved": "Alle Änderungen gespeichert",
+			"saveChanges": "Änderungen speichern",
+			"defaultRoleDescriptions": {
+				"viewer": "Kann Aufgaben ansehen und kommentieren.",
+				"member": "Kann Aufgaben und Projekte erstellen und verwalten.",
+				"admin": "Hat vollen Zugriff auf den Workspace."
+			},
+			"resources": {
+				"project": "Projekte",
+				"task": "Aufgaben",
+				"label": "Labels",
+				"workspace": "Workspace",
+				"organization": "Workspace-Verwaltung",
+				"member": "Mitglieder",
+				"invitation": "Einladungen",
+				"team": "Teams",
+				"ac": "Rollen und Berechtigungen"
+			},
+			"permissions": {
+				"project": {
+					"create": {
+						"label": "Erstellen",
+						"description": "Kann neue Projekte erstellen"
+					},
+					"read": {
+						"label": "Lesen",
+						"description": "Kann Projekte ansehen"
+					},
+					"update": {
+						"label": "Aktualisieren",
+						"description": "Kann Projekteinstellungen bearbeiten"
+					},
+					"delete": {
+						"label": "Löschen",
+						"description": "Kann Projekte löschen"
+					},
+					"share": {
+						"label": "Teilen",
+						"description": "Kann Projekte teilen"
+					}
+				},
+				"task": {
+					"create": {
+						"label": "Erstellen",
+						"description": "Kann Aufgaben erstellen"
+					},
+					"read": {
+						"label": "Lesen",
+						"description": "Kann Aufgaben ansehen"
+					},
+					"update": {
+						"label": "Aktualisieren",
+						"description": "Kann Aufgaben bearbeiten"
+					},
+					"delete": {
+						"label": "Löschen",
+						"description": "Kann Aufgaben löschen"
+					},
+					"assign": {
+						"label": "Zuweisen",
+						"description": "Kann Aufgaben Mitgliedern zuweisen"
+					}
+				},
+				"label": {
+					"create": {
+						"label": "Erstellen",
+						"description": "Kann Labels erstellen"
+					},
+					"read": {
+						"label": "Lesen",
+						"description": "Kann Labels ansehen"
+					},
+					"update": {
+						"label": "Aktualisieren",
+						"description": "Kann Labels bearbeiten"
+					},
+					"delete": {
+						"label": "Löschen",
+						"description": "Kann Labels löschen"
+					}
+				},
+				"workspace": {
+					"read": {
+						"label": "Lesen",
+						"description": "Kann Workspace-Einstellungen ansehen"
+					},
+					"update": {
+						"label": "Aktualisieren",
+						"description": "Kann Workspace-Einstellungen aktualisieren"
+					},
+					"delete": {
+						"label": "Löschen",
+						"description": "Kann den Workspace löschen"
+					},
+					"manage_settings": {
+						"label": "Einstellungen verwalten",
+						"description": "Kann Workspace-Einstellungen verwalten"
+					}
+				},
+				"organization": {
+					"update": {
+						"label": "Workspace-Verwaltung bearbeiten",
+						"description": "Workspace-Einstellungen über den Kontodienst ändern."
+					},
+					"delete": {
+						"label": "Workspace löschen",
+						"description": "Den Workspace über den Kontodienst dauerhaft löschen."
+					}
+				},
+				"member": {
+					"create": {
+						"label": "Mitglieder hinzufügen",
+						"description": "Benutzer zu diesem Workspace hinzufügen."
+					},
+					"update": {
+						"label": "Mitgliederrollen ändern",
+						"description": "Die zugewiesenen Rollen von Workspace-Mitgliedern ändern."
+					},
+					"delete": {
+						"label": "Mitglieder entfernen",
+						"description": "Benutzer aus diesem Workspace entfernen."
+					}
+				},
+				"invitation": {
+					"create": {
+						"label": "Mitglieder einladen",
+						"description": "Einladungen zu diesem Workspace senden."
+					},
+					"cancel": {
+						"label": "Einladungen widerrufen",
+						"description": "Ausstehende Workspace-Einladungen widerrufen."
+					}
+				},
+				"team": {
+					"create": {
+						"label": "Teams erstellen",
+						"description": "Teams in diesem Workspace erstellen."
+					},
+					"update": {
+						"label": "Teams bearbeiten",
+						"description": "Teams und Teammitgliedschaften ändern."
+					},
+					"delete": {
+						"label": "Teams löschen",
+						"description": "Teams in diesem Workspace löschen."
+					}
+				},
+				"ac": {
+					"create": {
+						"label": "Rollen erstellen",
+						"description": "Workspace-Rollen erstellen und ihnen Berechtigungen zuweisen."
+					},
+					"read": {
+						"label": "Rollen anzeigen",
+						"description": "Workspace-Rollen und ihre Berechtigungen anzeigen."
+					},
+					"update": {
+						"label": "Rollenberechtigungen ändern",
+						"description": "Rollenberechtigungen einschließlich administrativer Rechte ändern."
+					},
+					"delete": {
+						"label": "Rollen löschen",
+						"description": "Benutzerdefinierte Workspace-Rollen löschen."
+					}
+				}
+			},
+			"validation": {
+				"nameRequired": "Rollenname ist erforderlich",
+				"nameExists": "Eine Rolle mit diesem Namen existiert bereits",
+				"permissionRequired": "Mindestens eine Berechtigung muss ausgewählt werden"
+			},
+			"toast": {
+				"created": "Rolle erstellt",
+				"createError": "Rolle konnte nicht erstellt werden",
+				"updated": "Rolle aktualisiert",
+				"updateError": "Rolle konnte nicht aktualisiert werden",
+				"deleted": "Rolle gelöscht",
+				"deleteError": "Rolle konnte nicht gelöscht werden"
+			},
+			"deleteDialog": {
+				"title": "Rolle löschen",
+				"description": "Dadurch wird die Rolle \"{{role}}\" dauerhaft gelöscht. Mitglieder mit dieser Rolle verlieren deren Berechtigungen."
+			}
+		},
+		"workspaceLabels": {
+			"pageTitle": "Labels",
+			"title": "Labels",
+			"subtitle": "Labels gelten für alle Projekte in diesem Workspace.",
+			"createLabel": "Label erstellen",
+			"editLabel": "Label bearbeiten",
+			"deleteLabel": "Label löschen",
+			"saveLabel": "Speichern",
+			"nameLabel": "Name",
+			"namePlaceholder": "Label-Name",
+			"colorLabel": "Farbe",
+			"createDescription": "Projekte in diesem Workspace können es ihren Aufgaben hinzufügen.",
+			"editDescription": "Änderungen erscheinen bei jeder Aufgabe mit diesem Label.",
+			"deleteConfirmTitle": "„{{name}}“ löschen?",
+			"deleteConfirmDescription": "Das Label wird von allen Aufgaben entfernt, die es verwenden. Das kann nicht rückgängig gemacht werden.",
+			"createSuccess": "Label erstellt",
+			"updateSuccess": "Label aktualisiert",
+			"deleteSuccess": "Label gelöscht",
+			"createError": "Label konnte nicht erstellt werden",
+			"updateError": "Label konnte nicht aktualisiert werden",
+			"deleteError": "Label konnte nicht gelöscht werden",
+			"nameRequired": "Label-Name ist erforderlich",
+			"deletionPending": "Wird von Aufgaben entfernt…",
+			"resumeDeletion": "Löschung fortsetzen",
+			"editNamed": "{{name}} bearbeiten",
+			"emptyDescription": "Füge Labels hinzu, um Aufgaben projektübergreifend zu sortieren und zu filtern.",
+			"emptyTitle": "Noch keine Labels",
+			"loadError": "Labels konnten nicht geladen werden. Bitte versuche es erneut.",
+			"newLabel": "Neues Label",
+			"preview": "Auf einer Aufgabe",
+			"previewPlaceholder": "Label",
+			"resume": "Fortsetzen",
+			"rowActions": "Aktionen für {{name}}",
+			"sectionDescription": "Wenn du ein Label umbenennst oder seine Farbe änderst, wird jede Aufgabe mit diesem Label aktualisiert.",
+			"sectionTitle": "Workspace-Labels",
+			"subtitleWithWorkspace": "Labels gelten für alle Projekte in {{workspaceName}}."
+		},
+		"mattermostIntegration": {
+			"connect": "Connect Mattermost",
+			"toast": {
+				"disabled": "Mattermost notifications paused",
+				"enabled": "Mattermost notifications enabled",
+				"removed": "Mattermost integration removed successfully",
+				"removeError": "Failed to remove Mattermost integration",
+				"saved": "Mattermost integration saved successfully",
+				"saveError": "Failed to save Mattermost integration",
+				"updateError": "Failed to update Mattermost integration"
+			},
+			"update": "Update Mattermost",
+			"validation": {
+				"webhookInvalid": "Enter a valid Mattermost webhook URL"
+			},
+			"webhookHint": "Erstelle in Mattermost einen Incoming Webhook und füge ihn hier ein.",
+			"webhookPlaceholder": "https://your-mattermost-server.com/hooks/..."
+		},
+		"customFields": {
+			"createError": "Failed to create custom field.",
+			"createSuccess": "Custom field created.",
+			"creating": "Creating...",
+			"defaultLabel": "Default",
+			"deleteError": "Failed to delete custom field.",
+			"deleteSuccess": "Custom field deleted.",
+			"deleting": "Deleting...",
+			"namePlaceholder": "Field name",
+			"required": "Required",
+			"types": {
+				"boolean": "Kontrollkästchen",
+				"date": "Date",
+				"dropdown": "Dropdown",
+				"number": "Number",
+				"text": "Text",
+				"multiselect": "Dropdown, Mehrfachauswahl"
+			},
+			"clearDefault": "Standardwert entfernen",
+			"moreOptions": "+{{hiddenCount}} more",
+			"reorderError": "Failed to reorder fields",
+			"selectPlaceholder": "Select option(s)",
+			"actionsAria": "Aktionen für {{name}}",
+			"addOption": "Option hinzufügen",
+			"allowSeveral": "Mehrfachauswahl erlauben",
+			"allowSeveralDescription": "Eine Aufgabe kann mehr als eine Option wählen.",
+			"checked": "Aktiviert",
+			"createField": "Feld erstellen",
+			"defaultDescription": "Neue Aufgaben beginnen mit diesem Wert.",
+			"deleteConfirm": "Feld löschen",
+			"deleteDescription": "Das Feld und sein Wert werden aus allen Aufgaben entfernt. Das kann nicht rückgängig gemacht werden.",
+			"deleteTitle": "„{{name}}“ löschen?",
+			"dialogDescription": "Jede Aufgabe in {{project}} erhält dieses Feld.",
+			"dialogDescriptionFallback": "Jede Aufgabe in diesem Projekt erhält dieses Feld.",
+			"dragAria": "{{name}} verschieben",
+			"dragOptionAria": "{{option}} verschieben",
+			"edit": "Bearbeiten",
+			"editTitle": "Feld bearbeiten",
+			"emptyDescription": "Erfasse für jede Aufgabe Angaben wie Größe, Kunde oder Starttermin.",
+			"emptyTitle": "Noch keine benutzerdefinierten Felder",
+			"issues": {
+				"defaultRequired": "Pflichtfelder benötigen einen Standardwert.",
+				"moreOptionsRequired": "Füge mindestens zwei Optionen hinzu, um Mehrfachauswahl zu erlauben.",
+				"optionsRequired": "Füge mindestens eine Option hinzu."
+			},
+			"nameLabel": "Name",
+			"newTitle": "Neues Feld",
+			"noDefault": "Kein Standardwert",
+			"optionsLabel": "Optionen",
+			"removeOptionAria": "{{option}} entfernen",
+			"renameOptionAria": "{{option}} umbenennen",
+			"requiredDescription": "Jede Aufgabe hat immer einen Wert.",
+			"save": "Speichern",
+			"saving": "Wird gespeichert...",
+			"startsAs": "Standard: „{{value}}“",
+			"startsAt": "Standard: {{value}}",
+			"startsChecked": "Standardmäßig aktiviert",
+			"startsOn": "Standard: {{date}}",
+			"startsUnchecked": "Standardmäßig deaktiviert",
+			"typeLabel": "Typ",
+			"typeLocked": "Der Typ kann nach dem Erstellen eines Felds nicht mehr geändert werden.",
+			"unchecked": "Deaktiviert",
+			"updateError": "Benutzerdefiniertes Feld konnte nicht gespeichert werden.",
+			"updateSuccess": "Benutzerdefiniertes Feld gespeichert."
+		},
+		"security": "Security",
+		"securityPage": {
+			"confirmPassword": "Confirm new password",
+			"confirmPasswordPlaceholder": "Re-enter your new password",
+			"currentPassword": "Current password",
+			"currentPasswordPlaceholder": "Enter your current password",
+			"newPassword": "New password",
+			"newPasswordPlaceholder": "Enter a new password",
+			"noPassword": {
+				"description": "Your account signs in with a different method, so there is no password to change.",
+				"title": "Password change isn't available"
+			},
+			"pageTitle": "Security",
+			"sectionTitle": "Anmeldung",
+			"submit": "Passwort ändern",
+			"submitting": "Wird geändert...",
+			"subtitle": "Wie du dich bei Kaneo anmeldest.",
+			"title": "Security",
+			"updateError": "Failed to update password.",
+			"updateSuccess": "Password updated.",
+			"validation": {
+				"confirmRequired": "Confirm your new password.",
+				"currentRequired": "Enter your current password.",
+				"mismatch": "Passwords do not match.",
+				"tooShort": "New password must be at least 8 characters.",
+				"sameAsCurrent": "New password must be different from your current password."
+			},
+			"changePassword": "Passwort ändern",
+			"dialogDescription": "Mindestens 8 Zeichen, anders als das aktuelle Passwort.",
+			"dialogTitle": "Passwort ändern",
+			"passwordHint": "Verwende mindestens 8 Zeichen und ein Passwort, das du sonst nirgends nutzt.",
+			"passwordTitle": "Passwort"
+		},
+		"gitlabIntegration": {
+			"baseUrlLabel": "GitLab URL",
+			"browseModalHint": "Projekte, in denen dein Token Mitglied ist.",
+			"browseNeedsCredentials": "Gib die GitLab-URL und einen Token ein, um zu durchsuchen.",
+			"commentTaskLinkHint": "Damit Leute auf GitLab direkt zur Aufgabe springen können.",
+			"commentTaskLinkTitle": "Comment a Kaneo link on issues opened in GitLab",
+			"importSectionHint": "Importiere offene Issues und Merge Requests als Aufgaben.",
+			"openInGitlab": "Open {{project}} in GitLab",
+			"projectPathLabel": "Project path",
+			"searchProjects": "Projekte suchen",
+			"toast": {
+				"commentOnDisabled": "Task link comments on issues opened in GitLab are turned off",
+				"commentOnEnabled": "Kaneo will comment with a task link on issues opened in GitLab",
+				"importError": "Failed to import issues",
+				"issuesImported": "Issues imported successfully",
+				"removed": "GitLab integration removed",
+				"removeError": "Failed to remove GitLab integration",
+				"settingsUpdateError": "Failed to update GitLab integration",
+				"updated": "GitLab integration saved",
+				"updateError": "Failed to save GitLab integration",
+				"verifyError": "Failed to verify GitLab access",
+				"verifyFirst": "Verify access failed. Check URL, token, and project path"
+			},
+			"tokenLabel": "Access token",
+			"tokenPlaceholder": "Paste token",
+			"tokenPlaceholderUpdate": "Paste new token to rotate",
+			"tokenTypeBearer": "OAuth2 token",
+			"tokenTypeLabel": "Token type",
+			"tokenTypePrivate": "Personal, project or group access token",
+			"validation": {
+				"baseUrlInvalid": "Enter a valid URL (e.g. https://gitlab.com)",
+				"baseUrlRequired": "GitLab base URL is required",
+				"pathInvalid": "Enter the full path, e.g. group/project"
+			},
+			"webhookHint": "Füge diesen Webhook in den Projekteinstellungen hinzu, damit Änderungen zurück an Kaneo gehen.",
+			"loadProjectsError": "Projekte konnten nicht geladen werden.",
+			"importPermissionHint": "Importing requires permission to create and update tasks.",
+			"browseEmpty": "Dieser Token ist in keinem Projekt Mitglied.",
+			"chooseProjectDescription": "Gib den Pfad ein oder wähle eines aus der Liste.",
+			"noSearchMatchTitle": "Keine passenden Projekte",
+			"useProject": "Projekt verwenden",
+			"webhookEvents": "Aktiviere die Ereignisse Push, Issue, Kommentar und Merge Request."
+		},
+		"calendarFeeds": {
+			"title": "Kalender-Feeds",
+			"subtitle": "Abonniere geplante Projektaufgaben in deiner Kalender-App.",
+			"labels": "Nur diese Labels einbeziehen",
+			"selectLabels": "Label hinzufügen",
+			"noLabels": "Keine Labels gefunden.",
+			"timeZoneHint": "Ganztägige Termine verwenden {{timeZone}}.",
+			"accessHint": "Jeder mit einem Feed-Link kann die Titel, Beschreibungen und Termine der passenden Aufgaben lesen. Widerrufe einen Link, um den künftigen Zugriff zu beenden.",
+			"create": "Feed erstellen",
+			"creating": "Wird erstellt…",
+			"created": "Kalender-Feed erstellt.",
+			"createError": "Kalender-Feed konnte nicht erstellt werden.",
+			"activeFeeds": "Feeds",
+			"allScheduledTasks": "Alle geplanten Aufgaben",
+			"subscribeHint": "Füge einen Link in deiner Kalender-App als Abonnement hinzu. Änderungen erscheinen, sobald die App den Feed aktualisiert.",
+			"copy": "Link kopieren",
+			"copyError": "Link konnte nicht kopiert werden. Wähle die URL aus und kopiere sie manuell.",
+			"revoke": "Widerrufen",
+			"revoked": "Kalender-Feed widerrufen.",
+			"revokeError": "Kalender-Feed konnte nicht widerrufen werden.",
+			"loadError": "Kalender-Feeds oder Labels konnten nicht geladen werden. Bitte versuche es erneut.",
+			"deletedLabel": "Gelöschtes Label",
+			"permissionRequired": "Du benötigst die Berechtigung zum Teilen von Projekten, um Kalender-Feeds zu verwalten.",
+			"copiedLabel": "Kopiert",
+			"dialogDescription": "Aufgaben mit Start- oder Fälligkeitsdatum erscheinen im Feed.",
+			"dialogTitle": "Neuer Kalender-Feed",
+			"emptyDescription": "Erstelle einen Feed, um geplante Aufgaben in deiner Kalender-App zu sehen.",
+			"emptyTitle": "Noch keine Kalender-Feeds",
+			"feedActions": "Feed-Aktionen",
+			"labelsHint": "Leer lassen, um alle geplanten Aufgaben einzubeziehen.",
+			"newFeed": "Neuer Feed",
+			"revokeConfirm": "Feed widerrufen",
+			"revokeConfirmDescription": "Kalender-Apps mit diesem Link erhalten keine Aktualisierungen mehr. Das kann nicht rückgängig gemacht werden.",
+			"revokeConfirmTitle": "Diesen Feed widerrufen?",
+			"revoking": "Wird widerrufen…"
+		},
+		"invitationEmailFailed": "Einladung gespeichert, aber der E-Mail-Versand ist fehlgeschlagen. Prüfe die SMTP-Einstellungen und sende die Einladung erneut.",
+		"billing": {
+			"accessEnds": "Access ends",
+			"adminsOnly": "Only workspace owners and admins can manage billing.",
+			"choose": "Choose {{plan}}",
+			"choosePlan": {
+				"subtitle": "Switch anytime. Cancel whenever you like.",
+				"title": "Choose a plan"
+			},
+			"currentPlan": {
+				"title": "Current plan"
+			},
+			"disabled": "Billing isn't enabled on this instance. Self-hosted Kaneo includes every feature, free forever.",
+			"expiredCallout": {
+				"action": "Choose a plan",
+				"adminDescription": "You can still view everything, but creating and editing are paused until you choose a plan. Nothing has been deleted.",
+				"memberDescription": "You can still view everything, but creating and editing are paused until a workspace owner or admin chooses a plan.",
+				"title": "Your free trial has ended"
+			},
+			"features": {
+				"backups": "Automatic backups and updates",
+				"emailSupport": "Email support",
+				"prioritySupport": "Priority email support",
+				"roles": "Workspace roles and permissions",
+				"singleUser": "Single user",
+				"unlimitedMembers": "Unlimited team members",
+				"unlimitedProjects": "Unlimited projects and tasks"
+			},
+			"foundingFree": {
+				"badge": "Free",
+				"description": "This workspace has free access to Kaneo Cloud as an early supporter. Thank you for being here from the start.",
+				"title": "Founding Free"
+			},
+			"interval": {
+				"annual": "Annual",
+				"annualBadge": "2 months free",
+				"monthly": "Monthly"
+			},
+			"manage": "Manage billing",
+			"mostPopular": "Most popular",
+			"opening": "Opening...",
+			"pageTitle": "Billing",
+			"plans": {
+				"personal": {
+					"name": "Personal",
+					"tagline": "For individuals"
+				},
+				"team": {
+					"name": "Team",
+					"tagline": "For teams working together"
+				}
+			},
+			"portalHint": "Rechnungen, Zahlungsmethode und Kündigung werden über Creem verwaltet.",
+			"price": {
+				"billedMonthly": "Billed monthly",
+				"billedYearly": "{{price}} / month, billed yearly",
+				"billedYearlyPerUser": "{{price}} / user / month, billed yearly",
+				"perMonth": "/ month",
+				"perUserMonth": "/ user / month",
+				"perUserYear": "/ user / year",
+				"perYear": "/ year"
+			},
+			"processedBy": "Payments are securely processed by Creem. Prices exclude tax where applicable.",
+			"renews": "Renews",
+			"seats_one": "{{count}} seat",
+			"seats_other": "{{count}} seats",
+			"starting": "Starting...",
+			"status": {
+				"active": "Active",
+				"canceled": "Canceled",
+				"expired": "Expired",
+				"past_due": "Payment past due",
+				"paused": "Paused",
+				"scheduled_cancel": "Cancels soon",
+				"trialing": "Trial"
+			},
+			"subtitle": "Dein Plan für {{workspace}}.",
+			"trial": {
+				"activeTitle": "Free trial",
+				"expiredDescription": "Subscribe to a plan below to keep creating and editing. Your data stays safe and exportable in the meantime.",
+				"expiredTitle": "Your trial has ended",
+				"noDate": "Choose a plan below to continue after your trial.",
+				"badgeDaysLeft_one": "Noch {{count}} Tag",
+				"badgeDaysLeft_other": "Noch {{count}} Tage"
+			},
+			"trialCard": {
+				"activeDescription": "Upgrade anytime to keep your workspace after the trial.",
+				"choosePlan": "Choose a plan",
+				"daysLeft_one": "{{count}} day left in trial",
+				"daysLeft_other": "{{count}} days left in trial",
+				"dismiss": "Dismiss",
+				"ended": "Trial ended",
+				"endingDescription": "Pick a plan now so your team isn't interrupted.",
+				"expiredDescription": "Subscribe to keep creating and editing.",
+				"viewPlans": "View plans"
+			},
+			"openFailed": "Couldn't open billing for this workspace",
+			"checkoutSuccess": {
+				"title": "Danke für dein Abo",
+				"description": "Zahlung erhalten. Der Plan unten wird aktualisiert, sobald sie bestätigt ist."
+			}
+		},
+		"syncRules": {
+			"addLabel": "Label hinzufügen",
+			"advancedHint": "Aktiviere die erweiterten Einstellungen unter Präferenzen, um diese Regeln zu bearbeiten.",
+			"all": "Alle Aufgaben und Issues",
+			"any": "Mindestens ein ausgewähltes Label",
+			"apply": "Synchronisierungsregeln anwenden",
+			"closed": "Geschlossen",
+			"every": "Alle ausgewählten Labels",
+			"excluded": "Außerhalb der aktuellen Regel",
+			"filtered": "Nur passende Labels",
+			"impact": "Passende Aufgaben: {{matching}} / {{total}} · Neue Exporte: {{create}} · Zu pausieren: {{pause}} · Zu prüfen: {{review}}",
+			"impactTitle": "Was sich ändern wird",
+			"incoming": "Repository → Kaneo",
+			"incomingHint": "Wähle, welche Issues importiert werden oder Aufgaben erstellen dürfen. Verwende die exakten Labelnamen im Repository. Bestehende Verknüpfungen folgen der Kaneo-Regel.",
+			"loadError": "Synchronisierungsregeln konnten nicht geladen werden.",
+			"loading": "Synchronisierungsregeln werden geladen…",
+			"matchLabels": "Labelübereinstimmung",
+			"missingLabels": "Ein ausgewähltes Workspace-Label ist nicht verfügbar. Die Synchronisierung bleibt pausiert, bis die Regel korrigiert wird.",
+			"removeMissingLabels": "Nicht verfügbare Labels entfernen",
+			"next": "Weiter",
+			"noDescription": "Keine Beschreibung",
+			"noLabels": "Erstelle zuerst Workspace-Labels, um einen Aufgabenfilter einzurichten.",
+			"open": "Offen",
+			"outgoing": "Kaneo → Repository",
+			"outgoingHint": "Wähle, welche Kaneo-Aufgaben synchronisiert werden dürfen. Verliert eine verknüpfte Aufgabe ein erforderliches Label, pausieren beide Richtungen.",
+			"paused": "Synchronisierung pausiert",
+			"pausedHint": "Einträge und Verknüpfungen bleiben erhalten. Aufgaben, die wieder passen, müssen vor dem Fortsetzen geprüft werden.",
+			"preserveHint": "Beim Pausieren bleiben beide Einträge und ihre Verknüpfung erhalten. Das Fortsetzen erfordert einen Vergleich; alte Kommentare werden nicht erneut übertragen.",
+			"previewing": "Synchronisierungsumfang wird geprüft…",
+			"previous": "Zurück",
+			"refreshComparison": "Vergleich aktualisieren",
+			"refreshPreview": "Vorschau aktualisieren",
+			"removeLabel": "{{name}} entfernen",
+			"repository": "Repository",
+			"repositoryLabel": "Labelname im Repository",
+			"resumeError": "Fortsetzen fehlgeschlagen. Aufgabe, Issue oder Regel könnten sich geändert haben, oder der Anbieter ist nicht erreichbar. Die Synchronisierung bleibt pausiert; aktualisiere den Vergleich.",
+			"review": "Prüfen und fortsetzen",
+			"reviewHint": "Vergleiche den aktuellen Titel, die Beschreibung und den Status offen/geschlossen. Wähle, welche Seite diese Felder bestimmen soll. Labels und bisherige Kommentare bleiben unverändert.",
+			"reviewRequired": "Passt zur Regel · Prüfung erforderlich",
+			"reviewTitle": "Vor dem Fortsetzen vergleichen",
+			"saved": "Synchronisierungsregeln gespeichert",
+			"saveError": "Diese Regeln konnten nicht angewendet werden. Die Integration oder der Aufgabenumfang könnte sich geändert haben. Aktualisiere die Vorschau und versuche es erneut.",
+			"selectLabel": "Wähle mindestens ein Label für die Vorschau.",
+			"sharedHint": "Diese Regeln gelten für alle im Projekt. Das Ausblenden erweiterter Einstellungen deaktiviert sie nicht.",
+			"title": "Was synchronisiert wird",
+			"unavailableLabel": "Nicht verfügbares Label",
+			"useKaneo": "Kaneo-Werte übernehmen",
+			"useRepository": "Repository-Werte übernehmen",
+			"exportPending": "Passende Aufgaben exportieren",
+			"inactiveHint": "Diese Integration ist pausiert. Aufgaben werden erst nach ihrer Reaktivierung exportiert.",
+			"loadSavedRules": "Load saved rules",
+			"rulesChanged": "The saved rules changed while you were editing. Your draft is preserved. Review the current rules above before applying it, or load the saved rules.",
+			"allIssues": "Alle Issues",
+			"allTasks": "Alle Aufgaben",
+			"edit": "Bearbeiten",
+			"hidePaused": "Ausblenden",
+			"issuesLabelled": "Issues mit Label",
+			"joinAnd": "und",
+			"joinOr": "oder",
+			"kaneoToProvider": "Von Kaneo nach {{provider}}",
+			"pausedSummary_one": "{{count}} Aufgabe wird nicht mehr synchronisiert, weil sie nicht mehr zu den Synchronisierungsregeln passt.",
+			"pausedSummary_other": "{{count}} Aufgaben werden nicht mehr synchronisiert, weil sie nicht mehr zu den Synchronisierungsregeln passen.",
+			"providerToKaneo": "Von {{provider}} nach Kaneo",
+			"reviewPaused": "Prüfen",
+			"tasksLabelled": "Aufgaben mit Label"
+		},
+		"advancedSettingsDescription": "Zeigt zusätzliche Optionen wie Synchronisierungsregeln für Integrationen. Gilt nur für diesen Browser.",
+		"adminWorkspaces": {
+			"addMember": {
+				"adding": "Adding…",
+				"alreadyMember": "Already a member",
+				"description": "Add an existing user to {{name}}. They can access every project until you limit them.",
+				"noUsers": "No users found",
+				"role": "Role",
+				"searching": "Searching users…",
+				"submit": "Add member",
+				"title": "Add member",
+				"user": "User",
+				"userPlaceholder": "Search name or email…",
+				"usersError": "Users could not be loaded."
+			},
+			"clearSearch": "Clear search",
+			"columns": {
+				"actions": "Actions",
+				"created": "Created",
+				"members": "Members",
+				"owners": "Owners",
+				"projects": "Projects",
+				"workspace": "Workspace"
+			},
+			"confirm": {
+				"remove": {
+					"action": "Remove member",
+					"description": "{{name}} loses access to {{workspace}} and its projects. Their account stays on this instance.",
+					"title": "Remove {{name}}?"
+				},
+				"transfer": {
+					"action": "Make owner",
+					"description": "{{name}} becomes the only owner of {{workspace}}. Anyone who owns it now becomes an admin.",
+					"title": "Make {{name}} the owner?"
+				},
+				"working": "Working…"
+			},
+			"directoryTitle": "Alle Workspaces",
+			"emptyDescription": "Try another name or slug.",
+			"emptyTitle": "No workspaces found",
+			"loadError": "Workspaces could not be loaded.",
+			"manage": "Manage",
+			"manageLabel": "Manage {{name}}",
+			"members": {
+				"actions": "Actions for {{name}}",
+				"add": "Add member",
+				"count_one": "{{count}} member",
+				"count_other": "{{count}} members",
+				"description": "Change roles, project access, and ownership, even if you aren't a member of this workspace.",
+				"editAccess": "Change project access for {{name}} ({{access}})",
+				"empty": "This workspace has no members.",
+				"loadError": "Members could not be loaded.",
+				"makeOwner": "Make owner",
+				"remove": "Remove from workspace",
+				"roleLabel": "Role for {{name}}",
+				"title": "Members of {{name}}"
+			},
+			"next": "Next",
+			"noOwner": "No owner",
+			"pagination": "Page {{current}} of {{total}}",
+			"previous": "Previous",
+			"refreshing": "Refreshing workspaces",
+			"retry": "Retry",
+			"searchCount_one": "{{count}} matching workspace",
+			"searchCount_other": "{{count}} matching workspaces",
+			"searchLabel": "Search workspaces",
+			"searchPlaceholder": "Nach Name oder Slug suchen",
+			"subtitle": "Alle Workspaces auf dieser Kaneo-Instanz, auch die, in denen du kein Mitglied bist.",
+			"title": "Workspaces",
+			"toast": {
+				"added": "Member added",
+				"addError": "Failed to add member",
+				"ownershipTransferred": "Ownership transferred",
+				"removed": "Member removed",
+				"removeError": "Failed to remove member",
+				"roleError": "Failed to update role",
+				"roleUpdated": "Role updated",
+				"transferError": "Failed to transfer ownership"
+			}
+		},
+		"workspaceImport": {
+			"back": {
+				"allSources": "All sources",
+				"changeKey": "Change key",
+				"overview": "Import overview"
+			},
+			"connect": {
+				"cancel": "Cancel",
+				"continue": "Continue",
+				"hideSecret": "Hide {{field}}",
+				"sectionDescription": "Kaneo only reads from {{source}}. The key is used for this import and never stored.",
+				"sectionTitle": "Connect",
+				"showSecret": "Show {{field}}",
+				"title": "Import from {{source}}",
+				"whereToFind": "Where to find it"
+			},
+			"counts": {
+				"columns_one": "{{count, number}} column",
+				"columns_other": "{{count, number}} columns",
+				"comments_one": "{{count, number}} comment",
+				"comments_other": "{{count, number}} comments",
+				"labels_one": "{{count, number}} label",
+				"labels_other": "{{count, number}} labels",
+				"tasks_one": "{{count, number}} task",
+				"tasks_other": "{{count, number}} tasks"
+			},
+			"entry": {
+				"createProjectLink": "Import your projects",
+				"createProjectPrompt": "Moving from Jira, Linear, Trello or Plane?",
+				"projectsEmpty": "Import from another tool"
+			},
+			"history": {
+				"description": "Imports keep running on the server if you leave this page.",
+				"empty": "No imports yet. Imports you start show up here.",
+				"loadError": "Recent imports could not be loaded.",
+				"started": "Started {{time}}",
+				"title": "Recent imports"
+			},
+			"kaneo": {
+				"apiKeyDescription": "In that Kaneo, open Settings, then API Keys.",
+				"apiKeyLabel": "API key",
+				"apiKeyPlaceholder": "Paste API key",
+				"urlDescription": "The instance you are moving from.",
+				"urlLabel": "Kaneo URL"
+			},
+			"linear": {
+				"apiKeyDescription": "Read access is enough. You can revoke it after the import.",
+				"apiKeyLabel": "Personal API key",
+				"openSettings": "Open Linear settings",
+				"stepCreate": "Under Personal API keys, create a key with Read access.",
+				"stepOpen": "In Linear, open Settings, then Security and access.",
+				"stepPaste": "Copy it and paste it above."
+			},
+			"notAllowed": {
+				"description": "Importing creates projects, so it needs permission to manage workspace settings and create projects. Ask a workspace admin to run it.",
+				"title": "Only workspace admins can import"
+			},
+			"opensInNewTab": "(opens in a new tab)",
+			"pageTitle": "Import",
+			"plane": {
+				"tokenDescription": "Profile settings, Developer, then Personal Access Tokens.",
+				"tokenLabel": "Personal access token",
+				"urlDescription": "Copy it from your browser while in Plane. Self-hosted works too.",
+				"urlLabel": "Workspace URL",
+				"urlPlaceholder": "https://app.plane.so/your-workspace"
+			},
+			"planka": {
+				"adminTip": "Use a PLANKA admin account. PLANKA only shows email addresses to admins, and card members are matched to people here by email.",
+				"apiKeyDescription": "Created in PLANKA under your account settings.",
+				"apiKeyLabel": "API key",
+				"apiKeyPlaceholder": "Paste API key",
+				"passwordDescription": "Used only to sign in for this import.",
+				"passwordLabel": "Password",
+				"signInApiKey": "API key",
+				"signInDescription": "Use an API key if your account signs in through SSO.",
+				"signInLabel": "Sign in with",
+				"signInPassword": "Email and password",
+				"urlDescription": "The address you open PLANKA at.",
+				"urlLabel": "PLANKA URL",
+				"usernameDescription": "The account you sign in to PLANKA with.",
+				"usernameLabel": "Email or username"
+			},
+			"retry": "Try again",
+			"run": {
+				"failedBadge": "Failed",
+				"failedNames_one": "{{names, list}} failed, so nothing was created for it.",
+				"failedNames_other": "{{names, list}} failed, so nothing was created for them.",
+				"failedTitle": "Import failed",
+				"finishedNote": "Imported tasks did not send notifications. Comments keep their original author and date.",
+				"finishedNoteNoComments": "Imported tasks did not send notifications.",
+				"finishedTitle": "Import finished",
+				"goToProjects": "Go to projects",
+				"importingBadge": "Importing",
+				"importingTitle": "Importing from {{source}}",
+				"importMore": "Import more",
+				"keyInMemory": "Your {{source}} key is only kept in memory until this import finishes.",
+				"leavePage": "You can leave this page. The import keeps running on the server.",
+				"loadError": "This import could not be loaded",
+				"noTasks": "No tasks",
+				"nothingImported": "Nothing was imported",
+				"notImported": "Not imported",
+				"open": "Open",
+				"openProject": "Open {{name}}",
+				"queued": "Queued",
+				"started": "Started {{time}}",
+				"starting": "Starting",
+				"took_one": "Took {{count}} minute",
+				"took_other": "Took {{count}} minutes",
+				"tookUnderMinute": "Took less than a minute",
+				"totals": "{{parts, list}} imported",
+				"waiting": "Waiting",
+				"warnings_one": "{{count}} warning",
+				"warnings_other": "{{count}} warnings"
+			},
+			"select": {
+				"back": "Back",
+				"clear": "Clear",
+				"commentsDescription": "Keeps each comment's original author and date.",
+				"commentsLabel": "Import comments",
+				"inviteMembers": "Invite members",
+				"membersNote": "Assignees are matched to members of {{workspace}} by email. Invite your team first so their tasks stay assigned.",
+				"membersNoteTrello": "Assignees are matched to members of {{workspace}} by email, or by full name for Trello. Invite your team first so their tasks stay assigned.",
+				"selectAll": "Select all",
+				"membersNoteJira": "Assignees are matched to members of {{workspace}} by email, or by full name when Jira hides the email. Invite your team first so their tasks stay assigned."
+			},
+			"sources": {
+				"connect": "Connect",
+				"connectTo": "Connect {{source}}",
+				"description": "Pick the tool you are moving from. Each project you choose becomes a new project here.",
+				"kaneo": {
+					"description": "Move projects between Kaneo Cloud and a self-hosted instance.",
+					"intro": "Projects from every workspace the key can see. Each one you pick is copied here.",
+					"pickerName": "Another Kaneo"
+				},
+				"linear": {
+					"description": "Teams, issues, labels, sub-issues and comments. Paste a personal API key.",
+					"intro": "Each Linear team becomes a project, with its workflow as columns."
+				},
+				"plane": {
+					"description": "Projects, work items, sub-issues and comments. Cloud or self-hosted.",
+					"intro": "Each Plane project becomes a project here, with its states as columns."
+				},
+				"planka": {
+					"description": "Boards, lists, cards, checklists and comments from your PLANKA instance.",
+					"intro": "Each PLANKA board becomes a project, with its lists as columns."
+				},
+				"title": "Choose a source",
+				"trello": {
+					"description": "Boards, lists, cards, checklists and comments. Authorize with one click.",
+					"intro": "Each Trello board becomes a project, with its lists as columns."
+				},
+				"jira": {
+					"description": "Projects, issues, sub-tasks, links and comments. Cloud or Data Center.",
+					"intro": "Each Jira project becomes a project here, with its workflow as columns."
+				}
+			},
+			"status": {
+				"failed": "Failed",
+				"imported": "Imported",
+				"importing": "Importing {{current}} of {{total}}",
+				"partial": "{{done}} of {{total}} imported",
+				"warnings_one": "Done with {{count}} warning",
+				"warnings_other": "Done with {{count}} warnings"
+			},
+			"steps": {
+				"connect": "Connect",
+				"done": "(completed)",
+				"import": "Import",
+				"label": "Import steps"
+			},
+			"subtitle": "Bring your projects from another tool into {{workspace}}. Kaneo only reads from the source.",
+			"title": "Import",
+			"toast": {
+				"failed": "Import from {{source}} failed",
+				"finished": "Import from {{source}} finished",
+				"partial": "Import from {{source}} finished with errors"
+			},
+			"trello": {
+				"apiKeyDescription": "In a Power-Up you own, open the Trello Auth tab and generate an API key (not the OAuth 2.0 tab) at",
+				"apiKeyLabel": "API key",
+				"apiKeyPlaceholder": "Paste API key",
+				"authorizeButton": "Authorize on Trello",
+				"authorizeDescription": "Opens Trello in a new tab. Read only, expires after a day.",
+				"authorizeLabel": "Authorize Kaneo",
+				"authorizeNeedsKey": "Enter the API key first. Read only, expires after a day.",
+				"tokenDescription": "Click Allow on Trello, then paste the token it shows you.",
+				"tokenLabel": "Token",
+				"tokenPlaceholder": "Paste token"
+			},
+			"units": {
+				"board": {
+					"allImported_one": "{{count}} board imported.",
+					"allImported_other": "All {{count}} boards imported.",
+					"empty": "No boards found. Check that this key can see the boards you want to import.",
+					"found_one": "{{count}} board found. If you pick it, it becomes a new project in {{workspace}}.",
+					"found_other": "{{count}} boards found. Each one you pick becomes a new project in {{workspace}}.",
+					"importButton_one": "Import {{count}} board",
+					"importButton_other": "Import {{count}} boards",
+					"limit": "Pick up to {{max}} boards per import.",
+					"pick": "Pick the boards to bring over.",
+					"progress_one": "{{done}} of {{count}} board imported",
+					"progress_other": "{{done}} of {{count}} boards imported",
+					"runTitle_one": "{{source}}, {{count}} board",
+					"runTitle_other": "{{source}}, {{count}} boards",
+					"section": "Boards",
+					"someImported_one": "{{done}} of {{count}} board imported.",
+					"someImported_other": "{{done}} of {{count}} boards imported.",
+					"step": "Choose boards"
+				},
+				"project": {
+					"allImported_one": "{{count}} project imported.",
+					"allImported_other": "All {{count}} projects imported.",
+					"empty": "No projects found. Check that this key can see the projects you want to import.",
+					"found_one": "{{count}} project found. If you pick it, it becomes a new project in {{workspace}}.",
+					"found_other": "{{count}} projects found. Each one you pick becomes a new project in {{workspace}}.",
+					"importButton_one": "Import {{count}} project",
+					"importButton_other": "Import {{count}} projects",
+					"limit": "Pick up to {{max}} projects per import.",
+					"pick": "Pick the projects to bring over.",
+					"progress_one": "{{done}} of {{count}} project imported",
+					"progress_other": "{{done}} of {{count}} projects imported",
+					"runTitle_one": "{{source}}, {{count}} project",
+					"runTitle_other": "{{source}}, {{count}} projects",
+					"section": "Projects",
+					"someImported_one": "{{done}} of {{count}} project imported.",
+					"someImported_other": "{{done}} of {{count}} projects imported.",
+					"step": "Choose projects"
+				},
+				"team": {
+					"allImported_one": "{{count}} team imported.",
+					"allImported_other": "All {{count}} teams imported.",
+					"empty": "No teams found. Check that this key can see the teams you want to import.",
+					"found_one": "{{count}} team found. If you pick it, it becomes a new project in {{workspace}}.",
+					"found_other": "{{count}} teams found. Each one you pick becomes a new project in {{workspace}}.",
+					"importButton_one": "Import {{count}} team",
+					"importButton_other": "Import {{count}} teams",
+					"limit": "Pick up to {{max}} teams per import.",
+					"pick": "Pick the teams to bring over.",
+					"progress_one": "{{done}} of {{count}} team imported",
+					"progress_other": "{{done}} of {{count}} teams imported",
+					"runTitle_one": "{{source}}, {{count}} team",
+					"runTitle_other": "{{source}}, {{count}} teams",
+					"section": "Teams",
+					"someImported_one": "{{done}} of {{count}} team imported.",
+					"someImported_other": "{{done}} of {{count}} teams imported.",
+					"step": "Choose teams"
+				}
+			},
+			"jira": {
+				"emailDescription": "The email of your Atlassian account. Leave it empty for Jira Data Center.",
+				"emailLabel": "Email",
+				"nameMatchTip": "Jira often hides email addresses, so assignees may be matched to people here by full name.",
+				"openSettings": "Open Atlassian API tokens",
+				"stepCreate": "Create an API token and copy it.",
+				"stepOpen": "Open id.atlassian.com, then Security, then API tokens.",
+				"stepPaste": "Paste it with the email you sign in to Jira with.",
+				"tokenDescription": "Cloud: create one at id.atlassian.com. Data Center: use a personal access token.",
+				"tokenLabel": "API token",
+				"tokenPlaceholder": "Paste token",
+				"urlDescription": "Copy it from your browser. Data Center works too.",
+				"urlLabel": "Jira site URL",
+				"urlPlaceholder": "https://your-site.atlassian.net"
+			}
+		},
+		"chatIntegrations": {
+			"activeDescription": "Ausschalten, um zu pausieren, ohne die Einrichtung zu verlieren.",
+			"activeTitle": "Nachrichten an {{provider}} senden",
+			"channelHint": "Nur eine Bezeichnung für diese Liste.",
+			"channelLabel": "Kanal",
+			"channelPlaceholder": "#team-updates",
+			"disconnect": "Trennen",
+			"disconnectDescription": "Kaneo postet nicht mehr in {{provider}} und entfernt die gespeicherten Einstellungen.",
+			"disconnecting": "Wird getrennt…",
+			"disconnectTitle": "{{provider}} trennen?",
+			"events": {
+				"taskCommentCreated": "Neuen Kommentaren",
+				"taskCreated": "Neuen Aufgaben",
+				"taskDescriptionChanged": "Beschreibungsänderungen",
+				"taskPriorityChanged": "Prioritätsänderungen",
+				"taskStatusChanged": "Statusänderungen",
+				"taskTitleChanged": "Titeländerungen"
+			},
+			"optional": "Optional",
+			"postWhen": "Posten bei",
+			"retry": "Erneut versuchen",
+			"saveChanges": "Änderungen speichern",
+			"savedUrlPlaceholder": "Gespeichert. Füge eine neue URL ein, um sie zu ersetzen.",
+			"webhookUrlLabel": "Webhook-URL"
+		},
+		"codeHosting": {
+			"browse": "Durchsuchen",
+			"changeToken": "Token ändern",
+			"checking": "Zugriff wird geprüft…",
+			"chooseProjectTitle": "Projekt auswählen",
+			"chooseRepositoryTitle": "Repository auswählen",
+			"connectProject": "Projekt verbinden",
+			"connectRepository": "Repository verbinden",
+			"copied": "Kopiert",
+			"copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen.",
+			"copySecret": "Secret kopieren",
+			"copyUrl": "Webhook-URL kopieren",
+			"disconnect": "Trennen",
+			"disconnectDescription": "Aufgaben werden nicht mehr mit {{target}} synchronisiert. Du kannst die Verbindung später wiederherstellen.",
+			"disconnecting": "Wird getrennt…",
+			"disconnectTitle": "{{provider}} trennen?",
+			"hideSecret": "Secret ausblenden",
+			"importing": "Wird importiert…",
+			"importIssues": "Issues importieren",
+			"importNeedsReconnect": "Verbinde erneut, um den Import zu aktivieren.",
+			"importTitle": "Offene Issues importieren",
+			"issuesSection": "Issues",
+			"lastImport": "Letzter Import: {{imported}} erstellt, {{updated}} aktualisiert, {{skipped}} übersprungen.",
+			"loadError": "Diese Integration konnte nicht geladen werden.",
+			"pausedHint": "Die Synchronisierung ist pausiert. Verbinde erneut, um sie fortzusetzen.",
+			"projectSection": "Projekt",
+			"reconnect": "Erneut verbinden",
+			"repositoryPathInvalid": "Gib das Repository als owner/name ein.",
+			"repositoryPathLabel": "Repository",
+			"repositorySection": "Repository",
+			"retry": "Erneut versuchen",
+			"saveToken": "Token speichern",
+			"showSecret": "Secret anzeigen",
+			"signInDescription": "Verwende einen Token, der das Projekt und seine Issues lesen kann.",
+			"signInTitle": "Bei deiner Instanz anmelden",
+			"tokenStored": "Gespeicherter Token",
+			"tokenTitle": "Zugriffstoken",
+			"webhookSecret": "Secret",
+			"webhookSection": "Webhook",
+			"webhookUrl": "URL"
+		},
+		"projectCustomFields": {
+			"fieldsDescription": "Ziehe die Felder, um ihre Reihenfolge in einer Aufgabe zu ändern.",
+			"fieldsTitle": "Felder",
+			"newField": "Neues Feld",
+			"pageTitle": "Benutzerdefinierte Felder",
+			"subtitle": "Zusätzliche Angaben, die jede Aufgabe in {{project}} erfassen kann, etwa Größe oder Kunde.",
+			"subtitleFallback": "Zusätzliche Angaben, die jede Aufgabe in diesem Projekt erfassen kann, etwa Größe oder Kunde.",
+			"title": "Benutzerdefinierte Felder"
+		},
+		"shared": {
+			"autosave": "Änderungen werden automatisch gespeichert"
+		}
+	},
+	"navigation": {
+		"commandPalette": {
+			"suggestions": "Vorschläge",
+			"commands": "Befehle",
+			"projects": "Projekte",
+			"search": "Suche",
+			"members": "Mitglieder",
+			"createTask": "Aufgabe erstellen",
+			"createProject": "Projekt erstellen",
+			"createWorkspace": "Workspace erstellen",
+			"lightTheme": "Helles Design",
+			"darkTheme": "Dunkles Design",
+			"systemTheme": "Systemdesign",
+			"keyboardShortcuts": "Tastenkürzel",
+			"inputPlaceholder": "Nach Apps und Befehlen suchen...",
+			"empty": "Keine Ergebnisse gefunden.",
+			"footer": {
+				"navigate": "Navigieren",
+				"open": "Öffnen",
+				"close": "Schließen"
+			}
+		},
+		"sidebar": {
+			"projects": "Projekte",
+			"members": "Mitglieder",
+			"invitations": "Einladungen",
+			"more": "Mehr",
+			"backToBoard": "Zurück zum Board",
+			"home": "Home",
+			"inbox": "Inbox",
+			"invitePeople": "Invite people",
+			"myTasks": "My tasks"
+		},
+		"projectList": {
+			"viewProject": "Projekt ansehen",
+			"shareProject": "Projekt teilen",
+			"projectSettings": "Projekteinstellungen",
+			"linkCopied": "Projektlink in die Zwischenablage kopiert",
+			"addProject": "Projekt hinzufügen",
+			"deleteConfirmTitle": "Projekt löschen?",
+			"deleteConfirmDescription": "Dadurch wird das Projekt und alle zugehörigen Daten dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+			"deletedToast": "Projekt gelöscht",
+			"deleteProject": "Projekt löschen",
+			"switcherLabel": "Projekt oder Ansicht wechseln"
+		},
+		"search": {
+			"inputPlaceholder": "Aufgaben, Projekte, Kommentare suchen...",
+			"minCharsHint": "Gib mindestens 3 Zeichen ein, um zu suchen",
+			"groups": {
+				"task": "Aufgaben",
+				"project": "Projekte",
+				"workspace": "Workspaces",
+				"comment": "Kommentare",
+				"activity": "Aktivitäten",
+				"fallback": "Ergebnisse"
+			}
+		},
+		"settingsLayout": {
+			"toggleSidebar": "Sidebar umschalten",
+			"back": "Zurück"
+		},
+		"userMenu": {
+			"signedOutSuccess": "Erfolgreich abgemeldet",
+			"signOutFailed": "Abmeldung fehlgeschlagen",
+			"unnamedUser": "Benutzer",
+			"settings": "Einstellungen",
+			"signingOut": "Wird abgemeldet...",
+			"logOut": "Abmelden"
+		},
+		"workspaceSwitcher": {
+			"workspaces": "Workspaces",
+			"switching": "Wechseln...",
+			"addWorkspace": "Workspace hinzufügen",
+			"selectWorkspace": "Workspace auswählen"
+		},
+		"page": {
+			"projectsTitle": "Projekte",
+			"settingsTitle": "Einstellungen",
+			"backToWorkspace": "Zurück zum Workspace",
+			"settingsWorkspaceTab": "Workspace"
+		},
+		"projectSettings": {
+			"projectLabel": "Projekt"
+		},
+		"shortcuts": {
+			"categories": {
+				"general": "Allgemein",
+				"navigation": "Navigation",
+				"create": "Erstellen",
+				"views": "Ansichten",
+				"tasks": "Aufgaben",
+				"list": "Board und Liste",
+				"inbox": "Posteingang",
+				"filters": "Filter",
+				"editor": "Editor"
+			},
+			"items": {
+				"openCommandMenu": "Befehlspalette öffnen",
+				"openSearch": "Globale Suche",
+				"openShortcuts": "Tastenkürzel anzeigen",
+				"submit": "Speichern oder absenden",
+				"back": "Modal/Popover schließen",
+				"switchWorkspace": "Workspace wechseln",
+				"logOut": "Abmelden",
+				"showDisplayOptions": "Anzeigeoptionen",
+				"dismissToasts": "Alle Hinweise schließen",
+				"toggleSidebar": "Sidebar umschalten",
+				"goToHome": "Zur Startseite",
+				"goToInbox": "Zum Posteingang",
+				"goToMyTasks": "Zu meinen Aufgaben",
+				"goToProjects": "Zu den Projekten",
+				"goToSettings": "Zu den Einstellungen",
+				"goToTasks": "Zu den Aufgaben",
+				"goToBacklog": "Zum Backlog",
+				"goToProject": "Zu Projekt 1–9",
+				"openTask": "Aufgabe öffnen",
+				"openProject": "Projekt öffnen",
+				"createTask": "Aufgabe erstellen",
+				"createProject": "Projekt erstellen",
+				"toggleLayout": "Zwischen Board und Liste wechseln",
+				"deleteTask": "Aufgabe löschen",
+				"copyTaskUrl": "Aufgabenlink kopieren",
+				"copyBranchName": "Aufgaben-Branch kopieren",
+				"nextTask": "Nächstes Element",
+				"previousTask": "Vorheriges Element",
+				"openFocusedTask": "Fokussiertes Element öffnen",
+				"selectAll": "Alle auswählen",
+				"clearSelection": "Auswahl aufheben",
+				"changeStatus": "Status ändern",
+				"changePriority": "Priorität ändern",
+				"assignTask": "Zuweisen",
+				"assignToMe": "Mir zuweisen",
+				"changeLabels": "Labels ändern",
+				"setDueDate": "Fälligkeitsdatum festlegen",
+				"removeDueDate": "Fälligkeitsdatum entfernen",
+				"renameTask": "Umbenennen",
+				"editDescription": "Beschreibung bearbeiten",
+				"commentOnTask": "Kommentieren",
+				"moveToProject": "In anderes Projekt verschieben",
+				"createSubtask": "Unteraufgabe erstellen",
+				"setParent": "Übergeordnete Aufgabe festlegen",
+				"openParent": "Übergeordnete Aufgabe öffnen",
+				"openSubtask": "Unteraufgabe öffnen",
+				"markBlockedBy": "Als blockiert durch markieren",
+				"markBlocking": "Als blockierend markieren",
+				"markRelated": "Als verwandt markieren",
+				"addLink": "Link hinzufügen",
+				"toggleResources": "Ressourcen ein- oder ausblenden",
+				"copyTaskId": "Aufgaben-ID kopieren",
+				"copyTaskTitle": "Aufgabentitel kopieren",
+				"copyAsMarkdown": "Als Markdown kopieren",
+				"peekTask": "Fokussierte Aufgabe in der Vorschau öffnen",
+				"selectTask": "Aufgabe auswählen",
+				"selectGroup": "Alle in der Gruppe auswählen",
+				"copyPageUrl": "Seiten-URL kopieren",
+				"focusRight": "Nächste Spalte",
+				"focusLeft": "Vorherige Spalte",
+				"moveTaskTop": "An den Anfang der Gruppe verschieben",
+				"moveTaskUp": "Eine Position nach oben",
+				"moveTaskDown": "Eine Position nach unten",
+				"moveTaskBottom": "An das Ende der Gruppe verschieben",
+				"moveTaskLeft": "In die vorherige Spalte verschieben",
+				"moveTaskRight": "In die nächste Spalte verschieben",
+				"toggleGroup": "Gruppe ein- oder ausklappen",
+				"toggleAllGroups": "Alle Gruppen ein- oder ausklappen",
+				"deleteNotification": "Benachrichtigung löschen",
+				"deleteReadNotifications": "Alle gelesenen Benachrichtigungen löschen",
+				"toggleNotificationRead": "Als gelesen oder ungelesen markieren",
+				"markAllNotificationsRead": "Alle als gelesen markieren",
+				"addFilter": "Filter hinzufügen",
+				"clearAllFilters": "Alle Filter entfernen",
+				"clearLastFilter": "Letzten Filter entfernen",
+				"editorBold": "Fett",
+				"editorItalic": "Kursiv",
+				"editorUnderline": "Unterstrichen",
+				"editorStrike": "Durchgestrichen",
+				"editorAttach": "Bild oder Datei anhängen",
+				"editorInlineCode": "Inline-Code",
+				"editorLink": "Text in Link umwandeln",
+				"editorQuote": "Zitat",
+				"editorParagraph": "Normaler Text",
+				"editorHeading1": "Überschrift 1",
+				"editorHeading2": "Überschrift 2",
+				"editorHeading3": "Überschrift 3",
+				"editorChecklist": "Checkliste",
+				"editorToggleChecklist": "Checklistenpunkt umschalten",
+				"editorBulletList": "Aufzählung",
+				"editorNumberedList": "Nummerierte Liste",
+				"editorCodeBlock": "Codeblock",
+				"editorUndo": "Rückgängig",
+				"editorRedo": "Wiederholen"
+			},
+			"title": "Tastenkürzel",
+			"searchPlaceholder": "Nach Aktion oder Taste suchen",
+			"results_one": "{{count}} Ergebnis",
+			"results_other": "{{count}} Ergebnisse",
+			"noResults": "Keine passenden Tastenkürzel",
+			"then": "dann",
+			"or": "oder",
+			"thenEllipsis": "dann…"
+		}
+	},
+	"notifications": {
+		"newCount_one": "{{count}} neu",
+		"newCount_other": "{{count}} neu",
+		"emptyTitle": "Noch keine Benachrichtigungen",
+		"emptySubtitle": "Hier erscheinen Updates und Aktivitäten.",
+		"clearAll": "Alle Benachrichtigungen löschen",
+		"clearDialogTitle": "Alle Benachrichtigungen löschen?",
+		"clearDialogDescription": "Dadurch werden alle Benachrichtigungen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+		"reminderLeadTime": {
+			"minutes_one": "{{count}} Minute",
+			"minutes_other": "{{count}} Minuten",
+			"hours_one": "{{count}} Stunde",
+			"hours_other": "{{count}} Stunden",
+			"days_one": "{{count}} Tag",
+			"days_other": "{{count}} Tage"
+		},
+		"events": {
+			"task_created": {
+				"title": "Neue Aufgabe erstellt",
+				"content": "Die Aufgabe \"{{taskTitle}}\" wurde erstellt"
+			},
+			"workspace_created": {
+				"title": "Workspace erstellt",
+				"content": "Dein Workspace \"{{workspaceName}}\" wurde erfolgreich erstellt"
+			},
+			"task_status_changed": {
+				"title": "Aufgabenstatus geändert",
+				"content": "Der Status der Aufgabe \"{{taskTitle}}\" wurde von \"{{oldStatus}}\" zu \"{{newStatus}}\" geändert"
+			},
+			"task_assignee_changed": {
+				"title": "Aufgabe wurde dir zugewiesen",
+				"content": "Dir wurde die Aufgabe \"{{taskTitle}}\" zugewiesen"
+			},
+			"task_mention": {
+				"title": "{{mentionerName}} hat dich erwähnt",
+				"content": "{{mentionerName}} hat dich in „{{taskTitle}}“ erwähnt"
+			},
+			"task_comment": {
+				"title": "{{commenterName}} hat deine Aufgabe kommentiert",
+				"content": "Neuer Kommentar zu „{{taskTitle}}“: {{commentPreview}}"
+			},
+			"due_date_reminder": {
+				"title": "Aufgabe bald fällig",
+				"content": "„{{taskTitle}}“ ist in {{leadTime}} fällig"
+			},
+			"task_overdue": {
+				"title": "Aufgabe überfällig",
+				"content": "„{{taskTitle}}“ ist überfällig"
+			},
+			"time_entry_created": {
+				"title": "Zeiterfassung gestartet",
+				"contentWithTask": "Die Zeiterfassung für die Aufgabe \"{{taskTitle}}\" wurde gestartet",
+				"contentWithoutTask": "Die Zeiterfassung für eine Aufgabe wurde gestartet"
+			}
+		},
+		"inbox": {
+			"back": "Inbox",
+			"earlier": "Earlier",
+			"emptyFilter": "Nothing here",
+			"filters": {
+				"all": "All",
+				"label": "Filter notifications",
+				"mentions": "Mentions",
+				"unread": "Unread"
+			},
+			"openTask": "Open task",
+			"pageTitle": "Inbox",
+			"recentActivity": "Recent activity",
+			"selectPrompt": "Select a notification to read it",
+			"taskUnavailable": "This task is no longer available.",
+			"today": "Today",
+			"unread": "Unread",
+			"loadError": "Notifications couldn't be loaded.",
+			"taskLoadError": "This task couldn’t be loaded.",
+			"actionError": "Dein Posteingang konnte nicht aktualisiert werden. Versuche es erneut.",
+			"readCleared": "Gelesene Benachrichtigungen gelöscht"
+		}
+	},
+	"activity": {
+		"assignedToSelf": "hat sich die Aufgabe selbst zugewiesen",
+		"unassigned": "hat die Zuweisung der Aufgabe entfernt",
+		"assignedTo": "hat die Aufgabe {{name}} zugewiesen",
+		"changedStatus": "hat den Status von {{from}} zu {{to}} geändert",
+		"changedPriority": "hat die Priorität von {{from}} zu {{to}} geändert",
+		"clearedDueDate": "hat das Fälligkeitsdatum entfernt",
+		"setDueDate": "hat das Fälligkeitsdatum auf {{date}} gesetzt",
+		"changedDueDate": "hat das Fälligkeitsdatum von {{from}} zu {{to}} geändert",
+		"changedTitle": "hat den Titel von \"{{from}}\" zu \"{{to}}\" geändert",
+		"moved": "hat die Aufgabe von \"{{from}}\" nach \"{{to}}\" verschoben",
+		"created": "hat diese Aufgabe erstellt",
+		"githubUser": "GitHub-Benutzer",
+		"comment": {
+			"viewGithubProfile": "GitHub-Profil ansehen",
+			"cannotBeEmpty": "Kommentar darf nicht leer sein",
+			"mustBeLoggedInToEdit": "Du musst angemeldet sein, um Kommentare zu bearbeiten",
+			"updated": "Kommentar aktualisiert",
+			"failedToUpdate": "Kommentar konnte nicht aktualisiert werden",
+			"edit": "Kommentar bearbeiten",
+			"editPlaceholder": "Kommentar bearbeiten...",
+			"save": "Speichern",
+			"added": "Kommentar hinzugefügt",
+			"failedToAdd": "Kommentar konnte nicht hinzugefügt werden",
+			"leavePlaceholder": "Hinterlasse einen Kommentar...",
+			"attachFile": "Datei anhängen",
+			"submitShortcut": "Kommentar absenden",
+			"editor": {
+				"uploadsOnlyOnSavedTasks": "Datei-Uploads sind nur bei gespeicherten Aufgaben verfügbar.",
+				"uploadingFile": "Datei wird hochgeladen...",
+				"imageUploaded": "Bild hochgeladen",
+				"fileAttached": "Datei angehängt",
+				"failedToUploadFile": "Datei konnte nicht hochgeladen werden",
+				"plaintext": "Klartext",
+				"autoDetect": "Automatisch erkennen",
+				"slashGroupText": "Text",
+				"slashGroupLists": "Listen",
+				"slashGroupInsert": "Einfügen",
+				"slashParagraph": "Text",
+				"slashHeading": "Überschrift",
+				"slashBulletList": "Aufzählungsliste",
+				"slashTaskList": "To-do-Liste",
+				"slashOrderedList": "Nummerierte Liste",
+				"slashQuote": "Zitat",
+				"slashCodeBlock": "Codeblock",
+				"slashTable": "Tabelle",
+				"slashFile": "Datei",
+				"searchParagraph": "text absatz normal",
+				"searchHeading": "überschrift titel h2",
+				"searchBulletList": "liste aufzählung ungeordnet",
+				"searchTaskList": "todo to-do checkliste checkbox aufgabenliste",
+				"searchOrderedList": "liste geordnet nummeriert",
+				"searchQuote": "zitat blockquote",
+				"searchCodeBlock": "code snippet",
+				"searchTable": "tabelle raster",
+				"searchFile": "datei anhang bild foto upload",
+				"embedErrorInvalidUrl": "Gib eine gültige URL ein",
+				"embedErrorYoutubeOnly": "Nur YouTube-Links können eingebettet werden.",
+				"embedVideo": "Video einbetten",
+				"keepAsLink": "Als Link behalten",
+				"hintTab": "Tab",
+				"hintEsc": "Esc",
+				"pasteUrl": "URL einfügen",
+				"asLink": "Als Link",
+				"embed": "Einbetten",
+				"noCommands": "Keine Befehle",
+				"ariaCommentContent": "Kommentarinhalt",
+				"ariaCommentEditor": "Kommentar-Editor",
+				"ariaCopyCode": "Code kopieren",
+				"ariaCopied": "Kopiert",
+				"copy": "Kopieren",
+				"copied": "Kopiert",
+				"dropImageToUpload": "Bild zum Hochladen ablegen",
+				"previewImageAlt": "Bildvorschau",
+				"codeLang": {
+					"bash": "Bash",
+					"csharp": "C#",
+					"cpp": "C++",
+					"css": "CSS",
+					"go": "Golang",
+					"graphql": "GraphQL",
+					"html": "HTML",
+					"json": "JSON",
+					"java": "Java",
+					"javascript": "JavaScript",
+					"markdown": "Markdown",
+					"mermaid": "Mermaid",
+					"plaintext": "Klartext",
+					"python": "Python",
+					"rust": "Rust",
+					"sql": "SQL",
+					"swift": "Swift",
+					"typescript": "TypeScript",
+					"yaml": "YAML"
+				},
+				"table": {
+					"addColumnBefore": "Spalte links einfügen",
+					"addColumnAfter": "Spalte rechts einfügen",
+					"deleteColumn": "Spalte löschen",
+					"addRowBefore": "Zeile oberhalb einfügen",
+					"addRowAfter": "Zeile unterhalb einfügen",
+					"deleteRow": "Zeile löschen",
+					"deleteTable": "Tabelle löschen"
+				},
+				"mermaid": {
+					"renderFailed": "Mermaid-Diagramm konnte nicht gerendert werden"
+				}
+			},
+			"importedFrom": "Importiert aus {{source}}",
+			"importedBy": "Importiert von {{name}}",
+			"commentedOnForge": "hat auf {{forge}} kommentiert"
+		},
+		"movedFromOtherProject": "moved task from another project to \"{{to}}\""
+	},
+	"tasks": {
+		"title": "Aufgaben",
+		"status": {
+			"label": "Status",
+			"to-do": "Zu erledigen",
+			"in-progress": "In Bearbeitung",
+			"in-review": "In Prüfung",
+			"done": "Erledigt",
+			"archived": "Archiviert",
+			"planned": "Geplant"
+		},
+		"priority": {
+			"label": "Priorität",
+			"no-priority": "Keine Priorität",
+			"low": "Niedrig",
+			"medium": "Mittel",
+			"high": "Hoch",
+			"urgent": "Dringend"
+		},
+		"view": {
+			"board": "Board",
+			"list": "Liste",
+			"backlog": "Backlog",
+			"gantt": "Gantt",
+			"heading": "Ansicht"
+		},
+		"common": {
+			"selectTask": "Aufgabe auswählen",
+			"loadingTask": "Aufgabe wird geladen...",
+			"taskNotFound": "Aufgabe nicht gefunden",
+			"taskNotFoundDescription": "Die gesuchte Aufgabe existiert nicht oder wurde gelöscht.",
+			"ticketAmbiguous": "Aufgaben-ID passt zu mehreren Aufgaben",
+			"ticketAmbiguousDescription": "{{ticketId}} passt zu Aufgaben in mehreren Projekten dieses Workspaces. Gib einem dieser Projekte einen anderen Schlüssel, damit der Link funktioniert.",
+			"ticketNotFoundDescription": "In diesem Workspace gibt es keine Aufgabe mit der ID {{ticketId}}, oder du hast keinen Zugriff darauf.",
+			"customFields": "Custom Fields"
+		},
+		"detail": {
+			"subtaskOf": "Teilaufgabe von",
+			"activity": "Aktivität",
+			"noActivity": "Keine Aktivität gefunden",
+			"openInFullPage": "Auf ganzer Seite öffnen",
+			"titlePlaceholder": "Klicken, um einen Titel hinzuzufügen",
+			"addDescription": "Beschreibung hinzufügen...",
+			"editor": {
+				"ariaLabel": "Editor für Aufgabenbeschreibung",
+				"placeholder": "Schreibe eine Beschreibung...",
+				"previewImage": "Bildvorschau",
+				"autoDetect": "Automatisch erkennen",
+				"copyCode": "Code kopieren",
+				"copy": "Kopieren",
+				"copied": "Kopiert",
+				"attachFile": "Datei anhängen",
+				"dropToUpload": "Bild zum Hochladen ablegen",
+				"checkbox": {
+					"markIncomplete": "Aufgabe als unvollständig markieren",
+					"markComplete": "Aufgabe als abgeschlossen markieren"
+				},
+				"upload": {
+					"loading": "Datei wird hochgeladen...",
+					"failed": "Datei konnte nicht hochgeladen werden",
+					"imageSuccess": "Bild hochgeladen",
+					"fileSuccess": "Datei angehängt"
+				},
+				"slash": {
+					"groups": {
+						"text": "Text",
+						"lists": "Listen",
+						"insert": "Einfügen"
+					},
+					"empty": "Keine Befehle",
+					"commands": {
+						"paragraph": "Text",
+						"heading-2": "Überschrift",
+						"bullet-list": "Aufzählungsliste",
+						"task-list": "To-do-Liste",
+						"ordered-list": "Nummerierte Liste",
+						"blockquote": "Zitat",
+						"code-block": "Codeblock",
+						"table": "Tabelle",
+						"file": "Datei"
+					}
+				},
+				"languages": {
+					"bash": "Bash",
+					"csharp": "C#",
+					"cpp": "C++",
+					"css": "CSS",
+					"clojure": "Clojure",
+					"cypher": "Cypher",
+					"dart": "Dart",
+					"diff": "Diff",
+					"elixir": "Elixir",
+					"excel": "Excel",
+					"go": "Golang",
+					"graphql": "GraphQL",
+					"html": "HTML",
+					"haskell": "Haskell",
+					"json": "JSON",
+					"java": "Java",
+					"javascript": "JavaScript",
+					"kotlin": "Kotlin",
+					"makefile": "Makefile",
+					"markdown": "Markdown",
+					"mermaid": "Mermaid",
+					"ocaml": "OCaml",
+					"php": "PHP",
+					"perl": "Perl",
+					"plaintext": "Klartext",
+					"python": "Python",
+					"r": "R",
+					"reasonml": "ReasonML",
+					"ruby": "Ruby",
+					"rust": "Rust",
+					"sql": "SQL",
+					"swift": "Swift",
+					"toml": "TOML",
+					"terraform": "Terraform",
+					"typescript": "TypeScript",
+					"xml": "XML",
+					"yaml": "YAML"
+				},
+				"embed": {
+					"choice": {
+						"embedVideo": "Video einbetten",
+						"keepAsLink": "Als Link behalten"
+					},
+					"inputPlaceholder": "URL einfügen",
+					"embeddedContent": "Eingebetteter Inhalt",
+					"asLink": "Als Link",
+					"submit": "Einbetten",
+					"errors": {
+						"invalidUrl": "Gib eine gültige URL ein",
+						"onlyYoutube": "Nur YouTube-Links können eingebettet werden."
+					},
+					"onlyYoutubeInline": "Nur YouTube-URLs können eingebettet werden. Verwende stattdessen den Link-Modus."
+				},
+				"mermaid": {
+					"renderFailed": "Mermaid-Diagramm konnte nicht gerendert werden"
+				},
+				"image": {
+					"large": "Large",
+					"medium": "Medium",
+					"reset": "Reset size",
+					"resizeHandle": "Resize image",
+					"small": "Small"
+				},
+				"saved": "Gespeichert",
+				"saving": "Wird gespeichert…",
+				"saveFailed": "Speichern fehlgeschlagen",
+				"retrySave": "Erneut speichern"
+			}
+		},
+		"entity": {
+			"task": "Aufgabe"
+		},
+		"relations": {
+			"title": "Beziehungen",
+			"tasksInProject": "Aufgaben im Projekt",
+			"linkError": "Aufgabe konnte nicht verknüpft werden",
+			"empty": "Keine verknüpften Aufgaben",
+			"searchPlaceholder": "Aufgaben zum Verknüpfen suchen...",
+			"noTasksFound": "Keine Aufgaben gefunden",
+			"openTask": "Aufgabe öffnen",
+			"removeRelation": "Beziehung entfernen",
+			"related": "Verwandt",
+			"blocks": "Blockiert",
+			"selectTask": "Wähle eine Aufgabe zum Verknüpfen aus",
+			"types": {
+				"blocks": "blockiert",
+				"related": "steht in Beziehung zu",
+				"blocked_by": "blockiert von"
+			},
+			"blockedBy": "Blockiert durch",
+			"parentPlaceholder": "Übergeordnete Aufgabe festlegen…"
+		},
+		"subtasks": {
+			"title": "Teilaufgaben",
+			"inputPlaceholder": "Titel der Teilaufgabe...",
+			"addAction": "Hinzufügen",
+			"empty": "Noch keine Teilaufgaben",
+			"createError": "Teilaufgabe konnte nicht erstellt werden",
+			"deleteSuccess": "Aufgabe erfolgreich gelöscht",
+			"deleteError": "Aufgabe konnte nicht gelöscht werden",
+			"deleteDialogTitle": "Aufgabe löschen?",
+			"deleteDialogDescription": "Dadurch wird die Aufgabe und alle zugehörigen Daten dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+			"deleteAction": "Aufgabe löschen",
+			"completeAria": "Teilaufgabe als erledigt markieren",
+			"progress": "{{completed}} von {{total}} Unteraufgaben abgeschlossen",
+			"noCompletionColumn": "This project has no matching column for completing or reopening this subtask."
+		},
+		"properties": {
+			"title": "Eigenschaften",
+			"labels": "Labels",
+			"addLabels": "Labels hinzufügen",
+			"copyTaskLink": "Aufgabenlink kopieren",
+			"copyTaskBranch": "Aufgaben-Branch kopieren",
+			"taskLinkCopied": "Aufgabenlink kopiert",
+			"taskBranchCopied": "Branch-Name kopiert",
+			"start": "Start",
+			"startDate": "Startdatum",
+			"noDate": "Kein Datum",
+			"dates": "Termine",
+			"project": "Projekt"
+		},
+		"move": {
+			"title": "Aufgabe verschieben",
+			"projectLabel": "Zielprojekt",
+			"projectPlaceholder": "Projekt auswählen",
+			"statusLabel": "Zielstatus",
+			"statusHintKeep": "Der aktuelle Status wird im Zielprojekt bereits unterstützt.",
+			"statusHintAdjust": "Wähle den Status für das Zielprojekt aus.",
+			"action": "Aufgabe verschieben",
+			"success": "Aufgabe erfolgreich verschoben",
+			"error": "Aufgabe konnte nicht verschoben werden"
+		},
+		"popover": {
+			"assignee": {
+				"unassigned": "Nicht zugewiesen",
+				"updateError": "Aufgabenzuweisung konnte nicht aktualisiert werden"
+			},
+			"status": {
+				"updateError": "Aufgabenstatus konnte nicht aktualisiert werden"
+			},
+			"priority": {
+				"updateError": "Aufgabenpriorität konnte nicht aktualisiert werden"
+			},
+			"dueDate": {
+				"updateError": "Fälligkeitsdatum konnte nicht aktualisiert werden",
+				"clear": "Datum entfernen"
+			},
+			"startDate": {
+				"updateError": "Startdatum konnte nicht aktualisiert werden",
+				"clear": "Startdatum entfernen"
+			},
+			"labels": {
+				"searchPlaceholder": "Labels suchen...",
+				"empty": "Keine Labels gefunden",
+				"create": "\"{{name}}\" erstellen",
+				"chooseColor": "Farbe auswählen",
+				"updateError": "Label konnte nicht aktualisiert werden",
+				"createSuccess": "Label erstellt und hinzugefügt",
+				"createError": "Label konnte nicht erstellt werden",
+				"colors": {
+					"stone": "Stein",
+					"slate": "Schiefer",
+					"lavender": "Lavendel",
+					"sage": "Salbei",
+					"forest": "Wald",
+					"amber": "Bernstein",
+					"terracotta": "Terrakotta",
+					"rose": "Rosa",
+					"crimson": "Karmesinrot"
+				},
+				"editLabels": "Labels bearbeiten"
+			}
+		},
+		"backlog": {
+			"pageTitle": "{{name}}s Backlog",
+			"noTasksToMove": "Keine geplanten Aufgaben zum Verschieben",
+			"moveAllConfirm": "Alle {{count}} geplanten Aufgaben nach „Zu erledigen“ verschieben?",
+			"moveAllSuccess": "{{count}} Aufgaben nach „Zu erledigen“ verschoben",
+			"plan": "Planen",
+			"moveAllTooltip": "Alle geplanten Aufgaben nach „Zu erledigen“ verschieben",
+			"moveAll": "Alle verschieben",
+			"addTask": "Aufgabe hinzufügen",
+			"sections": {
+				"planned": "Geplant",
+				"archived": "Archiviert"
+			},
+			"noTasksInSection": "Keine {{section}}-Aufgaben",
+			"filters": {
+				"dueThisWeek": "Diese Woche fällig",
+				"dueNextWeek": "Nächste Woche fällig",
+				"noDueDate": "Kein Fälligkeitsdatum"
+			}
+		},
+		"sort": {
+			"direction": "Richtung",
+			"ascending": "Aufsteigend",
+			"descending": "Absteigend",
+			"fields": {
+				"position": "Manuell (Position)",
+				"createdAt": "Erstellungsdatum",
+				"priority": "Priorität",
+				"dueDate": "Fälligkeitsdatum",
+				"title": "Titel",
+				"number": "Aufgabennummer"
+			}
+		},
+		"boardFilters": {
+			"selectedCount": "{{count}} ausgewählt",
+			"subjects": {
+				"status": "Status",
+				"priority": "Priorität",
+				"assignee": "Zugewiesen",
+				"dueDate": "Fälligkeitsdatum",
+				"labels": "Labels"
+			},
+			"operators": {
+				"isAnyOf": "ist einer von",
+				"includeAnyOf": "enthält einen von",
+				"is": "ist",
+				"isNot": "ist nicht",
+				"isNoneOf": "ist keiner von",
+				"include": "enthält",
+				"exclude": "enthält nicht"
+			},
+			"allCustomFieldValues": "All values",
+			"noCustomFieldValues": "No custom field values",
+			"noValuesUsedYet": "No values used yet"
+		},
+		"gantt": {
+			"searchPlaceholder": "Geplante Tickets suchen...",
+			"pageTitle": "{{name}} – Gantt",
+			"title": "Gantt-Zeitachse",
+			"hideTasks": "Aufgaben ausblenden",
+			"showTasks": "Aufgaben anzeigen",
+			"noTasks": "Keine geplanten Aufgaben",
+			"noTasksSubtitle": "Füge Aufgaben ein Startdatum, ein Fälligkeitsdatum oder beides hinzu, um sie auf der Projektzeitleiste zu platzieren.",
+			"noTasksFound": "Keine Aufgaben gefunden",
+			"taskHeader": "Aufgabe",
+			"updateDatesError": "Aufgabendaten konnten nicht aktualisiert werden",
+			"resizeStart": "Startdatum anpassen",
+			"resizeDue": "Fälligkeitsdatum anpassen",
+			"taskAriaLabel": "{{title}}: öffnen oder ziehen zum Verschieben",
+			"jumpToToday": "Jump to today",
+			"previousPeriod": "Vorheriger Zeitraum",
+			"nextPeriod": "Nächster Zeitraum",
+			"periodStart": "Startdatum der Zeitleiste",
+			"showTaskDates": "Aufgabendaten anzeigen"
+		},
+		"delete": {
+			"title": "Aufgabe löschen?",
+			"description": "Dadurch wird die Aufgabe und alle zugehörigen Daten dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+			"action": "Aufgabe löschen",
+			"success": "Aufgabe erfolgreich gelöscht",
+			"error": "Aufgabe konnte nicht gelöscht werden"
+		},
+		"duplicate": {
+			"titleSuffix": "{{title}} (Kopie)",
+			"success": "Aufgabe erfolgreich dupliziert",
+			"error": "Aufgabe konnte nicht dupliziert werden"
+		},
+		"archive": {
+			"success": "{{count}} Aufgaben archiviert",
+			"confirmTitle_one": "{{count}} erledigte Aufgabe archivieren?",
+			"confirmTitle_other": "{{count}} erledigte Aufgaben archivieren?",
+			"confirmDescription": "Sie verschwinden vom Board und landen im Bereich „Archiviert“ des Backlogs."
+		},
+		"listView": {
+			"addTask": "Aufgabe hinzufügen",
+			"archiveAllTooltip": "Alle abgeschlossenen Aufgaben archivieren",
+			"noTasks": "Keine Aufgaben"
+		},
+		"kanban": {
+			"addTask": "Aufgabe hinzufügen",
+			"automaticallySortedHint": "Automatisch nach {{sort}} sortiert"
+		},
+		"pr": {
+			"merged": "Zusammengeführt",
+			"draft": "Entwurf",
+			"open": "Offen",
+			"label": "Pull Request",
+			"count_one": "{{count}} PR",
+			"count_other": "{{count}} PRs"
+		},
+		"assignee": {
+			"label": "Zugewiesen an",
+			"unassigned": "Nicht zugewiesen"
+		},
+		"dueDate": {
+			"label": "Fälligkeitsdatum",
+			"clear": "Datum entfernen",
+			"updateError": "Fälligkeitsdatum konnte nicht aktualisiert werden",
+			"clearError": "Fälligkeitsdatum konnte nicht entfernt werden"
+		},
+		"labels": {
+			"empty": "Keine Labels verfügbar"
+		},
+		"update": {
+			"error": "Aufgabe konnte nicht aktualisiert werden"
+		},
+		"contextMenu": {
+			"copyLink": "Link kopieren",
+			"copyLinkSuccess": "Aufgabenlink kopiert!"
+		},
+		"actions": {
+			"duplicate": "Duplizieren",
+			"archive": "Archivieren",
+			"markAsPlanned": "Als geplant markieren",
+			"delete": "Löschen..."
+		},
+		"bulk": {
+			"selectedCount": "{{count}} ausgewählt",
+			"moveToBacklog": "In Backlog verschieben",
+			"moveToBacklogSuccess": "{{count}} Aufgaben ins Backlog verschoben",
+			"moveToBacklogError": "Aufgaben konnten nicht ins Backlog verschoben werden",
+			"moveToBoard": "Aufs Board verschieben",
+			"moveToBoardSuccess": "{{count}} Aufgaben aufs Board verschoben",
+			"moveToBoardError": "Aufgaben konnten nicht aufs Board verschoben werden",
+			"delete": "Aufgaben löschen",
+			"deleteConfirmTitle_one": "{{count}} Aufgabe löschen?",
+			"deleteConfirmTitle_other": "{{count}} Aufgaben löschen?",
+			"deleteConfirmDescription": "Dadurch werden die ausgewählten Aufgaben und alle zugehörigen Daten dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+			"deleteSuccess": "{{count}} Aufgaben gelöscht",
+			"deleteError": "Aufgaben konnten nicht gelöscht werden",
+			"archive": "Aufgaben archivieren",
+			"archiveSuccess": "{{count}} Aufgaben archiviert",
+			"archiveError": "Aufgaben konnten nicht archiviert werden",
+			"updateSuccess": "{{count}} Aufgaben aktualisiert",
+			"updateError": "Aufgaben konnten nicht aktualisiert werden",
+			"assignTo": "Zuweisen an",
+			"assignSuccess": "{{count}} Aufgaben zugewiesen",
+			"assignError": "Aufgaben konnten nicht zugewiesen werden",
+			"setPriority": "Priorität festlegen",
+			"updatePriorityError": "Priorität konnte nicht aktualisiert werden",
+			"addLabel": "Label hinzufügen",
+			"addLabelSuccess": "Label zu {{count}} Aufgaben hinzugefügt",
+			"addLabelError": "Label konnte nicht hinzugefügt werden",
+			"updateDueDateError": "Fälligkeitsdatum konnte nicht aktualisiert werden",
+			"actions": "Aktionen",
+			"searchActions": "Aktionen suchen...",
+			"noActionsFound": "Keine Aktionen gefunden.",
+			"changeStatus": "Status ändern",
+			"clearSelection": "Auswahl aufheben",
+			"selectAll": "Alle auswählen",
+			"moreActions": "Weitere Aktionen",
+			"statusPlaceholder": "Status ändern…",
+			"priorityPlaceholder": "Priorität festlegen…",
+			"assigneePlaceholder": "Zuweisen an…",
+			"labelPlaceholder": "Label hinzufügen…",
+			"columnPlaceholder": "In Spalte verschieben…"
+		},
+		"editor": {
+			"table": {
+				"addColumnBefore": "Spalte links einfügen",
+				"addColumnAfter": "Spalte rechts einfügen",
+				"deleteColumn": "Spalte löschen",
+				"addRowBefore": "Zeile oberhalb einfügen",
+				"addRowAfter": "Zeile unterhalb einfügen",
+				"deleteRow": "Zeile löschen",
+				"deleteTable": "Tabelle löschen"
+			}
+		},
+		"calendar": {
+			"dayTasksAriaLabel": "Alle Aufgaben für {{date}} anzeigen",
+			"moreTasks": "+{{count}} weitere",
+			"nextMonth": "Nächster Monat",
+			"noTasks": "Keine geplanten Aufgaben",
+			"noTasksSubtitle": "Füge Aufgaben ein Startdatum, ein Fälligkeitsdatum oder beides hinzu, um sie im Kalender anzuzeigen.",
+			"pageTitle": "{{name}} – Kalender",
+			"previousMonth": "Vorheriger Monat",
+			"taskAriaLabel": "{{title}}, {{range}}: Aufgabe öffnen",
+			"title": "Kalender",
+			"today": "Heute",
+			"loadError": "Aufgaben konnten nicht geladen werden.",
+			"noTasksThisMonth": "Diesen Monat ist nichts geplant"
+		},
+		"descriptionSearchLoading": "Vollständige Beschreibungen werden durchsucht…",
+		"descriptionSearchError": "Die Suche in Beschreibungen ist fehlgeschlagen. Ergebnisse sind möglicherweise unvollständig.",
+		"descriptionRetry": "Erneut versuchen",
+		"descriptionLoading": "Beschreibung wird geladen…",
+		"descriptionLoadError": "Die Beschreibung konnte nicht geladen werden. Versuche es erneut, um die aktuelle Version zu laden.",
+		"checklistProgress": "{{completed}} von {{total}} Checklistenpunkten abgeschlossen",
+		"customFields": {
+			"fields": "Felder",
+			"empty": "Leer",
+			"required": "Pflichtfeld",
+			"enterKey": "Enter",
+			"toSave": "zum Speichern",
+			"today": "Heute",
+			"clear": "Leeren",
+			"setValue": "{{field}} festlegen…",
+			"noMatches": "Keine passenden Optionen",
+			"missingRequired_one": "{{count}} Pflichtfeld ist leer",
+			"missingRequired_other": "{{count}} Pflichtfelder sind leer",
+			"saveError": "{{field}} konnte nicht gespeichert werden",
+			"moreFields_one": "{{count}} weiteres Feld",
+			"moreFields_other": "{{count}} weitere Felder",
+			"manage": "Felder verwalten"
+		},
+		"board": {
+			"reorderFailed": "Die Reihenfolge konnte nicht gespeichert werden.",
+			"keyboardInstructions": "Drücke die Leertaste für die Vorschau und Enter, um diese Aufgabe zu öffnen. Mit Alt oder Option und den Pfeiltasten verschiebst du sie."
+		},
+		"toolbar": {
+			"search": "Aufgaben suchen",
+			"clearSearch": "Suche leeren",
+			"taskCount_one": "{{count}} Aufgabe",
+			"taskCount_other": "{{count}} Aufgaben",
+			"shownCount_one": "{{shown}} von {{count}} Aufgabe",
+			"shownCount_other": "{{shown}} von {{count}} Aufgaben"
+		},
+		"display": {
+			"title": "Anzeige",
+			"sortBy": "Sortieren nach",
+			"showOnCards": "Auf Karten anzeigen",
+			"showOnRows": "In Zeilen anzeigen",
+			"checklistProgress": "Checklisten-Fortschritt",
+			"projectBackground": "Projekthintergrund",
+			"layout": "Layout"
+		},
+		"filterBar": {
+			"label": "Aktive Filter",
+			"removeFilter": "Filter {{name}} entfernen",
+			"noMatches": "Keine Aufgaben passen zu deiner Suche oder deinen Filtern."
+		},
+		"filterMenu": {
+			"addFilter": "Filter hinzufügen…",
+			"searchSubject": "{{name}}…",
+			"noResults": "Keine Ergebnisse"
+		},
+		"shortcuts": {
+			"assignedToMe": "Dir zugewiesen",
+			"idCopied": "Aufgaben-ID kopiert",
+			"titleCopied": "Aufgabentitel kopiert",
+			"markdownCopied": "Als Markdown kopiert",
+			"copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen.",
+			"pageUrlCopied": "Seiten-URL kopiert"
+		}
+	},
+	"invitations": {
+		"email": {
+			"subject": "{{inviterName}} hat dich eingeladen, {{workspaceName}} auf Kaneo beizutreten",
+			"preview": "Du wurdest zu {{workspaceName}} auf Kaneo eingeladen",
+			"title": "{{workspaceName}} beitreten",
+			"subtitle": "{{inviterName}} ({{inviterEmail}}) hat dich eingeladen, in Kaneo zusammenzuarbeiten.",
+			"cta": "Einladung annehmen",
+			"sameEmail": "Du kannst die Einladung mit derselben E-Mail-Adresse annehmen, die diese Nachricht erhalten hat.",
+			"ignore": "Falls du damit nicht gerechnet hast, kannst du diese E-Mail einfach ignorieren.",
+			"footer": "Kaneo Workspace-Einladung",
+			"details": {
+				"title": "Einladungsdetails",
+				"sentTo": "Gesendet an",
+				"instance": "Instanz",
+				"role": "Rolle",
+				"expires": "Läuft ab"
+			}
+		},
+		"pageTitle": "Einladungen",
+		"pendingInvitations": "Ausstehende Einladungen",
+		"acceptSubtitle": "Nimm Einladungen an, um Workspaces beizutreten",
+		"noPendingTitle": "Keine ausstehenden Einladungen",
+		"noPendingDescription": "Du hast derzeit keine ausstehenden Workspace-Einladungen.",
+		"continueToSetup": "Weiter zum Setup",
+		"skipForNow": "Vorerst überspringen",
+		"table": {
+			"workspace": "Workspace",
+			"invitedBy": "Eingeladen von",
+			"expires": "Läuft ab"
+		},
+		"toast": {
+			"acceptError": "Einladung konnte nicht angenommen werden",
+			"acceptSuccess": "Einladung angenommen! Willkommen im Team.",
+			"rejectError": "Einladung konnte nicht abgelehnt werden",
+			"rejectSuccess": "Einladung abgelehnt"
+		}
+	},
+	"workspace": {
+		"projects": {
+			"pageTitle": "Projekte",
+			"createProject": "Projekt erstellen",
+			"title": "Titel",
+			"progress": "Fortschritt",
+			"targetDate": "Zieldatum",
+			"dueDate": "Fälligkeitsdatum",
+			"status": "Status",
+			"emptyTitle": "Noch keine Projekte",
+			"emptyDescription": "Lege los, indem du dein erstes Projekt erstellst.",
+			"projectStatus": {
+				"notStarted": "Nicht begonnen",
+				"complete": "Abgeschlossen",
+				"inProgress": "In Bearbeitung"
+			},
+			"noDueDate": "Kein Fälligkeitsdatum",
+			"reorderHandle": "Projekt neu anordnen",
+			"reorderError": "Projekte konnten nicht neu angeordnet werden",
+			"emptyDescriptionReadOnly": "In diesem Workspace gibt es noch keine Projekte. Bitte einen Admin, eines zu erstellen.",
+			"unavailable": {
+				"backToWorkspace": "Back to workspace",
+				"noAccessDescription": "Ask a workspace admin to give you access.",
+				"noAccessTitle": "You don't have access to this project",
+				"notFoundDescription": "This project doesn't exist or has been deleted.",
+				"notFoundTitle": "Project not found"
+			}
+		},
+		"search": {
+			"pageTitle": "Suche",
+			"backToDashboard": "Zurück zum Dashboard",
+			"placeholder": "Suche nach Aufgaben nach Titel oder Kurz-ID (z. B. DEP-23)...",
+			"hint": "Suche über alle Projekte in diesem Workspace. Nutze Kurz-IDs wie DEP-23, um bestimmte Aufgaben zu finden.",
+			"searching": "Suche läuft...",
+			"resultsFound_one": "{{count}} Ergebnis gefunden",
+			"resultsFound_other": "{{count}} Ergebnisse gefunden",
+			"noResultsTitle": "Keine Ergebnisse gefunden",
+			"noResultsDescription": "Passe deine Suchbegriffe an oder suche nach etwas anderem",
+			"startTitle": "Suche starten",
+			"startDescription": "Gib einen Suchbegriff ein, um Aufgaben in allen Projekten zu finden",
+			"quickSearchesLabel": "Schnellsuchen:",
+			"suggestionHighPriority": "Hohe Priorität",
+			"suggestionBug": "Bug",
+			"suggestionFeature": "Feature",
+			"suggestionInProgress": "In Bearbeitung",
+			"suggestionCompleted": "Abgeschlossen"
+		},
+		"create": {
+			"pageTitle": "Workspace erstellen",
+			"heading": "Neuen Workspace erstellen",
+			"subtitle": "Workspaces sind gemeinsame Umgebungen, in denen Teams an Projekten, Zyklen und Issues arbeiten können.",
+			"nameLabel": "Workspace-Name",
+			"namePlaceholder": "Workspace-Namen eingeben",
+			"descriptionLabel": "Beschreibung (optional)",
+			"descriptionPlaceholder": "Füge eine Beschreibung für deinen Workspace hinzu",
+			"required": "Erforderlich",
+			"creating": "Wird erstellt...",
+			"submit": "Workspace erstellen",
+			"success": "Workspace erfolgreich erstellt",
+			"error": "Workspace konnte nicht erstellt werden"
+		},
+		"home": {
+			"activity": {
+				"commented": "commented",
+				"empty": "Nothing has happened in the last 30 days.",
+				"loadError": "Activity couldn't be loaded.",
+				"title": "Activity",
+				"updated": "updated the task"
+			},
+			"greeting": {
+				"afternoon": "Good afternoon",
+				"evening": "Good evening",
+				"morning": "Good morning"
+			},
+			"newTask": "New task",
+			"pageTitle": "Home",
+			"projects": {
+				"all": "All projects",
+				"tasks_one": "{{count}} task",
+				"tasks_other": "{{count}} tasks",
+				"title": "Your projects",
+				"loadError": "Projects couldn't be loaded."
+			},
+			"upNext": {
+				"assigned_one": "{{count}} assigned to you",
+				"assigned_other": "{{count}} assigned to you",
+				"title": "Up next",
+				"viewAll": "View all"
+			},
+			"week": {
+				"more_one": "+{{count}} more",
+				"more_other": "+{{count}} more",
+				"truncated": "The week preview includes only the first {{shown}} of {{total}} assigned tasks."
+			}
+		},
+		"myTasks": {
+			"emptyDescription": "Tasks assigned to you across this workspace show up here.",
+			"groupBy": {
+				"dueDate": "Due date",
+				"label": "Group by",
+				"project": "Project"
+			},
+			"pageTitle": "My tasks",
+			"truncated": "Showing the first {{shown}} of {{total}} tasks."
+		},
+		"myWork": {
+			"due": {
+				"later": "Later",
+				"noDueDate": "No due date",
+				"overdue": "Overdue",
+				"thisWeek": "This week",
+				"today": "Today",
+				"tomorrow": "Tomorrow"
+			},
+			"empty": "Nothing assigned to you",
+			"loadError": "Your tasks couldn't be loaded."
+		}
+	},
+	"team": {
+		"roles": {
+			"owner": "Eigentümer",
+			"admin": "Admin",
+			"member": "Mitglied",
+			"viewer": "Betrachter"
+		},
+		"members": {
+			"pageTitle": "Mitglieder",
+			"inviteMember": "Mitglied einladen",
+			"you": "Du"
+		},
+		"invitations": {
+			"linkLabel": "Einladungslink",
+			"copyLink": "Link kopieren",
+			"linkCopied": "Einladungslink kopiert",
+			"copyFailed": "Automatisches Kopieren fehlgeschlagen. Markiere den Link und drücke Strg+C.",
+			"pendingBadge": "ausstehend",
+			"expires": "Läuft ab am {{date}}"
+		},
+		"inviteModal": {
+			"title": "Teammitglied einladen",
+			"emailLabel": "E-Mail",
+			"emailPlaceholder": "kollege@firma.com",
+			"sendInvitation": "Einladung senden",
+			"success": "Einladung erfolgreich gesendet",
+			"error": "Teammitglied konnte nicht eingeladen werden",
+			"createdTitle": "Einladung erstellt",
+			"shareLinkDescription": "Teile diesen Link mit {{email}}, damit die Person dem Workspace beitreten kann.",
+			"done": "Fertig"
+		},
+		"membersTable": {
+			"emptyTitle": "Noch keine Teammitglieder",
+			"emptyDescription": "Lade dein erstes Teammitglied ein, um loszulegen.",
+			"columns": {
+				"name": "Name",
+				"role": "Rolle",
+				"joined": "Beigetreten",
+				"actions": "Aktionen",
+				"projects": "Projects"
+			},
+			"memberRolePending": "{{role}} (Ausstehend)",
+			"ariaCancelInvitation": "Einladung abbrechen",
+			"ariaRemoveMember": "Mitglied entfernen",
+			"removeDialogTitle": "Teammitglied entfernen?",
+			"removeDialogDescription": "Bist du sicher, dass du {{name}} aus dem Workspace entfernen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.",
+			"cancelDialogTitle": "Einladung abbrechen?",
+			"cancelDialogDescription": "Bist du sicher, dass du die Einladung für {{email}} abbrechen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.",
+			"removeMember": "Mitglied entfernen",
+			"cancelInvitation": "Einladung abbrechen",
+			"removeSuccess": "Teammitglied erfolgreich entfernt",
+			"removeError": "Teammitglied konnte nicht entfernt werden",
+			"cancelInviteSuccess": "Einladung erfolgreich abgebrochen",
+			"cancelInviteError": "Einladung konnte nicht abgebrochen werden",
+			"ariaInvitationActions": "Einladungsaktionen",
+			"roleUpdateSuccess": "Rolle aktualisiert",
+			"roleUpdateError": "Rolle konnte nicht aktualisiert werden"
+		},
+		"projectAccess": {
+			"allProjects": "All projects",
+			"allProjectsDescription": "Access every project in this workspace, including new ones.",
+			"description": "Choose which projects this person can see.",
+			"dialogDescription": "Choose which projects {{name}} can access.",
+			"dialogTitle": "Project access",
+			"editAria": "Change project access for {{name}} ({{access}})",
+			"label": "Project access",
+			"noProjects": "No projects in this workspace yet.",
+			"projectCount_one": "{{count}} project",
+			"projectCount_other": "{{count}} projects",
+			"projectsLabel": "Projects",
+			"save": "Save",
+			"selectAtLeastOne": "Choose at least one project.",
+			"selectedProjects": "Selected projects",
+			"selectedProjectsDescription": "Only access the projects you choose.",
+			"updateError": "Failed to update project access",
+			"updateSuccess": "Project access updated",
+			"archived": "Archived",
+			"allProjectsUnavailable": "Your own access is limited, so you can only give access to selected projects."
+		}
+	},
+	"publicProject": {
+		"pageTitle": "Öffentliche Ansicht",
+		"badge": "Öffentlich",
+		"readOnly": "Schreibgeschützt",
+		"error": {
+			"title": "Projekt nicht gefunden",
+			"description": "Dieses Projekt existiert nicht oder ist nicht öffentlich zugänglich."
+		},
+		"taskCard": {
+			"viewDetailsAria": "Details für Aufgabe {{title}} ansehen"
+		},
+		"taskDetail": {
+			"labels": "Labels",
+			"externalLinks": "Externe Links",
+			"pullRequestFallback": "Pull Request",
+			"issueFallback": "Issue",
+			"prStatusMerged": "Zusammengeführt",
+			"prStatusDraft": "Entwurf",
+			"prStatusOpen": "Offen",
+			"dueWithDate": "Fällig {{date}}",
+			"created": "Erstellt",
+			"dueDateLabel": "Fälligkeitsdatum"
+		},
+		"theme": {
+			"switchToLight": "Zu hellem Modus wechseln",
+			"switchToDark": "Zu dunklem Modus wechseln"
+		},
+		"copyUrl": {
+			"successToast": "URL kopiert",
+			"errorToast": "URL konnte nicht kopiert werden",
+			"copied": "Kopiert",
+			"share": "Teilen"
+		},
+		"branding": {
+			"poweredBy": "Bereitgestellt von"
+		}
+	},
+	"press": {
+		"title": "Press kit",
+		"headline": "Kaneo press kit",
+		"intro": "Kaneo logos and product screenshots for articles, videos, and other media.",
+		"description": "Kaneo press resources: product information, logos, screenshots, and contact details for journalists and creators.",
+		"downloadKit": "Download all assets",
+		"boilerplateTitle": "About Kaneo",
+		"boilerplate": "Kaneo is an open-source project management platform created by Andrej Acevski. Teams can organize tasks in board and list views, assign work, set priorities and due dates, and connect GitHub. Kaneo is available under the MIT license for self-hosting, or as a managed service through Kaneo Cloud.",
+		"logosTitle": "Logos",
+		"darkLogo": "Dark wordmark",
+		"darkLogoAlt": "Dark Kaneo logo on a light background",
+		"darkLogoDetail": "SVG",
+		"lightLogo": "Light wordmark",
+		"lightLogoAlt": "Light Kaneo logo on a dark background",
+		"lightLogoDetail": "SVG",
+		"icon": "App icon",
+		"iconAlt": "Kaneo app icon",
+		"iconDetail": "PNG, 512 × 512",
+		"download": "Download",
+		"screenshotsTitle": "Screenshots",
+		"lightScreenshot": "Board (light)",
+		"lightScreenshotAlt": "Kaneo board in light theme, with task cards arranged by status",
+		"darkScreenshot": "Board (dark)",
+		"darkScreenshotAlt": "Kaneo board in dark theme, with task cards arranged by status",
+		"contactTitle": "Press enquiries",
+		"contactBody": "Contact the Kaneo team for product questions, interviews, or additional materials.",
+		"usageContrast": "Choose the light wordmark for dark backgrounds and the dark wordmark for light backgrounds.",
+		"usageProportions": "Keep the original proportions and colours, without stretching or adding effects.",
+		"usageSpace": "Leave enough space around the logo to keep it clear and readable.",
+		"darkListScreenshot": "List (dark)",
+		"darkListScreenshotAlt": "Kaneo task list in dark theme, grouped by status with assignees, priorities, labels, and due dates",
+		"darkTaskScreenshot": "Task details (dark)",
+		"darkTaskScreenshotAlt": "Kaneo task details in dark theme, with a description, checklist, team comment, and task properties",
+		"darkTimelineScreenshot": "Timeline (dark)",
+		"darkTimelineScreenshotAlt": "Kaneo Gantt timeline in dark theme, showing scheduled tasks and their durations",
+		"lightListScreenshot": "List (light)",
+		"lightListScreenshotAlt": "Kaneo task list in light theme, grouped by status with assignees, priorities, labels, and due dates",
+		"lightTaskScreenshot": "Task details (light)",
+		"lightTaskScreenshotAlt": "Kaneo task details in light theme, with a description, checklist, team comment, and task properties",
+		"lightTimelineScreenshot": "Timeline (light)",
+		"lightTimelineScreenshotAlt": "Kaneo Gantt timeline in light theme, showing scheduled tasks and their durations"
+	},
+	"landing": {
+		"sponsors": {
+			"ciSponsor": "Partner"
+		},
+		"founder": {
+			"title": "Why Kaneo exists",
+			"intro": "I'm Andrej, and I created Kaneo because I was tired of project management tools that got in the way more than they helped. After years of using bloated, overcomplicated platforms that distracted from actual work, I knew there had to be a better way.",
+			"problem": "The problem wasn't that these tools lacked features - it was that they had too many. Every notification, every unnecessary button, every complex workflow was pulling my team away from what mattered: building great products.",
+			"principle": "I believe the best tools are invisible. They should amplify your team's natural workflow, not force you to adapt to theirs. Kaneo is built on the principle that less is more - every feature exists because it solves a real problem, not because it looks impressive in a demo."
+		},
+		"hero": {
+			"cloudCta": "Try Kaneo Cloud",
+			"selfHostCta": "Self-host Kaneo",
+			"trialNote": "14-day cloud trial. No credit card required.",
+			"github": "GitHub",
+			"productHunt": "Product Hunt",
+			"title": "Project management",
+			"titleAccent": "that doesn't become the project.",
+			"description": "Open-source project management with boards, Gantt charts, and GitHub integration. Self-host for free with SSO included, or let Kaneo Cloud handle the hosting."
+		},
+		"navigation": {
+			"product": "Product",
+			"pricing": "Pricing",
+			"resources": "Resources",
+			"docs": "Documentation",
+			"blog": "Blog",
+			"guides": "Guides",
+			"comparisons": "Compare tools",
+			"roadmap": "Roadmap",
+			"community": "Community",
+			"menu": "Menu",
+			"closeMenu": "Close menu",
+			"home": "Kaneo home",
+			"signIn": "Sign In",
+			"getStarted": "Get Started"
+		},
+		"showcase": {
+			"label": "Kaneo product views",
+			"controls": "Choose a product view",
+			"play": "Play product views",
+			"pause": "Pause product views",
+			"board": "Board",
+			"list": "Backlog",
+			"gantt": "Gantt"
+		},
+		"features": {
+			"tasks": {
+				"label": "Subtasks & context",
+				"title": "Big tasks. Clear next steps.",
+				"description": "Break work into subtasks, assign each one, and track progress without losing the original brief. Every detail stays with the work."
+			},
+			"github": {
+				"label": "GitHub integration",
+				"title": "From pull request to done.",
+				"description": "Issues and labels sync both ways. Linked pull requests move tasks through review to done as your code is opened and merged.",
+				"link": "Set up GitHub"
+			},
+			"hosting": {
+				"title": "Run it on your own server.",
+				"description": "Deploy with Docker and keep your workspace on infrastructure you control.",
+				"link": "Self-host Kaneo"
+			},
+			"source": {
+				"title": "The code is open, too.",
+				"description": "Read the source, report an issue, or contribute a change. Development happens on GitHub.",
+				"link": "View the source"
+			},
+			"preview": {
+				"taskAlt": "Interactive Kaneo task and subtask preview.",
+				"githubAlt": "Interactive preview of a GitHub merge updating a Kaneo task.",
+				"taskTitle": "Publish the new homepage",
+				"taskDescription": "Update the copy and check the layout before the next release.",
+				"checklistDone": "Review the copy",
+				"checklistOpen": "Check the mobile layout",
+				"inProgress": "In Progress",
+				"high": "High",
+				"date": "Oct 12",
+				"design": "design",
+				"done": "Done",
+				"relationsAlt": "Interactive Kaneo task dependencies preview.",
+				"inReview": "In Review",
+				"trySubtasks": "Try checking off a subtask.",
+				"tryGithub": "Preview a merge to see the task update.",
+				"tryRelations": "Open a linked task to follow the connection.",
+				"mergeAction": "Preview merge",
+				"resetAction": "Reset preview",
+				"mergedHint": "Pull request merged. Task moved to Done.",
+				"progress": "{{completed}} of {{total}} subtasks complete",
+				"backToTask": "Back to the homepage task",
+				"releaseNotes": "Write the release notes",
+				"dependencyDescription": "The homepage is waiting on the mobile review. Keep the launch notes linked for context.",
+				"mobileDescription": "Check the new homepage on narrow screens before it goes live.",
+				"notesDescription": "Capture what changed for the launch announcement."
+			},
+			"relations": {
+				"label": "Linked tasks & dependencies",
+				"title": "See what’s holding things up.",
+				"description": "Connect blockers, follow dependencies, and keep related work close. Open a linked task to see the context behind the next step."
+			}
+		},
+		"seo": {
+			"title": "Kaneo — Open-source, self-hosted project management",
+			"description": "Open-source project management with boards, Gantt charts, and GitHub integration. Self-host for free with SSO included, or use Kaneo Cloud."
+		},
+		"resources": {
+			"eyebrow": "Make it your own",
+			"title": "A clear path from trying it to using it.",
+			"description": "Set up your server, connect your tools, or compare Kaneo with your current tracker.",
+			"docker": {
+				"title": "Self-host with Docker",
+				"description": "Installation, backups, and updates for a setup you control."
+			},
+			"sso": {
+				"title": "Bring your own identity provider",
+				"description": "Configure OIDC single sign-on in the free self-hosted build."
+			},
+			"mcp": {
+				"title": "Connect your AI tools",
+				"description": "Use MCP to work with tasks and projects through an AI client."
+			},
+			"linear": {
+				"title": "Compare Kaneo and Linear",
+				"description": "See the differences in hosting, licensing, and workflow."
+			}
+		},
+		"product": {
+			"title": "Before you get started",
+			"description": "The practical details about hosting, planning, and connecting your team.",
+			"overview": "Kaneo is an open-source, MIT-licensed project management platform with boards, backlog, Gantt and calendar views, custom fields, time tracking, and GitHub integration. Self-host it on your own infrastructure or use Kaneo Cloud.",
+			"hosting": {
+				"question": "Is Kaneo free to self-host?",
+				"answer": "Yes. Kaneo is MIT licensed and free to self-host, with single sign-on included. Run the application alongside PostgreSQL using Docker Compose, or deploy with the official Helm chart. You manage infrastructure, updates, and backups.",
+				"link": "Read the installation guide"
+			},
+			"planning": {
+				"question": "Does Kaneo have Gantt charts?",
+				"answer": "Yes. Kaneo includes Gantt and calendar views alongside boards, lists, and backlog planning. Use task start dates and due dates to plan work on a timeline. Budgeting, baseline comparisons, and sprint burndown reports are outside its current scope.",
+				"link": "Compare planning features"
+			},
+			"sso": {
+				"question": "Is single sign-on included?",
+				"answer": "Yes. The free self-hosted build supports Google, GitHub, Discord, and custom OAuth/OIDC providers. Configure your provider on your instance without purchasing a separate Kaneo edition.",
+				"link": "Configure OIDC"
+			},
+			"agents": {
+				"question": "Can AI clients work with Kaneo?",
+				"answer": "Yes. Kaneo provides an MCP server through the @kaneo/mcp package and an HTTP endpoint. Compatible AI clients can read and update tasks using an API key tied to a user, subject to workspace permissions.",
+				"link": "Read the MCP guide"
+			}
+		},
+		"comparison": {
+			"feature": "Feature",
+			"yes": "Yes",
+			"no": "No"
+		},
+		"selfHostingGuide": {
+			"summary": "What self-hosting involves, with links to the maintained Docker Compose configuration and installation steps.",
+			"answer": "To self-host Kaneo, run the application and PostgreSQL with Docker Compose, configure your public URL and secrets, and put a TLS reverse proxy in front. The installation guide specifies at least 2 GB of RAM and 10 GB of disk space. Plan for ongoing updates, database backups, and storage for uploaded files.",
+			"requirements": "The documented minimum is 2 GB of RAM and 10 GB of disk space, with Docker 20.10 or newer and Docker Compose V2. Allow more capacity for your workload, database growth, and uploaded files.",
+			"compose": "Use the maintained compose.yml in the Docker Compose guide. It defines PostgreSQL, a persistent database volume, the Kaneo application, and health checks. Configure the environment file before starting the services; for production, pin an image version so updates are deliberate.",
+			"backups": "Back up both PostgreSQL and any object storage used for uploads. Choose a schedule based on how much work your team can afford to lose, store copies off the application server, and test restoring them before you need them.",
+			"worth": "Self-hosting makes sense when you need control over infrastructure and data, and someone can own maintenance. Include server capacity, storage, backups, and that maintenance time when comparing costs with a managed service.",
+			"minimum": "The installation guide specifies Docker 20.10 or newer, Docker Compose V2, at least 2 GB of RAM, and 10 GB of disk space. The Compose setup includes PostgreSQL. Redis is optional for a single API instance.",
+			"composeLink": "Docker Compose configuration",
+			"composeLinkDescription": "The maintained compose.yml with persistent storage and health checks.",
+			"startLink": "Start and verify the services",
+			"startLinkDescription": "Start the stack, inspect its status, and check that the application is available."
+		}
+	}
+}

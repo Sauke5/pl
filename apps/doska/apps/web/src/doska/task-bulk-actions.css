@@ -1,0 +1,10 @@
+.doska-bulk-dialog { width:760px;max-width:calc(100vw - 40px); }
+.doska-bulk-heading { display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px; }
+.doska-bulk-heading h2 { margin:0;font-size:20px; }
+.doska-bulk-dialog footer { display:flex;justify-content:flex-end;gap:10px;margin-top:20px; }
+.doska-bulk-dates { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+.doska-bulk-check { display:flex;align-items:center;gap:8px;margin:12px 0; }
+.doska-bulk-check input { width:auto; }
+.doska-bulk-preview { max-height:50vh;overflow:auto; }
+.doska-bulk-preview th { position:sticky;top:0;background:#192b3d; }
+:root[data-theme="light"] .doska-bulk-preview th { background:#f2f6fb; }

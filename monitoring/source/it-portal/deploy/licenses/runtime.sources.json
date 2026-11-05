@@ -1,0 +1,21 @@
+{
+  "iperf3.LICENSE": {
+    "source": "https://github.com/esnet/iperf/blob/3.20/LICENSE",
+    "git_blob_sha": "25117caf097b6e0a10ac31154fa73f0dc75d35ca",
+    "sha256": "7c9ba0385fcf35c4c9e08ad0c0cba72d4315f36f0f742fef4de826a28cc33a97"
+  },
+  "openssl.LICENSE": {
+    "source": "https://github.com/openssl/openssl/blob/openssl-3.6.1/LICENSE.txt",
+    "git_blob_sha": "49cc83d2ee29d13453188217f0e4edd70c7f842f",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  "openssl.AUTHORS": {
+    "source": "https://github.com/openssl/openssl/blob/openssl-3.6.1/AUTHORS.md",
+    "git_blob_sha": "5b036a0d8358167c87c7fa275cc671cd222dcce6",
+    "sha256": "b9f638dfc06b59c2d3b808186c3b30f713805a5db390f5b77b1703ac58acb83e"
+  },
+  "musl.COPYRIGHT": {
+    "source": "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.6",
+    "sha256": "b870108ec5e7790e9f9919064f1b9421d62d5f9b0e6c230c6adf7ea2da62e97b"
+  }
+}

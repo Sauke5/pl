@@ -1,0 +1,11 @@
+.doska-overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.doska-app .doska-overview-metric { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 20px; text-align: left; border-radius: 16px; }
+.doska-overview-metric strong { font-size: 2rem; line-height: 1.2; }
+.doska-app .doska-overview-overdue strong { color: var(--doska-danger, #ff8d93); }
+.doska-overview-assignees { max-width: 960px; }
+.doska-overview-assignees h2 { margin: 0 0 16px; font-size: 1.15rem; }
+.doska-overview-assignees ul { list-style: none; margin: 0; padding: 0; }
+.doska-app .doska-overview-assignees li button { display: flex; justify-content: space-between; align-items: center; gap: 24px; width: 100%; margin-top: 8px; text-align: left; }
+.doska-overview-assignees li span { overflow-wrap: anywhere; min-width: 0; }
+@media (max-width: 1000px) { .doska-overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 500px) { .doska-overview-metrics { grid-template-columns: 1fr; } }

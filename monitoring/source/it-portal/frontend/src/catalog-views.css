@@ -1,0 +1,277 @@
+.catalog-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.catalog-view-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.doska-resource-tasks {
+  margin: 24px 0;
+}
+.doska-resource-tasks-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.doska-resource-tasks-heading h3 {
+  margin: 0;
+}
+.doska-resource-task-list {
+  padding-left: 20px;
+  margin: 12px 0;
+}
+.doska-resource-task-list li {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.doska-resource-source {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Catalog owns its content; PlatformShell owns the common chrome. */
+.pl-ui-main .catalog-layout {
+  grid-template-columns: 235px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.catalog-layout .catalog-main {
+  min-width: 0;
+}
+.catalog-layout .catalog-nav {
+  border: 1px solid var(--pl-ui-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--pl-ui-surface);
+  min-width: 0;
+}
+.catalog-layout .catalog-nav > button {
+  min-height: 39px;
+  padding: 9px 10px;
+  color: var(--pl-ui-text);
+}
+.catalog-layout .catalog-nav > h3 {
+  margin: 24px 8px 10px;
+}
+.catalog-layout .catalog-nav button span {
+  color: var(--pl-ui-muted);
+  font-variant-numeric: tabular-nums;
+}
+.catalog-layout .catalog-nav .catalog-favorites-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  font-size: inherit;
+}
+.catalog-layout .catalog-nav > button.selected {
+  background: var(--pl-ui-hover);
+  color: var(--pl-ui-text);
+}
+.catalog-layout .filter-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 18px;
+}
+.catalog-layout .filter-bar > :is(input, select),
+.catalog-layout .filter-bar .input-icon > input {
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  max-width: none;
+  margin: 0;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.catalog-layout .filter-bar .catalog-filter-search {
+  grid-column: span 3;
+  min-width: 0;
+}
+.catalog-layout .filter-bar .catalog-filter-sort {
+  grid-column: 4;
+}
+.catalog-layout .catalog-table-scroll {
+  overflow-x: auto;
+  border-radius: 12px;
+}
+.catalog-layout .resource-list {
+  border: 1px solid var(--pl-ui-border);
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 940px;
+  background: var(--pl-ui-surface);
+}
+.catalog-layout :is(.resource-row, .catalog-table-header) {
+  display: grid;
+  grid-template-columns:
+    minmax(200px, 2fr) minmax(154px, 1fr) minmax(140px, 1.15fr)
+    minmax(110px, 0.85fr) minmax(110px, 0.8fr) 108px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+}
+.catalog-layout .catalog-table-header {
+  min-height: 42px;
+  color: var(--pl-ui-muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--pl-ui-border);
+}
+.catalog-layout .catalog-table-header > :last-child {
+  font-size: 0;
+}
+.catalog-layout .resource-row {
+  min-height: 61px;
+  border-bottom: 1px solid var(--pl-ui-border);
+  cursor: pointer;
+}
+.catalog-layout .resource-row:last-child {
+  border-bottom: 0;
+}
+.catalog-layout .resource-row:hover,
+.catalog-layout .resource-row:focus-within {
+  background: var(--pl-ui-hover);
+}
+.catalog-layout .resource-row:focus-visible {
+  outline: 2px solid var(--pl-ui-focus);
+  outline-offset: -2px;
+}
+.catalog-layout .catalog-resource-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.catalog-layout .catalog-resource-identity > .resource-icon {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 9px;
+}
+.catalog-layout .resource-main {
+  min-width: 0;
+}
+.catalog-layout .resource-main > .resource-name {
+  display: block;
+  max-width: 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--pl-ui-text);
+  font-size: 14px;
+}
+.catalog-layout .resource-main > span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--pl-ui-muted);
+  font-size: 12px;
+}
+.catalog-layout .catalog-resource-ip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  color: var(--pl-ui-text);
+}
+.catalog-layout .catalog-resource-ip > span:first-child {
+  overflow-wrap: anywhere;
+}
+.catalog-layout .catalog-resource-ip > .button {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+.catalog-layout
+  :is(
+    .catalog-resource-direction,
+    .resource-site,
+    .catalog-resource-environment
+  ) {
+  display: block;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  color: var(--pl-ui-text);
+}
+.catalog-layout .catalog-resource-environment .tag {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  background: var(--pl-ui-hover);
+  border-color: var(--pl-ui-border);
+  color: var(--pl-ui-text);
+}
+.catalog-layout .catalog-resource-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.catalog-layout
+  .catalog-resource-actions
+  > :is(.button, .catalog-action-placeholder) {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  flex: none;
+}
+.catalog-layout .catalog-open-resource {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--pl-ui-muted);
+}
+.catalog-layout .catalog-open-resource:hover {
+  color: var(--pl-ui-text);
+  background: var(--pl-ui-hover);
+}
+.catalog-layout .list-footer {
+  padding: 14px 0;
+}
+@media (max-width: 1200px) {
+  .pl-ui-main .catalog-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+@media (max-width: 900px) {
+  .pl-ui-main .catalog-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalog-layout .catalog-nav {
+    display: block;
+    padding: 12px;
+  }
+  .catalog-layout .filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .catalog-layout .filter-bar .catalog-filter-search {
+    grid-column: 1/-1;
+  }
+  .catalog-layout .filter-bar .catalog-filter-sort {
+    grid-column: auto;
+  }
+}

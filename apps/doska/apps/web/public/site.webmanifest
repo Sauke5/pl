@@ -1,0 +1,15 @@
+{
+  "name": "Задачи — PL",
+  "short_name": "PL",
+  "icons": [
+    {
+      "src": "pl-brand.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#141414",
+  "background_color": "#141414",
+  "display": "standalone"
+}

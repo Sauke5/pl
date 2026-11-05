@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "source": {
+    "kind": "local-committed-snapshot",
+    "paths": [
+      "apps/netmap",
+      "apps/netmap-stack"
+    ],
+    "identity": "Selected existing NetMap UI plus isolated runtime glue. CI binds the selected committed blobs; no inventory snapshots, installation private config or source Git history enter the image."
+  },
+  "recipe": "monitoring/source/it-portal/deploy/images/netmap.Dockerfile",
+  "context": ".",
+  "targets": [
+    "database",
+    "cache",
+    "netbox",
+    "netbox-worker",
+    "gitea",
+    "adapter",
+    "oxidized"
+  ],
+  "upstream": {
+    "netbox": {
+      "version": "4.7.4",
+      "docker_version": "5.1.1",
+      "release": "https://github.com/netbox-community/netbox/releases/tag/v4.7.4",
+      "index": "sha256:c75a7dcfe61dadd4e009c9b5d9118a33bec991f4359c0db18ac7f287b5980246"
+    },
+    "oxidized": {
+      "version": "0.37.0",
+      "release": "https://github.com/ytti/oxidized/releases/tag/0.37.0",
+      "index": "sha256:07d8d7d669bb210b1100d121bbe214a3d64d621b1768f8f2179a1508a772541e"
+    },
+    "gitea": {
+      "version": "28.2.0",
+      "release": "https://github.com/go-gitea/gitea/releases/tag/v28.2.0",
+      "index": "sha256:94807314454f6525994a3b76286ba12bc7e7f8cd14f61d9e67431767f8103306"
+    }
+  },
+  "runtime": {
+    "gateway_port": 8092,
+    "network_prefixlen": 28,
+    "host_ports": [],
+    "roles": [
+      "database",
+      "cache",
+      "netbox",
+      "netbox-worker",
+      "gitea",
+      "adapter",
+      "oxidized"
+    ],
+    "data_volumes": [
+      "database",
+      "cache",
+      "media",
+      "gitea",
+      "adapter",
+      "oxidized"
+    ],
+    "start_scans": false
+  },
+  "verification": "Source review only on Mac. CI must build every target and exercise native login/subpaths, authenticated NetBox v2 schema/token, explicit fixture CIDR polling, collection and Gitea commit, map Cable rendering, persistence, owned removal and absence of LAN listeners.",
+  "images": {
+    "netmap-database": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "database",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "18.6"
+      }
+    },
+    "netmap-cache": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "cache",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "9.1"
+      }
+    },
+    "netmap-netbox": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "netbox",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "4.7.4"
+      }
+    },
+    "netmap-netbox-worker": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "netbox-worker",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "4.7.4"
+      }
+    },
+    "netmap-gitea": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "gitea",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "28.2.0"
+      }
+    },
+    "netmap-adapter": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "adapter",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      }
+    },
+    "netmap-oxidized": {
+      "labels": {
+        "org.opencontainers.image.version": "1.0.0",
+        "pl.module.id": "netmap",
+        "pl.module.role": "oxidized",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "0.37.0"
+      }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+--- a/pkg/plugins/manager/signature/manifest.go
++++ b/pkg/plugins/manager/signature/manifest.go
+@@ -351,0 +352,3 @@
++	if m.KeyID == plSigningKeyID {
++		return plVerifyManifest(m, block)
++	}
+--- /dev/null
++++ b/pkg/plugins/manager/signature/pl_trust.go
+@@ -0,0 +1,32 @@
++package signature
++
++import (
++ "bytes"
++ "crypto/sha256"
++ "encoding/hex"
++ "errors"
++
++ "github.com/ProtonMail/go-crypto/openpgp"
++ "github.com/ProtonMail/go-crypto/openpgp/clearsign"
++ "github.com/ProtonMail/go-crypto/openpgp/packet"
++)
++
++// Pl trust is limited to the exact signed manifests embedded by this build.
++// It does not authorize other Pl-signed plugins or change upstream trust.
++func plVerifyManifest(m PluginManifest, block *clearsign.Block) error {
++ if block == nil || m.KeyID != plSigningKeyID || m.SignedByOrg != "pl" || m.SignedByOrgName != "Pl" || string(m.SignatureType) != "community" {
++  return errors.New("invalid Pl plugin signer")
++ }
++ expected, ok := plSigningManifests[m.Plugin+"\x00"+m.Version]
++ sum := sha256.Sum256(block.Bytes)
++ if !ok || expected != hex.EncodeToString(sum[:]) {
++  return errors.New("Pl plugin manifest is outside the pinned build")
++ }
++ keys, err := openpgp.ReadArmoredKeyRing(bytes.NewBufferString(plSigningPublicKey))
++ if err != nil || len(keys) != 1 || keys[0].PrimaryKey.KeyIdString() != plSigningKeyID {
++  return errors.New("invalid embedded Pl signing key")
++ }
++ _, err = openpgp.CheckDetachedSignature(keys, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body, &packet.Config{})
++ if err != nil { return errors.New("Pl plugin signature verification failed") }
++ return nil
++}
+--- /dev/null
++++ b/pkg/plugins/manager/signature/pl_trust_test.go
+@@ -0,0 +1,27 @@
++package signature
++
++import (
++ "bytes"
++ "context"
++ "testing"
++
++ "github.com/grafana/grafana/pkg/plugins/manager/signature/statickey"
++)
++
++func TestPlSignedPluginManifestAndTampering(t *testing.T) {
++ s := &Signature{kr: statickey.New()}
++ if _, err := s.readPluginManifest(context.Background(), []byte(plSigningFixture)); err != nil {
++  t.Fatal("pinned Pl signed manifest rejected", err)
++ }
++ for _, tc := range []struct{ old, replacement string }{
++  {`"plugin": "`, `"plugin": "foreign-`},
++  {`"version": "`, `"version": "foreign-`},
++  {`"signedByOrgName": "Pl"`, `"signedByOrgName": "Other"`},
++  {"-----BEGIN PGP SIGNATURE-----", "-----BEGIN INVALID SIGNATURE-----"},
++ } {
++  body := bytes.Replace([]byte(plSigningFixture), []byte(tc.old), []byte(tc.replacement), 1)
++  if bytes.Equal(body, []byte(plSigningFixture)) { t.Fatal("negative fixture did not change") }
++  if _, err := s.readPluginManifest(context.Background(), body); err == nil { t.Fatal("tampered manifest accepted") }
++ }
++ if _, err := s.readPluginManifest(context.Background(), []byte(`{"plugin":"unsigned"}`)); err == nil { t.Fatal("unsigned manifest accepted") }
++}

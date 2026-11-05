@@ -1,0 +1,13 @@
+.doska-search-bar { display:flex;gap:12px;align-items:center;margin-bottom:16px; }
+.doska-search-bar input { flex:1;min-width:0;max-width:760px; }
+.doska-search-filters { border:1px solid var(--border);border-radius:12px;margin-bottom:20px;padding:0 16px; }
+.doska-search-filters>summary { cursor:pointer;padding:12px 0;font-size:14px; }
+.doska-search-filter-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 16px;padding-top:6px; }
+.doska-search-filter-grid .doska-field { margin:0;gap:5px;font-size:12px; }
+.doska-search-filter-grid select,.doska-search-filter-grid input { min-width:0;width:100%;min-height:36px;padding:7px 9px; }
+.doska-search-filters .doska-filters { margin:16px 0; }
+.doska-search-task-number,.doska-search-archive { color:var(--muted);font-size:12px; }
+
+.doska-search-resource-options { list-style:none; padding:0; margin:0; display:grid; gap:4px; max-height:240px; overflow:auto; }
+.doska-search-resource-options button { width:100%; text-align:left; overflow-wrap:anywhere; }
+.doska-search-resource label { display:grid; gap:8px; }

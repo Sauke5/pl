@@ -1,0 +1,48 @@
+.doska-comment-thread { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.doska-comment-thread > .doska-comment-bubble {
+  --comment-author: hsl(var(--comment-hue) 65% 77%);
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 92%;
+  min-width: min(260px, 92%);
+  padding: 10px 13px;
+  border: 1px solid hsl(var(--comment-hue) 45% 65% / .2);
+  border-radius: 14px 14px 14px 4px;
+  background: hsl(var(--comment-hue) 45% 65% / .075);
+}
+.doska-comment-thread > .doska-comment-own { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: hsl(var(--comment-hue) 45% 65% / .13); }
+.doska-comment-thread .doska-comment-bubble > header { flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 4px; margin-bottom: 6px; }
+.doska-comment-thread .doska-comment-author { display: inline-flex; align-items: center; gap: 7px; min-width: 0; color: var(--comment-author); }
+.doska-comment-author > span:last-child { overflow-wrap: anywhere; }
+.doska-comment-avatar { display: inline-flex; justify-content: center; align-items: center; width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; background: hsl(var(--comment-hue) 55% 65% / .17); font-size: 10px; line-height: 1; font-weight: 600; }
+.doska-comment-thread time { margin-left: auto; font-size: 11px; }
+.doska-comment-thread .doska-comment-content { min-width: 0; line-height: 1.5; }
+.doska-comment-thread .doska-comment-content > :first-child { margin-top: 0; }
+.doska-comment-thread .doska-comment-content > :last-child { margin-bottom: 0; }
+.doska-comment-thread .doska-comment-content pre { max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; }
+.doska-comment-thread .doska-comment-content blockquote { margin: 8px 0; padding-left: 10px; border-left: 2px solid var(--comment-author); }
+.doska-comment-thread .doska-comment-content ul, .doska-comment-thread .doska-comment-content ol { padding-left: 20px; }
+.doska-comment-thread .doska-detail-actions { margin-top: 5px; gap: 12px; }
+.doska-comment-thread .doska-detail-actions:empty { display: none; }
+.doska-comment-thread .doska-detail-actions button:hover { color: var(--text); text-decoration: underline; }
+.doska-comment-thread > .doska-comment-deleted { background: transparent; border-style: dashed; }
+:root[data-theme="light"] .doska-comment-thread > .doska-comment-bubble { --comment-author: hsl(var(--comment-hue) 55% 30%); background: hsl(var(--comment-hue) 50% 50% / .055); border-color: hsl(var(--comment-hue) 45% 40% / .18); }
+:root[data-theme="light"] .doska-comment-thread > .doska-comment-own { background: hsl(var(--comment-hue) 50% 50% / .1); }
+:root[data-theme="light"] .doska-comment-thread > .doska-comment-deleted { background: transparent; }
+@media (max-width: 480px) { .doska-comment-thread > .doska-comment-bubble { max-width: 96%; min-width: min(240px, 96%); padding: 9px 11px; } }
+
+.doska-comment-thread .doska-comment-content { overflow-wrap:anywhere;word-break:normal; }
+.doska-comment-thread .doska-comment-content img { max-width:100%;height:auto; }
+.doska-comment-composer { padding:0;border:0;border-radius:0;background:transparent; }
+.doska-comment-composer > .doska-task-fields { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px; }
+.doska-comment-composer .doska-field { margin:0; }
+.doska-comment-composer .doska-comment-input { grid-column:1 / -1;grid-row:1; }
+.doska-app .doska-comment-composer .doska-task-fields textarea { min-height:60px;max-height:180px;resize:none;overflow-y:auto;line-height:20px;padding:9px 12px; }
+.doska-comment-composer .doska-comment-mentions { grid-column:1 / -1;grid-row:2;flex-wrap:wrap; }
+.doska-comment-composer .doska-comment-mentions:empty { display:none; }
+.doska-comment-composer .doska-mention-select { grid-column:1;grid-row:3;flex-direction:row;align-self:center;gap:8px; }
+.doska-comment-composer .doska-mention-select select { width:auto;max-width:220px; }
+.doska-comment-composer .doska-comment-send { grid-column:2;grid-row:3;align-items:center;justify-content:flex-end; }
+.doska-comment-composer .doska-comment-send > button { min-height:34px;padding:6px 12px; }
+.doska-comment-composer [role="alert"] { grid-column:1 / -1; }
+@media(max-width:480px) { .doska-comment-composer .doska-mention-select { flex-wrap:wrap; }.doska-comment-composer .doska-comment-send { flex-wrap:wrap; } }

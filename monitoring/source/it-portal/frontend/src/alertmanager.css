@@ -1,0 +1,41 @@
+.am-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 1.5rem 0;
+  min-width: 0;
+}
+.am-fieldset > legend {
+  font-weight: 650;
+  margin-bottom: 1rem;
+}
+.am-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.am-receiver {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.am-receiver > .field,
+.am-proxy > .field {
+  margin: 1rem 0;
+}
+.am-proxy {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+.alertmanager-page .field {
+  min-width: 0;
+}
+.alertmanager-page input,
+.alertmanager-page textarea {
+  min-width: 0;
+}
+@media (max-width: 800px) {
+  .am-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

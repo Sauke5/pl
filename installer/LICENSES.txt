@@ -1,0 +1,53 @@
+PL — software notices
+
+Original PL code, including the PL Inventory service, is licensed under MIT.
+Copyright (c) 2026 Sauke5 and PL contributors. The complete MIT text is included
+in source.tar.gz as LICENSE and in the public source repository.
+
+The source archive is the exact selected build context, identified by its SHA256
+in the package manifest and pl.source.sha256 image labels. It contains no original
+Git history, deployment secrets or runtime data. Dependencies are pinned in
+Go/npm/Python/.NET lock and manifest files and retain their original licenses.
+
+Core runtime/build components: PostgreSQL (PostgreSQL License), Go (BSD-3-Clause),
+nginx (BSD-2-Clause), Alpine Linux packages and their own notices. API dependencies
+and browser packages retain their individual notices in THIRD_PARTY_NOTICES.
+Optional modules are separate deliveries. Their exact sources, revisions, versions,
+licenses and upstream image digests are recorded in deploy/images/*.sources.json
+in the corresponding source archive and /usr/share/pl/provenance/ in their images.
+
+Prometheus retains Apache-2.0. Xray retains MPL-2.0 notices in its image at
+/usr/share/licenses/xray/LICENSE and exact source/lock provenance under
+/usr/share/pl/provenance/xray/. Alertmanager retains Apache-2.0 at
+/usr/share/licenses/alertmanager/LICENSE with source and lock provenance at
+/usr/share/pl/provenance/alertmanager/.
+
+Optional Grafana OSS module: Grafana 13.3.0, AGPL-3.0-only.
+Official source: https://github.com/grafana/grafana/tree/6f8ce3c693b493043ebcd4787566d2b6b118b0f0
+The pinned official image preserves the native frontend, backend and bundled
+plugin signatures. Exact source, image digest and version are recorded in
+deploy/images/grafana.sources.json in source.tar.gz.
+License: https://github.com/grafana/grafana/blob/6f8ce3c693b493043ebcd4787566d2b6b118b0f0/LICENSE
+
+Optional Forms module: PL adapter source is included in source.tar.gz under
+apps/forms/. Its native engine is HeyForm 3.0.5 (AGPL-3.0-only), with MongoDB
+9.0.4 (SSPL-1.0) and KeyDB 6.3.4 (BSD-3-Clause). Exact image identities, source
+links and licenses are recorded in deploy/images/forms.sources.json in the source
+archive and /usr/share/pl/provenance/forms/sources.json in each module image.
+Upstream engine source: https://github.com/heyform/heyform/tree/v3.0.5
+
+Optional Doska module: the selected application source and MIT license are included
+under apps/doska/ in source.tar.gz. Upstream Kaneo 2.46.2 and the exact Doska
+revision are recorded in deploy/images/doska.sources.json. API and web images are
+built from that selected source; module PostgreSQL reuses the core database image.
+Workspace dependencies retain their individual notices and pinned lockfile records.
+
+Optional SFTPGo module: SFTPGo 2.7.6, AGPL-3.0-only.
+Official source: https://github.com/drakkan/sftpgo/tree/62ae9ba3957e9ed52b44a4f885e805e2d7b35972
+License: https://github.com/drakkan/sftpgo/blob/v2.7.6/LICENSE
+The module uses the pinned official upstream image with the PL runtime recipe.
+Image identity, source revision and recipe are recorded in
+deploy/images/sftpgo.sources.json in source.tar.gz and
+/usr/share/pl/provenance/sftpgo/sources.json in the module image.
+PL gateway and interface sources are included in source.tar.gz. The controller
+is supplied as the readable Python payload sftpgo-controller.py in the package.

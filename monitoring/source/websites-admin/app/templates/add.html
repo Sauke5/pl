@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading-row"><div><a class="back-link" href="{{ url_for('home') }}">← Все сайты</a><h1 class="page-title">Добавить сайт</h1><p class="page-note">Новая цель получает стандартную HTTP-проверку с ожидаемым кодом 200.</p></div></div>
+<form class="panel stack-form" action="{{ url_for('target_add_preview') }}" method="post" hx-post="{{ url_for('target_add_preview') }}" hx-target="#add-preview" hx-swap="innerHTML" data-progress-label="Проверяю URL и подбираю фрагменты…">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+  <div class="two-columns"><label><span>Отображаемое имя <span class="optional">необязательно</span></span><input class="pl-ui-input" name="display_name" maxlength="120" placeholder="Например: Корпоративный сайт" /></label><label>URL<input class="pl-ui-input" name="url" type="url" required placeholder="https://example.ru/" /></label></div>
+  <button class="button button-primary pl-ui-button pl-ui-button-default" type="submit">Проверить URL</button>
+</form>
+<div id="add-preview" class="preview-slot" aria-live="polite" aria-busy="false"><div class="empty-state"><strong>Проверка URL</strong><p>Здесь появятся результат загрузки и рекомендуемые фрагменты.</p></div></div>
+{% endblock %}

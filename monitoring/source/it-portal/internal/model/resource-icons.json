@@ -1,0 +1,154 @@
+[
+  {
+    "key": "doska",
+    "label": "Доска задач"
+  },
+  {
+    "key": "forms",
+    "label": "Опросы и формы"
+  },
+  {
+    "key": "prometheus",
+    "label": "Prometheus"
+  },
+  {
+    "key": "alertmanager",
+    "label": "Уведомления"
+  },
+  {
+    "key": "grafana",
+    "label": "Графики"
+  },
+  {
+    "key": "gitea",
+    "label": "Git"
+  },
+  {
+    "key": "netbox",
+    "label": "NetBox"
+  },
+  {
+    "key": "oxidized",
+    "label": "Архив"
+  },
+  {
+    "key": "dozzle",
+    "label": "Терминал"
+  },
+  {
+    "key": "dns",
+    "label": "DNS"
+  },
+  {
+    "key": "esxi",
+    "label": "Виртуализация"
+  },
+  {
+    "key": "idrac",
+    "label": "Управление сервером"
+  },
+  {
+    "key": "bmc",
+    "label": "Плата управления"
+  },
+  {
+    "key": "cloud",
+    "label": "Облако"
+  },
+  {
+    "key": "netronome",
+    "label": "Радиосвязь"
+  },
+  {
+    "key": "academy",
+    "label": "Обучение"
+  },
+  {
+    "key": "rds",
+    "label": "Рабочий стол"
+  },
+  {
+    "key": "support",
+    "label": "Поддержка"
+  },
+  {
+    "key": "wayline",
+    "label": "Маршрут"
+  },
+  {
+    "key": "wiki",
+    "label": "База знаний"
+  },
+  {
+    "key": "sftp",
+    "label": "Загрузка файлов"
+  },
+  {
+    "key": "topology",
+    "label": "Карта сети"
+  },
+  {
+    "key": "docker",
+    "label": "Контейнеры"
+  },
+  {
+    "key": "reports",
+    "label": "Отчёты"
+  },
+  {
+    "key": "monitoringAdmin",
+    "label": "Настройки мониторинга"
+  },
+  {
+    "key": "websitesAdmin",
+    "label": "Веб-панели"
+  },
+  {
+    "key": "auditor",
+    "label": "Аудит файлов"
+  },
+  {
+    "key": "vega",
+    "label": "Рабочие приложения"
+  },
+  {
+    "key": "proxyEdge",
+    "label": "Сетевой шлюз"
+  },
+  {
+    "key": "proxy",
+    "label": "Прокси"
+  },
+  {
+    "key": "server",
+    "label": "Сервер"
+  },
+  {
+    "key": "network",
+    "label": "Сеть"
+  },
+  {
+    "key": "database",
+    "label": "База данных"
+  },
+  {
+    "key": "folder",
+    "label": "Папка"
+  },
+  {
+    "key": "security",
+    "label": "Безопасность"
+  },
+  {
+    "key": "monitoring",
+    "label": "Мониторинг"
+  },
+  {
+    "key": "app",
+    "label": "Приложение"
+  },
+  {
+    "key": "web",
+    "label": "Веб-сервис"
+  }
+]

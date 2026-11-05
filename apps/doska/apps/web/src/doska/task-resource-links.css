@@ -1,0 +1,16 @@
+.doska-resource-links { border-top: 1px solid var(--border); padding-top: 20px; }
+.doska-resource-links-heading, .doska-resource-links-actions { display: flex; align-items: center; gap: 12px; }
+.doska-resource-links-heading { justify-content: space-between; }
+.doska-resource-links-heading h3 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.doska-resource-links-list, .doska-resource-search-results { list-style: none; padding: 0; margin: 12px 0 0; }
+.doska-resource-links-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.doska-resource-links-list li > div { min-width: 0; overflow-wrap: anywhere; }
+.doska-resource-links small { display: block; opacity: .75; font-size: .8rem; }
+.doska-app .doska-resource-links-actions input { flex: 1; width: 100%; min-width: 0; }
+.doska-resource-search { margin-top: 12px; }
+.doska-resource-search-results { max-height: 240px; overflow-y: auto; }
+.doska-app .doska-resource-search-results button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; margin-top: 6px; }
+.doska-resource-search-results span { min-width: 0; overflow-wrap: anywhere; }
+
+.doska-app .doska-resource-links button { min-height: 30px; padding: 5px 8px; font-size: 12px; }
+.doska-resource-links h3 { font-size: 14px; }

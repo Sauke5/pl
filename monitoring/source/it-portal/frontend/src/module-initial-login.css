@@ -1,0 +1,98 @@
+.module-initial-login {
+  position: relative;
+}
+
+.initial-login-services {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.initial-login-services > .button {
+  flex: 1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.initial-login-services > .button[aria-selected="true"] {
+  background: var(--surface-raised);
+  color: inherit;
+  border-color: var(--border);
+}
+
+.initial-login-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.initial-login-field {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.initial-login-field > span {
+  color: var(--muted);
+}
+
+.initial-login-value {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: text;
+}
+
+.initial-login-value:hover {
+  border-color: var(--blue);
+}
+
+.initial-login-value:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.initial-login-note {
+  margin: 14px 0 20px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.initial-login-open {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.initial-login-copied {
+  position: absolute;
+  z-index: 2;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  box-shadow: 0 4px 14px #0003;
+  pointer-events: none;
+  white-space: nowrap;
+}

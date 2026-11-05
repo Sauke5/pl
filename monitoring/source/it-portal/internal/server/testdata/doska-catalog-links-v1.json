@@ -1,0 +1,479 @@
+{
+  "contract": "doska-catalog-links-v1",
+  "status": "agreed-platform-implementation",
+  "base": "8a8fdd896ab9a3b44201bdb8889d9b20ac9b84ce",
+  "transport": {
+    "direction": "browser -> Platform route-specific handler -> fixed Doska API upstream; no reverse RPC",
+    "upstreamPath": "external path with leading /doska removed",
+    "signedURI": "external path including /doska and exact canonical query",
+    "authentication": "existing gateway v2; aud=doska; existing doska:read/doska:write scopes; current session and identity; write Origin/CSRF/nonce/body digest unchanged",
+    "internalRoutes": "gateway assertion required; never exposed by generic passthrough; no raw internal response reaches browser",
+    "bodyBytesMax": 131072,
+    "responseBytesMax": 1048576,
+    "cacheControl": "no-store",
+    "json": "exact case-sensitive keys; reject unknown/duplicate keys, trailing JSON, malformed UTF-8 and invalid types; task field nullability follows existing createTaskBody; cursor/nextCursor nullable",
+    "query": "reject unknown/duplicate keys and empty values; all write and POST read routes have no query",
+    "id": "[A-Za-z0-9_-]{1,128}",
+    "revision": "JSON safe integer 0..9007199254740991",
+    "failure": "never return partial internal payload after validation, ACL or resolution failure",
+    "dispatch": "All listed external routes intercepted by finite route-specific Platform handlers before generic gateway dispatch; capabilities path internal-only and browser404; response envelope validation/redaction mandatory; existing Doska152 and Forms routes preserved; no new generic proxy lane"
+  },
+  "resourcePolicy": {
+    "admin": "current User.Admin; only accepted active Platform resources, plus device/VM with exactly one current accepted active linked resource",
+    "employee": "only explicit BoardResourceIDs in the current active employee board; no department grant; return employee-safe projection only; no linked NetBox objects",
+    "all": "recheck policy on every search, resolve, attach, backref and response; admin does not bypass current Doska project/task ACL; no remote discovery scans",
+    "pagination": "resource ACL before search pagination; Doska actor project/task ACL before backref counts/pagination; no totals or hidden-match counts",
+    "revocation": "no descriptor snapshot fallback; fail closed if current policy cannot be evaluated"
+  },
+  "refs": {
+    "platform": {
+      "version": 1,
+      "source": "platform",
+      "type": "resource",
+      "id": "11111111-1111-4111-8111-111111111111"
+    },
+    "device": {
+      "version": 1,
+      "source": "netbox/22222222-2222-4222-8222-222222222222",
+      "type": "dcim.device",
+      "id": "42"
+    },
+    "vm": {
+      "version": 1,
+      "source": "netbox/22222222-2222-4222-8222-222222222222",
+      "type": "virtualization.virtualmachine",
+      "id": "17"
+    },
+    "rules": "exact keys version/source/type/id; platform id and integration id canonical lowercase UUID; NetBox id canonical positive decimal <=2147483647; source/type allowlist only; tuple identity survives rename/IP changes; ambiguous/unlinked/inactive is unavailable"
+  },
+  "routes": [
+    {
+      "operation": "capabilities",
+      "external": null,
+      "internal": "GET /api/doska/projects/{projectId}/resource-link-capabilities",
+      "signedURI": "/doska/api/doska/projects/{projectId}/resource-link-capabilities",
+      "scope": "doska:read",
+      "query": {},
+      "internalResponse": {
+        "version": 1,
+        "readContent": true,
+        "workOnTasks": true
+      },
+      "rules": "Platform calls before catalog search/resolve and before attach; current Doska project ACL; unknown/denied project returns same 404; no browser passthrough"
+    },
+    {
+      "operation": "search",
+      "external": "GET /doska/api/doska/catalog/search",
+      "internal": "capabilities only; catalog search runs in Platform",
+      "query": {
+        "projectId": {
+          "kind": "id",
+          "required": true
+        },
+        "q": {
+          "kind": "text",
+          "required": true,
+          "max_bytes": 512,
+          "max_chars": 128
+        },
+        "limit": {
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "cursor": {
+          "kind": "text",
+          "max_bytes": 512
+        }
+      },
+      "defaults": {
+        "limit": 20
+      },
+      "browserResponse": {
+        "version": 1,
+        "items": [
+          {
+            "displayName": "Service",
+            "objectKind": "service",
+            "selection": {
+              "resourceId": "11111111-1111-4111-8111-111111111111",
+              "sourceKind": "platform"
+            }
+          }
+        ],
+        "nextCursor": null
+      },
+      "rules": "readContent required; search only permitted metadata (employee search cannot match hidden IP/inventory/site/private IDs); cursor actor/project/query/policy-bound, expires <=300s; stable order before keyset page; empty q rejected"
+    },
+    {
+      "operation": "resolve",
+      "external": "POST /doska/api/doska/catalog/resolve",
+      "internal": "capabilities only; resource resolve runs in Platform",
+      "browserBody": {
+        "projectId": "project-1",
+        "selections": [
+          {
+            "resourceId": "11111111-1111-4111-8111-111111111111",
+            "sourceKind": "platform"
+          }
+        ]
+      },
+      "browserResponse": {
+        "version": 1,
+        "items": [
+          {
+            "index": 0,
+            "available": true,
+            "descriptor": {
+              "displayName": "Service",
+              "objectKind": "service"
+            }
+          }
+        ]
+      },
+      "unavailableItem": {
+        "index": 0,
+        "available": false
+      },
+      "rules": "1..32 unique selections; preserve input order with zero-based index; readContent required; unknown/denied/closed same unavailable item; no resource IDs echoed in unavailable item; CSRF required for POST despite read-only operation"
+    },
+    {
+      "operation": "list-links",
+      "external": "GET /doska/api/doska/projects/{projectId}/tasks/{taskId}/resource-links",
+      "internal": "GET /api/doska/projects/{projectId}/tasks/{taskId}/resource-links",
+      "scope": "doska:read",
+      "query": {},
+      "internalResponse": {
+        "version": 1,
+        "revision": 4,
+        "links": [
+          {
+            "linkId": "link-1",
+            "ref": {
+              "version": 1,
+              "source": "platform",
+              "type": "resource",
+              "id": "11111111-1111-4111-8111-111111111111"
+            }
+          }
+        ]
+      },
+      "browserResponse": {
+        "version": 1,
+        "revision": 4,
+        "links": [
+          {
+            "linkId": "link-1",
+            "available": true,
+            "descriptor": {
+              "displayName": "Service",
+              "objectKind": "service"
+            }
+          },
+          {
+            "linkId": "link-2",
+            "available": false
+          }
+        ]
+      },
+      "rules": "Doska checks readContent and task membership before fixed envelope; max32 links; Platform validates entire envelope then independently resolves each ref; unavailable contains exactly linkId/available, no ref/name/kind/private IDs; no available/hidden totals"
+    },
+    {
+      "operation": "attach",
+      "external": "POST /doska/api/doska/projects/{projectId}/tasks/{taskId}/resource-links",
+      "internal": "POST /api/doska/projects/{projectId}/tasks/{taskId}/resource-links",
+      "scope": "doska:write",
+      "browserBody": {
+        "expectedRevision": 4,
+        "clientRequestId": "33333333-3333-4333-8333-333333333333",
+        "selection": {
+          "resourceId": "11111111-1111-4111-8111-111111111111",
+          "sourceKind": "platform"
+        }
+      },
+      "internalBody": {
+        "version": 1,
+        "ref": {
+          "version": 1,
+          "source": "platform",
+          "type": "resource",
+          "id": "11111111-1111-4111-8111-111111111111"
+        },
+        "expectedRevision": 4,
+        "clientRequestId": "33333333-3333-4333-8333-333333333333"
+      },
+      "internalResponse": {
+        "version": 1,
+        "revision": 5,
+        "linkId": "link-1"
+      },
+      "browserResponse": {
+        "version": 1,
+        "revision": 5,
+        "linkId": "link-1"
+      },
+      "rules": "workOnTasks required at commit; Platform current policy before forwarding; unique task+ref tuple; duplicate already attached returns existing linkId/current revision without increment (after CAS); capacity32; response contains no saved descriptor"
+    },
+    {
+      "operation": "detach",
+      "external": "DELETE /doska/api/doska/projects/{projectId}/tasks/{taskId}/resource-links/{linkId}",
+      "internal": "DELETE /api/doska/projects/{projectId}/tasks/{taskId}/resource-links/{linkId}",
+      "scope": "doska:write",
+      "browserBody": {
+        "expectedRevision": 5,
+        "clientRequestId": "44444444-4444-4444-8444-444444444444"
+      },
+      "internalBody": {
+        "version": 1,
+        "expectedRevision": 5,
+        "clientRequestId": "44444444-4444-4444-8444-444444444444"
+      },
+      "internalResponse": {
+        "version": 1,
+        "revision": 6,
+        "linkId": "link-1"
+      },
+      "browserResponse": {
+        "version": 1,
+        "revision": 6,
+        "linkId": "link-1"
+      },
+      "rules": "workOnTasks and task+link membership required; opaque unavailable links may be detached without resource access; removal affects link only; unknown/foreign link404, no metadata"
+    },
+    {
+      "operation": "backrefs",
+      "external": "POST /doska/api/doska/catalog/task-links",
+      "internal": "POST /api/doska/catalog/task-links",
+      "scope": "doska:write (existing POST transport signing); operation is read-only",
+      "browserBody": {
+        "limit": 20,
+        "cursor": null,
+        "selection": {
+          "resourceId": "11111111-1111-4111-8111-111111111111",
+          "sourceKind": "platform"
+        }
+      },
+      "internalBody": {
+        "version": 1,
+        "ref": {
+          "version": 1,
+          "source": "platform",
+          "type": "resource",
+          "id": "11111111-1111-4111-8111-111111111111"
+        },
+        "limit": 20,
+        "cursor": null
+      },
+      "internalResponse": {
+        "version": 1,
+        "items": [
+          {
+            "projectId": "project-1",
+            "taskId": "task-1",
+            "title": "Task",
+            "href": "/doska/projects/project-1?taskId=task-1"
+          }
+        ],
+        "nextCursor": null
+      },
+      "browserResponse": {
+        "version": 1,
+        "items": [
+          {
+            "projectId": "project-1",
+            "taskId": "task-1",
+            "title": "Task",
+            "href": "/doska/projects/project-1?taskId=task-1"
+          }
+        ],
+        "nextCursor": null
+      },
+      "rules": "Platform resource policy then Doska readContent/task ACL across visible projects before keyset pagination; limit1..50 default20; cursor null or opaque <=512 bytes, actor/ref/ACL-bound; current resource policy rechecked before returning; no total; href server-generated and independently allowlisted by Platform"
+    },
+    {
+      "operation": "create-and-attach",
+      "external": "POST /doska/api/doska/projects/{projectId}/tasks/from-resource",
+      "internal": "POST /api/doska/projects/{projectId}/tasks/from-resource",
+      "scope": "doska:write",
+      "browserBody": {
+        "expectedRevision": 0,
+        "clientRequestId": "55555555-5555-4555-8555-555555555555",
+        "task": {
+          "title": "Check service",
+          "description": "",
+          "priority": "medium",
+          "columnId": "column-1"
+        },
+        "selection": {
+          "resourceId": "11111111-1111-4111-8111-111111111111",
+          "sourceKind": "platform"
+        }
+      },
+      "internalBody": {
+        "version": 1,
+        "ref": {
+          "version": 1,
+          "source": "platform",
+          "type": "resource",
+          "id": "11111111-1111-4111-8111-111111111111"
+        },
+        "expectedRevision": 0,
+        "clientRequestId": "55555555-5555-4555-8555-555555555555",
+        "task": {
+          "title": "Check service",
+          "description": "",
+          "priority": "medium",
+          "columnId": "column-1"
+        }
+      },
+      "internalResponse": {
+        "version": 1,
+        "revision": 1,
+        "linkId": "link-1",
+        "taskId": "task-1",
+        "projectId": "project-1",
+        "href": "/doska/projects/project-1?taskId=task-1"
+      },
+      "browserResponse": {
+        "version": 1,
+        "revision": 1,
+        "linkId": "link-1",
+        "taskId": "task-1",
+        "projectId": "project-1",
+        "href": "/doska/projects/project-1?taskId=task-1"
+      },
+      "rules": "explicit submit only; workOnTasks plus exact existing createTaskBody business validation; title trimmed1..500, description nullable<=100000; optional columnId, labels, customValues, parentTaskId, userId, coexecutorIds, priority, cardColor, startDate, due; expectedRevision exactly0; task+initial link+audit+idempotency result in ONE transaction; canonical /doska/projects/{projectId}?taskId={taskId}; Platform strict bounded JSON wrapper does not replace Node Zod/taskInput/createTaskInTransaction"
+    }
+  ],
+  "descriptor": {
+    "employeeExactKeys": [
+      "displayName",
+      "objectKind"
+    ],
+    "employee": {
+      "displayName": "Service",
+      "objectKind": "service"
+    },
+    "employeeObjectKind": "service (constant; no inventory-derived classification)",
+    "adminAllowedKeys": [
+      "displayName",
+      "objectKind",
+      "site",
+      "platformHref",
+      "sourceObservedAt",
+      "stale"
+    ],
+    "admin": {
+      "displayName": "Server",
+      "objectKind": "device",
+      "site": "Moscow",
+      "sourceObservedAt": "2026-10-25T09:00:00Z",
+      "stale": false
+    },
+    "rules": "displayName1..256chars/max1024bytes; site<=128chars/max512bytes; objectKind service|resource|device|virtual_machine; timestamps RFC3339 UTC or omitted; admin optional keys omitted when unavailable; platformHref omitted until actual permanent catalog deep link exists; no raw ref, sourceURL, NetBoxURL, IP, inventory, operations, credentials, provider/private IDs in any browser descriptor; public employee-board UUID appears only in search selection, never in unavailable link descriptor"
+  },
+  "concurrency": {
+    "revision": "per-task resource-links collection revision independent of task body; initially0; successful actual attach/detach increments1; all write CAS and audit in same transaction; no silent last-writer-wins",
+    "clientRequestId": "required canonical lowercase UUID; scoped by authenticated stable actor subject + projectId; durable idempotency shared by attach/detach/create-and-attach",
+    "digest": "canonical operation + exact taskId/linkId/ref/expectedRevision/task fields, not browser selection or gateway nonce",
+    "order": "current identity/project/task ACL first; current resource policy before Platform write forwarding; durable idempotency lookup before CAS; identical request returns committed result even after timeout, different digest409",
+    "retention": "successful mutation receipts retained >=30 days; retry outside retained window is not safe and client must reconcile; concurrent same key serializes and commits at most once",
+    "onResourceRevocation": "a committed response has only opaque linkId/task metadata, no ref/descriptor; subsequent link reads resolve current policy again",
+    "idempotencyHeader": "Idempotency-Key equals body clientRequestId; gateway signs regenerated canonical internal body and verified header; mismatch400; retries use new transport nonce with same business key"
+  },
+  "errors": {
+    "shape": {
+      "error": {
+        "code": "invalid_request"
+      }
+    },
+    "400": "invalid_request (schema, bounds, invalid selector/cursor, header mismatch); no rejected body echo",
+    "401": "unauthenticated",
+    "403": "csrf_failed or forbidden (authenticated actor cannot perform allowed operation)",
+    "404": "unavailable (unknown/denied project/task/link/resource indistinguishable)",
+    "409": "revision_conflict or idempotency_conflict; no ref/resource details; current link revision may be returned only after project/task read ACL",
+    "413": "request_too_large",
+    "429": "busy (existing JSON admission bounds)",
+    "502": "invalid_upstream_response (reject whole envelope; no upstream body echo)",
+    "503": "temporarily_unavailable (policy/upstream unavailable; no stale authorization fallback)",
+    "rules": "unknown/denied resource is same neutral404 for writes/backrefs; list/resolve use exact unavailable item; no inaccessible-resource counts; raw internal errors are never proxied"
+  },
+  "nonLinkSurfaces": {
+    "taskDetailSearchHistoryExport": "no raw refs/descriptors/snapshots; only opaque linkId if needed",
+    "sse": "existing allowed task invalidation after commit; no raw ref/name/resource metadata or new event type without fixture update",
+    "audit": "actor/action/linkId/transaction time; resource tuple restricted to backend storage, never generic activity feed or export",
+    "revalidation": "browser renders descriptors only from fresh Platform route-specific response; invalidation causes fetch; no persisted descriptor cache"
+  },
+  "ackBlockers": [
+    "Doska owner must ACK exact new routes, resource-links revision0/CAS, create-and-attach task fields, and durable actor+project clientRequestId retention before implementation.",
+    "Both owners must ACK new route-specific dispatch and deployment manifest additions; internal-only capabilities must remain inaccessible through browser/generic gateway."
+  ],
+  "selection": {
+    "shape": {
+      "resourceId": "11111111-1111-4111-8111-111111111111",
+      "sourceKind": "platform"
+    },
+    "rules": "resourceId is existing public employee-board UUID, not capability; sourceKind platform|netbox; employee platform only; admin netbox requires exactly one linked accepted active device/VM; Platform derives canonical ref and rechecks current policy every use; no provider IDs supplied by browser"
+  },
+  "resourceTaskSearchRoute": {
+    "method": "GET",
+    "external": "/doska/api/doska/task-search",
+    "upstream": "/api/doska/task-search",
+    "dispatch": "resource-task-search-v1",
+    "publicQuery": [
+      {
+        "name": "resourceId",
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      },
+      {
+        "name": "sourceKind",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "platform",
+            "netbox"
+          ]
+        }
+      }
+    ],
+    "internalQuery": [
+      {
+        "name": "resourceSource",
+        "schema": {
+          "type": "string",
+          "maxLength": 43
+        }
+      },
+      {
+        "name": "resourceType",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "resource",
+            "dcim.device",
+            "virtualization.virtualmachine"
+          ]
+        }
+      },
+      {
+        "name": "resourceObjectId",
+        "schema": {
+          "type": "string",
+          "maxLength": 36
+        }
+      }
+    ],
+    "rules": {
+      "selection": "Both public keys together require projectId; ordinary search unchanged when absent; empty, duplicate, partial or unknown values rejected",
+      "projection": "Internal three keys always forbidden from browser. Platform resolves canonical ref, replaces public pair with complete internal triple and signs canonical upstream query. No browser pair forwarded. Triple validated as refs.platform/device/vm; requires projectId",
+      "authorization": "Current session/identity, current resource policy and project readContent before call and before reply; denied/missing resource or project same 404; policy outage fail closed; no raw refs in errors or headers",
+      "pagination": "Existing filters and canonical resource EXISTS combined with task ACL before limit/offset. Same MyTask array response; no totals or client-side page intersection",
+      "response": "Exact existing MyTask[] schema from apps/docs/openapi.json /api/doska/task-search GET 200. No new resource fields; user title/description/value strings are not structural ref fields",
+      "ui": "Resource picker requires selected project and uses existing catalog/search and catalog/resolve; project change clears selection"
+    }
+  },
+  "resourceTaskSearchRevision": 1
+}

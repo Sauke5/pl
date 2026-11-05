@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "capabilities": [],
+  "fixtures": [
+    {
+      "id": "live-settings",
+      "driver": "isolated-demo",
+      "dependencies": ["postgres-test", "frontend-vite"],
+      "hook": "monitoring/source/it-portal/tests/ci/live-settings.py",
+      "reason": "liveSettings: TestSettingsBrowserFixture with PORTAL_SETTINGS_BROWSER=true and PORTAL_TEST_DATABASE_URL. API127.0.0.1:8140; Vite localhost:8139; PORTAL_SETTINGS_BROWSER_ORIGIN=http://localhost:8139; browser PORTAL_SETTINGS_LIVE=true. Required hook owns process cleanup and fails on skips. CI dispatcher adaptation is required; existing candidate-only adapter is incompatible."
+    },
+    {
+      "id": "systems-workspace",
+      "driver": "isolated-demo",
+      "dependencies": ["postgres-test", "frontend-vite"],
+      "hook": "monitoring/source/it-portal/tests/ci/systems-workspace.py",
+      "reason": "TestWorkspaceBrowserFixture with PORTAL_WORKSPACE_BROWSER=true and PORTAL_TEST_DATABASE_URL; API18182; Vite18199 and playwright.workspace.config.ts metadata.workspaceFixture=true. Required hook owns process cleanup and fails on skips. CI dispatcher adaptation is required; existing candidate-only adapter is incompatible."
+    }
+  ],
+  "suites": [
+    {
+      "id": "live-settings-browser",
+      "driver": "playwright-service",
+      "scopes": [
+        "monitoring/source/it-portal/frontend/tests",
+        "monitoring/source/it-portal/internal/server"
+      ],
+      "capabilities": ["core"],
+      "timeout_seconds": 1800,
+      "resources": {
+        "cpu_millis": 2000,
+        "memory_mb": 2048,
+        "disk_mb": 4096,
+        "heavy": true
+      },
+      "required": true,
+      "fixtures": ["live-settings"],
+      "artifacts": [
+        "reports/live-settings-browser/*.json",
+        "reports/live-settings-browser/*.xml"
+      ]
+    },
+    {
+      "id": "systems-workspace-browser",
+      "driver": "playwright-service",
+      "scopes": [
+        "monitoring/source/it-portal/frontend/tests",
+        "monitoring/source/it-portal/internal/server"
+      ],
+      "capabilities": ["core"],
+      "timeout_seconds": 1800,
+      "resources": {
+        "cpu_millis": 2000,
+        "memory_mb": 2048,
+        "disk_mb": 4096,
+        "heavy": true
+      },
+      "required": true,
+      "fixtures": ["systems-workspace"],
+      "artifacts": [
+        "reports/systems-workspace-browser/*.json",
+        "reports/systems-workspace-browser/*.xml"
+      ]
+    }
+  ],
+  "specs": [
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/alertmanager-configuration.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "alertmanager",
+      "reason": "Committed isolated route fixtures validate notification/proxy editor; real native delivery is separately required by runtime gate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/auth-pages.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/branch-check.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/catalog-management.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/catalog-views.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/connector-modules.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed connector editor fixtures; native owned runtime and signed Auditor protocol are verified separately"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/dashboard-layout.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/directory-return.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/doska-catalog.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/doska-login-return.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/ecosystem.spec.ts",
+      "kind": "real-service",
+      "suite": "core-service-browser",
+      "capability": "core",
+      "reason": "No route mocks; two unauthenticated tabs exercise real app session/theme and reload"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/edge.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/employee-portal.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/events-journal.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/favorites-layout.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/help.spec.ts",
+      "kind": "real-service",
+      "suite": "legacy-demo-browser",
+      "capability": "legacy-demo-regression",
+      "reason": "Requires auth/demo and real help-state persistence on an isolated demo API/PostgreSQL. Partial help route mocks do not make this fixture-only. The optional mobile390 scenario is outside the required desktop matrix."
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/home-header.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/host-resource.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/iperf.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/login-board.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/pl-merge.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/portal.spec.ts",
+      "kind": "real-service",
+      "suite": "legacy-demo-browser",
+      "capability": "legacy-demo-regression",
+      "reason": "Requires auth/demo and persisted/seeded isolated demo API; partial route mocks do not make this fixture-only. Legacy credential files and fixed large viewport assumptions require a product hook before selection."
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/prometheus-configuration.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "prometheus",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/proxy-control.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/quick-tools.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs; validates UI handling, not a live optional connector"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/relation-types.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/release-runtime.spec.ts",
+      "kind": "real-service",
+      "suite": "legacy-release-browser",
+      "capability": "legacy-release-runtime",
+      "reason": "Fixed localhost:18098 demo runtime with Wayline, Edge and corporate proxy; not the fresh local-only core/Prometheus candidate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/resource-icon-picker.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/runtime-settings.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Runtime operations editor fixtures; native policy enforcement verified by isolated candidate gate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-connections.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-live.spec.ts",
+      "kind": "real-service",
+      "suite": "live-settings-browser",
+      "capability": "core",
+      "reason": "Real Go handlers and disposable PostgreSQL persist integration/general settings and history; no page route mocks. Requires liveSettings fixture: PORTAL_SETTINGS_LIVE=true, TestSettingsBrowserFixture with PORTAL_SETTINGS_BROWSER=true, API 127.0.0.1:8140 and PORTAL_SETTINGS_BROWSER_ORIGIN=http://localhost:8139. Missing fixture execution is blocked, never skip-as-pass."
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-refresh.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-workspace.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-administration.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-auto-seen.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-delete.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftpgo-module.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "PL SFTPGo UI fixtures cover account authentication modes, rights, file actions, native-session expiry and durable configuration jobs; real SFTPGo acceptance is required separately"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/system-icons.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/systems-workspace.spec.ts",
+      "kind": "real-service",
+      "suite": "systems-workspace-browser",
+      "capability": "core",
+      "reason": "Real Go/PostgreSQL workspace persistence and operation queue; only help-state is mocked. Requires TestWorkspaceBrowserFixture with PORTAL_WORKSPACE_BROWSER=true on localhost:18182, Vite localhost:18199 and playwright.workspace.config.ts metadata.workspaceFixture=true. Missing fixture execution is blocked, never skip-as-pass."
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/xray-configuration.spec.ts",
+      "kind": "fixture",
+      "suite": "frontend-fixtures",
+      "capability": "core",
+      "reason": "Route fixtures exercise Xray catalogue, write-only credentials, configuration validation, durable apply/retry and rejection states; real proxy traffic is verified by the separate runtime gate"
+    }
+  ]
+}

@@ -1,0 +1,324 @@
+{
+  "schema": 1,
+  "grafana_version": "13.2.4",
+  "go_version": "1.27.2",
+  "plugins": [
+    {
+      "id": "elasticsearch",
+      "version": "12.9.2",
+      "directory": "elasticsearch",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-elasticsearch-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-elasticsearch-datasource/tar.gz/a4b9ec92456c705a5b3ff81c538c19293a5ee88e",
+        "revision": "a4b9ec92456c705a5b3ff81c538c19293a5ee88e",
+        "tag": "v12.9.2",
+        "sha256": "f81c9e593d5e31ea072872963f6cc2546982fce7d878cd6cf01ac6fc46b53b01"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana_elasticsearch_datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "grafana-postgresql-datasource",
+      "version": "13.0.4",
+      "directory": "grafana-postgresql-datasource",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-postgresql-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-postgresql-datasource/tar.gz/4d167c25053dc0444178451abf8a3f171e9e4471",
+        "revision": "4d167c25053dc0444178451abf8a3f171e9e4471",
+        "tag": "v13.0.4",
+        "sha256": "079f70bd79b9af06d666910c93ee6f449222654efce778810463a7487e5ea0e3"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana_postgresql_datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "grafana-pyroscope-datasource",
+      "version": "13.0.7",
+      "directory": "grafana-pyroscope-datasource",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-pyroscope-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-pyroscope-datasource/tar.gz/fcc51a6c9f04f446e7d6ff0a7b3a288e3ca8c52e",
+        "revision": "fcc51a6c9f04f446e7d6ff0a7b3a288e3ca8c52e",
+        "tag": "v13.0.7",
+        "sha256": "c92ce9657f6bc08e73eeced89252f946a6b7e41077b92374a5cf1fa42daf2b3b"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-pyroscope-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "influxdb",
+      "version": "13.1.7",
+      "directory": "influxdb",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-influxdb-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-influxdb-datasource/tar.gz/030eec102c9cfab314b73c87a2599ba8bb80bc40",
+        "revision": "030eec102c9cfab314b73c87a2599ba8bb80bc40",
+        "tag": "v13.1.7",
+        "sha256": "5aa728714e144ccbf709cd029daff199aaa4e76afe09b94bcc85f9b5930f3786"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana_influxdb_datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "jaeger",
+      "version": "13.0.5",
+      "directory": "jaeger",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-jaeger-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-jaeger-datasource/tar.gz/f2e2b7c6e0c2504cac5d30141e4a2f7b4990fe63",
+        "revision": "f2e2b7c6e0c2504cac5d30141e4a2f7b4990fe63",
+        "tag": "v13.0.5",
+        "sha256": "338df7904aa04e1c94d883dcc5d637e08459e66ccf5e40c80854257024454bb3"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-jaeger-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "loki",
+      "version": "13.2.2",
+      "directory": "loki",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-loki-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-loki-datasource/tar.gz/6d076df3d695f5fda342fbbad1f52547b55a96e2",
+        "revision": "6d076df3d695f5fda342fbbad1f52547b55a96e2",
+        "tag": "v13.2.2",
+        "sha256": "d195ba01a3ff22541f197fd0f8cecf3fdfc2e2fba8034d45439cfb497c5a8933"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-loki-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "mssql",
+      "version": "13.0.7",
+      "directory": "mssql",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-mssql-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-mssql-datasource/tar.gz/e0ad61ae045182f7869ba35afd1c48069b6add43",
+        "revision": "e0ad61ae045182f7869ba35afd1c48069b6add43",
+        "tag": "v13.0.7",
+        "sha256": "d1d15d089933e6da2294cbd843bbb70014390393e2a2e8ef4bfa207edd11292c"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-mssql-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "mysql",
+      "version": "13.1.4",
+      "directory": "mysql",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-mysql-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-mysql-datasource/tar.gz/453ec30a1245e539974d869a62f1c09bb5b9dfa9",
+        "revision": "453ec30a1245e539974d869a62f1c09bb5b9dfa9",
+        "tag": "v13.1.4",
+        "sha256": "85d5112a6cb2a854b2e461bfc04a0b78b794aff1a8b549145f01933ef7fcefbd"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-mysql-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "opentsdb",
+      "version": "13.0.4",
+      "directory": "opentsdb",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-opentsdb-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-opentsdb-datasource/tar.gz/2e3dc74ef71fe4b57b24170bd2c35612bc69ac25",
+        "revision": "2e3dc74ef71fe4b57b24170bd2c35612bc69ac25",
+        "tag": "v13.0.4",
+        "sha256": "f0417c4e8f0dff81d3832a3ca76d8ce9fa3b4069682640de607dd6f52fa06396"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-opentsdb-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "prometheus",
+      "version": "13.2.3",
+      "directory": "prometheus",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-prometheus-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-prometheus-datasource/tar.gz/6d21418acde6ce31c9f7a6418a88758842a881bb",
+        "revision": "6d21418acde6ce31c9f7a6418a88758842a881bb",
+        "tag": "v13.2.3",
+        "sha256": "24b1f2ed395438a5574102b166314be621259431fbae3f04ae66b55a143f1c13"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-prometheus-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0"
+      },
+      "retained_dependencies": {
+        "google.golang.org/grpc": "v1.85.0-dev.0.20260825072537-93e31b48545e"
+      }
+    },
+    {
+      "id": "stackdriver",
+      "version": "12.6.2",
+      "directory": "stackdriver",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-cloudmonitoring-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-cloudmonitoring-datasource/tar.gz/cb0dadba1d04a4697a344d134d92dc520411bb7c",
+        "revision": "cb0dadba1d04a4697a344d134d92dc520411bb7c",
+        "tag": "v12.6.2",
+        "sha256": "be157a7d53768ea128cae4da79b484d2036f6cb52d5c3ec24759bb8b4f3afb31"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana_cloudmonitoring_datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0",
+        "google.golang.org/grpc": "v1.84.0"
+      }
+    },
+    {
+      "id": "tempo",
+      "version": "13.2.4",
+      "directory": "tempo",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-tempo-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-tempo-datasource/tar.gz/cdacb742bae90fbf62c48c5cca0eacdc08fd2acd",
+        "revision": "cdacb742bae90fbf62c48c5cca0eacdc08fd2acd",
+        "tag": "v13.2.4",
+        "sha256": "fdef6e02f81297dc9c26cd13c735fba011e31fa90bc08a6b231489251016238f"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-tempo-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0"
+      },
+      "retained_dependencies": {
+        "google.golang.org/grpc": "v1.85.0-dev.0.20260825072537-93e31b48545e",
+        "github.com/grafana/tempo": "v1.5.1-0.20260910130453-bcfe9f230c1d"
+      },
+      "security_evidence": [
+        {
+          "advisory": "GO-2026-5528",
+          "cve": "CVE-2026-21728",
+          "upstream_fix": "650eb1985a0776789c8564122990f588a742356f",
+          "source_revision": "bcfe9f230c1de0f79cfd2110b38062e0f41c81e9",
+          "source_url": "https://raw.githubusercontent.com/grafana/tempo/bcfe9f230c1de0f79cfd2110b38062e0f41c81e9/modules/frontend/config.go",
+          "source_sha256": "53d4636b20ebb2b0e38e31b6dce5ef08eea8130cc01dcd2aa5515372e9d7339c",
+          "required_fragment": "MaxLimit:               256 * 1024,",
+          "classification": "upstream_fix_present_in_retained_source",
+          "advisory_url": "https://vuln.go.dev/ID/GO-2026-5528.json"
+        },
+        {
+          "advisory": "GO-2026-5359",
+          "cve": "CVE-2026-28377",
+          "upstream_fix": "bb8ca663db34a0980c9758b40d918fda3b4dbec3",
+          "source_revision": "bcfe9f230c1de0f79cfd2110b38062e0f41c81e9",
+          "source_url": "https://raw.githubusercontent.com/grafana/tempo/bcfe9f230c1de0f79cfd2110b38062e0f41c81e9/tempodb/backend/s3/config.go",
+          "source_sha256": "e189ee9c2857831814b2512b4bcdb202783aa3dcc2ad3c9ae785ad6e3a71c10a",
+          "required_fragment": "CustomerEncryptionKey flagext.Secret `yaml:\"encryption_key\"`",
+          "classification": "upstream_fix_present_in_retained_source",
+          "advisory_url": "https://vuln.go.dev/ID/GO-2026-5359.json"
+        }
+      ]
+    },
+    {
+      "id": "zipkin",
+      "version": "12.4.9",
+      "directory": "zipkin",
+      "source": {
+        "repository": "https://github.com/grafana/grafana-zipkin-datasource",
+        "url": "https://codeload.github.com/grafana/grafana-zipkin-datasource/tar.gz/4f1d9629b22e2bae0c887e20d82360786b4f34b6",
+        "revision": "4f1d9629b22e2bae0c887e20d82360786b4f34b6",
+        "tag": "v12.4.9",
+        "sha256": "565bf9a0f272bf367495e901112509e7d0c75c9afcede3a62d3711e629590085"
+      },
+      "build": {
+        "module_dir": ".",
+        "package": "./pkg",
+        "output": "gpx_grafana-zipkin-datasource_linux_{arch}",
+        "go_version": "1.27.2"
+      },
+      "dependencies": {
+        "golang.org/x/net": "v0.61.0"
+      },
+      "retained_dependencies": {
+        "google.golang.org/grpc": "v1.85.0-dev.0.20260825072537-93e31b48545e"
+      }
+    }
+  ]
+}

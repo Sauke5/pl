@@ -1,0 +1,17 @@
+.doska-import-editor { display:grid; gap:12px; min-width:0; }
+.doska-import-editor header { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; }
+.doska-import-editor-layout { display:grid; grid-template-columns:minmax(180px, .7fr) minmax(0, 1.6fr); gap:20px; }
+.doska-import-editor nav { min-width:0; }
+.doska-import-editor ol { list-style:none; padding:0; margin:0; max-height:48vh; overflow:auto; }
+.doska-import-editor nav li button { width:100%; display:grid; text-align:left; gap:4px; padding:10px; border-radius:8px; overflow-wrap:anywhere; border:1px solid transparent; }
+.doska-import-editor nav li button[aria-current=true] { border-color:var(--accent); background:var(--accent-soft); }
+.doska-import-editor nav li small,.doska-import-editor-issues { color:var(--danger, #e77e88); }
+.doska-import-editor-pages { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; }
+.doska-import-editor-fields { display:grid; gap:12px; min-width:0; align-content:start; }
+.doska-import-editor-fields h4 { margin:0; }
+.doska-import-editor-fields input,.doska-import-editor-fields textarea,.doska-import-editor-fields select { width:100%; min-width:0; box-sizing:border-box; }
+.doska-import-editor-fields textarea { resize:vertical; }
+.doska-import-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.doska-import-editor-issues { margin:0; padding-left:20px; font-size:13px; }
+.doska-import-editor [aria-invalid=true] { border-color:var(--danger, #e77e88); }
+@media(max-width:700px) { .doska-import-editor-layout { grid-template-columns:1fr; } .doska-import-editor ol { max-height:150px; } }

@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "version": "2.7.6",
+  "recipe": "deploy/images/sftpgo.Dockerfile",
+  "context": ".",
+  "roles": ["server"],
+  "images": {
+    "sftpgo-server": {
+      "target": "server",
+      "labels": {
+        "org.opencontainers.image.version": "2.7.6",
+        "pl.module.id": "sftpgo",
+        "pl.module.role": "server",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned"
+      }
+    }
+  },
+  "upstream": {
+    "version": "2.7.6",
+    "source_revision": "62ae9ba3957e9ed52b44a4f885e805e2d7b35972",
+    "release": "https://github.com/drakkan/sftpgo/releases/tag/v2.7.6",
+    "openapi": "https://raw.githubusercontent.com/drakkan/sftpgo/v2.7.6/openapi/openapi.yaml",
+    "dockerfile": "https://github.com/drakkan/sftpgo/blob/v2.7.6/Dockerfile",
+    "image": "drakkan/sftpgo:v2.7.6@sha256:1edd28d80de2a008863fbfc58c8ff7db47b1b410bae48d4e6076192337809b11",
+    "architectures": ["amd64", "arm64"],
+    "license": "AGPL-3.0-only",
+    "verified_at": "2026-10-26"
+  },
+  "runtime": {
+    "user": "1000:1000",
+    "state": "owned volume /var/lib/sftpgo: SQLite and native SSH host keys",
+    "files": "owned volume /srv/sftpgo: users/<username> and shared/<folder>; no host paths",
+    "configuration": "root-owned mode0440 files, group1000, mounted read-only /etc/pl-sftpgo",
+    "admin": "random installation-private bootstrap account; native tokens only in controller memory",
+    "sftp": "container2022; default host127.0.0.1:2022; explicit typed host-private-IPv4 listener plans",
+    "api": "container8080; random host loopback port, no native web admin/client UI",
+    "client": "session-bound native user JWT; never administrator impersonation",
+    "protocols": "SFTP and private REST only; FTP/WebDAV/SSH commands disabled"
+  },
+  "required_acceptance": [
+    "native SQLite/bootstrap/version/status and real SFTP handshake",
+    "password-only, SSH-key-only and independently enabled authentication",
+    "native groups, permissions, virtual folders, quotas and disabled-user rejection",
+    "Pl native user login, ACL-bound list/create/move/delete/upload/download",
+    "configuration revision conflict, listener preflight, interruption and rollback",
+    "disable/enable data persistence, client revocation, owned-only interrupted removal",
+    "image provenance and SCA; no tests or compatibility success inferred from metadata"
+  ]
+}

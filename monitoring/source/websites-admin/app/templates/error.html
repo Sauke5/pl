@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% set auth = none %}
+{% block content %}<div class="narrow-page"><section class="panel"><div class="error-code">{{ status }}</div><h1 class="page-title">{{ title }}</h1><p>{{ message }}</p><a class="button button-primary pl-ui-button pl-ui-button-default" href="{{ url_for('home') }}">На главную</a></section></div>{% endblock %}

@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "key_raw_ascii": "0123456789abcdef0123456789abcdef",
+  "portal_csrf": "test-only-portal-csrf",
+  "cases": [
+    {
+      "claims": {
+        "v": 1,
+        "aud": "monitoring-admin",
+        "iat": 1790000000,
+        "exp": 1790000030,
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "sub": "ad:test-user",
+        "name": "Тестовый пользователь",
+        "admin": true,
+        "scopes": [
+          "audit:read",
+          "containers:restart",
+          "monitoring:read"
+        ],
+        "method": "POST",
+        "uri": "/admin/api/v1/containers/example/restart?check=a%2Fb&check=c",
+        "content_type": "application/json",
+        "body_sha256": "b0048b1a81c9d025236128cd39df65e1690185470a2916db714d46e13d591296",
+        "idempotency_key": "test-restart-001",
+        "source_ip": "192.0.2.10",
+        "csrf_token": "8VarvVMvHVXGZEhOTYEePO0D2-6547i_ztTGCS75hxw",
+        "csrf_verified": true
+      },
+      "body_utf8": "{\"idempotency_key\":\"test-restart-001\"}",
+      "expected_service_csrf": "8VarvVMvHVXGZEhOTYEePO0D2-6547i_ztTGCS75hxw",
+      "assertion": "eyJ2IjoxLCJhdWQiOiJtb25pdG9yaW5nLWFkbWluIiwiaWF0IjoxNzkwMDAwMDAwLCJleHAiOjE3OTAwMDAwMzAsIm5vbmNlIjoiQUFFQ0F3UUZCZ2NJQ1FvTERBME9EdyIsInN1YiI6ImFkOnRlc3QtdXNlciIsIm5hbWUiOiLQotC10YHRgtC-0LLRi9C5INC_0L7Qu9GM0LfQvtCy0LDRgtC10LvRjCIsImFkbWluIjp0cnVlLCJzY29wZXMiOlsiYXVkaXQ6cmVhZCIsImNvbnRhaW5lcnM6cmVzdGFydCIsIm1vbml0b3Jpbmc6cmVhZCJdLCJtZXRob2QiOiJQT1NUIiwidXJpIjoiL2FkbWluL2FwaS92MS9jb250YWluZXJzL2V4YW1wbGUvcmVzdGFydD9jaGVjaz1hJTJGYiZjaGVjaz1jIiwiY29udGVudF90eXBlIjoiYXBwbGljYXRpb24vanNvbiIsImJvZHlfc2hhMjU2IjoiYjAwNDhiMWE4MWM5ZDAyNTIzNjEyOGNkMzlkZjY1ZTE2OTAxODU0NzBhMjkxNmRiNzE0ZDQ2ZTEzZDU5MTI5NiIsImlkZW1wb3RlbmN5X2tleSI6InRlc3QtcmVzdGFydC0wMDEiLCJzb3VyY2VfaXAiOiIxOTIuMC4yLjEwIiwiY3NyZl90b2tlbiI6IjhWYXJ2Vk12SFZYR1pFaE9UWUVlUE8wRDItNjU0N2lfenRUR0NTNzVoeHciLCJjc3JmX3ZlcmlmaWVkIjp0cnVlfQ",
+      "signature": "TUhJ6q8-O85ImARF0JqL6ZfwHdqCK8DW1mpGKwbAsWU"
+    },
+    {
+      "claims": {
+        "v": 1,
+        "aud": "websites-admin",
+        "iat": 1790000000,
+        "exp": 1790000030,
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "sub": "ad:test-user",
+        "name": "Тестовый пользователь",
+        "admin": true,
+        "scopes": [
+          "websites:read",
+          "websites:write"
+        ],
+        "method": "POST",
+        "uri": "/websites/add/preview?check=a%2Fb&check=c",
+        "content_type": "application/x-www-form-urlencoded",
+        "body_sha256": "2037c5a77ede72c6959b65ab6f2736b6afa9ab8acc622e700ae807c1e899d162",
+        "idempotency_key": "",
+        "source_ip": "192.0.2.10",
+        "csrf_token": "8yAs2T2_zoCVNNkZJruMGJbtk6RHzVhIEdhpZIa0bg8",
+        "csrf_verified": true
+      },
+      "body_utf8": "csrf_token=8yAs2T2_zoCVNNkZJruMGJbtk6RHzVhIEdhpZIa0bg8&url=https%3A%2F%2Fexample.invalid%2F",
+      "expected_service_csrf": "8yAs2T2_zoCVNNkZJruMGJbtk6RHzVhIEdhpZIa0bg8",
+      "assertion": "eyJ2IjoxLCJhdWQiOiJ3ZWJzaXRlcy1hZG1pbiIsImlhdCI6MTc5MDAwMDAwMCwiZXhwIjoxNzkwMDAwMDMwLCJub25jZSI6IkFBRUNBd1FGQmdjSUNRb0xEQTBPRHciLCJzdWIiOiJhZDp0ZXN0LXVzZXIiLCJuYW1lIjoi0KLQtdGB0YLQvtCy0YvQuSDQv9C-0LvRjNC30L7QstCw0YLQtdC70YwiLCJhZG1pbiI6dHJ1ZSwic2NvcGVzIjpbIndlYnNpdGVzOnJlYWQiLCJ3ZWJzaXRlczp3cml0ZSJdLCJtZXRob2QiOiJQT1NUIiwidXJpIjoiL3dlYnNpdGVzL2FkZC9wcmV2aWV3P2NoZWNrPWElMkZiJmNoZWNrPWMiLCJjb250ZW50X3R5cGUiOiJhcHBsaWNhdGlvbi94LXd3dy1mb3JtLXVybGVuY29kZWQiLCJib2R5X3NoYTI1NiI6IjIwMzdjNWE3N2VkZTcyYzY5NTliNjVhYjZmMjczNmI2YWZhOWFiOGFjYzYyMmU3MDBhZTgwN2MxZTg5OWQxNjIiLCJpZGVtcG90ZW5jeV9rZXkiOiIiLCJzb3VyY2VfaXAiOiIxOTIuMC4yLjEwIiwiY3NyZl90b2tlbiI6Ijh5QXMyVDJfem9DVk5Oa1pKcnVNR0pidGs2Ukh6VmhJRWRocFpJYTBiZzgiLCJjc3JmX3ZlcmlmaWVkIjp0cnVlfQ",
+      "signature": "mXhyWefG6ayQN78vHYeGajiw1mq5bKxE48Ml9WcbQjY"
+    }
+  ]
+}

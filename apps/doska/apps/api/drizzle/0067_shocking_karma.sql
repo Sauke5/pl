@@ -1,0 +1,2 @@
+ALTER TABLE "platform_department" ADD COLUMN "source_absent" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "platform_user_identity" ADD COLUMN "source_absent" boolean DEFAULT false NOT NULL;

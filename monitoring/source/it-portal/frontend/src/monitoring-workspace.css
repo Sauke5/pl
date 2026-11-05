@@ -1,0 +1,17 @@
+.monitoring-workspace {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.monitoring-workspace > .page-title {
+  margin-bottom: 0;
+}
+.monitoring-workspace .page-title .segmented {
+  flex-wrap: wrap;
+}
+.monitoring-workspace [hidden] {
+  display: none !important;
+}
+.monitoring-workspace .prometheus-module-page {
+  margin: 0;
+}

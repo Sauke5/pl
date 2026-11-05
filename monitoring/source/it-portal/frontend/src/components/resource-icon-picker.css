@@ -1,0 +1,76 @@
+.resource-icon-picker {
+  margin: 16px 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--border, #2b3e53);
+}
+.resource-icon-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.resource-icon-picker-heading > div {
+  display: grid;
+  gap: 5px;
+}
+.resource-icon-picker-heading strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.resource-icon-picker-heading small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.resource-icon-picker-heading .button {
+  min-width: 220px;
+  justify-content: flex-start;
+}
+.resource-icon-picker-heading .button > span:not(.resource-icon) {
+  flex: 1;
+  text-align: left;
+}
+.resource-icon-picker-heading .resource-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+.resource-icon-options {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 16px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 3px;
+}
+.resource-icon-options > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 92px;
+  padding: 10px 5px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.resource-icon-options > button > span:last-child {
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.resource-icon-options > button:hover {
+  background: var(--surface-raised);
+}
+.resource-icon-options > button[aria-pressed="true"] {
+  border-color: var(--blue);
+  background: var(--surface-raised);
+}
+.resource-icon-options > button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}

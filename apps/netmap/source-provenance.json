@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "source_repository": "local NetBox source",
+  "source_commit": "1e5756d50e899ba3930a16d0eb9a5d3030d0d501",
+  "source_prefix": "automation-topology/",
+  "selection": "code/UI/layout/vendor licenses; no runtime state, credentials, collectors, profiles or production units",
+  "files": {
+    "address_inventory.py": {
+      "source_sha256": "c0a0674a0e0e38ffc95fb35199782251230fb2b1342a25bc6c3299fc7182f0c1",
+      "packaged_sha256": "c0a0674a0e0e38ffc95fb35199782251230fb2b1342a25bc6c3299fc7182f0c1",
+      "adapted": false
+    },
+    "connection_authority.py": {
+      "source_sha256": "4fd691b384356e5f031e01c176682ba5de521ba6e07af06f99f09055f628358c",
+      "packaged_sha256": "e203fb3d517b14326b6ec4cbd0928ef9430dd3722f4d4410944cba0d188debbc",
+      "adapted": true
+    },
+    "equipment_types.py": {
+      "source_sha256": "700a8d9802eaf33d7587562888e1f22207549c0cd6a59ce4396b6705644c07c6",
+      "packaged_sha256": "700a8d9802eaf33d7587562888e1f22207549c0cd6a59ce4396b6705644c07c6",
+      "adapted": false
+    },
+    "endpoint_identity.py": {
+      "source_sha256": "a13c680af27527982ead909ea30c34e5e8336b4b2058bf8acf7298e533991be1",
+      "packaged_sha256": "a13c680af27527982ead909ea30c34e5e8336b4b2058bf8acf7298e533991be1",
+      "adapted": false
+    },
+    "tests_address_inventory.py": {
+      "source_sha256": "0e26f52f1ea1f2d6e077c0d264290b849cf696f5735cb8835bbd0fafcb7e7166",
+      "packaged_sha256": "0e26f52f1ea1f2d6e077c0d264290b849cf696f5735cb8835bbd0fafcb7e7166",
+      "adapted": false
+    },
+    "tests_equipment_types.py": {
+      "source_sha256": "c6d8cefd0eaeef478cc96057bf300217a78eb6da1ce64a9c06da39ef2a8c8473",
+      "packaged_sha256": "c6d8cefd0eaeef478cc96057bf300217a78eb6da1ce64a9c06da39ef2a8c8473",
+      "adapted": false
+    },
+    "tests_endpoint_identity.py": {
+      "source_sha256": "561580ad637af71254fe2fce33ab6dd3ef8777555c106591d1ac2197322ea19e",
+      "packaged_sha256": "561580ad637af71254fe2fce33ab6dd3ef8777555c106591d1ac2197322ea19e",
+      "adapted": false
+    },
+    "web/.node-version": {
+      "source_sha256": "b20a182c7b42cbf1ab3e380c2a050d469f6b5eacdf55dff575afb3ca372b6f2b",
+      "packaged_sha256": "b20a182c7b42cbf1ab3e380c2a050d469f6b5eacdf55dff575afb3ca372b6f2b",
+      "adapted": false
+    },
+    "web/app.js": {
+      "source_sha256": "d25b5f7d26fbca62cf4c603897d5674d64ea94e06068687018dc664ff64aabcb",
+      "packaged_sha256": "b04a551e1327286952c906334d29c77319170481aa944446c7cf8a3de4611039",
+      "adapted": true
+    },
+    "web/index.html": {
+      "source_sha256": "d207ab2e660a6a4e51befd62ba4dabc153d45d2eef161a9b9c660f32078d9d9f",
+      "packaged_sha256": "8a5c0cbdd0dcd8094f794023a79fdc83817d30c39067e34a673a6d10be05f195",
+      "adapted": true
+    },
+    "web/style.css": {
+      "source_sha256": "31ece44717c703e744f73680c43a1f770145684466e62b7a5d8b3f077ac24ea5",
+      "packaged_sha256": "2e1dabfba371b1a3394eb63ad0f0e5dcdfa3d1ada4380c2aa51ff4c8c9d0ce1e",
+      "adapted": true
+    },
+    "web/theme-init.js": {
+      "source_sha256": "aa151929520965d193ec6bf4c5f93830b20d5c5a8757f1ad0a5ee19079f390b1",
+      "packaged_sha256": "9b4c55e27463f5de4287a97f79e923b2cd17e2e856e9cd29392230974fd6dd7d",
+      "adapted": true
+    },
+    "web/office-projection.js": {
+      "source_sha256": "43e4290f631ab87d72040dec1eab6d309bf7b8ce053d24bf72a4fefc50e5ea37",
+      "packaged_sha256": "cc39ef6e5adb5a3512379d9011e75ddb71416c38e0840fb6d5ad454d40eb15a9",
+      "adapted": true
+    },
+    "web/elk-layout.js": {
+      "source_sha256": "ded32abe6cf6fe9619043fff8a40dc6c93d81e0d17d6180c20c7724c70533d94",
+      "packaged_sha256": "dc8575098a613bd8cea02639ba31596608b2caf0cf5371527ba55bd7c2711c9e",
+      "adapted": true
+    },
+    "web/build-layout.cjs": {
+      "source_sha256": "45bf4dac95ffd3a03d3ead3d3881164da5a2cf32471c1db9528ac435db8a5da7",
+      "packaged_sha256": "95393c7900fca6b743a47a5be9b42cbc89e34085b6ed3f25c975de1bde4c8b2c",
+      "adapted": true
+    },
+    "web/office-view.js": {
+      "source_sha256": "f0e20d8d424ed2034a72798db2131fa09a3704d9ddcdbcf07e62ee71e3b3d2ff",
+      "packaged_sha256": "587c7d1837107aaf8f6f53ea31b725529c465fa04a8f95e432413e67c2da84b7",
+      "adapted": true
+    },
+    "web/vendor/elkjs/LICENSE.md": {
+      "source_sha256": "637e81f4a1b6b4079535c499fca05e238cf7605c1ff5b76d60d7da7ce96700c9",
+      "packaged_sha256": "637e81f4a1b6b4079535c499fca05e238cf7605c1ff5b76d60d7da7ce96700c9",
+      "adapted": false
+    },
+    "web/vendor/elkjs/elk-api.js": {
+      "source_sha256": "d41e11da2acc5f57746104109ad9d74dd6250e4052afbea0c2dec0477e381226",
+      "packaged_sha256": "d41e11da2acc5f57746104109ad9d74dd6250e4052afbea0c2dec0477e381226",
+      "adapted": false
+    },
+    "web/vendor/elkjs/elk-worker.min.js": {
+      "source_sha256": "48f9b75d61e15c30d18cbe4e0814bac158123309f9013aacdae604344855ea8d",
+      "packaged_sha256": "48f9b75d61e15c30d18cbe4e0814bac158123309f9013aacdae604344855ea8d",
+      "adapted": false
+    },
+    "web/vendor/elkjs/package.json": {
+      "source_sha256": "4614a8db12f1c46a1d988d55e92012286c5a25dde3ea69be7695013f4d23cf02",
+      "packaged_sha256": "4614a8db12f1c46a1d988d55e92012286c5a25dde3ea69be7695013f4d23cf02",
+      "adapted": false
+    },
+    "web/test-office-view.cjs": {
+      "source_sha256": "7ba87bcb89041bf62fd575a66204f04b4bfac2a8ff8bb129f6c0f8c36734cbd9",
+      "packaged_sha256": "878fe46114cdd0b34b40811741cd03d13bcde57f67759276af63d0f5479bf1bd",
+      "adapted": true
+    },
+    "web/test-performance.cjs": {
+      "source_sha256": "0e2fc850df3ebfdf3d5c9871d0a6db3873f79d9661ca869ad739e6c0c0d51924",
+      "packaged_sha256": "0e2fc850df3ebfdf3d5c9871d0a6db3873f79d9661ca869ad739e6c0c0d51924",
+      "adapted": false
+    },
+    "web/test-elk-layout.cjs": {
+      "source_sha256": "ac0ce5d9b118ec10a90c60359d09dc4a28ceef5692e7a6c87c65c9f4b585e36a",
+      "packaged_sha256": "e11c7aa14d2ad31e85f1e5168547743d794d2feb38a365489ee2f4a495737563",
+      "adapted": true
+    },
+    "web/test-port-evidence.cjs": {
+      "source_sha256": "8222161b1b68576c4a848b8e50d65d14d6f2a196ee44fb77c6c5f03264c93546",
+      "packaged_sha256": "b91c4ab611512cb7ff3364cc8ad0239bc2289c692b1b85c6664d88f829f56da1",
+      "adapted": true
+    },
+    "web/test-type-filters.cjs": {
+      "source_sha256": "65c1b9ab79923531cd279b69702ce795df72f1078e8b39c9123b5b3ffdbd7555",
+      "packaged_sha256": "28ae28801d19cf55788e0cdf6db848f700a02c9003d0ccc76e5ec4d5e3371fd5",
+      "adapted": true
+    },
+    "web/test-vm-gateway-context.cjs": {
+      "source_sha256": "6ea935e9e4e103c3c5c433294c707178d24dddd260ee3339c01a7e1f623a509d",
+      "packaged_sha256": "6ea935e9e4e103c3c5c433294c707178d24dddd260ee3339c01a7e1f623a509d",
+      "adapted": false
+    },
+    "web/test-vm-gateway-layout.cjs": {
+      "source_sha256": "2b81ee2014f999ab1c398519b89e3c512f4270fcf5b0dc70c8ff14e69576857f",
+      "packaged_sha256": "2b81ee2014f999ab1c398519b89e3c512f4270fcf5b0dc70c8ff14e69576857f",
+      "adapted": false
+    }
+  },
+  "upstream_server": {
+    "path": "app.py",
+    "source_sha256": "ed61813c7f4c4ba9c3b79138498f6068cd4da039fb29c9d835434653e08f1019",
+    "adaptation": "read-only server API/static boundary only; production scheduler/writers not imported"
+  },
+  "local_files": {
+    "README.md": {
+      "sha256": "270bee55fab443d336739749201487d17580ae84a3cb87f3a86e6607ec368c59"
+    },
+    "app.py": {
+      "sha256": "6b10b8aa9ffb0986aa14b0b4f1a0b20e30f3a92cbe8e071200969cfb017312d0"
+    },
+    "tests_app.py": {
+      "sha256": "23bbba7a37848834791c4e92afa223ac9d539173a8fdd6eb7024fd283b458fd4"
+    },
+    "tests_connection_authority.py": {
+      "sha256": "9334446421d724af960cd845085e11e03fa2126e81cca299dc88205127cbad4c"
+    }
+  },
+  "adaptation_contract": {
+    "server": "Read-only finite static/API handler, provider callback or recorded JSON; no scheduler, device access, Docker subprocesses or writers",
+    "ui": "Configuration-driven scopes/navigation and PL origin; complete graph by default, explicit URL-persisted connection groups; no private site or fixed inventory-ID layout rules",
+    "defaults": "network scope, same-origin PL URLs; no corporate targets/endpoints/snapshots",
+    "build": "Original office-view.js and build inputs stay paired; targeted checks run directly in the portable checkout. Packaging and installed runtime acceptance are separate."
+  }
+}

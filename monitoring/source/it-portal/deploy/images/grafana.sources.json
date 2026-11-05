@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "version": "13.3.0",
+  "release_url": "https://grafana.com/grafana/download?edition=oss",
+  "source": {
+    "repository": "https://github.com/grafana/grafana",
+    "revision": "6f8ce3c693b493043ebcd4787566d2b6b118b0f0",
+    "license": "AGPL-3.0-only"
+  },
+  "upstream_image": "grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205",
+  "labels": {
+    "org.opencontainers.image.version": "13.3.0",
+    "org.opencontainers.image.revision": "6f8ce3c693b493043ebcd4787566d2b6b118b0f0",
+    "org.opencontainers.image.source": "https://github.com/grafana/grafana",
+    "org.opencontainers.image.licenses": "AGPL-3.0-only",
+    "pl.module.id": "grafana",
+    "pl.module.config.version": "1",
+    "pl.build.variant": "upstream-pinned"
+  },
+  "release_date": "2026-10-27",
+  "verification": {
+    "platform": "linux/amd64",
+    "platform_manifest_digest": "sha256:6e5d306338670f381a942f1c50d3c266bf71531e5ddd9ee4fc1a133dac5ce63d",
+    "config_digest": "sha256:6afa1ab7f6e662c739a45a1d458598d7eb6ab70fc7c0ab45af64864e1503d4b6",
+    "native_version": "13.3.0",
+    "native_commit": "6f8ce3c693b493043ebcd4787566d2b6b118b0f0",
+    "native_branch": "release-13.3.0#patched",
+    "native_command": "/usr/share/grafana/bin/grafana server -v",
+    "readback_sha256": "905f099bbaef476590d3494d31e7dcd73ccda4c2d90c24de3ec160fe712dbad4"
+  }
+}

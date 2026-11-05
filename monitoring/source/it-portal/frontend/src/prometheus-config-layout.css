@@ -1,0 +1,163 @@
+.prometheus-config-page .prom-configuration-card {
+  padding: clamp(1rem, 2vw, 1.75rem);
+}
+.prometheus-config-page .prom-configuration-card > .panel-heading {
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+}
+.prometheus-config-page .prom-config-columns {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.prometheus-config-page .prom-config-sidebar {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.prometheus-config-page .prom-config-common,
+.prometheus-config-page .prom-config-protected,
+.prometheus-config-page .prom-config-jobs-column > .panel {
+  padding: clamp(1rem, 1.6vw, 1.4rem);
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--surface-raised) 76%, transparent);
+  min-width: 0;
+}
+.prometheus-config-page .prom-config-common h3,
+.prometheus-config-page .prom-config-protected h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+.prometheus-config-page .prom-config-common .prom-config-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+.prometheus-config-page .prom-config-protected .field {
+  margin-top: 1rem;
+}
+.prometheus-config-page .prom-config-protected input {
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+.prometheus-config-page .prom-protected-heading,
+.prometheus-config-page .prom-targets-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.prometheus-config-page .prom-protected-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.prometheus-config-page .prom-protected-heading > span {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.prometheus-config-page .prom-config-jobs-column {
+  min-width: 0;
+}
+.prometheus-config-page .prom-config-jobs-column > .panel {
+  margin: 0;
+}
+.prometheus-config-page .prom-config-jobs-column > .panel > .panel-heading,
+.prometheus-config-page .prom-config-job > .module-instance-heading {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.prometheus-config-page .prom-config-job {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+.prometheus-config-page .prom-config-job:first-of-type {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+.prometheus-config-page .prom-config-job .prom-config-grid {
+  gap: 1rem 1.25rem;
+}
+.prometheus-config-page .prom-targets-heading {
+  margin: 1.25rem 0 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.prometheus-config-page .prom-targets-heading h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+.prometheus-config-page .prom-config-target:last-child {
+  margin-bottom: 0;
+}
+.prometheus-config-page .prom-config-target-address {
+  align-items: flex-start;
+}
+.prometheus-config-page .prom-config-target-address > button {
+  margin-top: 1.6rem;
+  flex-shrink: 0;
+}
+.prometheus-config-page .prom-config-footer {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.prometheus-config-page .prom-config-footer-state {
+  display: grid;
+  gap: 0.4rem;
+}
+.prometheus-config-page .prom-config-toolbar {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+.prometheus-config-page .prom-config-footer > .module-job,
+.prometheus-config-page .prom-config-footer > .notice,
+.prometheus-config-page .prom-config-footer > .error-box,
+.prometheus-config-page .prom-config-footer > .prom-config-explanation {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+.prometheus-config-page .prom-config-footer > .module-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.prometheus-config-page .field,
+.prometheus-config-page .field input {
+  min-width: 0;
+}
+@media (max-width: 1000px) {
+  .prometheus-config-page .prom-config-columns,
+  .prometheus-config-page .prom-config-footer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .prometheus-config-page .prom-config-toolbar {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 600px) {
+  .prometheus-config-page .prom-config-grid,
+  .prometheus-config-page .prom-config-label {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .prometheus-config-page .prom-config-toolbar {
+    display: grid;
+  }
+  .prometheus-config-page .prom-config-target,
+  .prometheus-config-page .prom-config-job {
+    padding: 0.85rem;
+  }
+}

@@ -1,0 +1,331 @@
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  ExternalLink,
+  FolderGit,
+  Pencil,
+  Trash2,
+  MessageSquareIcon,
+} from "lucide-react";
+import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import CommentEditor from "@/components/activity/comment-editor";
+import { GithubIcon } from "@/components/icons/github-icon";
+import { GitlabIcon } from "@/components/icons/gitlab-icon";
+import { useAuth } from "@/components/providers/auth-provider/hooks/use-auth";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/preview-card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import useDeleteComment from "@/hooks/mutations/comment/use-delete-comment";
+import useUpdateComment from "@/hooks/mutations/comment/use-update-comment";
+import { formatDateTime, formatRelativeTime } from "@/lib/format";
+import { getInitials } from "@/lib/get-initials";
+import { toast } from "@/lib/toast";
+
+const forges = {
+  github: { name: "GitHub", Icon: GithubIcon },
+  gitea: { name: "Gitea", Icon: FolderGit },
+  gitlab: { name: "GitLab", Icon: GitlabIcon },
+} as const;
+
+function forgeOf(externalSource: string | null | undefined) {
+  if (!externalSource) {
+    return null;
+  }
+  return forges[externalSource as keyof typeof forges] ?? null;
+}
+
+type CommentCardProps = {
+  commentId: string;
+  taskId: string;
+  content: string;
+  user: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  } | null;
+  createdAt: string;
+  importedBy?: string;
+  externalSource?: string | null;
+  externalUrl?: string | null;
+};
+
+export default function CommentCard({
+  commentId,
+  taskId,
+  content,
+  user,
+  createdAt,
+  externalSource,
+  externalUrl,
+  importedBy,
+}: CommentCardProps) {
+  const { t } = useTranslation();
+  const { user: currentUser } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(content);
+  const { mutateAsync: updateComment, isPending } = useUpdateComment();
+  const { mutate: deleteComment, isPending: isDeleting } =
+    useDeleteComment(taskId);
+  const queryClient = useQueryClient();
+
+  const canEdit = currentUser?.id === user?.id;
+  const forge = forgeOf(externalSource);
+  const sourceName = forge
+    ? forge.name
+    : externalSource === "planka"
+      ? "Planka"
+      : externalSource === "trello"
+        ? "Trello"
+        : externalSource === "jira"
+          ? "Jira"
+          : externalSource === "plane"
+            ? "Plane"
+            : externalSource === "linear"
+              ? "Linear"
+              : externalSource === "kaneo"
+                ? "Kaneo"
+                : externalSource;
+  // Gitea and GitLab profile URLs depend on the instance.
+  const githubProfileUrl =
+    forge?.name === "GitHub" && user?.name
+      ? `https://github.com/${user.name}`
+      : null;
+  const commentUrl = externalUrl || null;
+  const fullTimestamp = formatDateTime(createdAt);
+
+  const handleEdit = useCallback(() => {
+    setEditedContent(content);
+    setIsEditing(true);
+  }, [content]);
+
+  const handleCancel = useCallback(() => {
+    setEditedContent(content);
+    setIsEditing(false);
+  }, [content]);
+
+  const handleSave = useCallback(async () => {
+    if (!editedContent.trim()) {
+      toast.error(t("activity:comment.cannotBeEmpty"));
+      return;
+    }
+
+    if (!currentUser?.id) {
+      toast.error(t("activity:comment.mustBeLoggedInToEdit"));
+      return;
+    }
+
+    try {
+      await updateComment({
+        activityId: commentId,
+        comment: editedContent,
+      });
+
+      setIsEditing(false);
+      await queryClient.invalidateQueries({ queryKey: ["activities", taskId] });
+      toast.success(t("activity:comment.updated"), { icon: MessageSquareIcon });
+    } catch (error) {
+      console.error("Failed to update comment:", error);
+      toast.error(t("activity:comment.failedToUpdate"));
+    }
+  }, [
+    commentId,
+    currentUser?.id,
+    editedContent,
+    queryClient,
+    t,
+    taskId,
+    updateComment,
+  ]);
+
+  return (
+    <TooltipProvider>
+      <div className="group relative w-full rounded-lg border border-border/80 bg-foreground/2">
+        <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
+          <HoverCard>
+            <HoverCardTrigger>
+              <div className="flex cursor-pointer items-center gap-2">
+                <Avatar className="size-5">
+                  <AvatarImage src={user?.image ?? ""} alt={user?.name || ""} />
+                  <AvatarFallback className="bg-muted font-semibold text-[9px]">
+                    {getInitials(user?.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="font-medium text-[13px] text-foreground transition-colors hover:text-foreground/80">
+                  {user?.name}
+                </span>
+              </div>
+            </HoverCardTrigger>
+            <HoverCardContent className="w-64 p-3">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={user?.image ?? ""} alt={user?.name || ""} />
+                  <AvatarFallback className="bg-muted text-xs font-medium">
+                    {getInitials(user?.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-none">
+                    {user?.name}
+                  </p>
+                  {user?.email && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {user.email}
+                    </p>
+                  )}
+                  {forge && (
+                    <div className="mt-1.5 flex items-center gap-1">
+                      <forge.Icon className="size-3 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        {forge.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {githubProfileUrl && (
+                <a
+                  href={githubProfileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-1.5 border-t border-border pt-3 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ExternalLink className="size-3" />
+                  {t("activity:comment.viewGithubProfile")}
+                </a>
+              )}
+            </HoverCardContent>
+          </HoverCard>
+
+          {sourceName && (
+            <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
+              {t("activity:comment.importedFrom", { source: sourceName })}
+              {importedBy &&
+                ` · ${t("activity:comment.importedBy", { name: importedBy })}`}
+            </span>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="cursor-default text-xs text-muted-foreground/60 outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                aria-label={fullTimestamp}
+                title={fullTimestamp}
+              >
+                <time dateTime={createdAt}>
+                  {formatRelativeTime(createdAt)}
+                </time>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">{fullTimestamp}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {commentUrl && forge && (
+            <>
+              <span className="text-xs text-muted-foreground/40">·</span>
+              <a
+                href={commentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <forge.Icon className="size-3" />
+                {t("activity:comment.commentedOnForge", { forge: forge.name })}
+              </a>
+            </>
+          )}
+        </div>
+
+        {canEdit && !isEditing && (
+          <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEdit}
+                  className="h-6 w-6 rounded-md p-0 text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">{t("activity:comment.edit")}</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteComment({ activityId: commentId })}
+                  disabled={isDeleting}
+                  className="h-6 w-6 rounded-md p-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">{t("common:actions.delete")}</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+
+        <div className="pt-0.5">
+          <CommentEditor
+            value={isEditing ? editedContent : content}
+            onChange={isEditing ? setEditedContent : undefined}
+            placeholder={t("activity:comment.editPlaceholder")}
+            taskId={taskId}
+            uploadSurface="comment"
+            className={
+              isEditing
+                ? "[&_.kaneo-comment-editor-content_.ProseMirror]:min-h-[3rem] [&_.kaneo-comment-editor-content_.ProseMirror]:max-h-none [&_.kaneo-comment-editor-content_.ProseMirror]:overflow-visible [&_.kaneo-comment-editor-content_.ProseMirror]:px-3 [&_.kaneo-comment-editor-content_.ProseMirror]:pt-2.5 [&_.kaneo-comment-editor-content_.ProseMirror]:pb-2"
+                : "kaneo-comment-viewer [&_.kaneo-comment-editor-content_.ProseMirror]:pt-1.5 [&_.kaneo-comment-editor-content_.ProseMirror]:pr-3.5 [&_.kaneo-comment-editor-content_.ProseMirror]:pb-3.5 [&_.kaneo-comment-editor-content_.ProseMirror]:pl-10"
+            }
+            autoFocus={isEditing}
+            readOnly={!isEditing}
+            onSubmitShortcut={isEditing ? handleSave : undefined}
+            onCancelShortcut={isEditing ? handleCancel : undefined}
+          />
+        </div>
+
+        {isEditing && (
+          <div className="flex items-center justify-end gap-2 border-border/70 border-t bg-card/60 px-3 py-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleCancel}
+              disabled={isPending}
+              className="h-7 px-2.5 text-xs"
+            >
+              {t("common:actions.cancel")}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSave}
+              disabled={isPending || !editedContent.trim()}
+              className="h-7 px-2.5 text-xs"
+            >
+              {t("activity:comment.save")}
+            </Button>
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}

@@ -1,0 +1,1 @@
+"""Structured infrastructure monitoring summary."""

@@ -1,0 +1,15 @@
+.doska-template-dialog { width:700px;max-width:calc(100vw - 40px); }
+.doska-dialog form>fieldset { border:0;padding:0;margin:0;min-width:0; }
+.doska-template-composition { max-height:300px;overflow:auto;border-block:1px solid var(--border);margin:14px 0;padding:12px 0;font-size:13px; }
+.doska-template-composition h3 { margin:0 0 8px;font-size:14px; }
+.doska-template-composition ul { margin:6px 0;padding-left:20px; }
+.doska-template-composition li { margin:5px 0; }
+.doska-template-audience { font-size:13px; }
+.doska-template-selection { margin:-10px 0 18px;font-size:12px;color:var(--muted); }
+.doska-template-selection label { display:flex;align-items:center;gap:8px; }
+.doska-template-selection input { width:auto; }
+.doska-template-options { margin-bottom:12px; }
+.doska-template-dialog footer { display:flex;justify-content:flex-end;gap:10px;margin-top:18px; }
+
+.doska-template-description summary,.doska-template-relations summary { cursor:pointer;color:var(--muted);padding:5px 0; }
+.doska-template-description p { white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;margin:6px 0; }

@@ -1,0 +1,318 @@
+import { useRestoreTaskFocus } from "@/components/project/task-view-keys/use-restore-task-focus";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useNavigate } from "@tanstack/react-router";
+import { format } from "date-fns";
+import { Calendar, CalendarClock, CalendarX, Trash2Icon } from "lucide-react";
+import { type CSSProperties, useMemo, useState, memo } from "react";
+import { useTranslation } from "react-i18next";
+import { TaskProgressBadges } from "@/components/task/task-progress-badges";
+import { TaskPullRequests } from "@/components/task/task-pull-requests";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { useDeleteTask } from "@/hooks/mutations/task/use-delete-task";
+import useActiveWorkspace from "@/hooks/queries/workspace/use-active-workspace";
+import { useGetActiveWorkspaceUsers } from "@/hooks/queries/workspace-users/use-get-active-workspace-users";
+import { cn } from "@/lib/cn";
+import {
+  dueDateStatusColors,
+  getDueDateStatus,
+  isTaskCompleted,
+} from "@/lib/due-date-status";
+import { getInitials } from "@/lib/get-initials";
+import { getPriorityIcon } from "@/lib/priority";
+import { toast } from "@/lib/toast";
+import useBulkSelectionStore from "@/store/bulk-selection";
+import useProjectStore from "@/store/project";
+import { useUserPreferencesStore } from "@/store/user-preferences";
+import type Task from "@/types/task";
+import TaskCardContextMenuContent from "../kanban-board/task-card-context-menu/task-card-context-menu-content";
+import { CardFieldList } from "@/components/custom-fields/card-field-list";
+import { useTaskCardFields } from "@/components/custom-fields/use-task-card-fields";
+import { TaskLabels } from "../kanban-board/task-labels";
+import { ContextMenu, ContextMenuTrigger } from "../ui/context-menu";
+import { EASE_OUT_CSS } from "@/lib/motion";
+
+type TaskRowProps = {
+  task: Task;
+  projectSlug: string;
+};
+
+function TaskRow({ task, projectSlug }: TaskRowProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: task.id,
+    transition: { duration: 200, easing: EASE_OUT_CSS },
+  });
+
+  const { project } = useProjectStore();
+  const taskIsCompleted = isTaskCompleted(task.status, project?.columns);
+  const { data: workspace } = useActiveWorkspace();
+  const {
+    showAssignees,
+    showPriority,
+    showDueDates,
+    showLabels,
+    showTaskNumbers,
+  } = useUserPreferencesStore();
+  const cardFields = useTaskCardFields(task.projectId, task.id);
+  const [isDeleteTaskModalOpen, setIsDeleteTaskModalOpen] = useState<
+    boolean | null
+  >(null);
+  const [hasOpenedMenu, setHasOpenedMenu] = useState(false);
+  const { mutateAsync: deleteTask } = useDeleteTask();
+  const toggleSelection = useBulkSelectionStore(
+    (state) => state.toggleSelection,
+  );
+  const selectRange = useBulkSelectionStore((state) => state.selectRange);
+  const setFocusedTask = useBulkSelectionStore((state) => state.setFocusedTask);
+  useRestoreTaskFocus(task.id, useBulkSelectionStore);
+  const setSelectionAnchor = useBulkSelectionStore(
+    (state) => state.setSelectionAnchor,
+  );
+  const isTaskSelected = useBulkSelectionStore((state) =>
+    state.selectedTaskIds.has(task.id),
+  );
+  const isTaskFocused = useBulkSelectionStore(
+    (state) => state.focusedTaskId === task.id,
+  );
+
+  const { data: workspaceUsers } = useGetActiveWorkspaceUsers(
+    workspace?.id ?? "",
+  );
+
+  const assignee = useMemo(() => {
+    return workspaceUsers?.members?.find(
+      (member) => member.userId === task.userId,
+    );
+  }, [workspaceUsers, task.userId]);
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || `transform 200ms ${EASE_OUT_CSS}`,
+    touchAction: isDragging ? "none" : "auto",
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!project || !task) return;
+    if (e.defaultPrevented) return;
+
+    if (e.shiftKey) {
+      e.preventDefault();
+      selectRange(task.id);
+      return;
+    }
+
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      toggleSelection(task.id);
+      return;
+    }
+
+    setSelectionAnchor(task.id);
+    const currentParams = new URLSearchParams(window.location.search);
+    const currentTaskId = currentParams.get("taskId");
+
+    if (currentTaskId === task.id) {
+      navigate({
+        to: ".",
+        search: {},
+      });
+    } else {
+      navigate({
+        to: ".",
+        search: { taskId: task.id },
+      });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.defaultPrevented || e.target !== e.currentTarget) return;
+    if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault();
+      selectRange(task.id);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    try {
+      await deleteTask(task.id);
+      toast.success(t("tasks:delete.success"), { icon: Trash2Icon });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("tasks:delete.error"),
+      );
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-kaneo-sortable
+      className={cn(
+        "border-b border-border/50 transition-colors duration-150",
+        isDragging && "opacity-50",
+        isTaskSelected &&
+          "bg-accent/60 shadow-sm ring-1 ring-inset ring-ring/30",
+        isTaskFocused && "ring-2 ring-inset ring-ring/50",
+      )}
+    >
+      <ContextMenu
+        onOpenChange={(open) => {
+          if (open) setHasOpenedMenu(true);
+        }}
+      >
+        <ContextMenuTrigger asChild>
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- false positive for onClick and onKeyDown */}
+          <div
+            onClick={handleClick}
+            className={cn(
+              "group relative flex cursor-pointer items-center gap-3 px-4 py-1.5 outline-none transition-colors",
+              isTaskSelected ? "bg-accent/45" : "hover:bg-accent/60",
+            )}
+            data-task-id={task.id}
+            data-shortcut-surface
+            {...attributes}
+            {...listeners}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setFocusedTask(task.id)}
+          >
+            {showPriority && (
+              <div className="flex-shrink-0 first:[&_svg]:h-4 first:[&_svg]:w-4">
+                {getPriorityIcon(task.priority ?? "")}
+              </div>
+            )}
+            {showTaskNumbers && (
+              <div className="text-xs font-mono text-muted-foreground flex-shrink-0">
+                {projectSlug}-{task.number}
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <div className="flex items-center gap-2 justify-between w-full">
+                <span className="text-sm text-foreground truncate">
+                  {task.title}
+                </span>
+                <div className="flex items-center gap-1">
+                  <TaskProgressBadges task={task} />
+                  <CardFieldList fields={cardFields} max={3} />
+                  {showLabels && <TaskLabels labels={task.labels ?? []} />}
+
+                  <TaskPullRequests
+                    externalLinks={task.externalLinks}
+                    className="border-border bg-sidebar"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {showDueDates && task.dueDate && (
+              <div
+                className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded flex-shrink-0 ${dueDateStatusColors[getDueDateStatus(task.dueDate, taskIsCompleted)]}`}
+              >
+                {getDueDateStatus(task.dueDate, taskIsCompleted) ===
+                  "overdue" && <CalendarX className="w-3 h-3" />}
+                {getDueDateStatus(task.dueDate, taskIsCompleted) ===
+                  "due-soon" && <CalendarClock className="w-3 h-3" />}
+                {(getDueDateStatus(task.dueDate, taskIsCompleted) ===
+                  "far-future" ||
+                  getDueDateStatus(task.dueDate, taskIsCompleted) ===
+                    "no-due-date") && <Calendar className="w-3 h-3" />}
+                <span>{format(new Date(task.dueDate), "MMM d")}</span>
+              </div>
+            )}
+
+            {showAssignees && (
+              <div className="flex-shrink-0">
+                {task.userId ? (
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage
+                      src={assignee?.user?.image ?? ""}
+                      alt={assignee?.user?.name || ""}
+                    />
+                    <AvatarFallback className="text-xs font-medium border border-border/30">
+                      {getInitials(assignee?.user?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <div
+                    className="w-6 h-6 rounded-full bg-muted border border-border flex items-center justify-center"
+                    title={t("tasks:assignee.unassigned")}
+                  >
+                    <span className="text-[10px] font-medium text-muted-foreground">
+                      ?
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </ContextMenuTrigger>
+
+        {hasOpenedMenu && project && workspace && (
+          <TaskCardContextMenuContent
+            task={task}
+            taskCardContext={{
+              projectId: project.id,
+              worskpaceId: workspace.id,
+              workspaceSlug: workspace.slug,
+            }}
+            onDeleteClick={() => setIsDeleteTaskModalOpen(true)}
+          />
+        )}
+      </ContextMenu>
+
+      {isDeleteTaskModalOpen !== null && (
+        <AlertDialog
+          open={isDeleteTaskModalOpen}
+          onOpenChange={setIsDeleteTaskModalOpen}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("tasks:delete.title")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("tasks:delete.description")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="outline" size="sm" />}>
+                {t("common:actions.cancel")}
+              </AlertDialogClose>
+              <AlertDialogClose
+                render={
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDeleteTask}
+                  />
+                }
+              >
+                {t("tasks:delete.action")}
+              </AlertDialogClose>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </div>
+  );
+}
+
+export default memo(TaskRow);

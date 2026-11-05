@@ -1,0 +1,349 @@
+{
+	"version": 1,
+	"method": "POST",
+	"publicPath": "/doska/api/doska/projects/{id}/task-imports",
+	"upstreamPath": "/api/doska/projects/{id}/task-imports",
+	"maxBodyBytes": 3145728,
+	"maxTasks": 500,
+	"requestSchema": {
+		"type": "object",
+		"properties": {
+			"clientRequestId": {
+				"type": "string",
+				"format": "uuid"
+			},
+			"tasks": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"labels": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 100
+									},
+									"color": {
+										"anyOf": [
+											{
+												"type": "string",
+												"enum": [
+													"blue",
+													"cyan",
+													"green",
+													"yellow",
+													"orange",
+													"red",
+													"pink",
+													"purple"
+												]
+											},
+											{
+												"type": "string",
+												"pattern": "^#[0-9a-fA-F]{6}$"
+											}
+										]
+									}
+								},
+								"required": ["name", "color"],
+								"additionalProperties": false
+							},
+							"maxItems": 20
+						},
+						"customValues": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"fieldId": {
+										"type": "string",
+										"pattern": "^[A-Za-z0-9_-]{1,128}$"
+									},
+									"value": {
+										"type": ["string", "null"],
+										"maxLength": 10000
+									}
+								},
+								"required": ["fieldId", "value"],
+								"additionalProperties": false
+							},
+							"maxItems": 100
+						},
+						"title": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 500
+						},
+						"description": {
+							"type": ["string", "null"],
+							"maxLength": 100000
+						},
+						"columnId": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{1,128}$"
+						},
+						"parentTaskId": {
+							"type": ["string", "null"],
+							"pattern": "^[A-Za-z0-9_-]{1,128}$"
+						},
+						"userId": {
+							"type": ["string", "null"],
+							"pattern": "^[A-Za-z0-9:_-]{1,128}$"
+						},
+						"coexecutorIds": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"pattern": "^[A-Za-z0-9:_-]{1,128}$"
+							},
+							"maxItems": 100
+						},
+						"priority": {
+							"type": "string",
+							"enum": ["no-priority", "low", "medium", "high", "urgent"]
+						},
+						"cardColor": {
+							"type": ["string", "null"],
+							"enum": [
+								"blue",
+								"cyan",
+								"green",
+								"yellow",
+								"orange",
+								"red",
+								"pink",
+								"purple",
+								null
+							]
+						},
+						"startDate": {
+							"type": ["string", "null"]
+						},
+						"due": {
+							"type": ["object", "null"],
+							"properties": {
+								"date": {
+									"type": "string"
+								},
+								"time": {
+									"type": "string",
+									"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+								}
+							},
+							"required": ["date"],
+							"additionalProperties": false
+						}
+					},
+					"required": ["title"],
+					"additionalProperties": false
+				},
+				"minItems": 1,
+				"maxItems": 500
+			}
+		},
+		"required": ["clientRequestId", "tasks"],
+		"additionalProperties": false
+	},
+	"responses": {
+		"201": {
+			"description": "Tasks imported or previous import replayed",
+			"content": {
+				"application/json": {
+					"schema": {
+						"type": "object",
+						"properties": {
+							"taskIds": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"minItems": 1,
+								"maxItems": 500
+							},
+							"imported": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 500
+							},
+							"replayed": {
+								"type": "boolean"
+							}
+						},
+						"required": ["taskIds", "imported", "replayed"],
+						"additionalProperties": false
+					}
+				}
+			}
+		},
+		"400": {
+			"description": "Invalid request",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		},
+		"401": {
+			"description": "Authentication required",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		},
+		"403": {
+			"description": "Operation not permitted",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		},
+		"404": {
+			"description": "Resource unavailable",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		},
+		"409": {
+			"description": "Membership or request state conflict",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		},
+		"413": {
+			"description": "Import exceeds 3 MiB",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		},
+		"429": {
+			"$ref": "#/components/responses/ApiKeyRateLimited"
+		},
+		"503": {
+			"description": "Directory unavailable",
+			"content": {
+				"application/json": {
+					"schema": {
+						"$ref": "#/components/schemas/ApiError"
+					}
+				}
+			}
+		}
+	},
+	"semantics": {
+		"atomic": true,
+		"authorization": "Current workOnTasks capability, active project, before replay and commit",
+		"deduplication": "Same actor/project/request UUID returns original IDs; changed payload with same UUID is 409 IMPORT_REQUEST_CONFLICT. Same canonical tasks array with a new UUID replays and records an alias receipt. Task deletion does not recreate imported tasks.",
+		"normalization": "Strict createTaskBody; title trimmed. UI resolves statuses to columnId and assignees to existing project participant userId. No file contents retained. Unknown properties rejected.",
+		"dates": "startDate YYYY-MM-DD is Moscow 00:00. due.date YYYY-MM-DD without time is Moscow 23:59 and dueDateHasTime false; optional due.time is HH:mm Moscow. Null clears optional date/assignee/description, omission uses ordinary task defaults. Calendar dates validated by existing task schema.",
+		"rowError": "400 IMPORT_TASK_INVALID, issues [{path: body.tasks.<zero-based-index>, message: existing task validation message}]. Input schema errors: VALIDATION_ERROR. Body over limit: 413 PAYLOAD_TOO_LARGE."
+	},
+	"components": {
+		"schemas": {
+			"ApiError": {
+				"type": "object",
+				"properties": {
+					"message": {
+						"type": "string",
+						"description": "Human-readable description of the error.",
+						"example": "Task not found"
+					},
+					"code": {
+						"type": "string",
+						"description": "Stable UPPER_SNAKE_CASE code. Derived from the status unless a more specific code applies, such as VALIDATION_ERROR or MISSING_PERMISSION.",
+						"example": "NOT_FOUND"
+					},
+					"issues": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"path": {
+									"type": "string",
+									"description": "Dotted path to the invalid input, prefixed with the request part (body, query, params, header).",
+									"example": "body.title"
+								},
+								"message": {
+									"type": "string",
+									"example": "Required"
+								}
+							},
+							"required": ["path", "message"]
+						},
+						"description": "Every validation issue, for VALIDATION_ERROR."
+					},
+					"missingPermissions": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Permissions the caller lacks for this route, as resource:action, for MISSING_PERMISSION and API_KEY_SCOPE.",
+						"example": ["task:update"]
+					}
+				},
+				"required": ["message", "code"]
+			}
+		},
+		"responses": {
+			"ApiKeyRateLimited": {
+				"description": "The API key exceeded its rate limit or usage quota. Wait the number of seconds in Retry-After before retrying. The X-RateLimit headers are sent only when the rate limit was hit.",
+				"headers": {
+					"Retry-After": {
+						"description": "Seconds to wait before retrying. Omitted when an exhausted usage quota never refills.",
+						"schema": {
+							"type": "integer"
+						}
+					},
+					"X-RateLimit-Limit": {
+						"description": "Requests the API key may make per window.",
+						"schema": {
+							"type": "integer"
+						}
+					},
+					"X-RateLimit-Remaining": {
+						"description": "Requests left in the current window.",
+						"schema": {
+							"type": "integer"
+						}
+					},
+					"X-RateLimit-Reset": {
+						"description": "Unix time in seconds when the current window resets.",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/ApiError"
+						}
+					}
+				}
+			}
+		}
+	}
+}

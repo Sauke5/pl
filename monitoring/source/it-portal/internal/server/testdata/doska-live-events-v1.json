@@ -1,0 +1,199 @@
+{
+	"version": 1,
+	"transport": {
+		"contentType": "text/event-stream",
+		"maxFrameBytes": 4096,
+		"heartbeat": ": heartbeat\n\n",
+		"replay": false,
+		"maxTaskIds": 32,
+		"idPattern": "^[A-Za-z0-9_-]{1,128}$",
+		"duplicateScopes": false,
+		"duplicateTaskIds": false,
+		"unknownProperties": false
+	},
+	"projectScopes": [
+		"tasks",
+		"columns",
+		"checklists",
+		"comments",
+		"history",
+		"relations",
+		"subtasks",
+		"attachments",
+		"project",
+		"access",
+		"members",
+		"template-selection",
+		"invitations",
+		"join-requests",
+		"fields",
+		"labels"
+	],
+	"personalScopes": [
+		"projects",
+		"templates",
+		"invitations",
+		"notifications",
+		"preferences",
+		"notification-preferences"
+	],
+	"valid": [
+		{
+			"event": "ready",
+			"data": {
+				"version": 1
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "project-1",
+				"taskIds": ["task-1"],
+				"scopes": ["tasks", "checklists"]
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "project-1",
+				"scopes": ["fields", "labels"]
+			}
+		},
+		{
+			"event": "personal",
+			"data": {
+				"version": 1,
+				"scopes": ["notifications"]
+			}
+		},
+		{
+			"event": "reset",
+			"data": {
+				"version": 1,
+				"reason": "resync"
+			}
+		}
+	],
+	"invalid": [
+		{
+			"event": "ready",
+			"data": {
+				"version": 2
+			}
+		},
+		{
+			"event": "ready",
+			"data": {
+				"version": 1,
+				"extra": true
+			}
+		},
+		{
+			"event": "personal",
+			"data": {
+				"version": 1,
+				"scopes": ["tasks"]
+			}
+		},
+		{
+			"event": "personal",
+			"data": {
+				"version": 1,
+				"scopes": ["notifications"],
+				"userIds": ["pl:secret"]
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "p",
+				"scopes": ["templates"]
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "p",
+				"taskIds": ["t", "t"],
+				"scopes": ["tasks"]
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "p",
+				"scopes": ["tasks", "tasks"]
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "p",
+				"scopes": []
+			}
+		},
+		{
+			"event": "changed",
+			"data": {
+				"version": 1,
+				"projectId": "p",
+				"taskIds": [
+					"t0",
+					"t1",
+					"t2",
+					"t3",
+					"t4",
+					"t5",
+					"t6",
+					"t7",
+					"t8",
+					"t9",
+					"t10",
+					"t11",
+					"t12",
+					"t13",
+					"t14",
+					"t15",
+					"t16",
+					"t17",
+					"t18",
+					"t19",
+					"t20",
+					"t21",
+					"t22",
+					"t23",
+					"t24",
+					"t25",
+					"t26",
+					"t27",
+					"t28",
+					"t29",
+					"t30",
+					"t31",
+					"t32"
+				],
+				"scopes": ["tasks"]
+			}
+		},
+		{
+			"event": "reset",
+			"data": {
+				"version": 1,
+				"reason": "access",
+				"projectId": "hidden"
+			}
+		},
+		{
+			"event": "unknown",
+			"data": {
+				"version": 1
+			}
+		}
+	]
+}

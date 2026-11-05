@@ -1,0 +1,92 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"pl/portal/internal/modules"
+	"testing"
+)
+
+type deliveryControllerFixture struct{ calls int }
+
+func (c *deliveryControllerFixture) Apply(context.Context, modules.Operation) (modules.Observation, error) {
+	return modules.Observation{}, nil
+}
+func (c *deliveryControllerFixture) Delivery(_ context.Context, action string, op *modules.DeliveryUpgrade) (modules.DeliveryStatus, error) {
+	c.calls++
+	return modules.DeliveryStatus{CoreAPI: 1, CurrentVersion: "0.3.0", LatestVersion: "0.3.1", UpdateAvailable: true, Modules: []modules.DeliveryModule{{ModuleID: "forms", Version: "1.0.0"}, {ModuleID: "prometheus", Version: "3.15.0"}}}, nil
+}
+func TestDeliveryRequiresCurrentAdminBrowserSessionAndFiniteInput(t *testing.T) {
+	s, admin := localUsersFixture(t)
+	s.Config.PortableRelease = true
+	controller := &deliveryControllerFixture{}
+	s.Modules = modules.New(s.Store, controller)
+	viewer := apiUser(t, s, "delivery-viewer", false)
+	for _, route := range []struct{ method, path string }{
+		{"GET", "/api/v1/delivery"}, {"POST", "/api/v1/delivery/check"}, {"POST", "/api/v1/delivery/upgrade"},
+	} {
+		for _, test := range []struct {
+			who    apiIdentity
+			status int
+		}{{viewer, 403}, {apiIdentity{}, 401}} {
+			if got := apiCall(s, test.who, route.method, route.path, map[string]any{}, nil); got.Code != test.status {
+				t.Fatalf("%s %s: %d", route.method, route.path, got.Code)
+			}
+		}
+		if got := apiCall(s, admin, route.method, route.path, map[string]any{}, map[string]string{"Authorization": "Bearer fixture"}); got.Code != 403 {
+			t.Fatal("machine delivery grant")
+		}
+	}
+	if controller.calls != 0 {
+		t.Fatal("unauthorized controller execution")
+	}
+	if got := apiCall(s, admin, "POST", "/api/v1/delivery/check", map[string]any{}, map[string]string{"X-CSRF-Token": "forged"}); got.Code != 403 {
+		t.Fatal("csrf grant")
+	}
+	for _, body := range []map[string]any{
+		{"version": "0.3.1", "operation_id": "../x"},
+		{"version": "latest", "operation_id": "727b18f8-99da-410f-b94f-e677f2967731"},
+		{"version": "0.3.1", "operation_id": "727b18f8-99da-410f-b94f-e677f2967731", "url": "https://other.test/a"},
+	} {
+		if got := apiCall(s, admin, "POST", "/api/v1/delivery/upgrade", body, nil); got.Code != 400 {
+			t.Fatal("unbounded upgrade request", got.Code)
+		}
+	}
+	if controller.calls != 0 {
+		t.Fatal("invalid controller execution")
+	}
+	if got := apiCall(s, admin, "POST", "/api/v1/delivery/check", map[string]any{}, nil); got.Code != 200 {
+		t.Fatal(got.Code, got.Body.String())
+	}
+	if got := apiCall(s, admin, "POST", "/api/v1/delivery/upgrade", map[string]any{"version": "0.3.1", "operation_id": "727b18f8-99da-410f-b94f-e677f2967731"}, nil); got.Code != 200 {
+		t.Fatal(got.Code, got.Body.String())
+	}
+}
+func TestOnDemandCatalogUsesTrustedAvailableVersions(t *testing.T) {
+	s, admin := localUsersFixture(t)
+	s.Config.PortableRelease = true
+	s.Config.OnDemandModules = true
+	s.Config.ModuleVersions = map[string]string{"grafana": "99.0.0"}
+	s.Modules = modules.New(s.Store, &deliveryControllerFixture{})
+	got := apiCall(s, admin, "GET", "/api/v1/modules/catalog", nil, nil)
+	if got.Code != 200 {
+		t.Fatal(got.Code, got.Body.String())
+	}
+	var catalog struct {
+		Items []struct {
+			ID, Version string
+			Modes       []string
+		}
+	}
+	if err := json.Unmarshal(got.Body.Bytes(), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range catalog.Items {
+		if item.ID == "forms" && (item.Version != "1.0.0" || len(item.Modes) == 0) {
+			t.Fatal("on-demand module hidden")
+		}
+		if item.ID == "grafana" && item.Version != "" {
+			t.Fatal("stale bundled metadata overrides signed catalog")
+		}
+	}
+}

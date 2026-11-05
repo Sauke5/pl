@@ -1,0 +1,196 @@
+.sftpgo-page {
+  max-width: 100rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 3rem);
+  display: grid;
+  justify-items: stretch;
+  gap: 1.25rem;
+}
+.sftpgo-page > a {
+  justify-self: start;
+}
+.sftpgo-module {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.sftpgo-status,
+.sftpgo-tabs,
+.sftpgo-file-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sftpgo-status {
+  margin-bottom: 1rem;
+}
+.sftpgo-tabs {
+  padding: 0.25rem 0;
+}
+.sftpgo-editor {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.sftpgo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.sftpgo-full {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.sftpgo-editor fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.sftpgo-editor legend {
+  font-weight: 600;
+  padding: 0 0.4rem;
+}
+.sftpgo-editor input:not([type="checkbox"]),
+.sftpgo-editor select,
+.sftpgo-editor textarea,
+.sftpgo-login input {
+  width: 100%;
+  min-width: 0;
+}
+.sftpgo-editor textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+.sftpgo-check,
+.sftpgo-permissions label,
+.sftpgo-membership label {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+.sftpgo-check input,
+.sftpgo-permissions input,
+.sftpgo-membership input {
+  accent-color: var(--accent, #6bc6ff);
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.sftpgo-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.25rem;
+}
+.sftpgo-mappings {
+  display: grid;
+  gap: 1rem;
+}
+.sftpgo-mapping {
+  display: grid;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.sftpgo-membership {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+.sftpgo-membership select {
+  max-width: 14rem;
+}
+.sftpgo-list {
+  display: grid;
+}
+.sftpgo-list-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.sftpgo-list-row p {
+  margin: 0.4rem 0 0;
+}
+.sftpgo-module td small {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.sftpgo-module table {
+  width: 100%;
+}
+.sftpgo-file-toolbar {
+  margin-bottom: 1rem;
+  justify-content: space-between;
+}
+.sftpgo-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.sftpgo-breadcrumbs button {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sftpgo-login {
+  display: grid;
+  gap: 1rem;
+  max-width: 28rem;
+}
+.sftpgo-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-weight: 600;
+}
+.sftpgo-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+.sftpgo-upload:focus-within {
+  outline: 2px solid var(--accent, #6bc6ff);
+  outline-offset: 3px;
+}
+.sftpgo-upload.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 760px) {
+  .sftpgo-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sftpgo-tabs {
+    gap: 0.25rem;
+  }
+  .sftpgo-list-row,
+  .sftpgo-membership {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .sftpgo-membership select {
+    max-width: none;
+  }
+  .sftpgo-file-toolbar .actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}

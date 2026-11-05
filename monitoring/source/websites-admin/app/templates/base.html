@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}' />
+  <title>{{ title }} · Управление сайтами</title>
+  <link rel="icon" href="data:," />
+  {% set ecosystem_base = '/ecosystem/' if auth and auth.identity_source == 'platform' else url_for('static', path='ecosystem/') %}
+  <script src="{{ ecosystem_base }}theme-catalog.js"></script>
+  <script src="{{ ecosystem_base }}theme-runtime.js"></script>
+  <script src="{{ url_for('static', path='theme.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', path='platform.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', path='custom-theme.css') }}" />
+  <link rel="stylesheet" href="{{ ecosystem_base }}theme-menu.css" />
+  <link id="pl-ui-styles" rel="stylesheet" href="{{ ecosystem_base }}ui-v1.css" />
+  <script src="{{ ecosystem_base }}ui-v1.js" defer></script>
+  <script src="{{ url_for('static', path='shared-shell.js') }}" defer></script>
+  <script src="{{ url_for('static', path='vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</head>
+<body>
+  {% macro icon(name) -%}
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {% if name == 'sites' %}<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a17 17 0 0 1 0 18 17 17 0 0 1 0-18Z"/>
+    {% elif name == 'history' %}<path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2"/>
+    {% elif name == 'rollback' %}<path d="m9 4-5 5 5 5M4 9h10a6 6 0 0 1 0 12"/>
+    {% elif name == 'plus' %}<path d="M12 5v14M5 12h14"/>
+    {% elif name == 'portal' %}<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    {% elif name == 'menu' %}<path d="M4 6h16M4 12h16M4 18h16"/>
+    {% elif name == 'logout' %}<path d="M9 21H4V3h5M9 12h12m-5-5 5 5-5 5"/>
+    {% else %}<path d="m14 6-6 6 6 6"/>{% endif %}
+  </svg>
+  {%- endmacro %}
+  <a class="skip-link" href="#main-content">К содержимому</a>
+  <div class="page-progress" id="page-progress" role="status" aria-live="polite" aria-hidden="true">
+    <span class="page-progress-spinner" aria-hidden="true"></span>
+    <span id="page-progress-label">Загружаю данные…</span>
+  </div>
+  <div class="app-shell{% if not auth %} guest-shell{% endif %}" id="app-shell">
+    {% if auth %}
+    <aside class="sidebar" id="site-navigation">
+      <div class="sidebar-brand">
+        <a class="brand" href="/" aria-label="PL IT Platform"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span><span><strong>PL</strong><small>PLATFORM</small></span></a>
+        <button class="icon-button sidebar-toggle" type="button" aria-label="Свернуть меню" aria-expanded="true" aria-controls="site-navigation">{{ icon('chevron') }}</button>
+      </div>
+      {% set path = request.url.path %}
+      <nav aria-label="Навигация сервиса">
+        <a href="{{ url_for('home') }}" title="Сайты" {% if '/history' not in path and '/rollback' not in path and '/add' not in path %}class="active" aria-current="page"{% endif %}>{{ icon('sites') }}<span>Сайты</span></a>
+        <a href="{{ url_for('target_add_get') }}" title="Добавить сайт" {% if '/add' in path %}class="active" aria-current="page"{% endif %}>{{ icon('plus') }}<span>Добавить сайт</span></a>
+        <div class="nav-divider"></div>
+        <a href="{{ url_for('history') }}" title="История изменений" {% if '/history' in path %}class="active" aria-current="page"{% endif %}>{{ icon('history') }}<span>История</span></a>
+        <a href="{{ url_for('rollback_get') }}" title="Откат конфигурации" {% if '/rollback' in path %}class="active" aria-current="page"{% endif %}>{{ icon('rollback') }}<span>Откат</span></a>
+      </nav>
+      <div class="sidebar-bottom"><a class="platform-link" href="/" title="Платформа">{{ icon('portal') }}<span>Платформа</span></a><div class="sidebar-footer"><strong>PL</strong><span>Контроль сайтов</span></div></div>
+    </aside>
+    <button class="mobile-scrim" type="button" aria-label="Закрыть меню" hidden></button>
+    {% endif %}
+    <div class="app-body">
+    <header class="topbar">
+      {% if auth %}<button class="icon-button mobile-menu" type="button" aria-label="Открыть меню" aria-controls="site-navigation" aria-expanded="false">{{ icon('menu') }}</button>{% endif %}
+      <div class="breadcrumb"><a href="/">Платформа</a><span aria-hidden="true">/</span><strong>{{ title }}</strong></div>
+      <nav class="header-actions" aria-label="Учётная запись">
+        {% if auth %}
+          {% set display_name = auth.display_name or auth.user.username %}
+          <div class="user-info"><span class="avatar" aria-hidden="true">{{ display_name[:1]|upper }}</span><span><strong>{{ display_name }}</strong><small>{{ 'Пользователь Платформы' if auth.identity_source == 'platform' else 'Локальная учётная запись' }}</small></span></div>
+          {% if auth.identity_source == 'platform' %}
+          <button class="icon-button" type="button" data-platform-logout title="Выйти" aria-label="Выйти">{{ icon('logout') }}</button>
+          {% else %}
+          <form action="{{ url_for('logout') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button class="icon-button" type="submit" title="Выйти" aria-label="Выйти">{{ icon('logout') }}</button>
+          </form>
+          {% endif %}
+        {% endif %}
+        <button class="icon-button" id="theme-toggle" type="button" aria-label="Переключить на светлую тему" title="Переключить на светлую тему">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" hidden><path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5 8.5 8.5 0 1 0 20.5 14.3Z"/></svg>
+        </button>
+      </nav>
+    </header>
+    <main id="main-content" tabindex="-1">
+      <div id="session-error" class="notice notice-error" role="alert" hidden></div>
+      {% block content %}{% endblock %}
+    </main>
+    </div>
+  </div>
+</body>
+</html>

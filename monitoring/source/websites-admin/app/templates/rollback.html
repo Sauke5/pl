@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="narrow-page wide-narrow"><a class="back-link" href="{{ url_for('home') }}">← Все сайты</a><h1 class="page-title">Откатить последнюю версию</h1><p class="page-note">UI разрешает один шаг назад. На диске сохраняются последние десять полных snapshots.</p>
+{% if not snapshot %}<div class="empty-state">Предыдущая отличающаяся версия не найдена.</div>{% else %}
+<section class="panel"><div class="panel-heading"><div><h2>{{ snapshot.name }}</h2><p>{{ snapshot.metadata.timestamp }} · {{ snapshot.metadata.operation }}</p></div></div>
+  <div class="rollback-diff">
+    <div><h3>Будут восстановлены</h3>{% for target in difference.restore %}<p>{{ target.url }}</p>{% else %}<p>—</p>{% endfor %}</div>
+    <div><h3>Будут удалены</h3>{% for target in difference.remove %}<p>{{ target.url }}</p>{% else %}<p>—</p>{% endfor %}</div>
+    <div><h3>Будут изменены</h3>{% for pair in difference.change %}<p>{{ pair.current.url }}: {{ pair.current.fragments|length }} → {{ pair.previous.fragments|length }} фрагм.</p>{% else %}<p>—</p>{% endfor %}</div>
+  </div>
+  <form class="stack-form" method="post" action="{{ url_for('rollback_post') }}" data-reason-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><input type="hidden" name="revision" value="{{ revision }}" /><input type="hidden" name="snapshot" value="{{ snapshot.name }}" /><input type="hidden" name="operation_token" value="{{ operation_token }}" />
+    <label>Причина отката<textarea class="pl-ui-textarea" name="reason" minlength="3" required></textarea></label>
+    <label class="confirm-check danger-check"><input type="checkbox" name="confirm" value="yes" required /> Подтверждаю восстановление snapshot и reload сервисов.</label>
+    <div class="form-actions"><a class="button pl-ui-button pl-ui-button-secondary" href="{{ url_for('home') }}">Отмена</a><button class="button button-danger" type="submit">Выполнить откат</button></div>
+  </form>
+</section>{% endif %}</div>
+{% endblock %}

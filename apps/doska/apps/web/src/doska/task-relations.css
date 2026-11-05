@@ -1,0 +1,23 @@
+.doska-task-relations { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.doska-task-relations > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.doska-task-relations h3 { margin: 0; font-size: 14px; }
+.doska-app .doska-task-relations button { min-height: 30px; padding: 5px 8px; font-size: 12px; }
+.doska-task-relations > header button { display: inline-flex; align-items: center; gap: 6px; }
+.doska-task-relations ul { list-style: none; padding: 0; margin: 10px 0; }
+.doska-task-relations li { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--border); padding: 9px 0; }
+.doska-task-relations li > svg { flex-shrink: 0; color: var(--muted); }
+.doska-task-relations li > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.doska-task-relations li small, .doska-relation-muted { color: var(--muted); font-size: 12px; }
+.doska-task-relations li a { color: var(--text); text-decoration: none; font-size: 13px; overflow-wrap: anywhere; }
+.doska-task-relations li a:hover { color: var(--accent); text-decoration: underline; }
+.doska-task-relations li a span, .doska-relation-results button span { color: var(--muted); font-size: 11px; }
+.doska-relation-form { border: 1px solid var(--border); border-radius: 9px; padding: 12px; margin-top: 10px; font-size: 13px; }
+.doska-relation-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.doska-app .doska-relation-form label { display: grid; gap: 5px; margin-bottom: 10px; font-size: 12px; }
+.doska-app .doska-relation-form input, .doska-app .doska-relation-form select { width: 100%; min-width: 0; min-height: 34px; padding: 6px 8px; font-size: 13px; }
+.doska-relation-results { display: grid; gap: 3px; max-height: 190px; overflow-y: auto; }
+.doska-app .doska-relation-results button { display: block; text-align: left; border-color: transparent; background: transparent; overflow-wrap: anywhere; }
+.doska-app .doska-relation-results button[aria-pressed="true"] { border-color: var(--accent); background: var(--border); }
+.doska-relation-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.doska-relation-selected { margin: 10px 0 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .doska-relation-fields { grid-template-columns: 1fr; } }

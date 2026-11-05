@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "version": "26.09.2",
+  "recipe": "deploy/images/bookstack.Dockerfile",
+  "context": ".",
+  "roles": [
+    "web",
+    "database"
+  ],
+  "images": {
+    "bookstack-web": {
+      "target": "web",
+      "labels": {
+        "org.opencontainers.image.version": "26.09.2",
+        "pl.module.id": "bookstack",
+        "pl.module.role": "web",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "26.09.2"
+      }
+    },
+    "bookstack-database": {
+      "target": "database",
+      "labels": {
+        "org.opencontainers.image.version": "26.09.2",
+        "pl.module.id": "bookstack",
+        "pl.module.role": "database",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "13.0.2"
+      }
+    }
+  },
+  "upstream": {
+    "version": "26.09.2",
+    "source_revision": "6265d5667dd6904b7aa0d05a8c60795cf104011b",
+    "release": "https://github.com/BookStackApp/BookStack/releases/tag/v26.09.2",
+    "license": "MIT",
+    "verified_at": "2026-10-29",
+    "requirements": "https://www.bookstackapp.com/docs/admin/installation/",
+    "subdirectory": "https://www.bookstackapp.com/docs/admin/subdirectory-setup/"
+  },
+  "containers": {
+    "web": {
+      "maintainer": "LinuxServer.io (community, listed by BookStack)",
+      "repository": "https://github.com/linuxserver/docker-bookstack",
+      "revision": "9528d216916d3f05c903ec26288bc5a5783eb585",
+      "tag": "v26.09.2-ls293",
+      "image": "ghcr.io/linuxserver/bookstack:v26.09.2-ls293@sha256:2fdeeb1a2028ce7cb1274696237e32b9f849e16b6d77314d08c78356a6016fca",
+      "documentation": "https://docs.linuxserver.io/images/docker-bookstack/",
+      "architectures": [
+        "amd64",
+        "arm64"
+      ]
+    },
+    "database": {
+      "maintainer": "MariaDB Foundation / MariaDB plc (Docker Official Image)",
+      "repository": "https://github.com/MariaDB/mariadb-docker",
+      "revision": "7359e74de2aa6ef63dd3b8545db5c7e177e72618",
+      "version": "13.0.2",
+      "image": "mariadb:13.0.2@sha256:f4054da26e3a9dd6c8b5cc97363e544408b15c0fb369d7359c25dc04826eb6e1",
+      "amd64_manifest": "sha256:0231965d72f758adea93162ed7be119dfd49f14172c5754ed8c9d49b0f17bbc6",
+      "documentation": "https://hub.docker.com/_/mariadb",
+      "architectures": [
+        "amd64",
+        "arm64"
+      ]
+    }
+  },
+  "runtime": {
+    "prefix": "/wiki/",
+    "upstream": "http://pl-bookstack-<instance UUID>:80 (strip /wiki before forwarding)",
+    "authentication": "native BookStack standard authentication and users; Platform role is not a BookStack role",
+    "session": "pl_bookstack_session scoped by APP_URL to /wiki; native CSRF/authorization",
+    "bootstrap": "generated root-owned private mode0600 files; initial admin admin@pl.invalid; password file never in source/API/argv",
+    "data": "owned database volume /var/lib/mysql and config/uploads/attachments/sessions volume /config",
+    "secrets": "APP_KEY plus database/root/admin passwords generated per instance; app key persists across enable",
+    "network": "owned per-instance network for web and database; web alone joins existing core ingress; no DB host port",
+    "resource_budget": "2 x 512 MiB, 1 CPU, 256 pids; writable rootfs required by upstream init; no privileged/socket/host paths",
+    "wrapper_lineage": "Pinned LinuxServer BookStack software and native MariaDB retained; Pl adds only private initial administrator bootstrap after native migrations."
+  },
+  "required_acceptance": [
+    "pinned image availability/provenance and native BookStack/PHP/MariaDB version readback",
+    "fresh migrations and generated initial administrator login; no upstream default password exposed",
+    "native user creation, permissions, books/chapter/pages and editor save/reload",
+    "image and attachment upload/download through /wiki/ with native permissions",
+    "native session cookie Path/Secure/HttpOnly, CSRF, native logout and Platform gate logout",
+    "disable/enable and host restart preserve database, files, users and APP_KEY",
+    "interrupted install/remove retries; foreign container/volume/file/image/network rejection",
+    "Pl proxy prefix assets, redirects, encoded names, download/upload body limits; no runtime claim from static checks"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "revision": 0,
+  "resource_ids": [],
+  "targets": [
+    {
+      "integration_id": "fixture-alerts",
+      "instance": "https://public.example.test/"
+    }
+  ]
+}

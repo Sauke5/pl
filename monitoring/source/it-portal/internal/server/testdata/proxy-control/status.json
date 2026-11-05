@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "revision": 4,
+  "mode": "auto",
+  "active_path": "final185",
+  "observed_at": "2026-10-15T09:20:00+00:00",
+  "stale_after_seconds": 45,
+  "controller_error": null,
+  "paths": {
+    "relay": {
+      "health": "unhealthy",
+      "last_checked": "2026-10-15T09:20:00+00:00",
+      "last_success": "2026-10-15T09:19:00+00:00",
+      "latency_ms": null,
+      "error_code": "end_to_end_probe_failed"
+    },
+    "final185": {
+      "health": "healthy",
+      "last_checked": "2026-10-15T09:20:00+00:00",
+      "last_success": "2026-10-15T09:19:00+00:00",
+      "latency_ms": 210,
+      "error_code": null
+    },
+    "final2": {
+      "health": "healthy",
+      "last_checked": "2026-10-15T09:20:00+00:00",
+      "last_success": "2026-10-15T09:19:00+00:00",
+      "latency_ms": 210,
+      "error_code": null
+    }
+  },
+  "last_switch": {
+    "at": "2026-10-15T09:19:30+00:00",
+    "from": "relay",
+    "to": "final185",
+    "reason": "auto_health",
+    "actor": "automatic"
+  },
+  "counters": {
+    "source": "xray_stats_api",
+    "observed_at": "2026-10-15T09:20:00+00:00",
+    "values": {
+      "outbound>>>final185>>>traffic>>>downlink": 1048576
+    }
+  },
+  "sockets": null
+}

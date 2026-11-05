@@ -1,0 +1,13 @@
+.doska-task-labels { display: grid; gap: 8px; }
+.doska-label-chips,.doska-label-suggestions { display:flex;flex-wrap:wrap;gap:6px; }
+.doska-label-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid;border-radius:6px;padding:3px 7px;font-size:12px;max-width:100%;overflow-wrap:anywhere; }
+.doska-label-chip i { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+.doska-label-chip button { border:0;background:transparent;color:inherit;min-width:22px;min-height:22px;padding:0;cursor:pointer; }
+.doska-label-add { display:flex;gap:6px;align-items:center; }
+.doska-label-add input { min-width:0;flex:1; }
+.doska-label-add select { width:auto;max-width:120px; }
+.doska-label-add button,.doska-label-suggestions button { flex-shrink:0; }
+@media(max-width:600px) {.doska-label-add {flex-wrap:wrap}.doska-label-add input {flex-basis:100%}}
+
+.doska-task-card > .doska-label-chips { padding: 0 10px 6px; }
+.doska-task-card .doska-label-chip { font-size:11px; padding:2px 5px; }

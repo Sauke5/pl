@@ -1,0 +1,37 @@
+<section class="panel preview-panel">
+  <h2>Результат проверки</h2>
+  {% if fetched %}
+    <dl class="definition-grid compact-definitions"><div><dt>HTTP</dt><dd>{{ fetched.status_code }}</dd></div><div><dt>Финальный URL</dt><dd class="breakable">{{ fetched.final_url }}</dd></div><div><dt>Размер HTML</dt><dd>{{ '%.1f KB'|format(fetched.body|length / 1024) }}</dd></div><div><dt>Редиректы</dt><dd>{{ fetched.redirects|length }}</dd></div></dl>
+  {% endif %}
+  {% if error %}<div class="notice notice-error">{{ error }}</div>{% endif %}
+  {% if fetched and not candidates %}<div class="notice notice-warning">В исходном HTML не найден подходящий стабильный текст. Контентная проверка для этого сайта может быть недоступна.</div>{% endif %}
+  <form class="stack-form" method="post" action="{{ url_for('target_add_apply') }}" data-reason-form data-candidate-form data-max="3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <input type="hidden" name="revision" value="{{ revision }}" />
+    <input type="hidden" name="operation_token" value="{{ operation_token }}" />
+    <input type="hidden" name="url" value="{{ url }}" />
+    <input type="hidden" name="display_name" value="{{ display_name }}" />
+    {% if fetched and fetched.final_url != url %}
+      <label class="confirm-check"><input type="checkbox" name="confirm_redirect" value="yes" required /> Подтверждаю финальный URL {{ fetched.final_url }}. В мониторинге останется исходный URL.</label>
+    {% endif %}
+    {% if error %}
+      <label class="confirm-check danger-check"><input type="checkbox" name="forced" value="yes" required /> Принудительно сохранить недоступную цель. Операция будет отмечена как forced.</label>
+      <input type="hidden" name="content_enabled" value="no" />
+    {% else %}
+      <label class="toggle-row"><input type="checkbox" name="content_enabled" value="yes" data-content-toggle {% if candidates %}checked{% endif %} /> <span><strong>Включить content-check</strong><small>HTTP-проверка создаётся всегда.</small></span></label>
+      {% if candidates %}
+      <div data-content-candidates>
+        <div class="panel-heading"><div><h3>Контрольные фрагменты</h3><p>Для новой цели — от одного до трёх.</p></div><button class="button button-secondary pl-ui-button pl-ui-button-secondary" type="button" data-use-recommended>Использовать рекомендуемые</button></div>
+        <p class="important-note">Проверка считается успешной только в том случае, если на странице найдены все выбранные контрольные фрагменты.</p>
+        <div class="candidate-list">{% for candidate in candidates %}<label class="candidate"><input type="checkbox" name="fragments" value="{{ candidate.text }}" data-recommended="{{ 'true' if candidate.recommended else 'false' }}" {% if candidate.recommended %}checked{% endif %}/><span><strong>{{ candidate.text }}</strong><small>{{ candidate.source }} · оценка {{ candidate.score }}</small></span>{% if candidate.recommended %}<em>Рекомендуется</em>{% endif %}</label>{% endfor %}</div>
+      </div>
+      {% endif %}
+      <details class="advanced-force">
+        <summary>Дополнительное подтверждение</summary>
+        <label class="confirm-check danger-check"><input type="checkbox" name="forced" value="yes" /> Разрешить принудительное сохранение, если независимый probe Blackbox не пройдёт. Операция будет отмечена как forced.</label>
+      </details>
+    {% endif %}
+    <label>Причина добавления<textarea class="pl-ui-textarea" name="reason" minlength="3" required placeholder="Почему сайт добавляется в мониторинг"></textarea></label>
+    <div class="form-actions"><button class="button button-primary pl-ui-button pl-ui-button-default" type="submit">Проверить и применить</button></div>
+  </form>
+</section>

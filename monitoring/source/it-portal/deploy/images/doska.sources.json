@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "version": "2.46.2",
+  "source": {
+    "kind": "local-committed-snapshot",
+    "revision": "3a4a0c37bdd0da5bb966e703efca62096d760f83",
+    "paths": [
+      "apps/doska"
+    ],
+    "identity": "Selected committed API, web, workspace packages and migrations. Runtime state and deployment configuration are excluded."
+  },
+  "recipe": "monitoring/source/it-portal/deploy/images/doska.Dockerfile",
+  "context": ".",
+  "targets": [
+    "api",
+    "web"
+  ],
+  "node": "26.12.0",
+  "pnpm": "10.32.1",
+  "nginx": "1.30.6",
+  "runtime": {
+    "api": {
+      "user": "10001:10001",
+      "port": 1337,
+      "directory": "explicit installation-local Directory with module-scoped server token",
+      "health": "/healthz requires current Directory projection",
+      "attachments": "separate owned durable volume"
+    },
+    "web": {
+      "user": "nginx",
+      "port": 8080,
+      "base": "/doska/"
+    },
+    "database": {
+      "source": "exact core PostgreSQL image descriptor",
+      "isolation": "dedicated private database container, credentials and durable volume"
+    }
+  },
+  "images": {
+    "doska-api": {
+      "labels": {
+        "org.opencontainers.image.version": "2.46.2",
+        "pl.module.id": "doska",
+        "pl.module.role": "api",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      }
+    },
+    "doska-web": {
+      "labels": {
+        "org.opencontainers.image.version": "2.46.2",
+        "pl.module.id": "doska",
+        "pl.module.role": "web",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      }
+    }
+  },
+  "verification": "CI must exercise local administrator and ordinary user, Directory revocation, CSRF, idempotency, attachments, imports, SSE, persistence, ownership rejection and complete removal. No Mac builds."
+}

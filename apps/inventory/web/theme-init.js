@@ -1,0 +1,1 @@
+(()=>{if(window.PLTheme)return;let theme="dark";try{const saved=localStorage.getItem("pl-ui-theme");if(saved==="dark"||saved==="light")theme=saved;}catch{}document.documentElement.dataset.theme=theme;})();

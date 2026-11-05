@@ -1,0 +1,26 @@
+.doska-import-dialog { width:min(980px,calc(100vw - 40px)); max-height:calc(100dvh - 40px); }
+.doska-import-dialog form { display:flex; flex-direction:column; gap:16px; }
+.doska-import-dialog h2,.doska-import-dialog h3,.doska-import-dialog p { margin:0; }
+.doska-import-dialog fieldset { border:0; padding:0; min-width:0; display:grid; gap:16px; }
+.doska-import-dialog footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }
+.doska-import-dialog input[type=file] { max-width:100%; }
+.doska-import-mapping { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; }
+.doska-import-mapping section { display:grid; align-content:start; gap:10px; }
+.doska-import-mapping select { width:100%; min-height:38px; }
+.doska-import-preview { overflow:auto; max-height:36vh; border:1px solid var(--line); border-radius:10px; }
+.doska-import-preview table { width:100%; border-collapse:collapse; font-size:13px; }
+.doska-import-preview th,.doska-import-preview td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+.doska-import-preview td:nth-child(2) { min-width:210px; max-width:520px; overflow-wrap:anywhere; }
+.doska-import-preview th { position:sticky; top:0; background:var(--panel-solid,var(--bg)); z-index:1; }
+.doska-import-preview td:nth-child(n+3) { white-space:nowrap; }
+.doska-import-preview details { margin-top:6px; }
+.doska-import-description { padding-top:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.doska-import-issues { max-height: 25vh; overflow: auto; overflow-wrap: anywhere; }
+.doska-import-issues p { padding: 6px 0; white-space: pre-wrap; }
+.doska-app .doska-dialog.doska-import-dialog { width:min(1040px,calc(100vw - 40px));max-height:calc(100dvh - 40px); }
+.doska-import-dialog .doska-field { margin:0;gap:6px; }
+.doska-dialog.doska-import-dialog h2 { margin:0; }
+.doska-dialog.doska-import-dialog footer { margin-top:0;padding-top:12px;border-top:1px solid var(--border); }
+.doska-import-dialog .doska-import-editor nav li button { text-align:left;justify-content:flex-start; }
+.doska-import-dialog .doska-import-editor > button { justify-self:start; }

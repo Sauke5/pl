@@ -1,0 +1,293 @@
+{
+  "schema": 1,
+  "items": [
+    {
+      "id": "mailcow",
+      "name": "Почта",
+      "description": "Существующий Mailcow: почтовые ящики, очередь, службы, хранилище и Rspamd через read-only API.",
+      "modes": ["external"],
+      "actions": ["enable", "disable", "refresh", "remove"],
+      "integration_kind": "mailcow",
+      "external_auth": "read_only_api_key",
+      "capabilities": ["mail_monitoring"],
+      "direction": "Мониторинг",
+      "view": "mailcow",
+      "data_preservation": "Отключение прекращает сбор Pl. Внешний Mailcow, ящики и письма сохраняются."
+    },
+    {
+      "id": "alertmanager",
+      "name": "Alertmanager",
+      "description": "Маршрутизация уведомлений и HTTP proxy для получателей.",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "alertmanager",
+      "capabilities": [
+        "problems"
+      ],
+      "direction": "Мониторинг",
+      "view": "alertmanager",
+      "data_preservation": "Отключение сохраняет конфигурацию и состояние уведомлений."
+    },
+    {
+      "id": "xray",
+      "name": "Xray",
+      "description": "SOCKS/HTTP inbound и импорт outbound по ссылке.",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "",
+      "capabilities": [],
+      "direction": "Сети",
+      "view": "xray",
+      "data_preservation": "Отключение сохраняет конфигурацию."
+    },
+    {
+      "id": "prometheus",
+      "name": "Prometheus",
+      "description": "Сбор метрик и управление jobs и targets.",
+      "modes": [
+        "local",
+        "external"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "prometheus",
+      "capabilities": [
+        "discovery"
+      ],
+      "direction": "Мониторинг",
+      "view": "configuration",
+      "data_preservation": "Отключение сохраняет хранилище метрик.",
+      "external_auth": "none"
+    },
+    {
+      "id": "wayline",
+      "name": "Wayline",
+      "description": "Проверки доступности, маршрутов и скорости сети.",
+      "modes": [
+        "local",
+        "external"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "wayline",
+      "capabilities": [
+        "network_checks",
+        "health"
+      ],
+      "direction": "Сети",
+      "view": "wayline",
+      "data_preservation": "Отключение сохраняет цели, интервалы и историю проверок.",
+      "external_auth": "basic-reference"
+    },
+    {
+      "id": "fileauditor",
+      "name": "File Auditor",
+      "description": "Состояние файлового сервера и ошибки структуры каталогов Windows.",
+      "modes": [
+        "external"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "fileauditor",
+      "capabilities": [
+        "file_audit",
+        "health"
+      ],
+      "direction": "Файлы",
+      "view": "fileauditor",
+      "data_preservation": "Отключение прекращает проверки в Pl; внешний Auditor продолжает работать.",
+      "external_auth": "signed-gateway-v2"
+    },
+    {
+      "id": "grafana",
+      "name": "Grafana",
+      "description": "Панели и визуализация метрик. Собственный вход и настройка источников в Grafana.",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "grafana",
+      "capabilities": [
+        "health",
+        "links"
+      ],
+      "direction": "Мониторинг",
+      "view": "grafana",
+      "data_preservation": "Отключение сохраняет панели, источники данных и настройки Grafana."
+    },
+    {
+      "id": "forms",
+      "name": "Forms",
+      "description": "Анкеты, тесты и агрегированная аналитика через общую сессию Pl.",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "forms",
+      "capabilities": [
+        "health",
+        "links"
+      ],
+      "direction": "Управление",
+      "view": "nativeapp",
+      "data_preservation": "Отключение сохраняет анкеты, ответы, аналитику и настройки Forms."
+    },
+    {
+      "id": "doska",
+      "name": "Doska",
+      "description": "Проекты, доски и задачи через общую сессию Pl.",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "doska",
+      "capabilities": [
+        "health",
+        "links"
+      ],
+      "direction": "Управление",
+      "view": "nativeapp",
+      "data_preservation": "Отключение сохраняет проекты, задачи, вложения и настройки Doska."
+    },
+    {
+      "id": "sftpgo",
+      "name": "SFTPGo",
+      "description": "Файловый сервер: учётные записи, группы, общие папки, квоты и передача файлов через интерфейс Pl или SFTP-клиент.",
+      "version": "",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "install",
+        "refresh",
+        "disable",
+        "enable",
+        "remove",
+        "configure"
+      ],
+      "integration_kind": "sftpgo",
+      "capabilities": [
+        "health",
+        "files",
+        "management"
+      ],
+      "direction": "Файлы",
+      "view": "sftpgo",
+      "data_preservation": "Отключение сохраняет файлы и настройки. Полное удаление удаляет только данные выбранного экземпляра."
+    },
+    {
+      "id": "netmap",
+      "name": "NetMap",
+      "description": "Карта сети, инвентарь NetBox, сбор конфигураций Oxidized и история в Gitea.",
+      "modes": [
+        "local",
+        "external"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "netmap",
+      "capabilities": [
+        "health",
+        "links"
+      ],
+      "direction": "Сети",
+      "view": "netmap",
+      "data_preservation": "Локальное отключение сохраняет данные. Внешнее подключение управляет доступом через Pl; сервер NetMap и его данные остаются на своём хосте.",
+      "external_auth": "signed-gateway-v2",
+      "public_path": "/netmap/"
+    },
+    {
+      "id": "bookstack",
+      "name": "Wiki",
+      "description": "База знаний BookStack с собственным входом и хранением документов.",
+      "modes": [
+        "local",
+        "external"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "bookstack",
+      "capabilities": [
+        "health",
+        "links"
+      ],
+      "direction": "Управление",
+      "view": "nativeapp",
+      "data_preservation": "Локальное отключение сохраняет данные. Внешнее подключение управляет только доступом через Pl; BookStack и его данные остаются на своём хосте.",
+      "external_auth": "none",
+      "public_path": "/wiki/"
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "description": "Инвентаризация ПО, проверка комплектов и лицензий через общую сессию PL.",
+      "modes": [
+        "local"
+      ],
+      "actions": [
+        "enable",
+        "disable",
+        "refresh",
+        "remove"
+      ],
+      "integration_kind": "inventory",
+      "capabilities": [
+        "health",
+        "links"
+      ],
+      "direction": "Управление",
+      "view": "nativeapp",
+      "public_path": "/inventory/",
+      "data_preservation": "Отключение сохраняет импортированные сведения, историю и настройки Inventory."
+    }
+  ]
+}

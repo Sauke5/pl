@@ -1,0 +1,4 @@
+# Upstream OpenSSL uses a seven-character Markdown heading underline.
+monitoring/source/it-portal/THIRD_PARTY_NOTICES conflict-marker-size=32
+monitoring/source/it-portal/deploy/licenses/openssl.AUTHORS conflict-marker-size=32
+monitoring/source/it-portal/deploy/licenses/iperf3.LICENSE whitespace=-blank-at-eof

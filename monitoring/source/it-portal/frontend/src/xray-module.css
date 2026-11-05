@@ -1,0 +1,267 @@
+.xray-module .xray-status-card,
+.xray-module .xray-config-card {
+  padding: clamp(1rem, 2vw, 1.75rem);
+}
+.xray-module .panel-heading {
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.xray-module .xray-card-description {
+  margin: 0 0 1.5rem;
+}
+.xray-status-actions,
+.xray-connection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.xray-status-actions button,
+.xray-module .xray-surface h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.xray-revisions {
+  display: grid;
+  gap: 0.5rem;
+  text-align: right;
+}
+.xray-revisions > span {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  color: var(--muted);
+}
+.xray-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.xray-summary,
+.xray-module .xray-surface {
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: clamp(1rem, 1.6vw, 1.5rem);
+  min-width: 0;
+  background: color-mix(in srgb, var(--surface-raised) 76%, transparent);
+}
+.xray-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  overflow-wrap: anywhere;
+}
+.xray-summary > svg {
+  flex: 0 0 30px;
+  height: 30px;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+.xray-module .xray-summary h3,
+.xray-module .xray-surface h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+.xray-summary p {
+  margin: 0.5rem 0 0;
+}
+.xray-traffic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+.xray-table-scroll {
+  overflow-x: auto;
+}
+.xray-traffic-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.xray-traffic-table th,
+.xray-traffic-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.xray-traffic-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.xray-traffic-table td:not(:first-child) {
+  white-space: nowrap;
+}
+.xray-traffic-table code,
+.xray-protocol {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.85rem;
+}
+.xray-traffic-table code {
+  margin-left: 0.65rem;
+}
+.xray-service-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem 0;
+  border-block: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.xray-service-stats dt {
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+.xray-service-stats dd {
+  font-size: 1.2rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.xray-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding-top: 1rem;
+  margin-bottom: 0;
+  border-top: 1px solid var(--border);
+}
+.xray-privacy > svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+.xray-other-counters {
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+.xray-config-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+  margin-top: 1.5rem;
+}
+.xray-module .xray-fieldset {
+  margin: 0;
+}
+.xray-module .xray-fieldset > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+.xray-module .xray-fieldset > legend + * {
+  clear: both;
+}
+.xray-module .xray-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.xray-inbound-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  min-height: 240px;
+  gap: 1rem;
+}
+.xray-inbound-empty > svg {
+  color: var(--muted);
+}
+.xray-inbound-empty p {
+  margin: 0;
+}
+.xray-saved-connection {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  overflow-wrap: anywhere;
+}
+.xray-saved-connection > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.xray-saved-connection p {
+  margin: 0 0 0.5rem;
+}
+.xray-module .xray-outbound-editor > .field {
+  margin-top: 1rem;
+}
+.xray-module .xray-routing-editor {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(0, 3fr);
+  gap: 0.5rem 1.5rem;
+  margin-top: 1.25rem;
+}
+.xray-module .xray-routing-editor > legend {
+  float: none;
+  width: auto;
+}
+.xray-config-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+}
+.xray-draft-state {
+  display: grid;
+  gap: 0.35rem;
+}
+.xray-config-footer .actions {
+  margin: 0;
+  flex-wrap: wrap;
+}
+@media (max-width: 1000px) {
+  .xray-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .xray-traffic-grid,
+  .xray-config-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .xray-revisions {
+    text-align: left;
+  }
+  .xray-inbound-empty {
+    min-height: 180px;
+  }
+}
+@media (max-width: 600px) {
+  .xray-module .xray-fields,
+  .xray-module .xray-routing-editor,
+  .xray-service-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .xray-config-footer .actions {
+    display: grid;
+    width: 100%;
+  }
+}
+
+.xray-inbound-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.xray-inbound-caption {
+  display: block;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+.xray-inbound-heading button {
+  flex-shrink: 0;
+}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact-hero">
+  <div>
+    <h1>Сайты</h1>
+    <p class="subtitle">Доступность и контроль содержимого сайтов. Добавляйте сайты и управляйте контрольными фрагментами.</p>
+  </div>
+  <a class="button button-primary pl-ui-button pl-ui-button-default" href="{{ url_for('target_add_get') }}">Добавить сайт</a>
+</section>
+
+{% if message %}<div class="notice notice-success">{{ message }}</div>{% endif %}
+{% if warning %}<div class="notice notice-warning">{{ warning }}</div>{% endif %}
+{% for error in global_errors %}<div class="notice notice-error">{{ error }}</div>{% endfor %}
+
+<section class="summary-grid" aria-label="Сводка">
+  <a class="summary-card {% if state_filter == 'all' %}active{% endif %}" href="{{ url_for('home') }}"><strong>{{ counters.all }}</strong><span>Всего целей</span></a>
+  <a class="summary-card status-ok {% if state_filter == 'healthy' %}active{% endif %}" href="{{ url_for('home') }}?state=healthy"><strong>{{ counters.healthy }}</strong><span>Исправны</span></a>
+  <a class="summary-card status-error {% if state_filter == 'problem' %}active{% endif %}" href="{{ url_for('home') }}?state=problem"><strong>{{ counters.problem }}</strong><span>Проблемы</span></a>
+  <a class="summary-card status-disabled {% if state_filter == 'disabled' %}active{% endif %}" href="{{ url_for('home') }}?state=disabled"><strong>{{ counters.disabled }}</strong><span>Без content-check</span></a>
+</section>
+
+<form class="filter-bar" method="get" action="{{ url_for('home') }}">
+  <label class="search-field"><span class="sr-only">Поиск по URL</span><input class="pl-ui-input" type="search" name="q" value="{{ query }}" placeholder="Поиск по URL или названию" /></label>
+  <select class="pl-ui-select" name="state" aria-label="Фильтр состояния">
+    <option value="all" {% if state_filter == 'all' %}selected{% endif %}>Все состояния</option>
+    <option value="healthy" {% if state_filter == 'healthy' %}selected{% endif %}>Исправны</option>
+    <option value="problem" {% if state_filter == 'problem' %}selected{% endif %}>Проблемы</option>
+    <option value="disabled" {% if state_filter == 'disabled' %}selected{% endif %}>Content-check выключен</option>
+  </select>
+  <button class="button pl-ui-button pl-ui-button-secondary" type="submit">Показать</button>
+</form>
+
+<section class="target-list" aria-label="Цели мониторинга">
+  {% for row in rows %}
+    {% set target = row.target %}{% set status = row.status %}
+    <article class="target-card state-{{ status.state_class }}">
+      <a class="target-main" href="{{ url_for('target_detail', site_id=target.site_id) }}">
+        <div class="target-heading">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div><h2>{{ target.title }}</h2>{% if target.display_name %}<p>{{ target.url }}</p>{% endif %}</div>
+        </div>
+        <span class="state-badge state-{{ status.state_class }}">{{ status.state }}</span>
+      </a>
+      <div class="metric-grid">
+        <div><span>HTTP</span><strong>{{ status.http_status if status.http_status is not none else '—' }}</strong></div>
+        <div><span>Content</span><strong>{{ 'Включён' if target.content_enabled else 'Выключен' }}</strong></div>
+        <div><span>Ответ</span><strong>{{ '%.2f с'|format(status.latency_seconds) if status.latency_seconds is not none else '—' }}</strong></div>
+        <div><span>SSL</span><strong>{{ status.ssl_days ~ ' дн.' if status.ssl_days is not none else '—' }}</strong></div>
+        <div><span>Размер</span><strong>{{ '%.1f KB'|format(status.response_bytes / 1024) if status.response_bytes is not none else '—' }}</strong></div>
+        <div><span>Проверка</span><strong>{{ status.checked_at.astimezone().strftime('%d.%m %H:%M') if status.checked_at else '—' }}</strong></div>
+      </div>
+      <p class="problem-description">{{ status.description }}</p>
+    </article>
+  {% else %}
+    <div class="empty-state"><strong>{{ 'Ничего не найдено' if query or state_filter != 'all' else 'Сайтов пока нет' }}</strong><p>{{ 'Измените запрос или выберите другое состояние.' if query or state_filter != 'all' else 'Добавьте первый сайт, чтобы отслеживать доступность и содержимое.' }}</p><a class="button button-small pl-ui-button pl-ui-button-secondary" href="{{ url_for('home') if query or state_filter != 'all' else url_for('target_add_get') }}">{{ 'Сбросить фильтры' if query or state_filter != 'all' else 'Добавить сайт' }}</a></div>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "version": "0.34.1",
+  "source": {
+    "url": "https://codeload.github.com/prometheus/alertmanager/tar.gz/73c6bfe7393929211294c1954f30d8ed78e4d0ad",
+    "revision": "73c6bfe7393929211294c1954f30d8ed78e4d0ad",
+    "sha256": "5c5c72ec6b4c4746d523f2ed1994dfec4b94f7457e530ee6fb16cfec158e545e"
+  },
+  "ui": {
+    "url": "https://github.com/prometheus/alertmanager/releases/download/v0.34.1/alertmanager-web-ui-0.34.1.tar.gz",
+    "sha256": "881fe0f7beb9573f35be47dd233af6220e72c8db72c03bcd1780402eb8dc1307"
+  },
+  "labels": {
+    "org.opencontainers.image.version": "0.34.1",
+    "org.opencontainers.image.revision": "73c6bfe7393929211294c1954f30d8ed78e4d0ad",
+    "org.opencontainers.image.source": "https://github.com/prometheus/alertmanager",
+    "org.opencontainers.image.licenses": "Apache-2.0",
+    "pl.module.id": "alertmanager",
+    "pl.module.config.version": "1",
+    "pl.build.variant": "source-build",
+    "pl.build.go": "1.27.2"
+  },
+  "security_dependencies": {
+    "golang.org/x/crypto": "v0.58.0",
+    "golang.org/x/net": "v0.61.0",
+    "golang.org/x/text": "v0.43.0",
+    "google.golang.org/grpc": "v1.84.0"
+  },
+  "release_url": "https://github.com/prometheus/alertmanager/releases/tag/v0.34.1"
+}

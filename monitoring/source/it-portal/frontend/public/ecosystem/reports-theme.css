@@ -1,0 +1,80 @@
+/* Report-specific aliases for every custom theme in the shared registry.
+ * Legacy light/dark rules remain in each report, unchanged. */
+:root[data-pl-ui-theme-kind="custom"] {
+  --bg: var(--pl-ui-theme-background);
+  --surface: var(--pl-ui-theme-surface);
+  --surface-soft: var(--pl-ui-theme-raised);
+  --surface-hover: var(--pl-ui-theme-hover);
+  --text: var(--pl-ui-theme-text);
+  --muted: var(--pl-ui-theme-muted);
+  --line: var(--pl-ui-theme-border);
+  --line-strong: var(--pl-ui-theme-border);
+  --header: var(--pl-ui-theme-surface);
+  --header-soft: var(--pl-ui-theme-raised);
+  --header-text: var(--pl-ui-theme-text);
+  --header-muted: var(--pl-ui-theme-muted);
+  --header-border: var(--pl-ui-theme-border);
+  --critical: var(--pl-ui-theme-danger);
+  --critical-bg: color-mix(
+    in srgb,
+    var(--pl-ui-theme-danger) 8%,
+    var(--pl-ui-theme-surface)
+  );
+  --critical-badge-bg: color-mix(
+    in srgb,
+    var(--pl-ui-theme-danger) 16%,
+    var(--pl-ui-theme-surface)
+  );
+  --warning: var(--pl-ui-theme-warning);
+  --warning-bg: color-mix(
+    in srgb,
+    var(--pl-ui-theme-warning) 8%,
+    var(--pl-ui-theme-surface)
+  );
+  --warning-badge-bg: color-mix(
+    in srgb,
+    var(--pl-ui-theme-warning) 16%,
+    var(--pl-ui-theme-surface)
+  );
+  --healthy: var(--pl-ui-theme-success);
+  --healthy-bg: color-mix(
+    in srgb,
+    var(--pl-ui-theme-success) 8%,
+    var(--pl-ui-theme-surface)
+  );
+  --healthy-badge-bg: color-mix(
+    in srgb,
+    var(--pl-ui-theme-success) 16%,
+    var(--pl-ui-theme-surface)
+  );
+  --info: var(--pl-ui-theme-accent);
+  --info-bg: var(--pl-ui-theme-raised);
+  --focus: var(--pl-ui-theme-focus);
+  --shadow: color-mix(in srgb, var(--pl-ui-theme-background) 80%, transparent);
+}
+:root[data-pl-ui-theme-kind="custom"] :is(.header-link, .theme-toggle):hover {
+  background: var(--pl-ui-theme-hover);
+}
+:root[data-pl-ui-theme-kind="custom"] .server[data-health="healthy"] {
+  border-left-color: var(--healthy);
+}
+:root[data-pl-ui-theme-kind="custom"] .trend-bar {
+  background: var(--pl-ui-theme-accent);
+}
+:root[data-pl-ui-theme-kind="custom"] .trend-bar.warning {
+  background: var(--warning);
+}
+:root[data-pl-ui-theme-kind="custom"] .trend-bar.critical {
+  background: var(--critical);
+}
+/* The shared runtime initializes the Platform canvas. Reports have their own
+ * legacy body palettes; retain their original propagated canvas color too. */
+html:has(.report-header) {
+  background: var(--bg) !important;
+}
+.pl-ui-shell .pl-ui-report-main { max-width: none; padding: 0; }
+@media print {
+  .pl-ui-shell .pl-ui-topbar { display: none; }
+  .pl-ui-shell { display: block; background: transparent; }
+  .pl-ui-shell::before, .pl-ui-shell::after { display: none; }
+}

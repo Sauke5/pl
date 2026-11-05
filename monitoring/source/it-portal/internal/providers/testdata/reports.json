@@ -1,0 +1,568 @@
+[
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-24-run-93.html",
+    "date": "2026-09-24",
+    "run": 93
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-24-run-92.html",
+    "date": "2026-09-24",
+    "run": 92
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-23-run-91.html",
+    "date": "2026-09-23",
+    "run": 91
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-22-run-90.html",
+    "date": "2026-09-22",
+    "run": 90
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-21-run-89.html",
+    "date": "2026-09-21",
+    "run": 89
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-18-run-88.html",
+    "date": "2026-09-18",
+    "run": 88
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-17-run-87.html",
+    "date": "2026-09-17",
+    "run": 87
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-16-run-86.html",
+    "date": "2026-09-16",
+    "run": 86
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-15-run-85.html",
+    "date": "2026-09-15",
+    "run": 85
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-14-run-84.html",
+    "date": "2026-09-14",
+    "run": 84
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-11-run-83.html",
+    "date": "2026-09-11",
+    "run": 83
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-10-run-82.html",
+    "date": "2026-09-10",
+    "run": 82
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-09-run-81.html",
+    "date": "2026-09-09",
+    "run": 81
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-08-run-80.html",
+    "date": "2026-09-08",
+    "run": 80
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-07-run-79.html",
+    "date": "2026-09-07",
+    "run": 79
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-04-run-78.html",
+    "date": "2026-09-04",
+    "run": 78
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-03-run-77.html",
+    "date": "2026-09-03",
+    "run": 77
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-02-run-76.html",
+    "date": "2026-09-02",
+    "run": 76
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-09-01-run-75.html",
+    "date": "2026-09-01",
+    "run": 75
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-31-run-74.html",
+    "date": "2026-08-31",
+    "run": 74
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-28-run-73.html",
+    "date": "2026-08-28",
+    "run": 73
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-27-run-72.html",
+    "date": "2026-08-27",
+    "run": 72
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-26-run-71.html",
+    "date": "2026-08-26",
+    "run": 71
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-25-run-70.html",
+    "date": "2026-08-25",
+    "run": 70
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-24-run-69.html",
+    "date": "2026-08-24",
+    "run": 69
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-21-run-68.html",
+    "date": "2026-08-21",
+    "run": 68
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-20-run-67.html",
+    "date": "2026-08-20",
+    "run": 67
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-19-run-66.html",
+    "date": "2026-08-19",
+    "run": 66
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-18-run-65.html",
+    "date": "2026-08-18",
+    "run": 65
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-17-run-64.html",
+    "date": "2026-08-17",
+    "run": 64
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-14-run-63.html",
+    "date": "2026-08-14",
+    "run": 63
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-13-run-62.html",
+    "date": "2026-08-13",
+    "run": 62
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-12-run-61.html",
+    "date": "2026-08-12",
+    "run": 61
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-11-run-60.html",
+    "date": "2026-08-11",
+    "run": 60
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-10-run-59.html",
+    "date": "2026-08-10",
+    "run": 59
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-07-run-58.html",
+    "date": "2026-08-07",
+    "run": 58
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-06-run-57.html",
+    "date": "2026-08-06",
+    "run": 57
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-05-run-56.html",
+    "date": "2026-08-05",
+    "run": 56
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-04-run-55.html",
+    "date": "2026-08-04",
+    "run": 55
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-08-03-run-54.html",
+    "date": "2026-08-03",
+    "run": 54
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-31-run-53.html",
+    "date": "2026-07-31",
+    "run": 53
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-30-run-52.html",
+    "date": "2026-07-30",
+    "run": 52
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-29-run-51.html",
+    "date": "2026-07-29",
+    "run": 51
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-28-run-50.html",
+    "date": "2026-07-28",
+    "run": 50
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-27-run-49.html",
+    "date": "2026-07-27",
+    "run": 49
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-24-run-48.html",
+    "date": "2026-07-24",
+    "run": 48
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-23-run-47.html",
+    "date": "2026-07-23",
+    "run": 47
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-22-run-46.html",
+    "date": "2026-07-22",
+    "run": 46
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-21-run-45.html",
+    "date": "2026-07-21",
+    "run": 45
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-20-run-44.html",
+    "date": "2026-07-20",
+    "run": 44
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-17-run-43.html",
+    "date": "2026-07-17",
+    "run": 43
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-16-run-42.html",
+    "date": "2026-07-16",
+    "run": 42
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-15-run-41.html",
+    "date": "2026-07-15",
+    "run": 41
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-14-run-40.html",
+    "date": "2026-07-14",
+    "run": 40
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-13-run-39.html",
+    "date": "2026-07-13",
+    "run": 39
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-13-run-38.html",
+    "date": "2026-07-13",
+    "run": 38
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-13-run-37.html",
+    "date": "2026-07-13",
+    "run": 37
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-10-run-36.html",
+    "date": "2026-07-10",
+    "run": 36
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-09-run-35.html",
+    "date": "2026-07-09",
+    "run": 35
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-10-run-34.html",
+    "date": "2026-07-10",
+    "run": 34
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-09-run-33.html",
+    "date": "2026-07-09",
+    "run": 33
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-09-run-32.html",
+    "date": "2026-07-09",
+    "run": 32
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-08-run-31.html",
+    "date": "2026-07-08",
+    "run": 31
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-07-run-30.html",
+    "date": "2026-07-07",
+    "run": 30
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-06-run-29.html",
+    "date": "2026-07-06",
+    "run": 29
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-03-run-28.html",
+    "date": "2026-07-03",
+    "run": 28
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-02-run-27.html",
+    "date": "2026-07-02",
+    "run": 27
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-07-01-run-26.html",
+    "date": "2026-07-01",
+    "run": 26
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-30-run-25.html",
+    "date": "2026-06-30",
+    "run": 25
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-29-run-24.html",
+    "date": "2026-06-29",
+    "run": 24
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-29-run-23.html",
+    "date": "2026-06-29",
+    "run": 23
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-29-run-22.html",
+    "date": "2026-06-29",
+    "run": 22
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-26-run-21.html",
+    "date": "2026-06-26",
+    "run": 21
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-27-run-16.html",
+    "date": "2026-06-27",
+    "run": 16
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-27-run-15.html",
+    "date": "2026-06-27",
+    "run": 15
+  },
+  {
+    "report_type": "daily",
+    "file": "infrastructure-2026-06-26-run-14.html",
+    "date": "2026-06-26",
+    "run": 14
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W38-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 38,
+    "period_start": "2026-09-14",
+    "period_end": "2026-09-18",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W37-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 37,
+    "period_start": "2026-09-07",
+    "period_end": "2026-09-11",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W36-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 36,
+    "period_start": "2026-08-31",
+    "period_end": "2026-09-04",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W35-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 35,
+    "period_start": "2026-08-24",
+    "period_end": "2026-08-28",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W34-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 34,
+    "period_start": "2026-08-17",
+    "period_end": "2026-08-21",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W33-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 33,
+    "period_start": "2026-08-10",
+    "period_end": "2026-08-14",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W32-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 32,
+    "period_start": "2026-08-03",
+    "period_end": "2026-08-07",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W31-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 31,
+    "period_start": "2026-07-27",
+    "period_end": "2026-07-31",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W30-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 30,
+    "period_start": "2026-07-20",
+    "period_end": "2026-07-24",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W29-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 29,
+    "period_start": "2026-07-13",
+    "period_end": "2026-07-17",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  },
+  {
+    "report_type": "weekly",
+    "file": "infrastructure-weekly-2026-W28-run-1.html",
+    "iso_year": 2026,
+    "iso_week": 28,
+    "period_start": "2026-07-06",
+    "period_end": "2026-07-10",
+    "timezone": "Europe/Moscow",
+    "run": 1
+  }
+]

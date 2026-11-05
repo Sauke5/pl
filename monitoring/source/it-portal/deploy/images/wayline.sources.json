@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "source": {
+    "kind": "local-committed-snapshot",
+    "paths": [
+      "apps/wayline/backend",
+      "apps/wayline/web",
+      "apps/wayline/deploy/nginx/nginx.conf"
+    ],
+    "identity": "The release manifest and CI provenance bind every selected committed source blob to the candidate SHA. No live installation configuration, databases, credentials or original Git history enter the images."
+  },
+  "recipe": "monitoring/source/it-portal/deploy/images/wayline.Dockerfile",
+  "context": ".",
+  "targets": [
+    "api",
+    "runner",
+    "gateway"
+  ],
+  "go": "1.27.2",
+  "node": "24.21.0",
+  "nginx": "1.30.6",
+  "runtime": {
+    "api": {
+      "user": "10001:10001",
+      "capabilities": [],
+      "database": "/data/wayline.db"
+    },
+    "runner": {
+      "user": "0:10001",
+      "capabilities": [
+        "NET_RAW"
+      ],
+      "token_file": "/run/secrets/runner-token",
+      "network_alias": "wayline-runner"
+    },
+    "gateway": {
+      "user": "nginx",
+      "published_interface": "127.0.0.1",
+      "port": 8080,
+      "auth": "root-generated private Basic bridge"
+    }
+  },
+  "frontend": {
+    "base": "/wayline/",
+    "platform_auth": true,
+    "platform_origin": "/"
+  },
+  "verification": "Build and runtime tests run in CI. Acceptance must exercise browser session and CSRF, target creation and scheduling, authenticated API-to-runner calls, real TCP/ICMP/MTR probes, persistence across stop/start, exact-owned removal and absence of LAN listeners.",
+  "images": {
+    "wayline-api": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "wayline",
+        "pl.module.role": "api",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      }
+    },
+    "wayline-gateway": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "wayline",
+        "pl.module.role": "gateway",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      }
+    },
+    "wayline-runner": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "wayline",
+        "pl.module.role": "runner",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      }
+    }
+  }
+}

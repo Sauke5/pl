@@ -1,0 +1,14 @@
+/* App tokens consume custom palettes from the shared own-origin controller. */
+:root[data-pl-ui-theme-kind="custom"] {
+  --night:var(--pl-ui-theme-background);--ice:var(--pl-ui-theme-text);--muted:var(--pl-ui-theme-muted);--cold:var(--pl-ui-theme-accent);
+  --gold:var(--pl-ui-theme-warning);--green:var(--pl-ui-theme-success);--red:var(--pl-ui-theme-danger);
+  --line:var(--pl-ui-theme-border);--line-soft:var(--pl-ui-theme-border);--line-strong:var(--pl-ui-theme-border);
+  --surface:var(--pl-ui-theme-surface);--surface-solid:var(--pl-ui-theme-surface);--surface-raised:var(--pl-ui-theme-raised);
+  --sidebar:var(--pl-ui-theme-surface);--header:var(--pl-ui-theme-surface);--workspace:var(--pl-ui-theme-background);
+  --input:var(--pl-ui-theme-input);--input-border:var(--pl-ui-theme-border);--input-text:var(--pl-ui-theme-text);
+  --focus:var(--pl-ui-theme-focus);--input-focus:var(--pl-ui-theme-focus);--input-ring:0 0 0 3px var(--pl-ui-theme-raised);
+  --sidebar-border:var(--pl-ui-theme-border);--header-border:var(--pl-ui-theme-border);--panel-border:var(--pl-ui-theme-border);
+  --nav-text:var(--pl-ui-theme-muted);--nav-marker:var(--pl-ui-theme-accent);--nav-active:var(--pl-ui-theme-hover);
+  --button:var(--pl-ui-theme-primary-bg);--button-text:var(--pl-ui-theme-primary-text);--primary-border:var(--pl-ui-theme-border);
+  --drawer:var(--pl-ui-theme-surface);--dialog-border:var(--pl-ui-theme-border);--panel-shadow:var(--pl-ui-theme-shadow);
+}

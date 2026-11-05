@@ -1,0 +1,65 @@
+/* Palette-only bridge: legacy light/dark declarations remain untouched. */
+:root[data-pl-ui-theme-kind="custom"] {
+  --bg-color: var(--pl-ui-theme-background);
+  --text-color: var(--pl-ui-theme-text);
+  --muted-text-color: var(--pl-ui-theme-muted);
+  --focus-color: var(--pl-ui-theme-accent);
+  --focus-outline: var(--pl-ui-theme-focus);
+  --card-bg: var(--pl-ui-theme-surface);
+  --surface-color: var(--pl-ui-theme-surface);
+  --card-border: var(--pl-ui-theme-border);
+  --soft-border: var(--pl-ui-theme-border);
+  --card-hover-bg: var(--pl-ui-theme-hover);
+  --row-bg: var(--pl-ui-theme-hover);
+  --icon-bg: var(--pl-ui-theme-raised);
+  --action-bg: var(--pl-ui-theme-raised);
+  --panel-bg: var(--pl-ui-theme-surface);
+  --panel-border: var(--pl-ui-theme-border);
+  --panel-shadow: var(--pl-ui-theme-shadow);
+  --sidebar-bg: var(--pl-ui-theme-surface);
+  --sidebar-border: var(--pl-ui-theme-border);
+  --header-bg: var(--pl-ui-theme-surface);
+  --header-border: var(--pl-ui-theme-border);
+  --nav-text: var(--pl-ui-theme-muted);
+  --nav-active: var(--pl-ui-theme-hover);
+  --nav-marker: var(--pl-ui-theme-accent);
+  --control-bg: var(--pl-ui-theme-input);
+  --control-border: var(--pl-ui-theme-border);
+  --control-text: var(--pl-ui-theme-text);
+  --control-focus: var(--pl-ui-theme-focus);
+  --control-ring: color-mix(in srgb, var(--pl-ui-theme-focus) 15%, transparent);
+  --primary-bg: var(--pl-ui-theme-primary-bg);
+  --primary-border: var(--pl-ui-theme-border);
+  --primary-text: var(--pl-ui-theme-primary-text);
+  --hover-border: var(--pl-ui-theme-focus);
+  --dialog-bg: var(--pl-ui-theme-raised);
+  --dialog-border: var(--pl-ui-theme-border);
+  --overlay-bg: var(--pl-ui-theme-overlay);
+  --success-color: var(--pl-ui-theme-success);
+  --warning-color: var(--pl-ui-theme-warning);
+  --danger-color: var(--pl-ui-theme-danger);
+  --status-up-color: var(--pl-ui-theme-success);
+  --status-down-color: var(--pl-ui-theme-danger);
+  --status-checking-color: var(--pl-ui-theme-warning);
+  --status-unknown-color: var(--pl-ui-theme-subtle);
+  --success-bg: color-mix(in srgb, var(--pl-ui-theme-success) 8%, transparent);
+  --warning-bg: color-mix(in srgb, var(--pl-ui-theme-warning) 8%, transparent);
+  --danger-bg: color-mix(in srgb, var(--pl-ui-theme-danger) 8%, transparent);
+  --success-border: color-mix(in srgb, var(--pl-ui-theme-success) 30%, transparent);
+  --warning-border: color-mix(in srgb, var(--pl-ui-theme-warning) 30%, transparent);
+  --danger-border: color-mix(in srgb, var(--pl-ui-theme-danger) 30%, transparent);
+}
+:root[data-pl-ui-theme-kind="custom"] .app-shell::before {
+  background: linear-gradient(125deg, var(--pl-ui-theme-gradient-start), var(--pl-ui-theme-gradient-end));
+}
+:root[data-pl-ui-theme-kind="custom"] .app-shell::after { background: none; }
+:root[data-pl-ui-theme-kind="custom"] .avatar { background: var(--pl-ui-theme-raised); }
+:root[data-pl-ui-theme-kind="custom"] .button-primary:hover {
+  background: var(--pl-ui-theme-primary-hover);
+  box-shadow: var(--pl-ui-theme-shadow);
+}
+:root[data-pl-ui-theme-kind="custom"] .confirm-dialog,
+:root[data-pl-ui-theme-kind="custom"] .page-progress { box-shadow: var(--pl-ui-theme-shadow); }
+:root[data-pl-ui-theme-kind="custom"] .danger-check {
+  background: var(--danger-bg); border-color: var(--danger-border);
+}

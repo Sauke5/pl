@@ -1,0 +1,2 @@
+ALTER TABLE "task" ADD COLUMN "card_color" text;--> statement-breakpoint
+ALTER TABLE "task" ADD CONSTRAINT "task_card_color_valid" CHECK ("task"."card_color" IS NULL OR "task"."card_color" IN ('blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'pink', 'purple'));

@@ -1,0 +1,226 @@
+import { QueryClient } from "@tanstack/react-query";
+import type { ProjectWithTasks } from "@/types/project";
+import { describe, expect, it } from "vite-plus/test";
+import {
+  addLabelToTaskInTasksCache,
+  removeLabelFromTaskInTasksCache,
+  updateTaskLabelsInProject,
+} from "./sync-task-labels-cache";
+
+describe("updateTaskLabelsInProject", () => {
+  it("adds a label to the matching task without changing other tasks", () => {
+    const project = {
+      id: "project-1",
+      name: "Project",
+      slug: "PROJ",
+      icon: null,
+      description: null,
+      isPublic: false,
+      createdAt: "2026-04-16T00:00:00.000Z",
+      updatedAt: "2026-04-16T00:00:00.000Z",
+      workspaceId: "workspace-1",
+      columns: [
+        {
+          id: "todo",
+          slug: "todo",
+          name: "Todo",
+          icon: null,
+          isFinal: false,
+          tasks: [
+            {
+              id: "task-1",
+              title: "Task 1",
+              number: 1,
+              description: null,
+              status: "todo",
+              priority: null,
+              startDate: null,
+              dueDate: null,
+              position: 0,
+              createdAt: "2026-04-16T00:00:00.000Z",
+              updatedAt: "2026-04-16T00:00:00.000Z",
+              userId: null,
+              assigneeId: null,
+              assigneeName: null,
+              assigneeImage: null,
+              projectId: "project-1",
+              labels: [],
+              externalLinks: [],
+            },
+            {
+              id: "task-2",
+              title: "Task 2",
+              number: 2,
+              description: null,
+              status: "todo",
+              priority: null,
+              startDate: null,
+              dueDate: null,
+              position: 1,
+              createdAt: "2026-04-16T00:00:00.000Z",
+              updatedAt: "2026-04-16T00:00:00.000Z",
+              userId: null,
+              assigneeId: null,
+              assigneeName: null,
+              assigneeImage: null,
+              projectId: "project-1",
+              labels: [],
+              externalLinks: [],
+            },
+          ],
+        },
+      ],
+      plannedTasks: [],
+      archivedTasks: [],
+    };
+
+    const updatedProject = updateTaskLabelsInProject(
+      project,
+      "task-1",
+      (labels) => [
+        ...labels,
+        {
+          id: "label-bug",
+          name: "bug",
+          color: "red",
+        },
+      ],
+    );
+
+    expect(updatedProject.columns[0]?.tasks[0]?.labels).toEqual([
+      {
+        id: "label-bug",
+        name: "bug",
+        color: "red",
+      },
+    ]);
+    expect(updatedProject.columns[0]?.tasks[1]?.labels).toEqual([]);
+  });
+
+  it("removes a label from planned and archived task collections too", () => {
+    const project = {
+      id: "project-1",
+      name: "Project",
+      slug: "PROJ",
+      icon: null,
+      description: null,
+      isPublic: false,
+      createdAt: "2026-04-16T00:00:00.000Z",
+      updatedAt: "2026-04-16T00:00:00.000Z",
+      workspaceId: "workspace-1",
+      columns: [],
+      plannedTasks: [
+        {
+          id: "task-3",
+          title: "Planned task",
+          number: 3,
+          description: null,
+          status: "planned",
+          priority: null,
+          startDate: null,
+          dueDate: null,
+          position: 0,
+          createdAt: "2026-04-16T00:00:00.000Z",
+          updatedAt: "2026-04-16T00:00:00.000Z",
+          userId: null,
+          assigneeId: null,
+          assigneeName: null,
+          assigneeImage: null,
+          projectId: "project-1",
+          labels: [
+            {
+              id: "label-bug",
+              name: "bug",
+              color: "red",
+            },
+          ],
+          externalLinks: [],
+        },
+      ],
+      archivedTasks: [
+        {
+          id: "task-4",
+          title: "Archived task",
+          number: 4,
+          description: null,
+          status: "archived",
+          priority: null,
+          startDate: null,
+          dueDate: null,
+          position: 0,
+          createdAt: "2026-04-16T00:00:00.000Z",
+          updatedAt: "2026-04-16T00:00:00.000Z",
+          userId: null,
+          assigneeId: null,
+          assigneeName: null,
+          assigneeImage: null,
+          projectId: "project-1",
+          labels: [
+            {
+              id: "label-bug",
+              name: "bug",
+              color: "red",
+            },
+          ],
+          externalLinks: [],
+        },
+      ],
+    };
+
+    const updatedProject = updateTaskLabelsInProject(
+      project,
+      "task-3",
+      (labels) => labels.filter((label) => label.id !== "label-bug"),
+    );
+
+    expect(updatedProject.plannedTasks[0]?.labels).toEqual([]);
+    expect(updatedProject.archivedTasks[0]?.labels).toEqual([
+      {
+        id: "label-bug",
+        name: "bug",
+        color: "red",
+      },
+    ]);
+  });
+});
+
+it.each(["attach", "detach"])(
+  "preserves a local label %s after an older board fetch completes",
+  async (action) => {
+    const client = new QueryClient();
+    const label = { id: "label", name: "bug", color: "red" };
+    const board = {
+      id: "project",
+      columns: [
+        {
+          id: "todo",
+          tasks: [{ id: "task", labels: action === "attach" ? [] : [label] }],
+        },
+      ],
+      plannedTasks: [],
+      archivedTasks: [],
+    } as unknown as ProjectWithTasks;
+    client.setQueryData(["tasks", "project"], board);
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetch = client.fetchQuery({
+      queryKey: ["tasks", "project"],
+      queryFn: async () => {
+        await wait;
+        return board;
+      },
+      staleTime: 0,
+    });
+    if (action === "attach") addLabelToTaskInTasksCache(client, "task", label);
+    else removeLabelFromTaskInTasksCache(client, "task", label.id);
+    release();
+    await fetch;
+    expect(
+      client.getQueryData<ProjectWithTasks>(["tasks", "project"])?.columns[0]
+        .tasks[0].labels,
+    ).toEqual(action === "attach" ? [label] : []);
+    client.clear();
+  },
+);

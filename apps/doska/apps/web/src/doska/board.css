@@ -1,0 +1,133 @@
+.pl-ui-shell .pl-ui-main:has(.doska-board) { max-width:none; }
+.doska-board { display:flex;align-items:stretch;gap:14px;overflow-x:auto;padding:2px 2px 16px;min-height:calc(100dvh - 265px); }
+.doska-column { flex:1 0 280px;min-width:280px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(150deg,rgba(112,143,179,.09),rgba(89,124,157,.025));padding:12px; }
+.doska-column>header { display:flex;align-items:center;gap:9px;padding:0 4px 12px;min-height:44px; }
+.doska-column h2 { display:flex;align-items:center;gap:8px;font-size:15px;line-height:22.5px;margin:0; }
+.doska-column>header>.doska-icon { margin-left:auto; }
+.doska-column-dot { width:7px;height:7px;flex-shrink:0;border-radius:50%;background:var(--muted); }
+.doska-column.state-active .doska-column-dot { background:var(--accent); }
+.doska-column.state-completed .doska-column-dot { background:#31c79b; }
+.doska-column-count { color:var(--muted);background:rgba(112,143,179,.12);font-size:12px;border-radius:12px;padding:1px 7px; }
+.doska-column-tasks { display:flex;flex-direction:column;gap:9px; }
+.doska-app .doska-task-card { width:100%;display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:10px;padding:18px 16px;border:1px solid var(--border);border-radius:12px;background:rgba(112,143,179,.10);box-shadow:none;min-width:0; }
+.doska-app .doska-task-card:hover { background:rgba(112,143,179,.17);border-color:rgba(131,197,255,.4); }
+.doska-app .doska-task-card.selected { border-color:var(--accent);background:rgba(94,161,224,.14); }
+.doska-task-card strong { font-size:15px;line-height:23px;font-weight:550;overflow-wrap:anywhere; }
+.doska-task-number { color:var(--muted);font-size:11px;line-height:17px; }
+.doska-task-excerpt { color:var(--muted);font-size:13px;line-height:21px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-weight:400; }
+.doska-priority { font-size:11px;line-height:17px;padding:2px 8px;border-radius:10px;color:var(--muted);background:rgba(112,143,179,.12); }
+.doska-priority.priority-high,.doska-priority.priority-urgent { color:#efb44d;background:rgba(239,180,77,.1); }
+.doska-priority.priority-urgent { color:#f57679;background:rgba(245,118,121,.1); }
+.doska-task-meta { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;width:100%;margin-top:4px;color:var(--muted);font-size:11px;font-weight:400;line-height:18px; }
+.doska-task-meta>span { display:inline-flex;align-items:center;gap:6px; }
+.doska-column-empty { padding:18px 4px;font-size:13px; }
+.doska-unplaced { display:flex;flex-wrap:wrap;gap:12px;margin-top:20px; }
+.doska-unplaced h2 { width:100%; }.doska-unplaced .doska-task-card { width:290px; }
+.doska-task-drawer { position:fixed;inset:15px 15px 15px auto;margin:0;width:650px;max-width:calc(100vw - 30px);height:calc(100dvh - 30px);max-height:calc(100dvh - 30px);overflow-y:auto; }
+.doska-task-drawer::backdrop { backdrop-filter:none;background:rgba(4,13,25,.22); }
+.doska-drawer-heading { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;gap:20px; }
+.doska-drawer-heading h2 { margin:0;font-size:18px;color:var(--muted); }
+.doska-task-fields { margin:0;padding:0;border:0;min-width:0; }
+.doska-task-fields:disabled { opacity:1; }.doska-task-fields:disabled input,.doska-task-fields:disabled textarea,.doska-task-fields:disabled select { opacity:1; }
+.doska-task-field-grid { display:grid;grid-template-columns:1fr 1fr;gap:21px; }
+.doska-task-fields textarea { resize:vertical;min-height:126px; }
+.doska-coexecutors { margin:0 0 21px;padding:12px;border:1px solid var(--border);border-radius:9px;display:flex;gap:12px;flex-wrap:wrap;max-height:180px;overflow:auto; }
+.doska-coexecutors legend { font-size:13px;padding:0 5px; }.doska-coexecutors label { display:flex;align-items:center;gap:7px; }
+.doska-task-actions { border-top:1px solid var(--border); }.doska-task-actions>span { flex:1; }
+.doska-task-history { margin-top:28px;padding-top:16px;border-top:1px solid var(--border); }.doska-task-history h3 { margin:0 0 16px; }
+.doska-task-history ol { list-style:none;margin:0;padding:0; }.doska-task-history li { display:flex;flex-direction:column;gap:4px;margin:0 0 16px;font-size:13px; }.doska-task-history small { color:var(--muted);font-size:11px; }
+.doska-delete-task { border-top:1px solid var(--border);margin-top:24px;padding-top:20px; }.doska-delete-task>button { color:#f57679;background:transparent; }
+:root[data-theme="light"] .doska-column { background:linear-gradient(150deg,rgba(255,255,255,.55),rgba(246,250,255,.24)); }
+:root[data-theme="light"] .doska-task-card { background:rgba(255,255,255,.7); }
+:root[data-theme="light"] .doska-priority.priority-high { color:#916205; }:root[data-theme="light"] .doska-priority.priority-urgent,:root[data-theme="light"] .doska-delete-task>button { color:#b63544; }
+:root[data-theme="light"] .doska-column.state-completed .doska-column-dot { background:#167451; }
+@media(max-width:760px) { .doska-task-field-grid { grid-template-columns:1fr;gap:0; }.doska-task-drawer { padding:22px; }.doska-column { flex-basis:280px;min-width:280px; } }
+
+/* Board cards keep quick actions separate from the task opener. */
+.doska-app .doska-task-card { gap:9px;padding:12px;border-radius:10px;background:rgba(112,143,179,.075);transition:border-color 160ms,background-color 160ms,box-shadow 160ms; }
+.doska-app .doska-task-card:hover { background:rgba(112,143,179,.12);box-shadow:0 3px 12px rgba(0,0,0,.06); }
+.doska-app .doska-task-open { display:flex;flex-direction:column;align-items:stretch;width:100%;gap:6px;padding:0;border:0;border-radius:3px;background:transparent;text-align:left;box-shadow:none;min-width:0;color:inherit; }
+.doska-app .doska-task-open:hover { background:transparent; }
+.doska-task-card strong { font-size:14px;line-height:20px;font-weight:550; }
+.doska-card-topline { display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:18px; }
+.doska-task-excerpt { font-size:12px;line-height:18px;-webkit-line-clamp:2; }
+.doska-app .doska-task-meta { flex-direction:row;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:11px;line-height:17px;padding-top:2px; }
+.doska-task-meta>span:first-child { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.doska-task-meta svg { flex-shrink:0; }
+.doska-card-checklist { width:100%;display:flex;flex-direction:column;gap:5px;padding-top:7px;border-top:1px solid var(--border); }
+.doska-card-progress { display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:2px; }
+.doska-card-progress progress { appearance:none;height:3px;flex:1;min-width:20px;border:0;border-radius:4px;overflow:hidden;background:rgba(112,143,179,.16); }
+.doska-card-progress progress::-webkit-progress-bar { background:rgba(112,143,179,.16); }
+.doska-card-progress progress::-webkit-progress-value { background:var(--accent);border-radius:4px;transition:width 180ms ease; }
+.doska-card-progress progress::-moz-progress-bar { background:var(--accent); }
+.doska-app .doska-card-check { display:flex;align-items:flex-start;gap:7px;margin:0;padding:2px 0;font-size:12px;line-height:17px;cursor:pointer; }
+.doska-card-check input { width:14px;height:14px;flex:0 0 14px;margin:2px 0 0;accent-color:var(--accent);cursor:inherit; }
+.doska-card-check span { overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;transition:color 140ms; }
+.doska-card-check.is-done span { text-decoration:line-through;color:var(--muted); }
+.doska-card-check:has(input:disabled) { cursor:default; }
+.doska-app .doska-card-more { padding:2px 0;border:0;background:transparent;text-align:left;font-size:11px;color:var(--muted);justify-content:flex-start; }
+.doska-card-error { margin:0;font-size:12px;line-height:17px;color:#f57679; }
+:root[data-theme="light"] .doska-app .doska-task-card { background:rgba(255,255,255,.85); }
+:root[data-theme="light"] .doska-card-error { color:#b63544; }
+@media(prefers-reduced-motion:reduce) { .doska-app .doska-task-card,.doska-card-check span,.doska-card-progress progress::-webkit-progress-value { transition:none; } }
+
+.doska-draggable-task { position:relative;min-width:0; }
+.doska-draggable-task.is-dragging { opacity:.3; }
+.doska-column { transition:background-color 160ms,border-color 160ms; }
+.doska-column.is-drop-target { border-color:var(--accent);background-color:rgba(94,161,224,.08); }
+.doska-app .doska-drag-overlay { cursor:grabbing;background:#23394d;border-color:var(--accent);box-shadow:0 16px 38px #0004;transform:rotate(1deg); }
+:root[data-theme="light"] .doska-app .doska-drag-overlay { background:#fff; }
+.doska-sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+.doska-app .doska-task-meta { min-height:18px;margin-top:0; }
+.doska-app .doska-card-more { min-height:22px; }
+.doska-card-checklist { gap:3px; }
+.doska-project-menu { position:relative; }
+.doska-project-menu > summary { cursor:pointer;list-style:none;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:13px; }
+.doska-project-menu > summary::-webkit-details-marker { display:none; }
+.doska-project-menu[open] > summary { background:rgba(112,143,179,.15); }
+.doska-project-menu > div { position:absolute;right:0;top:calc(100% + 7px);z-index:5;min-width:200px;display:flex;flex-direction:column;gap:3px;padding:6px;border:1px solid var(--border);border-radius:10px;background:#1b2e40;box-shadow:0 12px 28px #0003; }
+.doska-project-menu > div > button { justify-content:flex-start;border-color:transparent;background:transparent; }
+:root[data-theme="light"] .doska-project-menu > div { background:#f5f8fc; }
+.doska-heading-actions { display:flex;align-items:center;gap:9px; }
+
+.doska-app .doska-task-meta { justify-content:flex-start;gap:7px;flex-wrap:wrap; }
+.doska-task-meta .doska-priority { padding:1px 5px; }
+.doska-draggable-task.is-insert-before::before,
+.doska-draggable-task.is-insert-after::after,
+.doska-column.is-insert-end .doska-column-tasks::after { content:"";position:absolute;left:3px;right:3px;height:3px;border-radius:3px;background:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 12%,transparent);pointer-events:none;z-index:2; }
+.doska-draggable-task.is-insert-before::before { top:-6px; }
+.doska-draggable-task.is-insert-after::after { bottom:-6px; }
+.doska-column-tasks { position:relative;min-height:8px; }
+.doska-column.is-insert-end .doska-column-tasks::after { bottom:-6px; }
+
+:is(.doska-task-meta,.doska-task-table,.doska-search-results) .doska-deadline.is-overdue { color:#ff9699;background:rgba(245,118,121,.10);border-radius:5px;padding:1px 5px; }
+:is(.doska-task-meta,.doska-task-table,.doska-search-results) .doska-deadline.is-today { color:#efc16c; }
+:root[data-theme="light"] :is(.doska-task-meta,.doska-task-table,.doska-search-results) .doska-deadline.is-overdue { color:#ad3038;background:#fbeaec; }
+:root[data-theme="light"] :is(.doska-task-meta,.doska-task-table,.doska-search-results) .doska-deadline.is-today { color:#875b0b; }
+
+.doska-view-switch { display:flex;gap:4px;width:fit-content;padding:4px;border:1px solid var(--border);border-radius:10px;margin:0 0 16px;background:rgba(112,143,179,.04); }
+.doska-view-switch button { min-height:34px;padding:6px 14px;background:transparent;border-color:transparent;color:var(--muted); }
+.doska-view-switch button[aria-pressed="true"] { background:rgba(94,161,224,.16);border-color:var(--border);color:var(--text); }
+
+.doska-card-progress.is-complete progress::-webkit-progress-value { background: #45b883; }
+.doska-card-progress.is-complete progress::-moz-progress-bar { background: #45b883; }
+
+@media(prefers-reduced-motion:reduce) { .doska-column { transition:none; } }
+
+.doska-card-color-blue { --card-color-hue:213; }.doska-card-color-cyan { --card-color-hue:186; }.doska-card-color-green { --card-color-hue:148; }.doska-card-color-yellow { --card-color-hue:48; }.doska-card-color-orange { --card-color-hue:26; }.doska-card-color-red { --card-color-hue:0; }.doska-card-color-pink { --card-color-hue:329; }.doska-card-color-purple { --card-color-hue:272; }
+.doska-app .doska-task-card.doska-card-colored { background:linear-gradient(hsl(var(--card-color-hue) 55% 58% / .16),hsl(var(--card-color-hue) 55% 58% / .16)),#192c3d; }
+.doska-app .doska-task-card.doska-card-colored:not(.selected) { border-color:hsl(var(--card-color-hue) 55% 65% / .42); }
+:root[data-theme="light"] .doska-app .doska-task-card.doska-card-colored { background:linear-gradient(hsl(var(--card-color-hue) 65% 50% / .11),hsl(var(--card-color-hue) 65% 50% / .11)),#fff; }
+:root[data-theme="light"] .doska-app .doska-task-card.doska-card-colored:not(.selected) { border-color:hsl(var(--card-color-hue) 50% 40% / .3); }
+
+.doska-card-checklist-title { font-size:12px; line-height:17px; overflow-wrap:anywhere; }
+.doska-app .doska-card-check { display:inline; max-width:100%; }
+.doska-card-check input { display:inline-block; vertical-align:top; margin:2px 7px 0 0; }
+.doska-card-check span { display:inline; overflow-wrap:anywhere; }
+
+.doska-card-check-row { font-size:12px; line-height:17px; }
+
+.doska-task-excerpt .doska-excerpt-line { display:block; }
+.doska-task-excerpt strong { font-size:inherit;line-height:inherit;font-weight:650; }
+.doska-task-excerpt em { font-style:italic; }
+.doska-task-excerpt code { font-size:inherit;overflow-wrap:anywhere; }

@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c1522">
+  <title>Отчёты инфраструктуры · PL</title>
+  <link rel="icon" href="data:,">
+  <script src="/ecosystem/theme-catalog.js"></script>
+  <script src="/ecosystem/theme-runtime.js"></script>
+  <link rel="stylesheet" href="/ecosystem/theme-menu.css">
+  <script src="/ecosystem/reports-theme-bridge.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0c1522; --text:#e6edf6; --muted:#9caec6; --accent:#83c5ff;
+      --line:rgba(174,199,232,.15); --panel:linear-gradient(130deg,rgba(112,143,179,.115),rgba(89,124,157,.075));
+      --panel-shadow:inset 0 1px 0 rgba(230,244,255,.07),0 15px 42px rgba(0,7,17,.08);
+      --control:rgba(9,23,39,.25); --hover:rgba(94,161,224,.12); --success:#31c79b;
+      --warning:#efb44d; --danger:#f57679; --focus:#83c5ff;
+    }
+    :root[data-theme="light"] {
+      color-scheme:light;
+      --bg:#edf2f7; --text:#21354b; --muted:#566c82; --accent:#286b9f;
+      --line:rgba(70,102,137,.18); --panel:linear-gradient(130deg,rgba(255,255,255,.8),rgba(246,250,255,.58));
+      --panel-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 15px 42px rgba(38,65,92,.055);
+      --control:rgba(255,255,255,.66); --hover:rgba(82,148,210,.10); --success:#167451;
+      --warning:#916205; --danger:#b63544; --focus:#286b9f;
+    }
+    * { box-sizing:border-box; }
+    html { min-width:320px; min-height:100%; background:var(--bg); }
+    body {
+      margin:0; min-height:100vh; color:var(--text); font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(ellipse at 31% 6%,rgba(58,102,145,.32),transparent 28%),radial-gradient(ellipse at 94% 33%,rgba(46,106,127,.28),transparent 27%),radial-gradient(ellipse at 63% 92%,rgba(70,69,114,.24),transparent 30%),linear-gradient(125deg,#0e1927,#132233 45%,#0e1826);
+    }
+    :root[data-theme="light"] body { background:radial-gradient(ellipse at 31% 6%,rgba(134,171,207,.2),transparent 28%),radial-gradient(ellipse at 94% 33%,rgba(135,189,199,.19),transparent 27%),radial-gradient(ellipse at 63% 92%,rgba(172,166,201,.17),transparent 30%),linear-gradient(125deg,#edf3f9,#e7eef6 45%,#eff4f9); }
+    button,input,select { font:inherit; }
+    button,a { -webkit-tap-highlight-color:transparent; }
+    a { color:inherit; }
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+    .app-shell { min-height:100vh; }
+    .brand { display:flex; align-items:center; gap:11px; flex:none; text-decoration:none; }
+    .brand-mark { width:32px; height:32px; border-radius:9px; display:grid; grid-template-columns:repeat(2,1fr); gap:3px; padding:6px; background:linear-gradient(145deg,#81c7ff,#4388c6); box-shadow:inset 0 1px 0 rgba(255,255,255,.4); }
+    .brand-mark i { border-radius:2px; background:rgba(255,255,255,.92); }
+    .brand-text { display:flex; flex-direction:column; }
+    .brand-text strong { font-size:18px; line-height:22px; font-weight:650; letter-spacing:-.4px; }
+    .brand-text small { margin-top:2px; color:var(--muted); font-size:7px; line-height:9px; letter-spacing:1.3px; }
+    .body { min-width:0; display:flex; flex-direction:column; }
+    .topbar { min-height:79px; padding:15px 38px; display:flex; align-items:center; gap:23px; border-bottom:1px solid rgba(185,207,237,.09); background:rgba(18,33,48,.26); -webkit-backdrop-filter:blur(28px) saturate(150%); backdrop-filter:blur(28px) saturate(150%); }
+    :root[data-theme="light"] .topbar { background:rgba(242,247,252,.55); border-color:rgba(70,102,137,.12); }
+    .crumb { display:flex; align-items:center; gap:13px; font-size:12px; color:var(--muted); }
+    .crumb b { color:var(--text); font-weight:500; }
+    .top-spacer { flex:1; }
+    .user-block { display:flex; align-items:center; gap:12px; padding-left:23px; border-left:1px solid var(--line); }
+    .avatar { width:37px; height:37px; display:grid; place-items:center; border-radius:50%; color:var(--accent); background:var(--hover); font-size:13px; font-weight:600; }
+    .user-name { max-width:260px; font-size:13px; line-height:18px; font-weight:550; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .user-caption { margin-top:4px; color:var(--muted); font-size:11px; line-height:14px; }
+    .icon-button { width:34px; height:34px; padding:0; display:grid; place-items:center; border:1px solid transparent; border-radius:9px; color:var(--muted); background:transparent; cursor:pointer; }
+    .icon-button:hover { color:var(--text); background:var(--hover); border-color:var(--line); }
+    .icon-button svg { width:19px; height:19px; }
+    .pl-ui-topbar .pl-ui-button-ghost { box-shadow:none; }
+    .login-link { display:inline-flex; align-items:center; gap:8px; min-height:36px; padding:0 12px; border:1px solid var(--line); border-radius:9px; text-decoration:none; font-size:13px; }
+    .login-link:hover { background:var(--hover); }
+    main { flex:1; width:100%; max-width:2240px; margin:0 auto; padding:38px 38px 30px; min-width:0; }
+    @media(min-width:2200px) { main { max-width:2410px; padding:45px 51px 35px; } .topbar { padding-inline:max(51px,calc((100vw - 2410px)/2 + 51px)); } }
+    @media(min-width:2900px) { main { max-width:2730px; padding:54px 56px 38px; } .topbar { padding-inline:max(56px,calc((100vw - 2730px)/2 + 56px)); } }
+    .page-title { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:31px; }
+    h1 { margin:0; font-size:30px; line-height:39px; letter-spacing:-.9px; font-weight:560; }
+    .subtitle { margin:9px 0 0; color:var(--muted); font-size:13px; line-height:20.8px; }
+    .button { min-height:39px; padding:9px 14px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:var(--panel); font-size:13px; font-weight:500; cursor:pointer; box-shadow:0 3px 12px rgba(0,7,17,.08); }
+    .button:hover { border-color:rgba(131,197,255,.45); background:var(--hover); }
+    .button.primary { border-color:rgba(131,197,255,.34); color:#071625; background:linear-gradient(130deg,#8ed0ff,#72b6ec); }
+    :root[data-theme="light"] .button.primary { color:#fff; border-color:#286b9f; background:#286b9f; }
+    .button:disabled { opacity:.56; cursor:not-allowed; }
+    .button svg { width:16px; height:16px; }
+    .panel { margin-bottom:23px; padding:24px; border:1px solid var(--line); border-radius:16px; background:var(--panel); box-shadow:var(--panel-shadow); -webkit-backdrop-filter:blur(32px) saturate(135%); backdrop-filter:blur(32px) saturate(135%); }
+    .panel-heading { min-height:29px; margin-bottom:22px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+    .panel-title { display:flex; align-items:center; gap:12px; font-size:17px; line-height:25.5px; letter-spacing:-.2px; font-weight:550; }
+    .panel-title svg { width:19px; height:19px; color:var(--accent); }
+    @media(min-width:2200px) { .panel { padding:28px; } .panel-heading { margin-bottom:25px; } .panel-title { font-size:18px; line-height:27px; } }
+    .count { color:var(--muted); font-size:12px; }
+    .recent-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr)); gap:16px; margin-bottom:18px; }
+    .latest-card { min-width:0; padding:17px 19px; display:flex; align-items:center; justify-content:space-between; gap:16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:var(--panel-shadow); }
+    .latest-copy { min-width:0; }
+    .latest-card > .latest-copy { width:100%; }
+    .latest-summary { min-width:0; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 16px; }
+    .latest-summary > .latest-copy { flex:1 1 240px; }
+    .latest-label { display:block; margin-bottom:7px; color:var(--muted); font-size:11px; line-height:16px; }
+    .report-card-title { display:block; font-size:14px; font-weight:550; }
+    .report-card-meta { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
+    .latest-actions { display:flex; align-items:center; justify-content:flex-start; gap:10px; flex:none; white-space:nowrap; }
+    .empty-note { min-width:0; color:var(--muted); font-size:13px; }
+    .overview-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:23px; }
+    .overview-card { min-width:0; padding:15px 17px; border:1px solid var(--line); border-radius:12px; background:rgba(9,23,39,.14); }
+    :root[data-theme="light"] .overview-card { background:rgba(255,255,255,.42); }
+    .overview-label { display:block; color:var(--muted); font-size:11px; line-height:17px; }
+    .overview-value { display:block; margin-top:5px; font-size:20px; line-height:26px; font-weight:550; letter-spacing:-.3px; }
+    .overview-detail { display:block; margin-top:3px; color:var(--muted); font-size:11px; line-height:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .filters { display:grid; grid-template-columns:minmax(220px,1.5fr) minmax(140px,.7fr) repeat(2,minmax(145px,.7fr)) auto auto; align-items:end; gap:12px; margin-bottom:18px; }
+    .field { min-width:0; display:flex; flex-direction:column; gap:8px; }
+    .field label { color:var(--muted); font-size:12px; line-height:18px; }
+    .control { width:100%; min-width:0; min-height:42px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:var(--control); font-size:13px; }
+    .control::placeholder { color:var(--muted); opacity:.82; }
+    .control option { color:#21354b; background:#edf2f7; }
+    .filter-actions { display:flex; gap:8px; }
+    .quick-ranges { display:flex; align-items:center; gap:8px; margin:-4px 0 18px; }
+    .quick-label { margin-right:3px; color:var(--muted); font-size:11px; }
+    .range-button { min-height:30px; padding:5px 10px; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:transparent; font-size:11px; cursor:pointer; }
+    .range-button:hover,.range-button[aria-pressed="true"] { color:var(--text); background:var(--hover); border-color:rgba(131,197,255,.3); }
+    .table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; }
+    table { width:100%; border-collapse:collapse; min-width:730px; }
+    th { padding:13px 14px; color:var(--muted); text-align:left; font-size:11px; line-height:16.5px; font-weight:500; white-space:nowrap; }
+    td { padding:8px 14px; border-top:1px solid var(--line); font-size:13px; line-height:19.5px; }
+    tbody tr:hover { background:var(--hover); }
+    .type-pill { display:inline-flex; align-items:center; min-height:25px; padding:3px 9px; border:1px solid var(--line); border-radius:99px; color:var(--muted); font-size:11px; white-space:nowrap; }
+    .table-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; white-space:nowrap; }
+    .report-action { width:96px; height:34px; flex:0 0 96px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid rgba(14,29,47,.12); border-radius:8px; font-size:12px; line-height:18px; font-weight:550; text-decoration:none; cursor:pointer; }
+    .action-preview { background:rgba(235,242,250,.10); border-color:rgba(218,231,246,.22); color:#e4ebf3; }
+    .action-open { background:rgba(108,180,225,.13); border-color:rgba(126,186,224,.28); color:#a2cae4; }
+    .action-download { background:rgba(189,91,109,.14); border-color:rgba(198,115,131,.30); color:#e6a0ad; }
+    :root[data-theme="light"] .action-preview { background:rgba(255,255,255,.78); border-color:rgba(89,112,139,.25); color:#31465b; }
+    :root[data-theme="light"] .action-open { background:rgba(102,166,207,.12); border-color:rgba(70,124,160,.27); color:#315f7d; }
+    :root[data-theme="light"] .action-download { background:rgba(181,89,108,.10); border-color:rgba(162,75,93,.27); color:#943648; }
+    .report-action:hover { box-shadow:inset 0 0 0 1px currentColor; }
+    .table-link { color:var(--accent); text-decoration:none; font-size:12px; }
+    .table-link:hover { text-decoration:underline; }
+    .state { padding:15px 14px; border:1px solid var(--line); border-radius:10px; color:var(--muted); font-size:13px; }
+    .state.error { color:var(--danger); border-color:rgba(245,118,121,.3); background:rgba(245,118,121,.07); }
+    .state.success { color:var(--success); border-color:rgba(49,199,155,.3); background:rgba(49,199,155,.07); }
+    .state.info { color:var(--accent); border-color:rgba(131,197,255,.24); background:rgba(51,124,173,.055); }
+    .state-row { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .state-row .button { flex:none; }
+    .hidden { display:none !important; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .backdrop { position:fixed; inset:0; z-index:10; display:grid; place-items:center; padding:20px; background:rgba(1,8,16,.56); backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px); }
+    .dialog { width:min(560px,100%); padding:27px; border:1px solid var(--line); border-radius:18px; background:linear-gradient(130deg,rgba(27,43,61,.97),rgba(14,25,39,.97)); box-shadow:inset 0 1px 0 rgba(230,244,255,.07),0 24px 80px rgba(0,0,0,.3); backdrop-filter:blur(32px) saturate(135%); -webkit-backdrop-filter:blur(32px) saturate(135%); }
+    :root[data-theme="light"] .backdrop { background:rgba(58,79,103,.22); }
+    :root[data-theme="light"] .dialog { background:linear-gradient(130deg,rgba(255,255,255,.96),rgba(238,245,251,.96)); box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 24px 80px rgba(38,65,92,.18); }
+    .focus-guard { position:fixed; width:1px; height:1px; opacity:0; }
+    .preview-dialog { width:min(1120px,100%); height:min(850px,calc(100vh - 40px)); display:flex; flex-direction:column; padding:24px; }
+    .preview-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+    .preview-meta { margin-top:5px; color:var(--muted); font-size:12px; }
+    .preview-tools { display:flex; align-items:center; gap:9px; flex:none; }
+    .preview-navigation { display:flex; gap:5px; margin-right:5px; }
+    .preview-status { min-height:34px; padding:8px 0; color:var(--muted); font-size:11px; }
+    .preview-frame-wrap { position:relative; flex:1; min-height:0; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    .preview-frame { display:block; width:100%; height:100%; border:0; background:#fff; }
+    .dialog-head { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; margin-bottom:20px; }
+    .dialog h2 { margin:0; font-size:23px; line-height:1.5; letter-spacing:-.5px; font-weight:550; }
+    .dialog-copy { margin:0 0 19px; color:var(--muted); font-size:13px; }
+    .warning { margin-top:16px; padding:12px 14px; border:1px solid rgba(239,180,77,.26); border-radius:10px; color:var(--warning); background:rgba(239,180,77,.07); font-size:12px; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
+    .spinner { width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .75s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .footer { padding:0 38px 18px; text-align:center; color:var(--muted); font-size:10px; }
+    @media(max-width:1100px) { .filters { grid-template-columns:repeat(3,minmax(0,1fr)); } .search-field { grid-column:span 3; } .filter-actions { grid-column:span 3; } }
+    @media(max-width:900px) { .overview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media(max-width:720px) { .brand-text { display:none; } .topbar { padding:12px 16px; gap:12px; } .user-block { padding-left:12px; gap:8px; } .user-name { max-width:130px; } main { padding:28px 18px 24px; } .recent-grid { grid-template-columns:1fr; } .latest-card { padding:15px; } .latest-actions { gap:8px; } .filters { grid-template-columns:repeat(2,minmax(0,1fr)); } .search-field { grid-column:span 2; } .filter-actions { grid-column:span 2; } .page-title { align-items:flex-start; } h1 { font-size:25px; } .footer { padding:0 15px 14px; } .preview-dialog { padding:16px; } .preview-head { flex-direction:column; } .preview-tools { width:100%; justify-content:flex-end; } }
+    @media(max-width:520px) { .topbar { min-height:66px; } .user-block { margin-left:auto; } .user-name { max-width:100px; } main { padding:24px 14px; } .page-title { flex-direction:column; } .page-title .button { align-self:flex-start; } .filters { grid-template-columns:1fr; } .search-field,.filter-actions { grid-column:auto; } .filter-actions .button { flex:1; } .latest-card { align-items:flex-start; flex-direction:column; } .latest-actions { width:100%; justify-content:flex-start; } .quick-ranges { flex-wrap:wrap; } .preview-tools { flex-wrap:wrap; justify-content:flex-start; } }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+    @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+      .topbar { background:#132233; }
+      .panel,.dialog { background:#162333; }
+      :root[data-theme="light"] .topbar { background:#f2f7fc; }
+      :root[data-theme="light"] .panel,:root[data-theme="light"] .dialog { background:#fff; }
+    }
+    :root[data-pl-ui-theme-kind="custom"] {
+      --bg:var(--pl-ui-theme-background); --text:var(--pl-ui-theme-text); --muted:var(--pl-ui-theme-muted);
+      --accent:var(--pl-ui-theme-accent); --line:var(--pl-ui-theme-border); --panel:var(--pl-ui-theme-surface);
+      --panel-shadow:var(--pl-ui-theme-shadow); --control:var(--pl-ui-theme-input); --hover:var(--pl-ui-theme-hover);
+      --success:var(--pl-ui-theme-success); --warning:var(--pl-ui-theme-warning); --danger:var(--pl-ui-theme-danger); --focus:var(--pl-ui-theme-focus);
+    }
+    :root[data-pl-ui-theme-kind="custom"] body { background:var(--bg); }
+    :root[data-pl-ui-theme-kind="custom"] .topbar { background:var(--pl-ui-theme-surface); border-color:var(--line); }
+    :root[data-pl-ui-theme-kind="custom"] .brand-mark { background:linear-gradient(145deg,var(--pl-ui-theme-primary-hover),var(--pl-ui-theme-primary-bg)); }
+    :root[data-pl-ui-theme-kind="custom"] .brand-mark i { background:var(--pl-ui-theme-primary-text); }
+    :root[data-pl-ui-theme-kind="custom"] .button:hover { border-color:var(--line); }
+    :root[data-pl-ui-theme-kind="custom"] .button.primary { color:var(--pl-ui-theme-primary-text); border-color:var(--line); background:var(--pl-ui-theme-primary-bg); }
+    :root[data-pl-ui-theme-kind="custom"] .button.primary:hover { background:var(--pl-ui-theme-primary-hover); }
+    :root[data-pl-ui-theme-kind="custom"] .overview-card { background:var(--pl-ui-theme-raised); }
+    :root[data-pl-ui-theme-kind="custom"] .control option { color:var(--text); background:var(--pl-ui-theme-surface); }
+    :root[data-pl-ui-theme-kind="custom"] .range-button:is(:hover,[aria-pressed="true"]) { border-color:var(--line); }
+    :root[data-pl-ui-theme-kind="custom"] .report-action { color:var(--text); border-color:var(--line); background:var(--pl-ui-theme-raised); }
+    :root[data-pl-ui-theme-kind="custom"] .backdrop { background:var(--pl-ui-theme-overlay); }
+    :root[data-pl-ui-theme-kind="custom"] .dialog { background:var(--pl-ui-theme-surface); box-shadow:var(--pl-ui-theme-shadow); }
+    :root[data-pl-ui-theme-kind="custom"] :is(.preview-frame-wrap,.preview-frame) { background:var(--bg); }
+    :root[data-pl-ui-theme-kind="custom"] .state.error { color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); background:color-mix(in srgb,var(--danger) 7%,transparent); }
+    :root[data-pl-ui-theme-kind="custom"] .state.success { color:var(--success); border-color:color-mix(in srgb,var(--success) 30%,transparent); background:color-mix(in srgb,var(--success) 7%,transparent); }
+    :root[data-pl-ui-theme-kind="custom"] .state.info { color:var(--accent); border-color:var(--line); background:var(--pl-ui-theme-raised); }
+    :root[data-pl-ui-theme-kind="custom"] .warning { color:var(--warning); border-color:color-mix(in srgb,var(--warning) 26%,transparent); background:color-mix(in srgb,var(--warning) 7%,transparent); }
+  </style>
+  <link id="pl-ui-styles" rel="stylesheet" href="/ecosystem/ui-v1.css">
+  <script src="/ecosystem/ui-v1.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="body">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Платформа PL"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="brand-text"><strong>PL</strong><small>PLATFORM</small></span></a>
+        <div class="crumb"><a href="/" aria-label="Платформа">Платформа</a><span aria-hidden="true">/</span><b>Отчёты</b></div>
+        <span class="top-spacer"></span>
+        <div id="session-user" class="user-block hidden">
+          <span class="avatar" id="user-avatar" aria-hidden="true">П</span>
+          <div><div class="user-name" id="user-name"></div><div class="user-caption">Пользователь Платформы</div></div>
+        </div>
+        <a id="login-link" class="login-link hidden" href="/">Войти <span aria-hidden="true">↗</span></a>
+        <button id="logout-button" class="icon-button hidden" type="button" aria-label="Выйти" title="Выйти">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
+        </button>
+        <button id="theme-button" class="icon-button" type="button" aria-label="Светлая тема" title="Светлая тема">
+          <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+        </button>
+      </header>
+      <main id="main-content">
+        <div class="page-title">
+          <div><h1>Отчёты инфраструктуры</h1><p class="subtitle">Архив ежедневных и недельных отчётов</p></div>
+          <button id="open-run" class="button primary" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Сформировать отчёт
+          </button>
+        </div>
+        <div id="run-message" class="state hidden" role="status" aria-live="polite"></div>
+        <div id="manifest-state" class="state hidden" role="status" aria-live="polite"></div>
+        <section class="recent-grid" aria-label="Последние отчёты">
+          <article class="latest-card"><div class="latest-copy"><span class="latest-label">Последний ежедневный</span><div id="latest-daily" class="empty-note">Загружаем архив…</div></div></article>
+          <article class="latest-card"><div class="latest-copy"><span class="latest-label">Последний недельный</span><div id="latest-weekly" class="empty-note">Загружаем архив…</div></div></article>
+        </section>
+        <section class="overview-grid" aria-label="Сводка архива">
+          <article class="overview-card"><span class="overview-label">Ежедневные отчёты</span><strong id="daily-total" class="overview-value">—</strong><span class="overview-detail">в архиве</span></article>
+          <article class="overview-card"><span class="overview-label">Недельные отчёты</span><strong id="weekly-total" class="overview-value">—</strong><span class="overview-detail">в архиве</span></article>
+          <article class="overview-card"><span class="overview-label">Диапазон архива</span><strong id="archive-range" class="overview-value">—</strong><span class="overview-detail">по периодам отчётов</span></article>
+          <article class="overview-card"><span class="overview-label">В выбранном периоде</span><strong id="period-total" class="overview-value">—</strong><span id="period-detail" class="overview-detail">с учётом фильтров</span></article>
+        </section>
+        <section class="panel" aria-labelledby="archive-heading">
+          <div class="panel-heading"><div class="panel-title" id="archive-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v15H4zM3 3h18v3H3zM9 10h6m-6 4h6"/></svg>Архив отчётов</div><span id="result-count" class="count">—</span></div>
+          <div class="filters" role="search">
+            <div class="field search-field"><label for="search">Поиск</label><input id="search" class="control" type="search" placeholder="Тип, дата или номер запуска" autocomplete="off"></div>
+            <div class="field"><label for="type-filter">Тип отчёта</label><select id="type-filter" class="control"><option value="all">Все типы</option><option value="daily">Ежедневный</option><option value="weekly">Недельный</option></select></div>
+            <div class="field"><label for="date-from">Период с</label><input id="date-from" class="control" type="date"></div>
+            <div class="field"><label for="date-to">Период по</label><input id="date-to" class="control" type="date"></div>
+            <div class="filter-actions"><button id="reset-filters" class="button" type="button">Сбросить</button><button id="refresh-list" class="button" type="button" aria-label="Обновить архив" title="Обновить архив"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9a7 7 0 0 1 11.7-2L20 12M4 12l2.8 5a7 7 0 0 0 11.7-2"/></svg></button></div>
+          </div>
+          <div class="quick-ranges" aria-label="Быстрый выбор периода"><span class="quick-label">Период:</span><button class="range-button" type="button" data-range="7" aria-pressed="false">Последние 7 дней</button><button class="range-button" type="button" data-range="30" aria-pressed="false">30 дней</button><button class="range-button" type="button" data-range="all" aria-pressed="true">Все</button></div>
+          <div id="archive-error" class="state error hidden" role="alert"></div>
+          <div id="archive-loading" class="state">Загружаем архив отчётов…</div>
+          <div id="archive-empty" class="state hidden"></div>
+          <div id="archive-table" class="table-wrap hidden">
+            <table><thead><tr><th scope="col">Тип</th><th scope="col">Период</th><th scope="col">Запуск</th><th scope="col"><span class="sr-only">Действия</span></th></tr></thead><tbody id="archive-rows"></tbody></table>
+          </div>
+        </section>
+      </main>
+      <footer class="footer">Время отчётов — Москва (UTC+3)</footer>
+    </div>
+  </div>
+  <div id="run-backdrop" class="backdrop hidden" role="presentation">
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-description">
+      <div class="dialog-head"><div><h2 id="dialog-title">Сформировать ежедневный отчёт</h2></div><button id="close-dialog" class="icon-button" type="button" aria-label="Закрыть диалог">×</button></div>
+      <p id="dialog-description" class="dialog-copy">Выберите дату отчёта. По умолчанию выбрано вчера; можно выбрать сегодня по московскому времени.</p>
+      <form id="run-form">
+        <div class="field"><label for="target-date">Дата отчёта</label><input id="target-date" class="control" type="date" required></div>
+        <div class="warning">Отчёт сохранится в архиве без отправки в Telegram.</div>
+        <div id="run-error" class="state error hidden" role="alert" style="margin-top:14px"></div>
+        <button id="reconcile-run" class="button hidden" type="button" style="margin-top:14px">Перепроверить архив</button>
+        <div class="dialog-actions"><button id="cancel-dialog" class="button" type="button">Отмена</button><button id="submit-run" class="button primary" type="submit">Сформировать</button></div>
+      </form>
+    </section>
+  </div>
+  <div id="preview-backdrop" class="backdrop hidden" role="presentation">
+    <span id="preview-focus-start" class="focus-guard" tabindex="0" aria-hidden="true"></span>
+    <section class="dialog preview-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-title" aria-describedby="preview-meta">
+      <div class="preview-head">
+        <div><h2 id="preview-title">Предварительный просмотр</h2><div id="preview-meta" class="preview-meta"></div></div>
+        <div class="preview-tools">
+          <div class="preview-navigation"><button id="preview-prev" class="icon-button" type="button" aria-label="Предыдущий отчёт" title="Предыдущий отчёт">←</button><button id="preview-next" class="icon-button" type="button" aria-label="Следующий отчёт" title="Следующий отчёт">→</button></div>
+          <a id="preview-open" class="report-action action-open" target="_blank" rel="noopener noreferrer" title="Открыть в отдельной вкладке">Открыть</a>
+          <a id="preview-download" class="report-action action-download" download>Скачать</a>
+          <button id="close-preview" class="icon-button" type="button" aria-label="Закрыть предварительный просмотр">×</button>
+        </div>
+      </div>
+      <div id="preview-status" class="preview-status" role="status" aria-live="polite">Загружаем отчёт…</div>
+      <div class="preview-frame-wrap"><iframe id="preview-frame" class="preview-frame" title="Содержимое выбранного отчёта" sandbox=""></iframe></div>
+    </section>
+    <span id="preview-focus-end" class="focus-guard" tabindex="0" aria-hidden="true"></span>
+  </div>
+  <script>
+    (function () {
+      "use strict";
+      var entries = [];
+      var session = null;
+      var requestActive = false;
+      var uncertainDates = new Set();
+      var pendingDate = "";
+      var previewItems = [];
+      var previewIndex = -1;
+      var previewToken = 0;
+      var lastFocus = null;
+      var $ = function (id) { return document.getElementById(id); };
+      var sharedShell = null;
+      function sharedStylesAvailable() {
+        try { var sheet = $("pl-ui-styles").sheet; return !!sheet && sheet.cssRules.length > 0; }
+        catch (_) { return false; }
+      }
+      if (sharedStylesAvailable() && window.PLUI && typeof window.PLUI.createShell === "function") {
+        try {
+          var oldShell = document.querySelector(".app-shell"), oldMain = $("main-content");
+          var candidate = window.PLUI.createShell({sidebar:false, context:"Отчёты", onLogout:logout});
+          var newLogout = candidate.element.querySelector(".pl-ui-logout");
+          var newTheme = candidate.element.querySelector(".pl-ui-theme-toggle");
+          newLogout.id="logout-button"; newLogout.hidden=true;
+          newTheme.id="theme-button";
+          candidate.slots.main.id="main-content";
+          candidate.slots.main.append(...oldMain.childNodes);
+          candidate.slots.footer.append(oldShell.querySelector(".footer"));
+          candidate.slots.actions.append($("login-link"));
+          oldShell.replaceWith(candidate.element);
+          sharedShell=candidate;
+        } catch (_) { /* Existing shell remains usable if shared assets fail. */ }
+      }
+      var nodes = {
+        daily: $("latest-daily"), weekly: $("latest-weekly"), rows: $("archive-rows"),
+        table: $("archive-table"), loading: $("archive-loading"), empty: $("archive-empty"),
+        error: $("archive-error"), count: $("result-count"), backdrop: $("run-backdrop"),
+        dialogError: $("run-error"), runMessage: $("run-message"), manifestState: $("manifest-state"),
+        dailyTotal: $("daily-total"), weeklyTotal: $("weekly-total"), archiveRange: $("archive-range"), periodTotal: $("period-total"), periodDetail: $("period-detail"),
+        previewBackdrop: $("preview-backdrop"), previewFrame: $("preview-frame"), previewStatus: $("preview-status"), previewTitle: $("preview-title"), previewMeta: $("preview-meta"), previewOpen: $("preview-open"), previewDownload: $("preview-download"), previewPrev: $("preview-prev"), previewNext: $("preview-next")
+      };
+      function moscowDate(offsetDays) {
+        var parts = new Intl.DateTimeFormat("en-CA", { timeZone:"Europe/Moscow", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(new Date());
+        var values = {};
+        parts.forEach(function (p) { values[p.type] = p.value; });
+        var date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day) + offsetDays));
+        return date.toISOString().slice(0, 10);
+      }
+      function validDate(value) {
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        if (Number(value.slice(0,4)) < 1) return false;
+        var d = new Date(value + "T00:00:00Z");
+        return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value;
+      }
+      function isoMonday(year, week) {
+        if (!Number.isInteger(year) || !Number.isInteger(week) || week < 1 || week > 53) return null;
+        var jan4 = new Date(Date.UTC(year, 0, 4));
+        var monday = new Date(jan4);
+        monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() + 6) % 7) + (week - 1) * 7);
+        var check = new Date(monday);
+        check.setUTCDate(check.getUTCDate() + 3);
+        if (check.getUTCFullYear() !== year) return null;
+        return monday;
+      }
+      function validEntry(item) {
+        if (!item || typeof item !== "object" || !Number.isSafeInteger(item.run) || item.run < 1 || typeof item.file !== "string") return null;
+        var daily = /^infrastructure-(\d{4}-\d{2}-\d{2})-run-([1-9]\d*)\.html$/.exec(item.file);
+        if (item.report_type === "daily" && daily && item.date === daily[1] && validDate(item.date) && Number(daily[2]) === item.run) {
+          return { type:"daily", date:item.date, periodStart:item.date, periodEnd:item.date, run:item.run, file:item.file, sortDate:item.date, labelDate:item.date };
+        }
+        var weekly = /^infrastructure-weekly-(\d{4})-W(\d{2})-run-([1-9]\d*)\.html$/.exec(item.file);
+        if (item.report_type === "weekly" && weekly && Number(weekly[3]) === item.run && Number.isSafeInteger(item.iso_year) && Number.isSafeInteger(item.iso_week) && item.iso_year === Number(weekly[1]) && item.iso_week === Number(weekly[2]) && validDate(item.period_start) && validDate(item.period_end)) {
+          var monday = isoMonday(Number(weekly[1]), Number(weekly[2]));
+          if (!monday) return null;
+          var friday = new Date(monday); friday.setUTCDate(friday.getUTCDate() + 4);
+          var start = monday.toISOString().slice(0,10); var end = friday.toISOString().slice(0,10);
+          if (item.period_start !== start || item.period_end !== end) return null;
+          return { type:"weekly", year:Number(weekly[1]), week:Number(weekly[2]), periodStart:start, periodEnd:end, run:item.run, file:item.file, sortDate:end, labelDate:start + " — " + end };
+        }
+        return null;
+      }
+      function formatDate(value) {
+        if (!validDate(value)) return "";
+        var p = value.split("-"); return p[2] + "." + p[1] + "." + p[0];
+      }
+      function reportTitle(item) { return item.type === "daily" ? "Ежедневный отчёт" : "Недельный отчёт · " + item.year + "-W" + String(item.week).padStart(2,"0"); }
+      function reportHref(item) { return "/reports/" + encodeURIComponent(item.file); }
+      function makeLatestCard(item, target, label) {
+        target.replaceChildren();
+        if (!item) { target.className="empty-note"; target.textContent=label; return; }
+        target.className="latest-summary";
+        var content=document.createElement("div"); content.className="latest-copy";
+        var title=document.createElement("strong"); title.className="report-card-title"; title.textContent=reportTitle(item);
+        var meta=document.createElement("span"); meta.className="report-card-meta"; meta.textContent=(item.type === "daily" ? formatDate(item.periodEnd) : formatDate(item.periodStart)+" — "+formatDate(item.periodEnd))+" · запуск №"+item.run;
+        content.appendChild(title); content.appendChild(meta); target.appendChild(content);
+        var actions=document.createElement("div"); actions.className="latest-actions";
+        var view=document.createElement("button"); view.type="button"; view.className="report-action action-preview"; view.textContent="Просмотр"; view.addEventListener("click",function(){openPreview(item,sorted(entries));}); actions.appendChild(view);
+        var open=document.createElement("a"); open.className="report-action action-open"; open.href=reportHref(item); open.target="_blank"; open.rel="noopener noreferrer"; open.textContent="Открыть"; actions.appendChild(open);
+        var download=document.createElement("a"); download.className="report-action action-download"; download.href=reportHref(item); download.setAttribute("download",item.file); download.textContent="Скачать"; actions.appendChild(download);
+        target.appendChild(actions);
+      }
+      function sorted(list) { return list.slice().sort(function (a,b) { return b.sortDate.localeCompare(a.sortDate) || b.run-a.run || (b.type === a.type ? 0 : (b.type === "daily" ? 1 : -1)) || b.file.localeCompare(a.file); }); }
+      function setState(node, text, kind) { node.textContent = text; node.className = "state" + (kind ? " " + kind : ""); }
+      function paintLatest() {
+        var daily = sorted(entries.filter(function (x) { return x.type === "daily"; }))[0];
+        var weekly = sorted(entries.filter(function (x) { return x.type === "weekly"; }))[0];
+        makeLatestCard(daily,nodes.daily,"Ежедневных отчётов пока нет.");
+        makeLatestCard(weekly,nodes.weekly,"Недельные отчёты пока не сформированы.");
+      }
+      function filtered() {
+        var query = $("search").value.trim().toLocaleLowerCase("ru"); var type = $("type-filter").value;
+        var from = $("date-from").value; var to = $("date-to").value;
+        return sorted(entries.filter(function (item) {
+          if (type !== "all" && item.type !== type) return false;
+          if (from && item.periodEnd < from) return false;
+          if (to && item.periodStart > to) return false;
+          var text = [reportTitle(item),item.type,item.periodStart,item.periodEnd,formatDate(item.periodStart),formatDate(item.periodEnd),item.year || "",item.week || "",item.run].join(" ").toLocaleLowerCase("ru");
+          return !query || text.indexOf(query) >= 0;
+        }));
+      }
+      function updateOverview() {
+        var daily=entries.filter(function(item){return item.type === "daily";}).length;
+        var weekly=entries.length-daily;
+        nodes.dailyTotal.textContent=String(daily); nodes.weeklyTotal.textContent=String(weekly);
+        if (entries.length) {
+          var start=entries.reduce(function(value,item){return item.periodStart < value ? item.periodStart : value;},entries[0].periodStart);
+          var end=entries.reduce(function(value,item){return item.periodEnd > value ? item.periodEnd : value;},entries[0].periodEnd);
+          nodes.archiveRange.textContent=formatDate(start)+" — "+formatDate(end);
+        } else nodes.archiveRange.textContent="—";
+        var matches=filtered(); nodes.periodTotal.textContent=String(matches.length);
+        var from=$("date-from").value,to=$("date-to").value;
+        nodes.periodDetail.textContent=from || to ? (from ? "с "+formatDate(from) : "")+(from && to ? " — " : "")+(to ? formatDate(to) : "") : "по текущим фильтрам";
+      }
+      function updateQuickRanges() {
+        var from=$("date-from").value,to=$("date-to").value,today=moscowDate(0);
+        document.querySelectorAll(".range-button").forEach(function(button){
+          var value=button.dataset.range; var active=value === "all" ? !from && !to : value === "7" ? from === moscowDate(-6) && to === today : from === moscowDate(-29) && to === today;
+          button.setAttribute("aria-pressed",active ? "true" : "false");
+        });
+      }
+      function renderRows() {
+        nodes.rows.replaceChildren();
+        var list = filtered(); nodes.count.textContent = list.length + (list.length === 1 ? " отчёт" : list.length > 1 && list.length < 5 ? " отчёта" : " отчётов");
+        updateOverview(); updateQuickRanges();
+        nodes.table.classList.toggle("hidden",list.length === 0 || nodes.error.classList.contains("hidden") === false);
+        nodes.empty.classList.add("hidden");
+        if (!entries.length) return;
+        if (!list.length) { setState(nodes.empty,"По этим фильтрам отчётов нет. Измените условия или сбросьте фильтры."); nodes.empty.classList.remove("hidden"); return; }
+        list.forEach(function(item) {
+          var tr = document.createElement("tr");
+          var type = document.createElement("td"); var pill = document.createElement("span"); pill.className="type-pill"; pill.textContent=item.type === "daily" ? "Ежедневный" : "Недельный"; type.appendChild(pill);
+          var period = document.createElement("td"); period.textContent = item.type === "daily" ? formatDate(item.periodEnd) : formatDate(item.periodStart) + " — " + formatDate(item.periodEnd);
+          var run = document.createElement("td"); run.textContent = "№" + item.run;
+          var actions = document.createElement("td"); var group = document.createElement("div"); group.className="table-actions";
+          var preview = document.createElement("button"); preview.type="button"; preview.className="report-action action-preview"; preview.textContent="Просмотр"; preview.addEventListener("click",function(){openPreview(item,list);});
+          var open = document.createElement("a"); open.className="report-action action-open"; open.href=reportHref(item); open.target="_blank"; open.rel="noopener noreferrer"; open.textContent="Открыть";
+          var download = document.createElement("a"); download.className="report-action action-download"; download.href=reportHref(item); download.setAttribute("download",item.file); download.textContent="Скачать";
+          group.appendChild(preview); group.appendChild(open); group.appendChild(download); actions.appendChild(group);
+          tr.appendChild(type); tr.appendChild(period); tr.appendChild(run); tr.appendChild(actions); nodes.rows.appendChild(tr);
+        });
+        nodes.table.classList.remove("hidden");
+      }
+      function showManifestError(message) {
+        [nodes.dailyTotal,nodes.weeklyTotal,nodes.archiveRange,nodes.periodTotal].forEach(function(node){node.textContent="—";});
+        nodes.periodDetail.textContent="Архив недоступен";
+        [$("latest-daily"),$("latest-weekly")].forEach(function(node){node.className="empty-note";node.textContent="Не удалось загрузить отчёты";});
+        setState(nodes.error,message,"error"); nodes.error.classList.remove("hidden"); nodes.loading.classList.add("hidden"); nodes.table.classList.add("hidden"); nodes.empty.classList.add("hidden"); nodes.count.textContent="Архив недоступен";
+        var retry = document.createElement("button"); retry.type="button"; retry.className="button"; retry.textContent="Повторить"; retry.addEventListener("click",loadManifest); nodes.error.appendChild(document.createTextNode(" ")); nodes.error.appendChild(retry);
+      }
+      async function loadManifest() {
+        nodes.error.classList.add("hidden"); nodes.empty.classList.add("hidden"); nodes.table.classList.add("hidden"); nodes.loading.classList.remove("hidden"); nodes.count.textContent="Загрузка…";
+        try {
+          var response = await fetch("/reports/reports.json?ts=" + Date.now(), { method:"GET", cache:"no-store", credentials:"same-origin" });
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          var payload = await response.json(); if (!Array.isArray(payload)) throw new Error("invalid manifest");
+          var valid = []; payload.forEach(function(item) { var normalized=validEntry(item); if (normalized) valid.push(normalized); });
+          entries = sorted(valid); nodes.loading.classList.add("hidden");
+          if (valid.length !== payload.length) { entries=[]; paintLatest(); renderRows(); showManifestError("В архиве получены некорректные записи. Список временно скрыт, чтобы не показывать неверные ссылки."); return false; }
+          nodes.error.classList.add("hidden"); paintLatest(); renderRows();
+          if (!entries.length) { setState(nodes.empty,"Архив пока пуст. Когда появятся опубликованные отчёты, они будут отображаться здесь."); nodes.empty.classList.remove("hidden"); nodes.table.classList.add("hidden"); }
+          return true;
+        } catch (error) { entries=[]; paintLatest(); renderRows(); showManifestError("Не удалось загрузить архив отчётов. Проверьте соединение и повторите запрос."); return false; }
+      }
+      function showSession(value) {
+        session=value;
+        var user=value && value.authenticated && value.user;
+        if (sharedShell) {
+          var display=user && (user.display_name || user.name || user.id || "Пользователь");
+          sharedShell.setUser({name:display || "",subtitle:"Пользователь Платформы"});
+          $("logout-button").hidden=!user;
+          $("login-link").classList.toggle("hidden",!!user);
+          return;
+        }
+        if (user) {
+          var name = user.display_name || user.name || user.id || "Пользователь";
+          $("user-name").textContent=name; $("user-avatar").textContent=Array.from(name.trim())[0] || "П";
+          $("session-user").classList.remove("hidden"); $("logout-button").classList.remove("hidden"); $("login-link").classList.add("hidden");
+        } else { $("session-user").classList.add("hidden"); $("logout-button").classList.add("hidden"); $("login-link").classList.remove("hidden"); }
+      }
+      async function loadSession() {
+        try { var response=await fetch("/api/v1/session",{credentials:"same-origin",cache:"no-store"}); if (!response.ok) throw new Error("session unavailable"); showSession(await response.json()); }
+        catch (error) { showSession(null); }
+      }
+      async function logout() {
+        var button=$("logout-button"); button.disabled=true;
+        try {
+          if (!session || !session.authenticated) { window.location.assign("/"); return; }
+          var response=await fetch("/auth/logout",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRF-Token":session.csrf_token || ""},body:"{}"});
+          if (response.ok || response.status === 401) window.location.assign("/");
+          else { button.disabled=false; setState(nodes.manifestState,"Не удалось завершить сеанс. Повторите выход из Платформы.","error"); nodes.manifestState.classList.remove("hidden"); }
+        } catch (error) { button.disabled=false; setState(nodes.manifestState,"Нет ответа от Платформы. Сеанс не подтверждён как завершённый.","error"); nodes.manifestState.classList.remove("hidden"); }
+      }
+      async function loadPreview(index) {
+        if (index < 0 || index >= previewItems.length) return;
+        previewIndex=index; var item=previewItems[index]; var url=reportHref(item); var token=++previewToken;
+        nodes.previewTitle.textContent=reportTitle(item);
+        nodes.previewMeta.textContent=(item.type === "daily" ? "Ежедневный · " : "Недельный · ")+formatDate(item.periodStart)+(item.type === "weekly" ? " — "+formatDate(item.periodEnd) : "")+" · запуск №"+item.run;
+        nodes.previewOpen.href=url; nodes.previewDownload.href=url; nodes.previewDownload.setAttribute("download",item.file);
+        nodes.previewPrev.disabled=index === 0; nodes.previewNext.disabled=index === previewItems.length-1;
+        nodes.previewFrame.removeAttribute("srcdoc"); delete nodes.previewFrame.dataset.reportUrl; nodes.previewFrame.removeAttribute("src"); nodes.previewStatus.textContent="Загружаем выбранный отчёт…"; nodes.previewStatus.className="preview-status";
+        try {
+          var response=await fetch(url,{method:"GET",credentials:"same-origin",cache:"no-store"});
+          if (token !== previewToken) return;
+          if (!response.ok) throw new Error("HTTP "+response.status);
+          var source=await response.text();
+          if (token !== previewToken) return;
+          nodes.previewStatus.textContent="Предварительный просмотр загружается…";
+          var previewSource=window.PLReportTheme ? await window.PLReportTheme.previewHTML(source) : source;
+          if (token !== previewToken) return;
+          nodes.previewFrame.dataset.reportUrl=url;
+          nodes.previewFrame.srcdoc=previewSource;
+        } catch (error) {
+          if (token !== previewToken) return;
+          nodes.previewStatus.textContent="Не удалось загрузить отчёт. Откройте его в отдельной вкладке или повторите просмотр."; nodes.previewStatus.className="preview-status state error";
+        }
+      }
+      function openPreview(item,list) {
+        if (nodes.previewBackdrop.classList.contains("hidden")) lastFocus=document.activeElement;
+        previewItems=(list && list.length ? list.slice() : sorted(entries));
+        previewIndex=previewItems.findIndex(function(value){return value.file === item.file;});
+        if (previewIndex < 0) { previewItems=[item]; previewIndex=0; }
+        nodes.previewBackdrop.classList.remove("hidden"); document.querySelector(".app-shell").inert=true; document.body.style.overflow="hidden"; void loadPreview(previewIndex); $("close-preview").focus();
+      }
+      function closePreview() {
+        previewToken++; nodes.previewFrame.removeAttribute("srcdoc"); delete nodes.previewFrame.dataset.reportUrl; nodes.previewFrame.removeAttribute("src"); nodes.previewBackdrop.classList.add("hidden"); document.querySelector(".app-shell").inert=false; document.body.style.overflow=""; previewItems=[]; previewIndex=-1;
+        if (lastFocus && lastFocus.focus) lastFocus.focus();
+      }
+      function stepPreview(delta) { var next=previewIndex+delta; if (next >= 0 && next < previewItems.length) void loadPreview(next); }
+      nodes.previewFrame.addEventListener("load",function(){
+        var item=previewItems[previewIndex];
+        if (item && !nodes.previewBackdrop.classList.contains("hidden") && nodes.previewFrame.dataset.reportUrl === reportHref(item)) { nodes.previewStatus.textContent="Предварительный просмотр загружен."; nodes.previewStatus.className="preview-status"; }
+      });
+      nodes.previewFrame.addEventListener("error",function(){ if (!nodes.previewBackdrop.classList.contains("hidden")) { nodes.previewStatus.textContent="Не удалось отобразить этот отчёт. Его можно открыть отдельно."; nodes.previewStatus.className="preview-status state error"; } });
+      function openDialog() {
+        lastFocus=document.activeElement; $("target-date").value=pendingDate || moscowDate(-1); $("target-date").max=moscowDate(0); nodes.dialogError.classList.add("hidden"); $("reconcile-run").classList.add("hidden"); nodes.backdrop.classList.remove("hidden"); document.querySelector(".app-shell").inert=true; document.body.style.overflow="hidden"; updateRunButton(); if (uncertainDates.has($("target-date").value)) lockUncertain($("target-date").value,"Для этой даты уже есть запрос с неизвестным результатом. Сверьте архив; повторный запуск заблокирован."); $("target-date").focus();
+      }
+      function closeDialog() { if (requestActive) return; nodes.backdrop.classList.add("hidden"); document.querySelector(".app-shell").inert=false; document.body.style.overflow=""; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+      function showRunMessage(text, kind) { nodes.runMessage.replaceChildren(); nodes.runMessage.className="state" + (kind ? " " + kind : ""); nodes.runMessage.textContent=text; nodes.runMessage.classList.remove("hidden"); }
+      function updateRunButton() { $("submit-run").disabled=requestActive || uncertainDates.has($("target-date").value); }
+      function generationError(status) {
+        if (status === 400) return "Генератор отклонил выбранную дату. Проверьте дату и попробуйте ещё раз.";
+        if (status === 409) return "Генератор уже выполняет другой запуск. Обновите архив перед новой попыткой.";
+        if (status >= 500) return "Генератор завершился с ошибкой. Сверьте архив перед дальнейшими действиями.";
+        return "Генератор временно недоступен (HTTP " + status + "). Повторите попытку позже.";
+      }
+      function lockUncertain(target, text) {
+        uncertainDates.add(target); pendingDate=target; $("reconcile-run").classList.remove("hidden"); setState(nodes.dialogError,text,"info"); nodes.dialogError.classList.remove("hidden"); updateRunButton();
+      }
+      async function reconcileArchive() {
+        var target=$("target-date").value; var button=$("reconcile-run"); button.disabled=true; button.textContent="Проверяем архив…";
+        var ok=await loadManifest();
+        var found=ok && entries.find(function(item){ return item.type === "daily" && item.date === target; });
+        var status=found
+          ? "В архиве есть ежедневный отчёт за " + formatDate(target) + " (запуск №" + found.run + "). Результат последнего запроса остаётся неизвестным; повторный запуск для этой даты заблокирован."
+          : "В архиве пока не найден отчёт за " + formatDate(target) + ". Результат первого запроса остаётся неизвестным; повторный запуск для этой даты заблокирован.";
+        setState(nodes.dialogError,status,"info"); nodes.dialogError.classList.remove("hidden"); button.disabled=false; button.textContent="Перепроверить архив";
+      }
+      async function submitRun(event) {
+        event.preventDefault(); if (requestActive) return;
+        var target=$("target-date").value; var max=moscowDate(0);
+        if (uncertainDates.has(target)) { lockUncertain(target,"Для этой даты уже есть запрос с неизвестным результатом. Сначала сверьте архив; повторный запуск заблокирован."); return; }
+        if (!validDate(target) || target > max) { setState(nodes.dialogError,"Укажите корректную дату не позднее сегодняшней по московскому времени.","error"); nodes.dialogError.classList.remove("hidden"); return; }
+        requestActive=true; var submit=$("submit-run"); submit.disabled=true; $("cancel-dialog").disabled=true; $("close-dialog").disabled=true; submit.replaceChildren(); var spin=document.createElement("span"); spin.className="spinner"; spin.setAttribute("aria-hidden","true"); submit.appendChild(spin); submit.appendChild(document.createTextNode("Формируем…"));
+        nodes.dialogError.classList.add("hidden"); nodes.runMessage.classList.add("hidden");
+        var ambiguous=false;
+        try {
+          var response=await fetch("/api/reports/run",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRF-Token":session && session.csrf_token || ""},body:JSON.stringify({target_date:target})});
+          var result=null; try { result=await response.json(); } catch (error) {}
+          if (response.status >= 500 && response.status <= 599) ambiguous=true;
+          if (!response.ok || !result || result.ok !== true) { throw new Error(generationError(response.status)); }
+          ambiguous=true;
+          var report=result.report && validEntry(Object.assign({},result.report,{report_type:result.report.report_type || "daily"}));
+          if (!report || report.type !== "daily" || report.date !== target || result.report.url !== "/reports/" + report.file || result.telegram_sent !== false) {
+            lockUncertain(target,"Генератор ответил, но не удалось подтвердить опубликованный файл и статус отправки. Сверьте архив перед дальнейшими действиями.");
+          } else {
+            var manifestLoaded=await loadManifest();
+            var published=manifestLoaded && entries.find(function(item){ return item.type === "daily" && item.file === report.file && item.date === target; });
+            if (published) {
+              requestActive=false; $("cancel-dialog").disabled=false; $("close-dialog").disabled=false; closeDialog();
+              showRunMessage("В архиве подтверждён " + reportTitle(published).toLocaleLowerCase("ru") + " за " + formatDate(target) + " · запуск №" + published.run + ". Отправка в Telegram не выполнялась.","success");
+            } else {
+              lockUncertain(target,"Генератор сообщил об успехе, но отчёт пока не найден в архиве. Сверьте архив; повторный запуск для этой даты заблокирован.");
+            }
+          }
+        } catch (error) {
+          ambiguous=ambiguous || error instanceof TypeError || /timeout|timed out|network|fetch/i.test(String(error && error.message));
+          if (ambiguous) lockUncertain(target,"Ответ генератора не подтверждает, создался ли отчёт. Сверьте архив; повторный запуск для этой даты заблокирован.");
+          else { setState(nodes.dialogError,"Не удалось сформировать отчёт. " + (error.message || "Проверьте состояние генератора."),"error"); nodes.dialogError.classList.remove("hidden"); }
+        } finally {
+          requestActive=false; $("cancel-dialog").disabled=false; $("close-dialog").disabled=false; submit.textContent="Сформировать"; updateRunButton();
+        }
+      }
+      $("open-run").addEventListener("click",openDialog); $("close-dialog").addEventListener("click",closeDialog); $("cancel-dialog").addEventListener("click",closeDialog);
+      $("run-form").addEventListener("submit",submitRun); if (!sharedShell) $("logout-button").addEventListener("click",logout); $("reconcile-run").addEventListener("click",reconcileArchive);
+      $("close-preview").addEventListener("click",closePreview); $("preview-prev").addEventListener("click",function(){stepPreview(-1);}); $("preview-next").addEventListener("click",function(){stepPreview(1);});
+      $("target-date").addEventListener("change",function(){ nodes.dialogError.classList.add("hidden"); $("reconcile-run").classList.add("hidden"); pendingDate=""; updateRunButton(); if (uncertainDates.has($("target-date").value)) lockUncertain($("target-date").value,"Для этой даты уже есть запрос с неизвестным результатом. Сверьте архив; повторный запуск заблокирован."); });
+      nodes.backdrop.addEventListener("mousedown",function(event){ if (event.target === nodes.backdrop) closeDialog(); });
+      nodes.previewBackdrop.addEventListener("mousedown",function(event){ if (event.target === nodes.previewBackdrop) closePreview(); });
+      $("preview-focus-start").addEventListener("focus",function(){nodes.previewFrame.focus();});
+      $("preview-focus-end").addEventListener("focus",function(){nodes.previewBackdrop.querySelector('button:not([disabled]),a[href]').focus();});
+      document.addEventListener("keydown",function(event){
+        if (event.key === "Escape" && !nodes.backdrop.classList.contains("hidden")) closeDialog();
+        else if (event.key === "Escape" && !nodes.previewBackdrop.classList.contains("hidden")) closePreview();
+        if (event.key === "Tab" && !nodes.backdrop.classList.contains("hidden")) {
+          var focusable=nodes.backdrop.querySelectorAll('button:not([disabled]),input:not([disabled])'); var first=focusable[0],last=focusable[focusable.length-1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      });
+      ["search","type-filter"].forEach(function(id){ $(id).addEventListener(id === "search" ? "input" : "change",renderRows); });
+      ["date-from","date-to"].forEach(function(id){ $(id).addEventListener("change",renderRows); });
+      document.querySelectorAll(".range-button").forEach(function(button){button.addEventListener("click",function(){var range=button.dataset.range;if(range === "all"){$("date-from").value="";$("date-to").value="";}else{$("date-from").value=moscowDate(-(Number(range)-1));$("date-to").value=moscowDate(0);}renderRows();});});
+      $("reset-filters").addEventListener("click",function(){ $("search").value=""; $("type-filter").value="all"; $("date-from").value=""; $("date-to").value=""; renderRows(); });
+      $("refresh-list").addEventListener("click",loadManifest);
+      if (!sharedShell && window.PLTheme) window.PLTheme.mountMenu($("theme-button"));
+      loadSession(); loadManifest();
+    })();
+  </script>
+</body>
+</html>

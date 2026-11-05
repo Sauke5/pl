@@ -1,0 +1,109 @@
+.connection-detail {
+  min-width: 0;
+  margin: 20px 0;
+}
+.connection-detail > h3,
+.connection-bindings > h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.connection-detail-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+.connection-detail-status > button {
+  margin-left: auto;
+}
+.connection-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.connection-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.connection-table th,
+.connection-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 10px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.connection-table thead th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.connection-table tbody th {
+  font-weight: 400;
+}
+.connection-table strong {
+  font-weight: 500;
+}
+.connection-table small {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.connection-table small.settings-field-error {
+  color: var(--danger);
+}
+.connection-revision {
+  font-family: var(--font-mono, monospace);
+}
+.connection-history-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.connection-history-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.connection-inline-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+.connection-bindings {
+  margin-top: 20px;
+}
+.connection-binding {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(140px, 1fr) 30px;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+.connection-binding > span {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.connection-binding-new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin-top: 14px;
+}
+.connection-binding-new label {
+  flex: 1;
+  min-width: 150px;
+  font-size: 13px;
+}
+.connection-binding-new label input,
+.connection-binding-new label select {
+  margin-top: 6px;
+  width: 100%;
+}
+.connection-history-block + .connection-history-block {
+  margin-top: 20px;
+}

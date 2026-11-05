@@ -1,0 +1,241 @@
+.mailcow-overview,
+.mailcow-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.mailcow-overview > .panel,
+.mailcow-groups > .panel {
+  min-width: 0;
+  margin: 0;
+}
+.mailcow-module > .page-title {
+  margin-bottom: 14px;
+}
+.mailcow-module .page-title .segmented {
+  margin: 0;
+}
+.mailcow-module .mailcow-source-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: 70px;
+  margin-bottom: 14px;
+}
+.mailcow-source-bar > .button {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.mailcow-server-icon {
+  color: var(--blue);
+  flex-shrink: 0;
+}
+.mailcow-server-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.mailcow-server-name h2 {
+  font-size: 16px;
+  font-weight: 550;
+  margin: 0;
+}
+.mailcow-server-name span {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.mailcow-overview > .mailcow-summary-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  min-height: 210px;
+}
+.mailcow-summary-card .panel-heading {
+  margin-bottom: 0;
+}
+.mailcow-summary-card .panel-heading h2 {
+  font-size: 16px;
+  line-height: 1.3;
+}
+.mailcow-summary-card .module-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 8px;
+}
+.mailcow-card-description {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 5px 0 0;
+}
+.mailcow-summary-metrics {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0 4px;
+}
+.mailcow-summary-metrics > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 4px;
+}
+.mailcow-summary-metrics > div + div {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+.mailcow-summary-metrics dt {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+}
+.mailcow-summary-metrics dd {
+  order: -1;
+  color: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.mailcow-summary-metrics .mailcow-metric-unknown dd {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 500;
+}
+.mailcow-summary-metrics.is-compact {
+  margin: 0;
+}
+.mailcow-summary-metrics.is-compact dd {
+  font-size: 20px;
+}
+.mailcow-summary-metrics.is-compact .mailcow-metric-unknown dd {
+  font-size: 15px;
+}
+.mailcow-summary-secondary {
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.mailcow-summary-secondary > .mailcow-summary-metrics {
+  flex: 1;
+  min-width: 0;
+}
+.mailcow-storage-display {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 6px 0;
+}
+.mailcow-storage-progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  color: var(--blue);
+  accent-color: var(--blue);
+}
+.mailcow-storage-progress::-webkit-progress-bar {
+  background: var(--surface-raised);
+}
+.mailcow-storage-progress::-webkit-progress-value {
+  background: var(--blue);
+  border-radius: 6px;
+}
+.mailcow-storage-progress::-moz-progress-bar {
+  background: var(--blue);
+  border-radius: 6px;
+}
+.mailcow-summary-sources {
+  padding-top: 10px;
+  margin-top: auto;
+}
+.mailcow-summary-sources p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.mailcow-summary-sources strong {
+  font-weight: 500;
+}
+.mailcow-summary-sources .mailcow-source-warning {
+  color: var(--orange);
+}
+.mailcow-section-title {
+  margin: 20px 0 14px;
+  font-size: 17px;
+  font-weight: 550;
+}
+.mailcow-group-data {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.mailcow-group-data > summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-size: 12px;
+}
+.mailcow-module .module-endpoint {
+  overflow-wrap: anywhere;
+}
+.mailcow-module .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.mailcow-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+.mailcow-table-wrap th {
+  text-align: left;
+}
+.mailcow-settings {
+  padding: 0;
+  margin: 20px 0;
+  border: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  min-width: 0;
+}
+.mailcow-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.mailcow-setting .field,
+.mailcow-setting .checkbox-label {
+  margin: 0;
+}
+@media (max-width: 1200px) {
+  .mailcow-overview,
+  .mailcow-groups,
+  .mailcow-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mailcow-module .mailcow-source-bar {
+    flex-wrap: wrap;
+  }
+}

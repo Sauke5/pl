@@ -1,0 +1,130 @@
+package modules
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"pl/portal/internal/model"
+)
+
+func TestAlertmanagerControllerSignsFinitePrepareValidateStatusAndAlertsRead(t *testing.T) {
+	id := "11111111-1111-4111-8111-111111111111"
+	ref := "22222222-2222-4222-8222-222222222222"
+	var calls atomic.Int32
+	c := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		mac := hmac.New(sha256.New, make([]byte, 32))
+		mac.Write([]byte(r.Header.Get("X-Pl-Timestamp") + "\nPOST\n" + r.URL.Path + "\n"))
+		mac.Write(body)
+		if r.Method != "POST" || r.Header.Get("X-Pl-Signature") != hex.EncodeToString(mac.Sum(nil)) {
+			t.Error("unsigned Alertmanager request")
+		}
+		var input map[string]json.RawMessage
+		if json.Unmarshal(body, &input) != nil {
+			t.Error("invalid signed JSON")
+		}
+		if string(input["instance_id"]) != `"`+id+`"` {
+			t.Error("wrong instance identity")
+		}
+		switch r.URL.Path {
+		case "/v1/alertmanager/prepare":
+			if !strings.Contains(string(body), "private-token-secret") || !strings.Contains(string(body), "private-smtp-password") {
+				t.Error("root prepare lost write-only credentials")
+			}
+			public := model.DefaultAlertmanagerConfiguration()
+			public.Revision = 1
+			public.Ref = ref
+			json.NewEncoder(w).Encode(public)
+		case "/v1/alertmanager/validate":
+			if len(input) != 2 || string(input["configuration_ref"]) != `"`+ref+`"` {
+				t.Error("validation must send only frozen reference")
+			}
+			io.WriteString(w, `{"valid":true}`)
+		case "/v1/alertmanager/status":
+			if len(input) != 1 {
+				t.Error("arbitrary status parameters")
+			}
+			io.WriteString(w, `{"state":"running","version":"fixture"}`)
+		case "/v1/alertmanager/read":
+			if len(input) != 3 || string(input["path"]) != `"/api/v2/alerts"` || string(input["query"]) != `""` {
+				t.Error("root read route is not finite")
+			}
+			w.Header().Set("Set-Cookie", "private=discard")
+			json.NewEncoder(w).Encode(map[string]any{"instance_id": id, "status": 200, "content_type": "application/json", "body": base64.StdEncoding.EncodeToString([]byte(`[{"fingerprint":"actual-alert"}]`))})
+		default:
+			t.Error("unexpected finite endpoint")
+			w.WriteHeader(404)
+		}
+	})
+	input := model.AlertmanagerConfigurationInput{Receivers: []model.AlertmanagerReceiverInput{{Name: "office", Kind: "telegram", Token: "private-token-secret", ChatID: 1}, {Name: "mail", Kind: "email", SMTP: &model.AlertmanagerSMTPInput{Smarthost: "smtp.example.invalid:587", From: "alerts@example.invalid", To: []string{"ops@example.invalid"}, TLSMode: "starttls", Username: "operator", Password: "private-smtp-password"}}}}
+	prepared, err := c.PrepareAlertmanager(context.Background(), id, input)
+	if err != nil || prepared.Ref != ref {
+		t.Fatalf("prepare err=%v", err)
+	}
+	if err := c.ValidateAlertmanager(context.Background(), id, ref); err != nil {
+		t.Fatal(err)
+	}
+	if status, err := c.AlertmanagerStatus(context.Background(), id); err != nil || status.State != "running" {
+		t.Fatalf("status %+v %v", status, err)
+	}
+	response, err := c.ReadAlertmanager(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(response.Body)
+	if !strings.Contains(string(data), "actual-alert") || response.Header.Get("Set-Cookie") != "" {
+		t.Fatal("finite alerts read lost data or leaked headers")
+	}
+	if calls.Load() != 4 {
+		t.Fatal("unexpected request count")
+	}
+	bad := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(422)
+		io.WriteString(w, `{"error":"private-token-secret private-smtp-password https://hook.invalid/secret"}`)
+	})
+	_, err = bad.PrepareAlertmanager(context.Background(), id, input)
+	if err == nil || strings.Contains(err.Error(), "private-token-secret") || strings.Contains(err.Error(), "private-smtp-password") || strings.Contains(err.Error(), "https://") {
+		t.Fatal("root error body leaked")
+	}
+}
+
+func TestAlertmanagerReadRejectsForeignStatusHTMLMalformedAndOversizedJSON(t *testing.T) {
+	id := "11111111-1111-4111-8111-111111111111"
+	for _, scenario := range []string{"foreign", "redirect", "html", "invalid-base64", "invalid-json", "oversized"} {
+		t.Run(scenario, func(t *testing.T) {
+			c := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				returned, status, ct, body := id, 200, "application/json", base64.StdEncoding.EncodeToString([]byte(`[]`))
+				switch scenario {
+				case "foreign":
+					returned = "foreign"
+				case "redirect":
+					status = 302
+				case "html":
+					ct = "text/html"
+				case "invalid-base64":
+					body = "!"
+				case "invalid-json":
+					body = base64.StdEncoding.EncodeToString([]byte(`private nonJSON`))
+				case "oversized":
+					body = base64.StdEncoding.EncodeToString(make([]byte, alertmanagerReadLimit+1))
+				}
+				json.NewEncoder(w).Encode(map[string]any{"instance_id": returned, "status": status, "content_type": ct, "body": body})
+			})
+			if response, err := c.ReadAlertmanager(context.Background(), id); err == nil {
+				response.Body.Close()
+				t.Fatal("invalid read accepted")
+			}
+		})
+	}
+}

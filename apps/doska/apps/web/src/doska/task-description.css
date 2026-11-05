@@ -1,0 +1,18 @@
+.doska-task-description-block { margin-bottom:16px;min-width:0; }
+.doska-description-heading { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px; }
+.doska-description-heading > label { margin:0;font-size:13px;color:var(--muted); }
+.doska-description-mode { display:flex;gap:4px; }
+.doska-app .doska-description-mode button { padding:3px 7px;min-height:26px;font-size:11px;background:transparent;border-color:transparent;color:var(--muted); }
+.doska-app .doska-description-mode button[aria-pressed="true"] { background:var(--border);color:var(--text); }
+.doska-description-format { display:flex;gap:3px;margin-bottom:5px; }
+.doska-app .doska-description-format button { display:inline-flex;align-items:center;justify-content:center;min-height:26px;width:28px;padding:4px;border-color:transparent;background:transparent;color:var(--muted); }
+.doska-app .doska-description-format button:hover { background:var(--border);color:var(--text); }
+.doska-description-preview { min-height:82px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;line-height:1.55;overflow-wrap:anywhere; }
+.doska-description-preview > :first-child { margin-top:0; }.doska-description-preview > :last-child { margin-bottom:0; }
+.doska-description-preview p { color:inherit;margin:6px 0; }
+.doska-description-preview pre { white-space:pre-wrap;max-width:100%;overflow:auto; }
+.doska-description-preview blockquote { margin:8px 0;padding-left:10px;border-left:2px solid var(--accent); }
+.doska-description-preview a { color:var(--accent);text-decoration:underline; }
+.doska-description-preview ul,.doska-description-preview ol { padding-left:20px; }
+
+.doska-app .doska-task-description-block textarea.doska-task-description { display:block;width:100%;min-width:0;box-sizing:border-box; }

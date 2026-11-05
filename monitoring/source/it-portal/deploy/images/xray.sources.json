@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "version": "26.3.27",
+  "upstream_version": "26.3.27",
+  "upstream_commit": "d2758a023cd7f4174a5a5fa4ff66e487d4342ba0",
+  "upstream_release": "https://github.com/XTLS/Xray-core/releases/tag/v26.3.27",
+  "release_policy": "Use the latest non-prerelease upstream release. The tag was independently resolved with Git ls-remote; newer prereleases are not selected.",
+  "source": {
+    "url": "https://codeload.github.com/XTLS/Xray-core/tar.gz/d2758a023cd7f4174a5a5fa4ff66e487d4342ba0",
+    "sha256": "14fa566ee0a801d3d51144c67018b449f5dcf462ddfacadd032da069787e61f9",
+    "revision": "d2758a023cd7f4174a5a5fa4ff66e487d4342ba0"
+  },
+  "go": "1.27.2",
+  "build_image": "golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d",
+  "dependency_policy": "Apply only the four explicitly listed stable dependency updates and their Go-selected transitive graph. Retain public Go checksum verification, assert exact selected versions and module/archive checksums, compile with readonly locks, and ship the final go.mod/go.sum, full module graph and executable build metadata. No vulnerability ignores, replacements or checksum-database bypasses.",
+  "runtime": {
+    "base": "scratch",
+    "user": "65534:65534",
+    "binary": "/usr/local/bin/xray",
+    "config": "/etc/xray/config.json",
+    "ca_bundle": "/etc/ssl/certs/ca-certificates.crt",
+    "ca_source": "The immutable pinned build image; runtime TLS verification remains enabled.",
+    "geo_data": "Not included; private_direct routing uses finite literal private CIDRs.",
+    "provenance": "/usr/share/pl/provenance/xray/",
+    "license": "/usr/share/licenses/xray/LICENSE"
+  },
+  "labels": {
+    "org.opencontainers.image.version": "26.3.27",
+    "org.opencontainers.image.revision": "d2758a023cd7f4174a5a5fa4ff66e487d4342ba0",
+    "org.opencontainers.image.source": "https://github.com/XTLS/Xray-core",
+    "org.opencontainers.image.licenses": "MPL-2.0",
+    "pl.module.id": "xray",
+    "pl.module.config.version": "1",
+    "pl.build.variant": "source-build",
+    "pl.build.go": "1.27.2"
+  },
+  "verification": "The source tag was resolved from upstream Git and its archive SHA256 computed from the downloaded immutable commit archive. Dependency versions were verified against the official Go module proxy latest stable metadata and checksums from sum.golang.org. No build or test was performed on Mac. CI must compile, inspect provenance, rescan the final image without HIGH/CRITICAL exceptions, and exercise SOCKS/HTTP and imported-outbound traffic.",
+  "dependency_update": [
+    {
+      "module": "golang.org/x/crypto",
+      "from": "v0.49.0",
+      "version": "v0.58.0",
+      "revision": "8fdf07b3114278fb3b78c1cf1814e08bd851eb4c",
+      "sum": "h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54=",
+      "go_mod_sum": "h1:Xh+kl5A+M0gMiWDytH2Hhr5Z7WbNCpv/eB/EFgfSk+w=",
+      "authority": "https://proxy.golang.org/golang.org/x/crypto/@latest",
+      "checksum_authority": "https://sum.golang.org/lookup/golang.org/x/crypto@v0.58.0"
+    },
+    {
+      "module": "golang.org/x/net",
+      "from": "v0.52.0",
+      "version": "v0.61.0",
+      "revision": "c1d31df183e51b1075a2fd670d6f6f4efb871773",
+      "sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+      "go_mod_sum": "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=",
+      "authority": "https://proxy.golang.org/golang.org/x/net/@latest",
+      "checksum_authority": "https://sum.golang.org/lookup/golang.org/x/net@v0.61.0"
+    },
+    {
+      "module": "golang.org/x/text",
+      "from": "v0.35.0",
+      "version": "v0.43.0",
+      "revision": "ac40b0f06c159afb5bfca4d1860f8b4b60dbc160",
+      "sum": "h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=",
+      "go_mod_sum": "h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=",
+      "authority": "https://proxy.golang.org/golang.org/x/text/@latest",
+      "checksum_authority": "https://sum.golang.org/lookup/golang.org/x/text@v0.43.0"
+    },
+    {
+      "module": "google.golang.org/grpc",
+      "from": "v1.79.3",
+      "version": "v1.84.0",
+      "revision": "e84aa5ab15d1d2b29d54f838312ad490cb7551a8",
+      "sum": "h1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0=",
+      "go_mod_sum": "h1:ljCht0DrxQrXBDRTZp52Qxh3Ffk8CdYm2sj4O2QN2C0=",
+      "authority": "https://proxy.golang.org/google.golang.org/grpc/@latest",
+      "checksum_authority": "https://sum.golang.org/lookup/google.golang.org/grpc@v1.84.0"
+    }
+  ]
+}

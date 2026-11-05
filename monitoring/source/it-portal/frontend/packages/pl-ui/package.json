@@ -1,0 +1,34 @@
+{
+  "name": "@pl/ui",
+  "version": "1.0.2-pl.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./core": "./core.js",
+    "./react": "./react.tsx",
+    "./styles.css": "./styles.css",
+    "./dialog": "./dialog.tsx",
+    "./primitives": "./primitives.tsx"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19",
+    "@radix-ui/react-dialog": ">=1.1.23",
+    "motion": ">=14"
+  },
+  "files": [
+    "core.js",
+    "styles.css",
+    "react.tsx",
+    "dialog.tsx",
+    "primitives.tsx"
+  ],
+  "peerDependenciesMeta": {
+    "@radix-ui/react-dialog": {
+      "optional": true
+    },
+    "motion": {
+      "optional": true
+    }
+  }
+}

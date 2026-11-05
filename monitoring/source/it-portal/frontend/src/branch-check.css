@@ -1,0 +1,49 @@
+.branch-origin {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 14px 0 20px;
+}
+.branch-result {
+  margin-top: 24px;
+}
+.branch-result .simple-row {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.branch-result .simple-row small {
+  margin-left: auto;
+  color: var(--muted);
+}
+.branch-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+}
+.branch-metrics dt {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.branch-metrics dd {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 600;
+}
+.branch-result h3 {
+  font-size: 16px;
+  margin: 24px 0 12px;
+}
+.branch-hops td {
+  overflow-wrap: anywhere;
+}
+.branch-hops td:nth-child(2) {
+  max-width: 320px;
+}
+.branch-raw summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 12px 0;
+}

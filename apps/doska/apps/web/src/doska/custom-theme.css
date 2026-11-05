@@ -1,0 +1,88 @@
+/* Palette bridge for registry-defined themes. Legacy palettes stay in their own stylesheets. */
+:root[data-pl-ui-theme-kind="custom"] .doska-app {
+  --text: var(--pl-ui-theme-text);
+  --muted: var(--pl-ui-theme-muted);
+  --accent: var(--pl-ui-theme-accent);
+  --border: var(--pl-ui-theme-border);
+  --surface: var(--pl-ui-theme-surface);
+  --background: var(--pl-ui-theme-background);
+  --input-bg: var(--pl-ui-theme-input);
+  --danger: var(--pl-ui-theme-danger);
+  --doska-danger: var(--pl-ui-theme-danger);
+  background: var(--background);
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-app::before {
+  background: linear-gradient(125deg, var(--pl-ui-theme-gradient-start), var(--pl-ui-theme-gradient-end));
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-app::after { background: none; }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-sidebar,.doska-topbar,.doska-panel,.doska-dialog) {
+  background: var(--pl-ui-theme-surface);
+  border-color: var(--pl-ui-theme-border);
+}
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-panel,.doska-dialog) { box-shadow: var(--pl-ui-theme-shadow); }
+:root[data-pl-ui-theme-kind="custom"] .doska-dialog::backdrop { background: var(--pl-ui-theme-overlay); }
+:root[data-pl-ui-theme-kind="custom"] .doska-sidebar nav a { color: var(--pl-ui-theme-muted); }
+:root[data-pl-ui-theme-kind="custom"] .doska-sidebar nav a.active {
+  color: var(--pl-ui-theme-text);
+  background: var(--pl-ui-theme-hover);
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-sidebar nav a.active::before { background: var(--pl-ui-theme-accent); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :focus-visible { outline-color: var(--pl-ui-theme-focus); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(input,select,textarea) {
+  color: var(--pl-ui-theme-text);
+  background: var(--pl-ui-theme-input);
+  border-color: var(--pl-ui-theme-border);
+  accent-color: var(--pl-ui-theme-accent);
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(input,textarea)::placeholder { color: var(--pl-ui-theme-subtle); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(button:not(.pl-ui-button):not(.pl-ui-mobile-scrim):not(.doska-icon),.doska-button) {
+  background-color: var(--pl-ui-theme-hover);
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(button:not(.pl-ui-button):not(.pl-ui-mobile-scrim):not(.doska-icon),.doska-button):hover {
+  background-color: var(--pl-ui-theme-raised);
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-primary {
+  background: var(--pl-ui-theme-primary-bg);
+  color: var(--pl-ui-theme-primary-text);
+  border-color: var(--pl-ui-theme-primary-bg);
+}
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-primary:hover { background: var(--pl-ui-theme-primary-hover); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(.doska-icon,.doska-task-open,.doska-card-more,.doska-collapse,.doska-description-format button,.doska-description-mode button,.doska-detail-actions button,.doska-task-action-menu button,.doska-project-menu button,.doska-checklist-controls button,.doska-view-switch button) { background: transparent; }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(.doska-icon,.doska-collapse,.doska-description-format button,.doska-description-mode button,.doska-task-action-menu button,.doska-project-menu button,.doska-checklist-controls button):hover { background: var(--pl-ui-theme-hover); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-avatar,.doska-column-count,.doska-priority,.doska-view-switch,.doska-task-properties) { background: var(--pl-ui-theme-hover); }
+:root[data-pl-ui-theme-kind="custom"] .doska-column { background: var(--pl-ui-theme-background); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-task-card { background: var(--pl-ui-theme-surface); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-task-card:hover { background: var(--pl-ui-theme-raised); border-color: var(--pl-ui-theme-subtle); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-task-card.selected { background: var(--pl-ui-theme-raised); border-color: var(--pl-ui-theme-accent); }
+/* User-selected card/participant hues are content, not a theme accent. */
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-task-card.doska-card-colored { background: linear-gradient(hsl(var(--card-color-hue) 55% 58% / .16),hsl(var(--card-color-hue) 55% 58% / .16)),var(--pl-ui-theme-surface); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-task-card.doska-card-colored:not(.selected) { border-color: hsl(var(--card-color-hue) 55% 65% / .42); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-color-option { background: hsl(var(--card-color-hue) 62% 59%); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-color-default { background: var(--pl-ui-theme-surface); }
+:root[data-pl-ui-theme-kind="custom"] .doska-column.is-drop-target { background: var(--pl-ui-theme-hover); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-drag-overlay { background: var(--pl-ui-theme-raised); box-shadow: var(--pl-ui-theme-shadow); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-task-drawer .doska-drawer-heading,.doska-task-editor-content > .doska-task-actions,.doska-task-action-menu > div,.doska-project-menu > div,.doska-checklist-menu-popup,.doska-bulk-preview th,.doska-close-confirm) { background: var(--pl-ui-theme-surface); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-project-menu > div,.doska-checklist-menu-popup,.doska-close-confirm,.doska-task-action-menu > div,.doska-color-picker-panel) { box-shadow: var(--pl-ui-theme-shadow); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-project-menu[open] > summary,.doska-view-switch button[aria-pressed="true"],.doska-notification-list > li.is-unread,.doska-task-table tbody tr.is-selected,.doska-task-table tbody tr:hover,.doska-calendar-day.is-today) { background: var(--pl-ui-theme-hover); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-view-switch button[aria-pressed="true"] { background: var(--pl-ui-theme-raised); }
+:root[data-pl-ui-theme-kind="custom"] .doska-notification-bell > span { background: var(--pl-ui-theme-primary-bg); color: var(--pl-ui-theme-primary-text); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(.doska-add-item,.doska-add-list) { color: var(--pl-ui-theme-text); background: var(--pl-ui-theme-raised); border-color: var(--pl-ui-theme-border); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app :is(.doska-add-item,.doska-add-list):hover { background: var(--pl-ui-theme-hover); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-calendar-task { background: var(--pl-ui-theme-surface); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-calendar-task:hover { background: var(--pl-ui-theme-raised); }
+:root[data-pl-ui-theme-kind="custom"] .doska-calendar-grid .is-outside-month { background: var(--pl-ui-theme-background); }
+:root[data-pl-ui-theme-kind="custom"] .doska-card-progress progress,
+:root[data-pl-ui-theme-kind="custom"] .doska-card-progress progress::-webkit-progress-bar,
+:root[data-pl-ui-theme-kind="custom"] .doska-task-table-progress progress::-webkit-progress-bar { background: var(--pl-ui-theme-border); }
+:root[data-pl-ui-theme-kind="custom"] .doska-checklist-complete { --checklist-complete: var(--pl-ui-theme-success); }
+:root[data-pl-ui-theme-kind="custom"] .doska-card-progress.is-complete progress::-webkit-progress-value { background: var(--pl-ui-theme-success); }
+:root[data-pl-ui-theme-kind="custom"] .doska-card-progress.is-complete progress::-moz-progress-bar { background: var(--pl-ui-theme-success); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-column.state-completed .doska-column-dot,.doska-task-table-status.state-completed > span) { background: var(--pl-ui-theme-success); }
+:root[data-pl-ui-theme-kind="custom"] .doska-task-table-status.state-active > span { background: var(--pl-ui-theme-accent); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-error,.doska-archive-project,.doska-priority.priority-urgent,.doska-deadline.is-overdue) { color: var(--pl-ui-theme-danger); background: color-mix(in srgb,var(--pl-ui-theme-danger) 10%,transparent); border-color: color-mix(in srgb,var(--pl-ui-theme-danger) 35%,transparent); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-card-error,.doska-checklist .doska-checklist-menu-popup > button,.doska-calendar-task.is-overdue .doska-calendar-task-meta) { color: var(--pl-ui-theme-danger); }
+:root[data-pl-ui-theme-kind="custom"] :is(.doska-priority.priority-high,.doska-deadline.is-today) { color: var(--pl-ui-theme-warning); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-calendar-task.is-overdue { border-left-color: var(--pl-ui-theme-danger); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-calendar-task.is-today { border-left-color: var(--pl-ui-theme-warning); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app .doska-calendar-task.is-completed { border-left-color: var(--pl-ui-theme-success); }
+:root[data-pl-ui-theme-kind="custom"] .doska-app [aria-invalid="true"] { border-color: var(--pl-ui-theme-danger); }

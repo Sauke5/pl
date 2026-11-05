@@ -1,0 +1,27 @@
+.doska-task-custom-fields { padding:12px 16px 0; }
+.doska-task-custom-fields h4 { margin:0 0 10px;font-size:12px;color:var(--muted);font-weight:500; }
+.doska-custom-field-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+.doska-custom-multiselect { border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-width:0;margin:0; }
+.doska-custom-multiselect legend { font-size:12px;color:var(--muted);padding:0 3px; }
+.doska-custom-multiselect label { display:flex;align-items:center;gap:7px;margin:4px 0;font-size:12px;overflow-wrap:anywhere; }
+.doska-custom-multiselect input { width:auto;min-height:0; }
+.doska-custom-multiselect small { color:var(--muted); }
+.doska-project-fields { border-top:1px solid var(--border);margin-top:18px;padding-top:16px; }
+.doska-project-fields h3 { margin:0 0 12px;font-size:15px; }
+.doska-project-fields ul { padding:0;list-style:none; }
+.doska-project-fields li { display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border); }
+.doska-project-fields li > span { flex:1;min-width:0;overflow-wrap:anywhere; }
+.doska-project-fields small { display:block;font-size:11px;color:var(--muted); }
+.doska-project-fields li button { min-height:28px;padding:4px 7px;font-size:12px; }
+.doska-standard-required { display:flex;flex-wrap:wrap;gap:8px 16px;margin:10px 0; }
+.doska-standard-required label { display:flex;gap:6px;align-items:center;font-size:12px; }
+.doska-standard-required input { width:auto;min-height:0; }
+.doska-custom-definition-form { border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:12px; }
+.doska-custom-definition-form .doska-field { margin-bottom:12px; }
+.doska-custom-definition-form footer { display:flex;justify-content:flex-end;gap:8px;margin-top:12px; }
+@media(max-width:520px) { .doska-custom-field-grid { grid-template-columns:minmax(0,1fr); } }
+
+.doska-custom-definition-form .doska-field:has(input[type="checkbox"]) { display:flex;align-items:center;gap:8px; }
+.doska-custom-definition-form input[type="checkbox"] { width:auto;min-height:0; }
+.doska-project-fields .doska-detail-actions > label { display:flex;align-items:center;gap:6px;font-size:12px; }
+.doska-project-fields .doska-detail-actions > label input { width:auto;min-height:0; }

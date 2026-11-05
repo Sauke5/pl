@@ -1,0 +1,49 @@
+import { getApiUrl } from "@/fetchers/get-api-url";
+import { HttpError } from "@/lib/http-error";
+import type { GenericWebhookIntegration } from "./get-generic-webhook-integration";
+
+export type UpdateGenericWebhookIntegrationRequest = {
+  webhookUrl?: string;
+  secret?: string | null;
+  isActive?: boolean;
+  events?: {
+    taskCreated?: boolean;
+    taskStatusChanged?: boolean;
+    taskPriorityChanged?: boolean;
+    taskTitleChanged?: boolean;
+    taskDescriptionChanged?: boolean;
+    taskCommentCreated?: boolean;
+    taskDeleted?: boolean;
+    taskMoved?: boolean;
+    taskDueDateChanged?: boolean;
+    taskAssigneeChanged?: boolean;
+    taskUnassigned?: boolean;
+    dueDateReminder?: boolean;
+  };
+  dueDateReminderLeadTimeMinutes?: number;
+};
+
+async function updateGenericWebhookIntegration(
+  projectId: string,
+  json: UpdateGenericWebhookIntegrationRequest,
+) {
+  const response = await fetch(
+    getApiUrl(`/generic-webhook-integration/project/${projectId}`),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(json),
+    },
+  );
+
+  if (!response.ok) {
+    throw await HttpError.fromResponse(response);
+  }
+
+  return (await response.json()) as GenericWebhookIntegration;
+}
+
+export default updateGenericWebhookIntegration;

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set auth = none %}
+{% block content %}
+<section class="auth-shell">
+  <div class="panel auth-panel">
+    <div class="eyebrow">Внутренний сервис</div>
+    <h1 class="page-title">Управление сайтами</h1>
+    <p class="page-note">Войдите, чтобы изменять цели мониторинга и контрольные фрагменты.</p>
+    {% if error %}<div class="notice notice-error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('login_post') }}" class="stack-form">
+      <input type="hidden" name="csrf_token" value="{{ login_csrf }}" />
+      <label>Логин<input class="pl-ui-input" name="username" autocomplete="username" required autofocus /></label>
+      <label>Пароль<input class="pl-ui-input" name="password" type="password" autocomplete="current-password" required /></label>
+      <button class="button button-primary pl-ui-button pl-ui-button-default" type="submit">Войти</button>
+    </form>
+    <p class="service-note">Регистрация и восстановление пароля отключены. Доступ выдаёт администратор мониторинга.</p>
+  </div>
+</section>
+{% endblock %}

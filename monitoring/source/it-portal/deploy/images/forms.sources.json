@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "version": "0.1.0",
+  "recipe": "deploy/images/forms.Dockerfile",
+  "context": ".",
+  "roles": [
+    "adapter",
+    "engine",
+    "mongo",
+    "keydb"
+  ],
+  "images": {
+    "forms-adapter": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "forms",
+        "pl.module.role": "adapter",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "source-build"
+      },
+      "target": "adapter"
+    },
+    "forms-engine": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "forms",
+        "pl.module.role": "engine",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "3.0.5"
+      },
+      "target": "engine"
+    },
+    "forms-mongo": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "forms",
+        "pl.module.role": "mongo",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "9.0.4"
+      },
+      "target": "mongo"
+    },
+    "forms-keydb": {
+      "labels": {
+        "org.opencontainers.image.version": "0.1.0",
+        "pl.module.id": "forms",
+        "pl.module.role": "keydb",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned",
+        "pl.upstream.version": "6.3.4"
+      },
+      "target": "keydb"
+    }
+  },
+  "upstream": {
+    "pip": {
+      "version": "26.2.2",
+      "wheel": "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl",
+      "sha256": "fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70",
+      "vendored_certifi": "2026.10.19",
+      "source": "https://pip.pypa.io/en/stable/news/#v26-2-2",
+      "advisory": "https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2"
+    },
+    "python": {
+      "version": "3.15.0",
+      "image": "python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58",
+      "source": "https://www.python.org/downloads/release/python-3150/"
+    },
+    "engine": {
+      "version": "3.0.5",
+      "image": "heyform/community-edition:v3.0.5@sha256:3a103fa72d7ec8d94e8f0c44b009041fdd73d4ed35e3ed1b68ff7fe28520525e",
+      "source": "https://github.com/heyform/heyform/releases/tag/v3.0.5",
+      "license": "AGPL-3.0-only"
+    },
+    "mongo": {
+      "version": "9.0.4",
+      "image": "mongo:9.0.4@sha256:dc28ed5a9d0fc616903c3f463bb1e53b92b49f441721b91926e87d90bf957ce8",
+      "source": "https://www.mongodb.com/products/updates/",
+      "license": "SSPL-1.0"
+    },
+    "keydb": {
+      "version": "6.3.4",
+      "source": "https://github.com/Snapchat/KeyDB/releases/tag/v6.3.4",
+      "license": "BSD-3-Clause",
+      "images": {
+        "amd64": "eqalpha/keydb:x86_64_v6.3.4@sha256:eceb1806730c7850395b8262300182c2e15a6e5dacbf0b72cbab110518caf43f",
+        "arm64": "eqalpha/keydb:arm64_v6.3.4@sha256:acf2f4c443276bf071ab90861fd9644b22c9b6440e544fa655d287981dd8cd0a"
+      }
+    }
+  },
+  "runtime": {
+    "steady_containers": 4,
+    "temporary_bootstrap_container": "same engine image, private network only, removed after native account creation",
+    "published": "none; host controller reaches the owned adapter IPv4 on its internal bridge",
+    "network": "private internal bridge",
+    "database_auth": "MongoDB is unexposed and accessible only to owned stack; KeyDB requires a private random password",
+    "secrets": "32 raw gateway bytes plus random native service/session/encryption credentials; private mounted files, not browser response or Docker Env"
+  },
+  "verification": "All tests/build/native startup in CI. MongoDB9 with upstream Mongoose7.8.7 is a fresh-install compatibility candidate, not a migration claim; CI must prove native bootstrap/create/publish/respond/aggregate, denied nonadmin control, disabled native registration, signed gateway/CSRF/replay, persistence and exact owned removal. KeyDB upstream6.3.4 images date2023; SCA must evaluate their final rootfs, not trust the version label."
+}

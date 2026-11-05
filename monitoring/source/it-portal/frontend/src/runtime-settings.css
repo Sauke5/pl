@@ -1,0 +1,47 @@
+.runtime-settings {
+  display: grid;
+  gap: 24px;
+}
+.runtime-settings fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.runtime-settings .form-grid {
+  align-items: start;
+}
+.runtime-facts {
+  display: grid;
+  margin: 20px 0;
+  gap: 16px;
+}
+.runtime-facts > div {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) 2fr;
+  gap: 24px;
+}
+.runtime-facts dt {
+  color: var(--muted);
+}
+.runtime-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1000px) {
+  .runtime-facts > div {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+.runtime-process {
+  margin-top: 24px;
+}
+.runtime-process summary {
+  cursor: pointer;
+}
+.runtime-process summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}

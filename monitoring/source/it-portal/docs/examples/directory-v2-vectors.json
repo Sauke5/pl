@@ -1,0 +1,89 @@
+{
+  "test_only": true,
+  "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "portal_csrf_utf8": "test-only-portal-csrf",
+  "vectors": [
+    {
+      "name": "employee-get",
+      "now": 1790000000,
+      "request": {
+        "method": "GET",
+        "uri": "/directory/api/v1/contacts?q=%D0%98%D0%B2%D0%B0%D0%BD&site=1",
+        "body_utf8": "",
+        "headers": {
+          "X-PL-Gateway-Assertion": "eyJ2IjoyLCJhdWQiOiJkaXJlY3RvcnkiLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDAzMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R4QVJFaE1VRlJZWEdCa2FHeHdkSGg4Iiwic3ViIjoiYWQ6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwibmFtZSI6ItCY0LLQsNC9INCY0LLQsNC90L7QsiA8RGlyZWN0b3J5PiIsImFkbWluIjpmYWxzZSwic2NvcGVzIjpbImRpcmVjdG9yeTpyZWFkIl0sIm1ldGhvZCI6IkdFVCIsInVyaSI6Ii9kaXJlY3RvcnkvYXBpL3YxL2NvbnRhY3RzP3E9JUQwJTk4JUQwJUIyJUQwJUIwJUQwJUJEJnNpdGU9MSIsImNvbnRlbnRfdHlwZSI6IiIsImJvZHlfc2hhMjU2IjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImlkZW1wb3RlbmN5X2tleSI6IiIsInNvdXJjZV9pcCI6IjE5Mi4wLjIuMTAiLCJjc3JmX3Rva2VuIjoiX3VhSFFwY0V5N1pndVFCSkQtVWZYbjFoUGg3V2Z1c1FvYmZoNHFDaUFQayIsImNzcmZfdmVyaWZpZWQiOmZhbHNlfQ",
+          "X-PL-Gateway-Signature": "BPe16aEQlgyrH2zlvWl9BpgcTygZ-OVD_NolyueQGw0"
+        }
+      },
+      "payload": {
+        "v": 2,
+        "aud": "directory",
+        "iat": 1790000000,
+        "exp": 1790000030,
+        "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "sub": "ad:00000000-0000-4000-8000-000000000001",
+        "name": "Иван Иванов <Directory>",
+        "admin": false,
+        "scopes": [
+          "directory:read"
+        ],
+        "method": "GET",
+        "uri": "/directory/api/v1/contacts?q=%D0%98%D0%B2%D0%B0%D0%BD&site=1",
+        "content_type": "",
+        "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "idempotency_key": "",
+        "source_ip": "192.0.2.10",
+        "csrf_token": "_uaHQpcEy7ZguQBJD-UfXn1hPh7WfusQobfh4qCiAPk",
+        "csrf_verified": false
+      },
+      "canonical_json_utf8": "{\"v\":2,\"aud\":\"directory\",\"iat\":1790000000,\"exp\":1790000030,\"nonce\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\",\"sub\":\"ad:00000000-0000-4000-8000-000000000001\",\"name\":\"Иван Иванов <Directory>\",\"admin\":false,\"scopes\":[\"directory:read\"],\"method\":\"GET\",\"uri\":\"/directory/api/v1/contacts?q=%D0%98%D0%B2%D0%B0%D0%BD&site=1\",\"content_type\":\"\",\"body_sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"idempotency_key\":\"\",\"source_ip\":\"192.0.2.10\",\"csrf_token\":\"_uaHQpcEy7ZguQBJD-UfXn1hPh7WfusQobfh4qCiAPk\",\"csrf_verified\":false}",
+      "canonical_json_hex": "7b2276223a322c22617564223a226469726563746f7279222c22696174223a313739303030303030302c22657870223a313739303030303033302c226e6f6e6365223a2241414543417751464267634943516f4c4441304f4478415245684d554652595847426b6147787764486838222c22737562223a2261643a30303030303030302d303030302d343030302d383030302d303030303030303030303031222c226e616d65223a22d098d0b2d0b0d0bd20d098d0b2d0b0d0bdd0bed0b2203c4469726563746f72793e222c2261646d696e223a66616c73652c2273636f706573223a5b226469726563746f72793a72656164225d2c226d6574686f64223a22474554222c22757269223a222f6469726563746f72792f6170692f76312f636f6e74616374733f713d25443025393825443025423225443025423025443025424426736974653d31222c22636f6e74656e745f74797065223a22222c22626f64795f736861323536223a2265336230633434323938666331633134396166626634633839393666623932343237616534316534363439623933346361343935393931623738353262383535222c226964656d706f74656e63795f6b6579223a22222c22736f757263655f6970223a223139322e302e322e3130222c22637372665f746f6b656e223a225f7561485170634579375a677551424a442d5566586e316850683757667573516f6266683471436941506b222c22637372665f7665726966696564223a66616c73657d",
+      "hmac_input_ascii": "pl-gateway-v2\neyJ2IjoyLCJhdWQiOiJkaXJlY3RvcnkiLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDAzMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R4QVJFaE1VRlJZWEdCa2FHeHdkSGg4Iiwic3ViIjoiYWQ6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwibmFtZSI6ItCY0LLQsNC9INCY0LLQsNC90L7QsiA8RGlyZWN0b3J5PiIsImFkbWluIjpmYWxzZSwic2NvcGVzIjpbImRpcmVjdG9yeTpyZWFkIl0sIm1ldGhvZCI6IkdFVCIsInVyaSI6Ii9kaXJlY3RvcnkvYXBpL3YxL2NvbnRhY3RzP3E9JUQwJTk4JUQwJUIyJUQwJUIwJUQwJUJEJnNpdGU9MSIsImNvbnRlbnRfdHlwZSI6IiIsImJvZHlfc2hhMjU2IjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImlkZW1wb3RlbmN5X2tleSI6IiIsInNvdXJjZV9pcCI6IjE5Mi4wLjIuMTAiLCJjc3JmX3Rva2VuIjoiX3VhSFFwY0V5N1pndVFCSkQtVWZYbjFoUGg3V2Z1c1FvYmZoNHFDaUFQayIsImNzcmZfdmVyaWZpZWQiOmZhbHNlfQ",
+      "expected_hmac_hex": "04f7b5e9a110960cab1f6ce5bd697d06981c4f2819f8e543fcda25cae7901b0d",
+      "expected_signature": "BPe16aEQlgyrH2zlvWl9BpgcTygZ-OVD_NolyueQGw0"
+    },
+    {
+      "name": "admin-patch",
+      "now": 1790000000,
+      "request": {
+        "method": "PATCH",
+        "uri": "/directory/api/v1/contacts/42",
+        "body_utf8": "{\"name\":\"Иван Иванов\"}",
+        "headers": {
+          "X-PL-Gateway-Assertion": "eyJ2IjoyLCJhdWQiOiJkaXJlY3RvcnkiLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDAzMCwibm9uY2UiOiJJQ0VpSXlRbEppY29LU29yTEMwdUx6QXhNak0wTlRZM09EazZPenc5UGo4Iiwic3ViIjoiYWQ6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwibmFtZSI6ItCY0LLQsNC9INCY0LLQsNC90L7QsiA8RGlyZWN0b3J5PiIsImFkbWluIjp0cnVlLCJzY29wZXMiOlsiZGlyZWN0b3J5OmF1ZGl0OnJlYWQiLCJkaXJlY3Rvcnk6cmVhZCIsImRpcmVjdG9yeTp3cml0ZSJdLCJtZXRob2QiOiJQQVRDSCIsInVyaSI6Ii9kaXJlY3RvcnkvYXBpL3YxL2NvbnRhY3RzLzQyIiwiY29udGVudF90eXBlIjoiYXBwbGljYXRpb24vanNvbjsgY2hhcnNldD11dGYtOCIsImJvZHlfc2hhMjU2IjoiMGY1Y2Y4ZDljODg2ODM1ZDlmMjFmNmQ2MGE3Y2IyNDg2Y2Y3ZGJkMjZiZDJkMGQ1YTE4MjFmNzcyOTQ0Yzk5ZCIsImlkZW1wb3RlbmN5X2tleSI6IiIsInNvdXJjZV9pcCI6IjE5Mi4wLjIuMTAiLCJjc3JmX3Rva2VuIjoiX3VhSFFwY0V5N1pndVFCSkQtVWZYbjFoUGg3V2Z1c1FvYmZoNHFDaUFQayIsImNzcmZfdmVyaWZpZWQiOnRydWV9",
+          "X-PL-Gateway-Signature": "jjbFfyR9a23fyyiifiwe6tGA9gfh0txOfDxIXKX-_gs",
+          "Content-Type": "application/json; charset=utf-8",
+          "X-CSRF-Token": "_uaHQpcEy7ZguQBJD-UfXn1hPh7WfusQobfh4qCiAPk"
+        }
+      },
+      "payload": {
+        "v": 2,
+        "aud": "directory",
+        "iat": 1790000000,
+        "exp": 1790000030,
+        "nonce": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+        "sub": "ad:00000000-0000-4000-8000-000000000001",
+        "name": "Иван Иванов <Directory>",
+        "admin": true,
+        "scopes": [
+          "directory:audit:read",
+          "directory:read",
+          "directory:write"
+        ],
+        "method": "PATCH",
+        "uri": "/directory/api/v1/contacts/42",
+        "content_type": "application/json; charset=utf-8",
+        "body_sha256": "0f5cf8d9c886835d9f21f6d60a7cb2486cf7dbd26bd2d0d5a1821f772944c99d",
+        "idempotency_key": "",
+        "source_ip": "192.0.2.10",
+        "csrf_token": "_uaHQpcEy7ZguQBJD-UfXn1hPh7WfusQobfh4qCiAPk",
+        "csrf_verified": true
+      },
+      "canonical_json_utf8": "{\"v\":2,\"aud\":\"directory\",\"iat\":1790000000,\"exp\":1790000030,\"nonce\":\"ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8\",\"sub\":\"ad:00000000-0000-4000-8000-000000000001\",\"name\":\"Иван Иванов <Directory>\",\"admin\":true,\"scopes\":[\"directory:audit:read\",\"directory:read\",\"directory:write\"],\"method\":\"PATCH\",\"uri\":\"/directory/api/v1/contacts/42\",\"content_type\":\"application/json; charset=utf-8\",\"body_sha256\":\"0f5cf8d9c886835d9f21f6d60a7cb2486cf7dbd26bd2d0d5a1821f772944c99d\",\"idempotency_key\":\"\",\"source_ip\":\"192.0.2.10\",\"csrf_token\":\"_uaHQpcEy7ZguQBJD-UfXn1hPh7WfusQobfh4qCiAPk\",\"csrf_verified\":true}",
+      "canonical_json_hex": "7b2276223a322c22617564223a226469726563746f7279222c22696174223a313739303030303030302c22657870223a313739303030303033302c226e6f6e6365223a22494345694979516c4a69636f4b536f724c4330754c7a41784d6a4d304e5459334f446b364f7a7739506a38222c22737562223a2261643a30303030303030302d303030302d343030302d383030302d303030303030303030303031222c226e616d65223a22d098d0b2d0b0d0bd20d098d0b2d0b0d0bdd0bed0b2203c4469726563746f72793e222c2261646d696e223a747275652c2273636f706573223a5b226469726563746f72793a61756469743a72656164222c226469726563746f72793a72656164222c226469726563746f72793a7772697465225d2c226d6574686f64223a225041544348222c22757269223a222f6469726563746f72792f6170692f76312f636f6e74616374732f3432222c22636f6e74656e745f74797065223a226170706c69636174696f6e2f6a736f6e3b20636861727365743d7574662d38222c22626f64795f736861323536223a2230663563663864396338383638333564396632316636643630613763623234383663663764626432366264326430643561313832316637373239343463393964222c226964656d706f74656e63795f6b6579223a22222c22736f757263655f6970223a223139322e302e322e3130222c22637372665f746f6b656e223a225f7561485170634579375a677551424a442d5566586e316850683757667573516f6266683471436941506b222c22637372665f7665726966696564223a747275657d",
+      "hmac_input_ascii": "pl-gateway-v2\neyJ2IjoyLCJhdWQiOiJkaXJlY3RvcnkiLCJpYXQiOjE3OTAwMDAwMDAsImV4cCI6MTc5MDAwMDAzMCwibm9uY2UiOiJJQ0VpSXlRbEppY29LU29yTEMwdUx6QXhNak0wTlRZM09EazZPenc5UGo4Iiwic3ViIjoiYWQ6MDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwibmFtZSI6ItCY0LLQsNC9INCY0LLQsNC90L7QsiA8RGlyZWN0b3J5PiIsImFkbWluIjp0cnVlLCJzY29wZXMiOlsiZGlyZWN0b3J5OmF1ZGl0OnJlYWQiLCJkaXJlY3Rvcnk6cmVhZCIsImRpcmVjdG9yeTp3cml0ZSJdLCJtZXRob2QiOiJQQVRDSCIsInVyaSI6Ii9kaXJlY3RvcnkvYXBpL3YxL2NvbnRhY3RzLzQyIiwiY29udGVudF90eXBlIjoiYXBwbGljYXRpb24vanNvbjsgY2hhcnNldD11dGYtOCIsImJvZHlfc2hhMjU2IjoiMGY1Y2Y4ZDljODg2ODM1ZDlmMjFmNmQ2MGE3Y2IyNDg2Y2Y3ZGJkMjZiZDJkMGQ1YTE4MjFmNzcyOTQ0Yzk5ZCIsImlkZW1wb3RlbmN5X2tleSI6IiIsInNvdXJjZV9pcCI6IjE5Mi4wLjIuMTAiLCJjc3JmX3Rva2VuIjoiX3VhSFFwY0V5N1pndVFCSkQtVWZYbjFoUGg3V2Z1c1FvYmZoNHFDaUFQayIsImNzcmZfdmVyaWZpZWQiOnRydWV9",
+      "expected_hmac_hex": "8e36c57f247d6b6ddfcb28a27e2c1eead180f607e1d2dc4e7c3c485ca5fefe0b",
+      "expected_signature": "jjbFfyR9a23fyyiifiwe6tGA9gfh0txOfDxIXKX-_gs"
+    }
+  ]
+}

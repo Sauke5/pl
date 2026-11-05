@@ -1,0 +1,28 @@
+# Existing host nginx prerequisite; render placeholders for this deployment.
+# This file is not installed or reloaded by the standalone lifecycle command.
+server {
+    listen 443 ssl;
+    server_name NETMAP_REMOTE_DNS;
+    ssl_certificate /ABSOLUTE/PATH/TO/fullchain.pem;
+    ssl_certificate_key /ABSOLUTE/PATH/TO/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 3m;
+    access_log off;
+
+    location /netmap/ {
+        # No URI suffix: preserve the exact signed /netmap/... path and query.
+        proxy_pass http://127.0.0.1:ADAPTER_LOOPBACK_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        proxy_set_header Accept-Encoding "";
+        proxy_redirect off;
+        proxy_intercept_errors off;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 190s;
+        proxy_send_timeout 190s;
+    }
+
+    # /internal/* and /healthz are not published through the TLS ingress.
+    location / { return 404; }
+}

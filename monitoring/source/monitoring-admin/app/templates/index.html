@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="admin-view" id="overview" data-view="overview">
+  <div class="page-heading">
+    <div>
+      <p class="eyebrow">Операционный контур</p>
+      <h1 tabindex="-1">Состояние мониторинга</h1>
+      <p class="page-note">Контейнеры, доставка сообщений и диагностика сервера в одном месте.</p>
+    </div>
+    <button class="button button-secondary pl-ui-button pl-ui-button-secondary" id="refresh-button" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/></svg>
+      Обновить
+    </button>
+  </div>
+
+  <div class="summary-grid" aria-label="Сводка">
+    <article class="summary-card accent-blue"><span>Работают</span><strong id="summary-running">—</strong><small>контейнеров</small></article>
+    <article class="summary-card accent-green"><span>Healthy</span><strong id="summary-healthy">—</strong><small>прошли health-check</small></article>
+    <article class="summary-card accent-amber"><span>Требуют внимания</span><strong id="summary-attention">—</strong><small>сервисов</small></article>
+    <article class="summary-card"><span>Последняя доставка</span><strong class="summary-text" id="summary-delivery">—</strong><small id="summary-delivery-meta">Telegram</small></article>
+  </div>
+</section>
+
+<section class="admin-view content-section" id="containers" data-view="containers" hidden>
+  <div class="page-heading">
+    <div><p class="eyebrow">Runtime</p><h1 tabindex="-1">Контейнеры</h1><p class="page-note">Состояние Docker Compose и разрешённые операции.</p></div>
+    <span class="section-meta" id="containers-updated">Загрузка…</span>
+  </div>
+  <div class="container-workspace">
+    <div class="container-list panel" id="container-list" aria-live="polite">
+      <div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>
+    </div>
+    <article class="container-detail panel" id="container-detail">
+      <div class="empty-detail"><svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8Zm0 9 9-4M12 12 3 8m9 4v9"/></svg><strong>Выберите контейнер</strong><p>Здесь появятся health, uptime, последние 50 строк лога и доступные операции.</p></div>
+    </article>
+  </div>
+</section>
+
+<section class="admin-view" id="diagnostics" data-view="diagnostics" hidden>
+  <div class="page-heading">
+    <div><p class="eyebrow">System check</p><h1 tabindex="-1">Диагностика</h1><p class="page-note">Безопасный чек-лист ключевых компонентов.</p></div>
+    <button class="button button-secondary pl-ui-button pl-ui-button-secondary" id="diagnostics-refresh" type="button">Повторить проверку</button>
+  </div>
+  <section class="content-section panel" aria-label="Результаты диагностики">
+    <div class="check-list" id="diagnostics-list" aria-live="polite"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+  </section>
+</section>
+
+<section class="admin-view" id="telegram" data-view="telegram" hidden>
+    <div class="page-heading">
+      <div><p class="eyebrow">Delivery</p><h1 tabindex="-1">Telegram</h1><p class="page-note">Последние попытки доставки сообщений и отчётов.</p></div>
+      <span class="section-meta" id="telegram-count">—</span>
+    </div>
+  <section class="content-section panel" aria-label="История доставки">
+    <div class="delivery-list" id="telegram-list" aria-live="polite"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+  </section>
+</section>
+
+<section class="admin-view" id="operations" data-view="operations" hidden>
+    <div class="page-heading">
+      <div><p class="eyebrow">Activity</p><h1 tabindex="-1">Последние операции</h1><p class="page-note">Результаты действий, выполненных из панели.</p></div>
+    </div>
+  <section class="content-section panel" aria-label="Журнал операций">
+    <div class="operations-list" id="operations-list"><div class="empty-state">Операций в этой сессии пока нет.</div></div>
+  </section>
+</section>
+
+<dialog class="confirm-dialog pl-ui-native-dialog" id="restart-dialog" aria-labelledby="restart-title">
+  <form method="dialog">
+    <button class="icon-button button-ghost dialog-close pl-ui-button pl-ui-button-ghost pl-ui-button-icon" value="cancel" aria-label="Закрыть"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+    <span class="dialog-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/></svg></span>
+    <div class="dialog-heading"><p class="eyebrow">Подтверждение операции</p><h2 id="restart-title">Перезапустить контейнер?</h2></div>
+    <p>Контейнер <strong id="restart-container-name">—</strong> будет корректно перезапущен. Кратковременная недоступность сервиса ожидаема.</p>
+    <div class="dialog-note"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>После запуска backend проверит состояние и health сервиса.</span></div>
+    <div class="dialog-actions">
+      <button class="button button-secondary pl-ui-button pl-ui-button-secondary" value="cancel">Отмена</button>
+      <button class="button button-danger" id="restart-confirm" value="default" type="button">Перезапустить</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

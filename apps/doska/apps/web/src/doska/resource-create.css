@@ -1,0 +1,3 @@
+.doska-resource-create-form { max-width: 900px; margin-inline: auto; }
+.doska-resource-create-form .doska-task-editor-content > .doska-task-actions { margin: 24px 0 0; padding: 16px 0 0; bottom: 0; background: var(--panel); }
+.doska-resource-create-form .doska-page-heading { gap: 16px; flex-wrap: wrap; }

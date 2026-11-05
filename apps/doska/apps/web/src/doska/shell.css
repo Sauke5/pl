@@ -1,0 +1,74 @@
+html[data-doska-mode="platform"], html[data-doska-mode="platform"] body { margin:0; min-height:100%; }
+.doska-app { --text:#e6edf6; --muted:#9caec6; --accent:#83c5ff; --border:rgba(174,199,232,.15); --surface:rgba(18,33,48,.75); color:var(--text); font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#0c1522; min-height:100dvh; isolation:isolate; }
+.doska-app *, .doska-app *::before, .doska-app *::after { box-sizing:border-box; }
+.doska-app a { color:var(--accent); text-decoration:none; }
+.doska-app h1 { margin:0; font-size:30px;line-height:39px;font-weight:560;letter-spacing:-.9px; }
+.doska-app h2 { font-size:18px;line-height:27px;font-weight:560; }
+.doska-app h3 { font-size:15px;font-weight:550; }
+.doska-app p { color:var(--muted); }
+.doska-app button:not(.pl-ui-button):not(.pl-ui-mobile-scrim):not(.doska-icon), .doska-app .doska-button { display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:39px;padding:9px 14px;border:1px solid var(--border);border-radius:9px;background:rgba(112,143,179,.08);color:var(--text);font:500 13px/16.9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer; }
+.doska-app button:not(.pl-ui-button):not(.pl-ui-mobile-scrim):not(.doska-icon):hover,.doska-app .doska-button:hover { background:rgba(112,143,179,.18); }
+.doska-app button:not(.pl-ui-button):not(.pl-ui-mobile-scrim):not(.doska-icon):disabled { opacity:.5;cursor:default; }
+.doska-app .doska-primary { background:linear-gradient(130deg,rgba(75,147,200,.42),rgba(73,130,180,.33));border-color:rgba(136,206,252,.48);color:#e0f3ff; }
+.doska-app :focus-visible { outline:2px solid #74b9ff;outline-offset:3px; }
+.doska-app input:not(.pl-ui-input),.doska-app select:not(.pl-ui-select),.doska-app textarea:not(.pl-ui-textarea) { min-height:42px;padding:10px 12px;border:1px solid #b5d7fa27;border-radius:9px;background:rgba(9,23,39,.25);color:var(--text);font:400 14px/21px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:100%; }
+.doska-app input[type="checkbox"] { min-height:initial; width:16px;height:16px; }
+.doska-app label { font-size:13px; }
+.doska-breadcrumb { display:flex;align-items:center;gap:13px;font-size:12px;line-height:18px;min-width:0; }
+.doska-breadcrumb a,.doska-breadcrumb svg { flex-shrink:0; }
+.doska-breadcrumb span { font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.doska-user-actions { display:flex;align-items:center;gap:23px; }
+.doska-app .doska-icon { display:inline-flex;align-items:center;justify-content:center;cursor:pointer;width:34px;height:34px;min-height:34px;padding:0;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted); }
+.doska-page-heading { display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:31px; }
+.doska-page-heading p { margin:4px 0 0;font-size:13px;line-height:20.8px; }
+.doska-panel:not(.pl-ui-panel) { padding:24px;border:1px solid rgba(171,203,237,.16);border-radius:16px;background:linear-gradient(130deg,rgba(112,143,179,.115),rgba(89,124,157,.075));box-shadow:inset 0 1px 0 rgba(230,244,255,.07),0 15px 42px rgba(0,7,17,.08);backdrop-filter:blur(32px) saturate(135%);-webkit-backdrop-filter:blur(32px) saturate(135%);margin-bottom:23px; }
+.doska-filters { display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:22px; }
+.doska-filters input[type="search"] { width:320px; }
+.doska-filters label { display:flex;align-items:center;gap:8px; }
+.doska-project-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px; }
+.doska-project-grid h2 { margin:0 0 8px; }
+.doska-project-grid a { display:block;color:var(--text); }
+.doska-project-grid p { overflow-wrap:anywhere; }
+.doska-meta { color:var(--muted);font-size:12px; }
+.doska-pagination { display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:22px; }
+.doska-table-wrap { overflow-x:auto; }
+.doska-app table { width:100%;border-collapse:collapse; }
+.doska-app th { font-size:11px;font-weight:500;padding:14px;text-align:left;color:var(--muted); }
+.doska-app td { font-size:13px;padding:18px 14px;border-top:1px solid var(--border);color:var(--text); }
+.doska-notice { padding:16px 20px;border:1px solid var(--border);border-radius:10px; }
+.doska-error { color:#f57679;background:rgba(130,37,45,.15); }
+.doska-gate { display:grid;place-items:center;padding:30px; }
+.doska-gate .doska-panel { width:min(480px,100%);padding:42px; }
+.doska-dialog:not(.pl-ui-native-dialog) { width:min(650px,calc(100vw - 30px));max-height:calc(100dvh - 50px);padding:29px;border:1px solid #c2ddf538;border-radius:18px;color:var(--text);background:linear-gradient(130deg,rgba(46,66,87,.96),rgba(26,45,64,.98));box-shadow:inset 0 1px 0 #e5f4ff17,0 24px 100px #000b; }
+.doska-dialog::backdrop { background:rgba(4,13,25,.45);backdrop-filter:blur(14px) saturate(85%); }
+.doska-dialog h2 { margin:0 0 26px;font-size:23px;line-height:34.5px;font-weight:550;letter-spacing:-.5px; }
+.doska-field { display:flex;flex-direction:column;gap:9px;margin-bottom:21px; }
+.doska-dialog footer { display:flex;justify-content:flex-end;gap:9px;margin-top:24px;padding-top:22px; }
+:root[data-theme="light"] .doska-app { --text:#21354b;--muted:#566c82;--accent:#286b9f;--border:rgba(70,102,137,.18);--surface:#f3f7fc;background:#edf2f7; }
+:root[data-theme="light"] .doska-panel { background:linear-gradient(130deg,rgba(255,255,255,.8),rgba(246,250,255,.58));border-color:var(--border);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 15px 42px rgba(38,65,92,.055); }
+:root[data-theme="light"] .doska-app input,:root[data-theme="light"] .doska-app select,:root[data-theme="light"] .doska-app textarea { background:rgba(255,255,255,.72);border-color:rgba(49,106,153,.25);color:#21354b; }
+:root[data-theme="light"] .doska-app .doska-primary { background:linear-gradient(130deg,#337cad,#3d729f);border-color:#3375a2;color:#fff; }
+:root[data-theme="light"] .doska-app :focus-visible { outline-color:#286b9f; }
+:root[data-theme="light"] .doska-dialog:not(.pl-ui-native-dialog) { background:linear-gradient(130deg,rgba(248,252,255,.98),rgba(235,243,251,.99));border-color:rgba(70,102,137,.23);box-shadow:inset 0 1px 0 #ffffffc9,0 24px 100px #26415c30; }
+:root[data-theme="light"] .doska-dialog::backdrop { background:rgba(31,51,73,.22); }
+:root[data-theme="light"] .doska-error { background:#fff0f1;color:#952c39;border-color:rgba(182,53,68,.27); }
+@media(min-width:2200px) { .doska-panel { padding:28px; } }
+
+@media(max-width:1100px) { .doska-project-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.doska-user-actions { gap:12px; } }
+@media(max-width:760px) { .doska-project-grid { grid-template-columns:1fr; }.doska-page-heading { align-items:flex-start; } }
+@media(prefers-reduced-motion:reduce) { .doska-app *, .doska-app *::before,.doska-app *::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; } }
+.doska-inline-actions { display:flex; gap:9px; flex-wrap:wrap; }
+.doska-management-section { border-top:1px solid var(--border); margin-top:24px; padding-top:16px; }
+.doska-employee-options { display:flex; flex-direction:column; gap:6px; margin:12px 0; max-height:240px; overflow:auto; }
+.doska-employee-options button { justify-content:flex-start; }
+.doska-employee-options button[aria-pressed="true"] { border-color:var(--accent); }
+.doska-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.doska-field input[aria-invalid="true"] { border-color: #e96f78; }
+
+.doska-app .doska-archive-project { color:#ff9699;border-color:rgba(245,118,121,.35);background:rgba(245,118,121,.08); }
+.doska-app .doska-archive-project:hover { background:rgba(245,118,121,.16); }
+:root[data-theme="light"] .doska-app .doska-archive-project { color:#ad3038;border-color:rgba(173,48,56,.3);background:#fbeaec; }
+
+.doska-live-check { position:fixed;inset:0;display:grid;place-items:center;background:var(--background,#142435);color:var(--text,#dce6f3);z-index:100; }
+
+.doska-app .doska-panel.pl-ui-panel { margin-bottom:23px; }

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "",
+    "revision": 0,
+    "name": "Test infrastructure",
+    "description": "Portable schema fixture",
+    "profile": "custom",
+    "planned": false,
+    "resource_ids": [
+      "fixture-host"
+    ],
+    "metrics": [
+      {
+        "id": "fixture-up",
+        "metric": "target.up",
+        "title": "Availability",
+        "integration_id": "fixture-prometheus",
+        "labels": {
+          "job": "fixture-linux",
+          "instance": "host.example.test:9100"
+        },
+        "resource_id": "fixture-host"
+      }
+    ]
+  }
+]

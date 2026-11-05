@@ -1,0 +1,1183 @@
+{
+	"status": "candidate",
+	"source": "32100115c52f960b7d02c3590e4483a972deec29",
+	"apiImage": {
+		"tag": "doska-api:32100115",
+		"id": "sha256:e1130fe1f4bf1c185056a0cc1fe07a9fc485b52e41ee9e96056e362f62d8d306",
+		"architecture": "amd64"
+	},
+	"webImage": {
+		"tag": "doska-web:32100115",
+		"id": "sha256:095ea2a0c3a85facc4e8a7d26c4d7289d1c464e7a61e716de8875758f150bef8",
+		"architecture": "amd64"
+	},
+	"upstreams": {
+		"api": "http://192.0.2.240:1337",
+		"web": "http://192.0.2.240:8080"
+	},
+	"readiness": {
+		"api": "GET /healthz: 200 after directory catch-up with valid lease, otherwise 503",
+		"web": "GET /healthz: 200"
+	},
+	"pages": [
+		"/doska",
+		"/doska/",
+		"/doska/projects",
+		"/doska/projects/{projectId}",
+		"/doska/invitations",
+		"/doska/management",
+		"/doska/search",
+		"/doska/my-tasks"
+	],
+	"assets": [
+		{
+			"path": "/doska/assets/index-CpVbegcg.js",
+			"bytes": 2074,
+			"sha256": "3b811062501cfe76fcdbec3fe315fc8cd8f19cf0798f04e8b452eeb0df8028e4"
+		},
+		{
+			"path": "/doska/assets/mount-B5ow2s7r.js",
+			"bytes": 1250115,
+			"sha256": "b03a0990074ceab9bfa4c3227ff2c04baf4fcc9beea478d953377fce00bdf4d4"
+		},
+		{
+			"path": "/doska/assets/mount-CIEXCVMA.css",
+			"bytes": 50230,
+			"sha256": "62a166a812d24e7c7171c6997d7f1f4c85014c5602dece0433fee6c977365f0d"
+		},
+		{
+			"path": "/doska/doska-theme-init.js",
+			"bytes": 550,
+			"sha256": "d0076dd7c9f87d5a3788d323fc01e0467523fb6e380bbc6e87e7afc0753680da"
+		},
+		{
+			"path": "/doska/pl-brand.svg",
+			"bytes": 375,
+			"sha256": "24f0c749245b140c4c5c0348dea50d080ccfa8f1ef753b91b2cf384dceb7b5cd"
+		}
+	],
+	"apiRoutes": [
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/comments",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/comments",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments/{commentId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/comments/{commentId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/comments/{commentId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/comments/{commentId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PUT",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/order",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/order",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PUT",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/order",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/order",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/{itemId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/{itemId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/{itemId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/checklists/{checklistId}/items/{itemId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}",
+			"upstream": "/api/doska/projects/{id}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}",
+			"upstream": "/api/doska/projects/{id}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/context",
+			"upstream": "/api/doska/context",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/my-tasks",
+			"upstream": "/api/doska/my-tasks",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				},
+				{
+					"name": "archived",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"],
+						"default": "false"
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/access",
+			"upstream": "/api/doska/projects/{id}/access",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects",
+			"upstream": "/api/doska/projects",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects",
+			"upstream": "/api/doska/projects",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				},
+				{
+					"name": "q",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"maxLength": 200
+					}
+				},
+				{
+					"name": "archived",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"],
+						"default": "false"
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/archive",
+			"upstream": "/api/doska/projects/{id}/archive",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/owner",
+			"upstream": "/api/doska/projects/{id}/owner",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/management",
+			"upstream": "/api/doska/projects/{id}/management",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/invitations",
+			"upstream": "/api/doska/projects/{id}/invitations",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/invitations",
+			"upstream": "/api/doska/projects/{id}/invitations",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/invitations",
+			"upstream": "/api/doska/invitations",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/invitations/{invitationId}/respond",
+			"upstream": "/api/doska/projects/{id}/invitations/{invitationId}/respond",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/invitations/{invitationId}/revoke",
+			"upstream": "/api/doska/projects/{id}/invitations/{invitationId}/revoke",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/join-requests",
+			"upstream": "/api/doska/projects/{id}/join-requests",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/join-requests",
+			"upstream": "/api/doska/projects/{id}/join-requests",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/join-requests/{requestId}/resolve",
+			"upstream": "/api/doska/projects/{id}/join-requests/{requestId}/resolve",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/join-requests/{requestId}/cancel",
+			"upstream": "/api/doska/projects/{id}/join-requests/{requestId}/cancel",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/members",
+			"upstream": "/api/doska/projects/{id}/members",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/members/{memberId}",
+			"upstream": "/api/doska/projects/{id}/members/{memberId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/members/{memberId}",
+			"upstream": "/api/doska/projects/{id}/members/{memberId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/managed-projects",
+			"upstream": "/api/doska/managed-projects",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				},
+				{
+					"name": "q",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"maxLength": 200
+					}
+				},
+				{
+					"name": "archived",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"],
+						"default": "false"
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/employee-options",
+			"upstream": "/api/doska/projects/{id}/employee-options",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				},
+				{
+					"name": "q",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"maxLength": 200
+					}
+				},
+				{
+					"name": "purpose",
+					"required": true,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["invitation", "ownership"]
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks",
+			"upstream": "/api/doska/projects/{id}/tasks",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks",
+			"upstream": "/api/doska/projects/{id}/tasks",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				},
+				{
+					"name": "archived",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"],
+						"default": "false"
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/archive",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/archive",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/history",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/history",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/columns",
+			"upstream": "/api/doska/projects/{id}/columns",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/columns",
+			"upstream": "/api/doska/projects/{id}/columns",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/columns/{columnId}",
+			"upstream": "/api/doska/projects/{id}/columns/{columnId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/columns/{columnId}",
+			"upstream": "/api/doska/projects/{id}/columns/{columnId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/columns/reorder",
+			"upstream": "/api/doska/projects/{id}/columns/reorder",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/relations",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/relations",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/relations",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/relations",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/relations/{relationId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/relations/{relationId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/task-search",
+			"upstream": "/api/doska/task-search",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				},
+				{
+					"name": "q",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"maxLength": 200
+					}
+				},
+				{
+					"name": "projectId",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{1,128}$"
+					}
+				},
+				{
+					"name": "assigneeId",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9:_-]{1,128}$"
+					}
+				},
+				{
+					"name": "coexecutorId",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9:_-]{1,128}$"
+					}
+				},
+				{
+					"name": "state",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["planned", "active", "completed"]
+					}
+				},
+				{
+					"name": "priority",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["no-priority", "low", "medium", "high", "urgent"]
+					}
+				},
+				{
+					"name": "dueFrom",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+					}
+				},
+				{
+					"name": "dueTo",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+					}
+				},
+				{
+					"name": "unassigned",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"]
+					}
+				},
+				{
+					"name": "overdue",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"]
+					}
+				},
+				{
+					"name": "archived",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"enum": ["true", "false"],
+						"default": "false"
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/templates",
+			"upstream": "/api/doska/templates",
+			"query": [
+				{
+					"name": "page",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10000,
+						"default": 1
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/templates/{id}",
+			"upstream": "/api/doska/templates/{id}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/templates",
+			"upstream": "/api/doska/templates",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/templates/{id}/projects",
+			"upstream": "/api/doska/templates/{id}/projects",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/template-selection",
+			"upstream": "/api/doska/projects/{id}/template-selection",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/projects/{id}/template-selection/{taskId}",
+			"upstream": "/api/doska/projects/{id}/template-selection/{taskId}",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/template-preview",
+			"upstream": "/api/doska/projects/{id}/template-preview",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/notifications",
+			"upstream": "/api/doska/notifications",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 50
+					}
+				},
+				{
+					"name": "cursor",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 1024
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/notifications/unread-count",
+			"upstream": "/api/doska/notifications/unread-count",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/notifications/{id}/read",
+			"upstream": "/api/doska/notifications/{id}/read",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/notifications/read-all",
+			"upstream": "/api/doska/notifications/read-all",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/notifications/preferences",
+			"upstream": "/api/doska/notifications/preferences",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/notifications/preferences",
+			"upstream": "/api/doska/notifications/preferences",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/preferences",
+			"upstream": "/api/doska/preferences",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PATCH",
+			"external": "/doska/api/doska/preferences",
+			"upstream": "/api/doska/preferences",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachments",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachments",
+			"kind": "read",
+			"schema": "attachment-list-v1",
+			"query": [
+				{
+					"name": "limit",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"default": 100
+					}
+				},
+				{
+					"name": "offset",
+					"required": false,
+					"multiplicity": 1,
+					"schema": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 10000000,
+						"default": 0
+					}
+				}
+			],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads",
+			"kind": "write",
+			"schema": "attachment-reserve-v1",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "PUT",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}/content",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}/content",
+			"kind": "upload",
+			"schema": "attachment-content-v1",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "POST",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}/finalize",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}/finalize",
+			"kind": "write",
+			"schema": "attachment-finalize-v1",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachment-uploads/{uploadId}",
+			"kind": "write",
+			"schema": "attachment-empty-v1",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "GET",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachments/{attachmentId}/content",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachments/{attachmentId}/content",
+			"kind": "download",
+			"schema": "attachment-download-v1",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		},
+		{
+			"method": "DELETE",
+			"external": "/doska/api/doska/projects/{id}/tasks/{taskId}/attachments/{attachmentId}",
+			"upstream": "/api/doska/projects/{id}/tasks/{taskId}/attachments/{attachmentId}",
+			"kind": "write",
+			"schema": "attachment-empty-v1",
+			"query": [],
+			"unknownQueryKeys": "reject"
+		}
+	],
+	"requestBodyLimitBytes": 131072,
+	"websockets": false,
+	"uploads": true,
+	"nativeRoutes": false,
+	"rewrite": "API: remove one leading /doska; preserve raw query. Web: preserve full /doska prefix.",
+	"directory": {
+		"origin": "https://platform.example.test",
+		"tokenEnv": "DOSKA_DIRECTORY_TOKEN_FILE",
+		"tokenFile": "/run/secrets/directory_token",
+		"pollSeconds": 15,
+		"leaseSeconds": 30,
+		"requestIdentityRefresh": "Authenticated identity?sub= on every verified API request; coalesce in-flight per sub, maximum 32 subjects; same revision refreshes timestamps only when rights match and observed_at increases; fail closed on error/inactive/expired.",
+		"fullSnapshotSeconds": 300
+	},
+	"gateway": {
+		"modeEnv": "DOSKA_AUTH_MODE=platform",
+		"keyEnv": "DOSKA_GATEWAY_KEY_FILE",
+		"keyFile": "/run/secrets/gateway_key",
+		"audience": "doska",
+		"keyBytes": 32
+	},
+	"bootstrap": "Platform imports AD identities/departments and resolves primary department. Any active employee with one resolved primary department can create the first project and becomes owner. No native admin bootstrap.",
+	"queryLimits": {
+		"rawBytes": 4096,
+		"duplicateKeys": "reject"
+	},
+	"pageQuery": {
+		"/doska/projects/{projectId}": {
+			"taskId": {
+				"type": "string",
+				"pattern": "^[A-Za-z0-9_-]+$",
+				"multiplicity": 1,
+				"required": false
+			},
+			"panel": {
+				"type": "string",
+				"enum": ["members"],
+				"multiplicity": 1,
+				"required": false
+			}
+		},
+		"otherPages": {}
+	},
+	"webSource": "32100115c52f960b7d02c3590e4483a972deec29",
+	"apiSource": "32100115c52f960b7d02c3590e4483a972deec29",
+	"attachments": {
+		"storage": "Docker volume attachments on Doska",
+		"maxFileBytes": 26214400,
+		"quotaBytes": 20000000000,
+		"releaseGate": "Platform READY required; not deployed"
+	}
+}

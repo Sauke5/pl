@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading-row"><div><a class="back-link" href="{{ url_for('home') }}">← Все сайты</a><h1 class="page-title">История изменений</h1></div></div>
+<form class="filter-bar history-filter" method="get"><input class="pl-ui-input" name="url" value="{{ url_filter }}" placeholder="Фильтр по URL" aria-label="Фильтр по URL" /><select class="pl-ui-select" name="operation" aria-label="Операция"><option value="">Все операции</option>{% for value,label in [('add','Добавление'),('delete','Удаление'),('content_enable','Включение content-check'),('content_disable','Выключение content-check'),('content_update','Обновление фрагментов'),('rollback','Откат')] %}<option value="{{ value }}" {% if operation_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><select class="pl-ui-select" name="result" aria-label="Результат"><option value="">Любой результат</option><option value="success" {% if result_filter == 'success' %}selected{% endif %}>Успешно</option><option value="failed" {% if result_filter == 'failed' %}selected{% endif %}>Ошибка</option></select><button class="button pl-ui-button pl-ui-button-secondary" type="submit">Показать</button></form>
+<section class="panel history-list">
+{% for event in events %}
+  <article class="audit-card">
+    <div class="audit-head"><div><strong>{{ event.operation }}</strong><span class="result result-{{ 'success' if event.success else 'failed' }}">{{ 'Успешно' if event.success else 'Ошибка' }}</span>{% if event.forced %}<span class="forced-badge">FORCED</span>{% endif %}</div><time>{{ event.created_at.astimezone().strftime('%d.%m.%Y %H:%M:%S') }}</time></div>
+    <p class="breakable">{{ event.url or 'Общая конфигурация' }}</p><p><strong>Причина:</strong> {{ event.reason }}</p>
+    <details><summary>До / после</summary><div class="before-after"><div><h3>Было</h3><pre>{{ event.old_values|tojson(indent=2) if event.old_values else '—' }}</pre></div><div><h3>Стало</h3><pre>{{ event.new_values|tojson(indent=2) if event.new_values else '—' }}</pre></div></div>{% if event.technical_error %}<p class="technical-error">Техническая ошибка: {{ event.technical_error }}</p>{% endif %}</details>
+    <small>Пользователь: {{ event.username }} · уведомление: {{ event.notification_status }} · operation id: {{ event.operation_id }}</small>
+  </article>
+{% else %}<div class="empty-state">История по заданному фильтру пуста.</div>{% endfor %}
+</section>
+{% if pages > 1 %}<nav class="pagination">{% if page > 1 %}<a class="button pl-ui-button pl-ui-button-secondary" href="?page={{ page-1 }}&url={{ url_filter|urlencode }}&operation={{ operation_filter }}&result={{ result_filter }}">Назад</a>{% endif %}<span>{{ page }} / {{ pages }}</span>{% if page < pages %}<a class="button pl-ui-button pl-ui-button-secondary" href="?page={{ page+1 }}&url={{ url_filter|urlencode }}&operation={{ operation_filter }}&result={{ result_filter }}">Дальше</a>{% endif %}</nav>{% endif %}
+{% endblock %}

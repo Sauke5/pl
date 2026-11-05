@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "upstream_version": "3.15.0",
+  "upstream_commit": "5241a27fe3c6983549fccc32f6e65917408c63cd",
+  "source": {
+    "url": "https://codeload.github.com/prometheus/prometheus/tar.gz/5241a27fe3c6983549fccc32f6e65917408c63cd",
+    "sha256": "eee7ec029ffdba7d9ee59171cad5ddaff10e71514b0bae1a6fde6dc1ae99e181"
+  },
+  "embedded_ui": {
+    "url": "https://github.com/prometheus/prometheus/releases/download/v3.15.0/prometheus-web-ui-3.15.0.tar.gz",
+    "sha256": "fa8c918ed05e3f89e232e9b69eccd6ed074602cd9e8a2cab7a92bec9651974ae",
+    "checksum_authority": "https://github.com/prometheus/prometheus/releases/download/v3.15.0/sha256sums.txt",
+    "policy": "Reuse all official release static assets, deterministic gzip and builtinassets; no frontend source changes."
+  },
+  "go": "1.27.2",
+  "dependency_update": {
+    "module": "golang.org/x/net",
+    "version": "v0.61.0",
+    "sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+    "go_mod_sum": "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=",
+    "policy": "go get exact version; retain upstream graph and Go checksum database; emit final go.mod, go.sum and complete module graph into image provenance."
+  },
+  "build_date_policy": "Fixed to upstream release publication time, not wall clock; BuildUser identifies derivative.",
+  "verification": "Recipe prepared from official source and checksum inputs; CI must build, scan both executables, verify embedded native UI and run fresh install/config reload/TSDB acceptance."
+}

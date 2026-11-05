@@ -1,0 +1,96 @@
+.sftp-adm-shell .sidebar-brand {
+  min-height: 74px;
+}
+.sftp-adm-spacer {
+  flex: 1;
+}
+.sftp-adm-back {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 13px;
+}
+.sftp-adm-heading {
+  margin-bottom: 31px;
+}
+.sftp-adm-heading h1 {
+  margin: 0 0 8px;
+}
+.sftp-adm-heading p {
+  margin: 0;
+  font-size: 13px;
+}
+.sftp-adm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  max-width: 1120px;
+}
+.sftp-adm-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+.sftp-adm-entry > svg {
+  color: #83c5ff;
+  margin-bottom: 24px;
+}
+.sftp-adm-entry h2 {
+  margin: 0 0 10px;
+}
+.sftp-adm-entry p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #9caec6;
+  margin: 0 0 28px;
+}
+.sftp-adm-entry > .button {
+  margin-top: auto;
+  text-decoration: none;
+}
+.sftp-adm-entry .sftp-adm-unavailable {
+  margin: auto 0 0;
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+}
+.sftp-adm-state {
+  font-size: 13px;
+}
+.sftp-adm-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1120px;
+  margin-top: 24px;
+  font-size: 12px;
+}
+.sftp-adm-identity > span {
+  color: #9caec6;
+}
+.sftp-adm-identity code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.sftp-adm-identity .button {
+  flex-shrink: 0;
+}
+[data-theme="light"] .sftp-adm-entry > svg {
+  color: #286b9f;
+}
+[data-theme="light"] .sftp-adm-entry p {
+  color: #566c82;
+}
+[data-theme="light"] .sftp-adm-identity > span {
+  color: #566c82;
+}
+@media (max-width: 1050px) {
+  .sftp-adm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="narrow-page">
+  <a class="back-link" href="{{ url_for('target_detail', site_id=target.site_id) }}">← Карточка цели</a>
+  <section class="panel danger-panel">
+    <div class="eyebrow danger-text">Необратимая операция</div><h1 class="page-title">Удалить сайт</h1>
+    <p>Будут удалены HTTP-target, content-target и принадлежащие цели модули. Посторонние настройки останутся без изменений. Перед операцией создаётся полный snapshot.</p>
+    <dl class="definition-grid"><div><dt>URL</dt><dd class="breakable">{{ target.url }}</dd></div><div><dt>Content-check</dt><dd>{{ 'Включён' if target.content_enabled else 'Выключен' }}</dd></div><div><dt>Фрагменты</dt><dd>{{ target.fragments|length }}</dd></div></dl>
+    <form class="stack-form" method="post" action="{{ url_for('target_delete_post', site_id=target.site_id) }}" data-reason-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><input type="hidden" name="revision" value="{{ revision }}" /><input type="hidden" name="operation_token" value="{{ operation_token }}" />
+      <label>Причина удаления<textarea class="pl-ui-textarea" name="reason" minlength="3" required></textarea></label>
+      <label>Введите URL цели для подтверждения<input class="pl-ui-input" name="confirm_url" autocomplete="off" required /></label>
+      <div class="form-actions"><a class="button pl-ui-button pl-ui-button-secondary" href="{{ url_for('target_detail', site_id=target.site_id) }}">Отмена</a><button class="button button-danger" type="submit">Удалить цель</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+/* Registry palettes extend the existing UI without changing legacy light/dark. */
+@media screen {
+  :root[data-pl-theme-kind="custom"] .pl-app {
+    --text: var(--pl-theme-text);
+    --muted: var(--pl-theme-muted);
+    --accent: var(--pl-theme-accent);
+    --success: var(--pl-theme-success);
+    --warning: var(--pl-theme-warning);
+    --danger: var(--pl-theme-danger);
+    --border: var(--pl-theme-border);
+    --sidebar-bg: var(--pl-theme-surface);
+    --header-bg: var(--pl-theme-surface);
+    --panel-bg: var(--pl-theme-surface);
+    --panel-shadow: var(--pl-theme-shadow);
+    --field-bg: var(--pl-theme-input);
+    --field-border: var(--pl-theme-border);
+    --primary-bg: var(--pl-theme-primary-bg);
+    --primary-border: var(--pl-theme-border);
+    --primary-text: var(--pl-theme-primary-text);
+    --nav-text: var(--pl-theme-muted);
+    --nav-active: var(--pl-theme-hover);
+    --focus: var(--pl-theme-focus);
+    background: var(--pl-theme-background);
+  }
+
+  :root[data-pl-theme-kind="custom"] .pl-app .nav-item:hover,
+  :root[data-pl-theme-kind="custom"] .pl-app .icon-button:hover:not(:disabled),
+  :root[data-pl-theme-kind="custom"] .pl-app .secondary-button:hover {
+    background: var(--pl-theme-hover);
+  }
+  :root[data-pl-theme-kind="custom"] .pl-app .primary-button:hover {
+    background: var(--pl-theme-primary-hover);
+    filter: none;
+  }
+  :root[data-pl-theme-kind="custom"] .pl-app .secondary-button:hover { filter: none; }
+  :root[data-pl-theme-kind="custom"] .pl-app .brand-mark { box-shadow: none; }
+
+  :root[data-pl-theme-kind="custom"] .pl-app .notice,
+  :root[data-pl-theme-kind="custom"] .pl-app .shell-alert,
+  :root[data-pl-theme-kind="custom"] .pl-app .severity {
+    border-color: var(--pl-theme-border);
+    background: var(--pl-theme-raised);
+  }
+  :root[data-pl-theme-kind="custom"] .pl-app .severity.warning { color: var(--pl-theme-warning); }
+  :root[data-pl-theme-kind="custom"] .pl-app .filter-bar input:focus,
+  :root[data-pl-theme-kind="custom"] .pl-app .filter-bar select:focus {
+    box-shadow: 0 0 0 3px var(--pl-theme-hover);
+  }
+
+  :root[data-pl-theme-kind="custom"] .pl-app .finding-overlay,
+  :root[data-pl-theme-kind="custom"] .pl-app .dialog-overlay { background: var(--pl-theme-overlay); }
+  :root[data-pl-theme-kind="custom"] .pl-app .finding-detail,
+  :root[data-pl-theme-kind="custom"] .pl-app .scan-dialog {
+    color: var(--pl-theme-text);
+    background: var(--pl-theme-surface);
+    border-color: var(--pl-theme-border);
+    box-shadow: var(--pl-theme-shadow);
+  }
+}

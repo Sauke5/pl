@@ -1,0 +1,108 @@
+.doska-task-drawer .doska-drawer-heading { position: sticky; top: -29px; z-index: 3; margin: -29px -29px 24px; padding: 18px 29px; background: #192b3d; border-bottom: 1px solid var(--border); }
+.doska-task-editor-content { min-width: 0; }
+.doska-task-editor .doska-field { margin-bottom: 16px; }
+.doska-task-title-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.doska-task-editor .doska-task-title-field input { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -.5px; padding: 8px 0; background: transparent; border-color: transparent; border-radius: 4px; }
+.doska-task-editor .doska-task-title-field input:hover { border-bottom-color: var(--border); }
+.doska-task-editor textarea { min-height: 96px; }
+.doska-task-properties { padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; background: rgba(112,143,179,.04); }
+.doska-task-properties .doska-task-field-grid { gap: 14px; }
+.doska-task-properties .doska-field { gap: 5px; font-size: 12px; color: var(--muted); }
+.doska-task-properties select, .doska-task-properties input { min-height: 36px; padding: 7px 9px; }
+.doska-task-people summary, .doska-task-history-section > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; }
+.doska-task-people .doska-coexecutors { border: 0; padding: 12px 0 0; margin: 0; }
+.doska-task-people legend { display: none; }
+.doska-task-people summary span { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.doska-task-editor-content > .doska-task-actions { position: sticky; bottom: -29px; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 24px -29px -29px; padding: 14px 29px; background: #192b3d; border-top: 1px solid var(--border); }
+.doska-save-state { color: var(--muted); font-size: 12px; text-align: right; }
+.doska-task-history-section { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 12px; }
+.doska-task-history-section .doska-task-history { margin-top: 0; border: 0; }
+.doska-task-history-section .doska-task-history h3 { display: none; }
+.doska-close-confirm { position: sticky; top: 40px; z-index: 4; background: #24364a; border: 1px solid var(--accent); padding: 16px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 8px 24px #0003; }
+.doska-close-confirm p { margin: 0 0 12px; color: var(--text); }
+.doska-close-confirm button + button { margin-left: 8px; }
+:root[data-theme="light"] .doska-task-drawer .doska-drawer-heading,
+:root[data-theme="light"] .doska-task-editor-content > .doska-task-actions { background: #f2f6fb; }
+:root[data-theme="light"] .doska-close-confirm { background: #f2f6fb; }
+@media(max-width:760px) {
+ .doska-task-drawer .doska-drawer-heading { top: -22px; margin: -22px -22px 20px; padding: 14px 22px; }
+ .doska-task-editor-content > .doska-task-actions { bottom: -22px; margin: 20px -22px -22px; padding: 12px 22px; flex-wrap: wrap; }
+ .doska-task-properties .doska-task-field-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+}
+.doska-task-properties > summary { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 13px; list-style: none; }
+.doska-task-properties > summary::after { content: "⌄"; margin-left: auto; color: var(--muted); transition: transform 160ms ease; }
+.doska-task-properties[open] > summary { margin-bottom: 18px; }
+.doska-task-properties[open] > summary::after { transform: rotate(180deg); }
+.doska-task-properties > summary::-webkit-details-marker { display: none; }
+.doska-property-summary { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doska-task-drawer[open] { animation: doska-drawer-enter 180ms ease-out; }
+@keyframes doska-drawer-enter { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+@media(prefers-reduced-motion: reduce) { .doska-task-drawer[open] { animation: none; } .doska-task-properties > summary::after { transition: none; } }
+.doska-task-drawer .doska-drawer-heading h2 { margin:0;font-size:15px;line-height:22px;letter-spacing:0; }
+.doska-task-drawer.doska-dialog::backdrop { backdrop-filter:none;background:rgba(4,13,25,.3); }
+.doska-task-editor .doska-task-fields textarea { min-height:90px; }
+
+.doska-task-editor .doska-task-title-field input { padding:8px 12px; }
+.doska-task-editor .doska-task-fields textarea.doska-task-description { min-height:82px;resize:none;overflow:hidden;line-height:20px;padding:10px 12px; }
+
+.doska-task-properties { padding:0; }
+.doska-task-properties > summary { padding:14px 18px;min-height:48px; }
+.doska-task-properties[open] > summary { margin-bottom:0;border-bottom:1px solid var(--border); }
+.doska-task-properties > .doska-task-field-grid { padding:16px 18px 0; }
+.doska-task-properties > .doska-task-people { padding:0 18px 12px; }
+
+.doska-task-title-field.is-new > span { position:static;width:auto;height:auto;overflow:visible;clip-path:none; }
+.doska-task-editor .doska-task-title-field.is-new input { background:var(--input-bg,rgba(8,24,39,.16));border-color:var(--border);font-size:20px;line-height:28px; }
+.doska-task-title-field input::placeholder { color:var(--muted);opacity:.85;font-weight:400; }
+.doska-field-error { color:var(--danger,#e58b8b);font-size:12px;margin:-8px 0 12px; }
+.doska-task-drawer .doska-drawer-heading .doska-save-state { margin-left:auto; }
+.doska-task-editor-toolbar { display:flex;align-items:center;justify-content:flex-end;gap:12px;min-height:30px;margin:-14px 0 4px; }
+.doska-task-action-menu { position:relative; }
+.doska-task-action-menu > summary { display:flex;align-items:center;justify-content:center;cursor:pointer;width:32px;height:28px;border-radius:6px;list-style:none;color:var(--muted); }
+.doska-task-action-menu > summary::-webkit-details-marker { display:none; }
+.doska-task-action-menu > summary:hover { background:var(--border); }
+.doska-task-action-menu > div { position:absolute;right:0;top:32px;min-width:190px;z-index:5;background:#192b3d;border:1px solid var(--border);border-radius:8px;padding:5px;box-shadow:0 8px 24px #0003; }
+.doska-task-action-menu button { display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px; }
+:root[data-theme="light"] .doska-task-action-menu > div { background:#f2f6fb; }
+.doska-task-properties > .doska-task-field-grid { padding:12px 16px 0;gap:12px; }
+.doska-task-properties .doska-field { margin-bottom:0; }
+.doska-task-properties .doska-task-owner-row { grid-template-columns:minmax(0,1fr); }
+.doska-task-properties > .doska-task-people { padding:4px 16px 10px; }
+.doska-task-properties input[type="date"],.doska-task-properties input[type="time"] { height:36px;min-height:36px;min-width:0;width:100%;font-size:13px; }
+.doska-task-due-field { display:flex;align-items:flex-end;gap:8px;min-width:0; }
+.doska-task-due-field > .doska-field:first-child { flex:1;min-width:0; }
+.doska-task-time-field { width:112px;flex-shrink:0; }
+.doska-task-properties .doska-add-due-time { height:36px;font-size:12px;padding:5px 8px;white-space:nowrap; }
+@media(max-width:520px) {
+ .doska-task-properties .doska-task-dates-row { grid-template-columns:minmax(0,1fr); }
+ .doska-task-drawer .doska-drawer-heading .doska-save-state { max-width:45%; }
+}
+
+.doska-task-properties .doska-task-dates-row { grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr); }
+.doska-task-editor-content > .doska-task-actions { justify-content:flex-end; }
+@media(max-width:520px) { .doska-task-properties .doska-task-dates-row { grid-template-columns:minmax(0,1fr); } }
+
+.doska-task-participants-hint { display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:6px 16px 0;color:var(--muted);font-size:11px; }
+.doska-task-properties .doska-task-participants-hint button { padding:2px 0;min-height:24px;background:transparent;border:0;color:var(--accent);font-size:11px;text-decoration:underline;text-underline-offset:3px; }
+
+.doska-task-header-actions { display:flex;align-items:center; }
+.doska-task-header-actions:empty { display:none; }
+.doska-task-header-actions .doska-task-action-menu > summary { width:32px;height:32px; }
+.doska-task-footer { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:0 16px;border-top:1px solid var(--border);margin-top:24px;padding-top:12px; }
+.doska-task-footer > .doska-task-history-section { grid-column:1/-1;grid-row:1;margin:0;padding:0;border:0; }
+.doska-task-footer > .doska-task-history-section > summary { width:fit-content;max-width:45%; }
+.doska-task-footer > .doska-template-selection { grid-column:2;grid-row:1;justify-self:end;margin:0;padding:8px 0; }
+.doska-task-footer > .doska-template-selection p { max-width:240px; }
+
+.doska-task-editor .doska-task-color-field { border:0;padding:12px 16px 0;margin:0;min-width:0; }
+.doska-task-color-field legend { float:left;width:100%;padding:0;margin-bottom:8px;font-size:12px;color:var(--muted); }
+.doska-task-color-palette { clear:both;display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.doska-task-color-palette .doska-color-option { position:relative;display:block;width:26px;height:26px;margin:0;border-radius:50%;background:hsl(var(--card-color-hue) 62% 59%);border:2px solid transparent;cursor:pointer; }
+.doska-task-color-palette .doska-color-default { background:var(--surface);border-color:var(--border); }
+.doska-color-default::before { content:"";position:absolute;left:3px;right:3px;top:10px;border-top:1px solid var(--muted);transform:rotate(-45deg); }
+.doska-task-color-palette .doska-color-option:has(input:checked) { outline:2px solid var(--text);outline-offset:2px; }
+.doska-task-color-palette .doska-color-option:has(input:focus-visible) { outline:2px solid var(--accent);outline-offset:3px; }
+.doska-task-color-palette .doska-color-option:has(input:disabled) { cursor:default;opacity:.6; }
+.doska-task-color-palette .doska-color-option input { position:absolute;inset:0;opacity:0;width:100%;height:100%;min-height:0;margin:0;padding:0;cursor:inherit; }
+.doska-task-color-palette .doska-color-option > span { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+.doska-color-blue { --card-color-hue:213; }.doska-color-cyan { --card-color-hue:186; }.doska-color-green { --card-color-hue:148; }.doska-color-yellow { --card-color-hue:48; }.doska-color-orange { --card-color-hue:26; }.doska-color-red { --card-color-hue:0; }.doska-color-pink { --card-color-hue:329; }.doska-color-purple { --card-color-hue:272; }

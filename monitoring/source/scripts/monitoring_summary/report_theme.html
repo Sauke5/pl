@@ -1,0 +1,1548 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ежедневный отчет IT-инфраструктуры</title>
+  <script>
+    (() => {
+      let saved = null;
+      try {
+        saved = localStorage.getItem("monitoring-report-theme");
+      } catch {
+        saved = null;
+      }
+      const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+      document.documentElement.dataset.theme = saved || preferred;
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-soft: #f1f5f9;
+      --surface-hover: #edf2f7;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d1d5db;
+      --line-strong: #c4cbd4;
+      --header: #1f2937;
+      --header-soft: #334155;
+      --critical: #b42318;
+      --critical-bg: #fff0ee;
+      --critical-badge-bg: #ffdcd7;
+      --warning: #946200;
+      --warning-bg: #fff7dc;
+      --warning-badge-bg: #ffe9a6;
+      --healthy: #067647;
+      --healthy-bg: #e9f8ef;
+      --healthy-badge-bg: #d4f3df;
+      --info: #175cd3;
+      --info-bg: #eaf2ff;
+      --focus: #60a5fa;
+      --header-text: #ffffff;
+      --header-muted: #cbd5e1;
+      --header-border: #64748b;
+      --shadow: rgba(15, 23, 42, 0.08);
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-soft: #1f2937;
+      --surface-hover: #252f3d;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --line: #30363d;
+      --line-strong: #455162;
+      --header: #161b22;
+      --header-soft: #1f2937;
+      --critical: #f87171;
+      --critical-bg: #2b171b;
+      --critical-badge-bg: #442126;
+      --warning: #fbbf24;
+      --warning-bg: #2b2414;
+      --warning-badge-bg: #473a16;
+      --healthy: #34d399;
+      --healthy-bg: #12271f;
+      --healthy-badge-bg: #173c2d;
+      --info: #60a5fa;
+      --info-bg: #17243a;
+      --focus: #60a5fa;
+      --header-text: #e2e8f0;
+      --header-muted: #94a3b8;
+      --header-border: #475569;
+      --shadow: rgba(0, 0, 0, 0.32);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      transition: background-color 0.16s ease, color 0.16s ease;
+    }
+
+    button,
+    summary {
+      font: inherit;
+    }
+
+    button:focus-visible,
+    summary:focus-visible,
+    a:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--focus) 32%, transparent);
+      outline-offset: 2px;
+    }
+
+    .page {
+      width: min(1240px, calc(100% - 32px));
+      margin: 24px auto 56px;
+    }
+
+    .report-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      padding: 28px 30px;
+      background: var(--header);
+      color: var(--header-text);
+      border-radius: 6px;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 27px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .report-meta {
+      margin: 7px 0 0;
+      color: var(--header-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .header-link,
+    .theme-toggle,
+    .demo-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      border: 1px solid var(--header-border);
+      border-radius: 4px;
+      background: var(--header-soft);
+      color: var(--header-text);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .header-link {
+      min-height: 34px;
+      padding: 5px 10px;
+      text-decoration: none;
+    }
+
+    .header-link:hover,
+    .theme-toggle:hover {
+      background: #334155;
+    }
+
+    .theme-toggle {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .theme-toggle span {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .demo-label {
+      min-height: 24px;
+      padding: 3px 8px;
+      color: var(--header-muted);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .summary-item {
+      min-height: 94px;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .summary-item strong {
+      display: block;
+      font-size: 25px;
+      line-height: 1.2;
+    }
+
+    .summary-item span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .summary-item.critical strong {
+      color: var(--critical);
+    }
+
+    .summary-item.warning strong {
+      color: var(--warning);
+    }
+
+    .summary-item.healthy strong {
+      color: var(--healthy);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 0 18px;
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .toolbar-actions button {
+      min-height: 34px;
+      border: 0;
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      padding: 6px 11px;
+      font-weight: 650;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .toolbar-actions button {
+      border: 1px solid var(--line-strong);
+    }
+
+    .toolbar-actions button:hover {
+      background: var(--surface-hover);
+    }
+
+    .priority {
+      margin: 20px 0 8px;
+      padding: 0 0 18px;
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .priority h2 {
+      margin: 0 0 12px;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    .priority-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .priority-item {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 58px;
+      padding: 10px 12px;
+      border-left: 4px solid var(--line-strong);
+      background: var(--surface);
+      border-radius: 0 5px 5px 0;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .priority-item.is-critical {
+      border-left-color: var(--critical);
+      background: var(--critical-bg);
+    }
+
+    .priority-item.is-warning {
+      border-left-color: var(--warning);
+      background: var(--warning-bg);
+    }
+
+    .priority-item strong,
+    .priority-item span {
+      display: block;
+    }
+
+    .priority-item span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+      line-height: 1.1;
+      text-align: center;
+      flex: 0 0 auto;
+      max-width: 100%;
+    }
+
+    .status.critical {
+      color: var(--critical);
+      background: var(--critical-badge-bg);
+    }
+
+    .status.warning {
+      color: var(--warning);
+      background: var(--warning-badge-bg);
+    }
+
+    .status.healthy {
+      color: var(--healthy);
+      background: var(--healthy-badge-bg);
+    }
+
+    .status.info {
+      color: var(--info);
+      background: var(--info-bg);
+    }
+
+    .report-section {
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .report-section > summary {
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 66px;
+      padding: 12px 4px;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .report-section > summary::-webkit-details-marker,
+    .server > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .chevron {
+      width: 22px;
+      height: 22px;
+      display: inline-grid;
+      place-items: center;
+      color: var(--muted);
+      transition: transform 0.16s ease;
+    }
+
+    details[open] > summary .chevron {
+      transform: rotate(90deg);
+    }
+
+    .section-title {
+      min-width: 0;
+    }
+
+    .section-title strong {
+      display: block;
+      font-size: 17px;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-counts {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .section-body {
+      padding: 0 0 22px 36px;
+    }
+
+    .report-section:not([open]) > .section-body,
+    .server:not([open]) > .server-details,
+    .healthy-summary:not([open]) > .compact-table-wrap {
+      display: none;
+    }
+
+    .subsection {
+      margin-top: 12px;
+    }
+
+    .subsection-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    .subsection-heading h3 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .subsection-heading span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .server-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .server {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 5px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .server[data-health="critical"] {
+      border-left: 4px solid var(--critical);
+    }
+
+    .server[data-health="warning"] {
+      border-left: 4px solid var(--warning);
+    }
+
+    .server[data-health="healthy"] {
+      border-left: 4px solid #8cc9a5;
+    }
+
+    .server > summary {
+      display: grid;
+      grid-template-columns: 20px minmax(145px, 1.2fr) repeat(3, minmax(104px, 0.7fr)) minmax(118px, max-content);
+      gap: 12px;
+      align-items: center;
+      min-height: 52px;
+      padding: 8px 10px;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .server-name {
+      min-width: 0;
+    }
+
+    .server-name strong,
+    .server-name small {
+      display: block;
+    }
+
+    .server-name strong {
+      overflow-wrap: anywhere;
+    }
+
+    .server-name small {
+      color: var(--muted);
+    }
+
+    .metric-label {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 750;
+    }
+
+    .metric-value {
+      display: block;
+      margin-top: 2px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .metric-value.bad {
+      color: var(--critical);
+    }
+
+    .metric-value.warn {
+      color: var(--warning);
+    }
+
+    .delta {
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .delta.up {
+      color: var(--critical);
+    }
+
+    .delta.down {
+      color: var(--healthy);
+    }
+
+    .server-details {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      padding: 15px 42px 18px;
+      background: var(--surface-soft);
+      border-top: 1px solid var(--line);
+    }
+
+    .notice {
+      display: grid;
+      gap: 3px;
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--surface);
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .notice strong {
+      color: var(--info);
+    }
+
+    .notice span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .detail-block h4 {
+      margin: 0 0 7px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .detail-block p {
+      margin: 2px 0;
+    }
+
+    .sparkline {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      align-items: end;
+      gap: 4px;
+      height: 64px;
+      padding: 8px 6px 4px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background:
+        linear-gradient(to top, transparent 0 31%, color-mix(in srgb, var(--line) 55%, transparent) 32% 33%, transparent 34% 64%, color-mix(in srgb, var(--line) 55%, transparent) 65% 66%, transparent 67%);
+    }
+
+    .trend-bar {
+      align-self: end;
+      min-width: 5px;
+      height: var(--value);
+      background: #7aa5d8;
+      border-radius: 2px 2px 0 0;
+      position: relative;
+      display: block;
+    }
+
+    .trend-bar i {
+      display: none;
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 6px);
+      transform: translateX(-50%);
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: var(--text);
+      color: var(--bg);
+      font-style: normal;
+      font-size: 10px;
+      white-space: nowrap;
+      z-index: 2;
+    }
+
+    .trend-bar:hover i {
+      display: block;
+    }
+
+    .trend-bar.empty {
+      opacity: .35;
+    }
+
+    .trend-bar.warning {
+      background: #dda93b;
+    }
+
+    .trend-bar.critical {
+      background: #d85b51;
+    }
+
+    .trend-labels {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .compact-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--surface);
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 9px 11px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      background: var(--surface-soft);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .muted-note {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .healthy-summary {
+      margin-top: 10px;
+    }
+
+    .healthy-summary > summary {
+      cursor: pointer;
+      color: var(--healthy);
+      font-weight: 700;
+    }
+
+    .healthy-summary .compact-table-wrap {
+      margin-top: 10px;
+    }
+
+    .history-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .history-column {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--surface);
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .history-column h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .history-column ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .history-column li + li {
+      margin-top: 5px;
+    }
+
+    .empty-state {
+      margin: 0;
+      padding: 12px;
+      color: var(--healthy);
+      background: var(--healthy-bg);
+      border-radius: 5px;
+    }
+
+    footer {
+      padding: 20px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 980px) {
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .server > summary {
+        grid-template-columns: 20px minmax(150px, 1fr) repeat(2, minmax(92px, 0.6fr)) minmax(118px, max-content);
+      }
+
+      .server > summary .optional-metric {
+        display: none;
+      }
+
+      .server-details {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 680px) {
+      .page {
+        width: min(100% - 18px, 1240px);
+        margin-top: 9px;
+      }
+
+      .report-header {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        align-items: start;
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .summary-item {
+        min-height: 82px;
+      }
+
+      .toolbar {
+        align-items: stretch;
+      }
+
+      .toolbar-actions {
+        width: 100%;
+      }
+
+      .toolbar-actions button {
+        flex: 1;
+      }
+
+      .header-actions {
+        justify-content: flex-start;
+      }
+
+      .priority-item {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .priority-item > .status {
+        grid-column: auto;
+        justify-self: start;
+      }
+
+      .priority-item > .delta {
+        justify-self: start;
+      }
+
+      .report-section > summary {
+        grid-template-columns: 24px minmax(0, 1fr);
+      }
+
+      .section-counts {
+        grid-column: 2;
+        justify-self: start;
+      }
+
+      .section-body {
+        padding-left: 0;
+      }
+
+      .server > summary {
+        grid-template-columns: 20px minmax(0, 1fr) minmax(112px, max-content);
+      }
+
+      .server > summary .row-metric {
+        display: none;
+      }
+
+      .server-details {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .history-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="report-header">
+      <div>
+        <h1>Ежедневный отчет IT-инфраструктуры</h1>
+        <p class="report-meta">
+          24 июня 2026 · рабочее время 09:00–18:00 МСК · доступность и перезагрузки за 24 часа
+        </p>
+      </div>
+      <div class="header-actions">
+        <a
+          class="header-link"
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Открыть портал ↗</a>
+        <button
+          class="theme-toggle"
+          id="theme-toggle"
+          type="button"
+          aria-label="Переключить тему"
+          title="Переключить тему"
+        ><span id="theme-icon" aria-hidden="true">☾</span></button>
+      </div>
+    </header>
+
+    <section class="summary-grid" aria-label="Общая сводка">
+      <div class="summary-item">
+        <strong>64</strong>
+        <span>объекта мониторинга</span>
+      </div>
+      <div class="summary-item healthy">
+        <strong>62</strong>
+        <span>доступны сейчас</span>
+      </div>
+      <div class="summary-item critical">
+        <strong>2</strong>
+        <span>критические проблемы</span>
+      </div>
+      <div class="summary-item warning">
+        <strong>5</strong>
+        <span>требуют внимания</span>
+      </div>
+      <div class="summary-item">
+        <strong>99,82%</strong>
+        <span>доступность за 24 часа</span>
+      </div>
+      <div class="summary-item">
+        <strong>−1</strong>
+        <span>проблема к прошлому дню</span>
+      </div>
+    </section>
+
+    <nav class="toolbar" aria-label="Управление отчетом">
+      <div class="toolbar-actions">
+        <button type="button" id="expand-all">Развернуть все</button>
+        <button type="button" id="collapse-all">Свернуть все</button>
+      </div>
+    </nav>
+
+    <section class="priority">
+      <h2>Главное за день</h2>
+      <div class="priority-list">
+        <article class="priority-item is-critical">
+          <span class="status critical">Критично</span>
+          <div>
+            <strong>Vega-sql01: transaction log базы production заполнен на 94%</strong>
+            <span>Первое обнаружение 11:20 МСК · сохраняется 6 ч 40 мин · вчера было 81%</span>
+          </div>
+          <span class="delta up">+13 п.п.</span>
+        </article>
+        <article class="priority-item is-critical">
+          <span class="status critical">Критично</span>
+          <div>
+            <strong>DOCS-WIKI-01 был недоступен 47 минут</strong>
+            <span>03:12–03:59 МСК · сейчас доступен · повторилось второй раз за 7 дней</span>
+          </div>
+          <span class="delta up">повтор</span>
+        </article>
+        <article class="priority-item is-warning">
+          <span class="status warning">Внимание</span>
+          <div>
+            <strong>Spica4: на диске C: осталось 7,8%</strong>
+            <span>Минимум за день · 7-дневное среднее 10,6% · снижение продолжается</span>
+          </div>
+          <span class="delta up">−2,8 п.п.</span>
+        </article>
+      </div>
+    </section>
+
+    <details class="report-section" open>
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>Доступность инфраструктуры</strong>
+          <span>Полные сутки, 00:00–23:59 МСК</span>
+        </span>
+        <span class="section-counts">
+          <span class="status critical">2 события</span>
+          <span class="status healthy">62 доступны</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="subsection">
+          <div class="subsection-heading">
+            <h3>Проблемные объекты</h3>
+            <span>Сначала самые длительные простои</span>
+          </div>
+          <div class="server-list">
+            <details class="server problem-item" data-health="critical">
+              <summary>
+                <span class="chevron">›</span>
+                <span class="server-name">
+                  <strong>DOCS-WIKI-01</strong>
+                  <small>Linux · внутренние сервисы</small>
+                </span>
+                <span class="row-metric">
+                  <span class="metric-label">Доступность</span>
+                  <span class="metric-value bad">96,74%</span>
+                </span>
+                <span class="row-metric">
+                  <span class="metric-label">Простой</span>
+                  <span class="metric-value bad">47 мин</span>
+                </span>
+                <span class="row-metric optional-metric">
+                  <span class="metric-label">7 дней</span>
+                  <span class="metric-value">2 события</span>
+                </span>
+                <span class="status healthy">Сейчас доступен</span>
+              </summary>
+              <div class="server-details">
+                <div class="detail-block">
+                  <h4>Последнее событие</h4>
+                  <p><strong>03:12–03:59 МСК</strong></p>
+                  <p>47 минут недоступности</p>
+                </div>
+                <div class="detail-block">
+                  <h4>Сравнение</h4>
+                  <p>Предыдущий день: 100%</p>
+                  <p>Среднее 7 дней: 99,41%</p>
+                </div>
+                <div class="detail-block">
+                  <h4>Тренд за 7 дней</h4>
+                  <div class="sparkline" aria-label="Доступность за семь дней">
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span class="warning" style="--value:88%"></span>
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span class="critical" style="--value:72%"></span>
+                  </div>
+                </div>
+                <div class="detail-block">
+                  <h4>Контекст</h4>
+                  <p>Роль: база знаний</p>
+                  <p>Локация: головной офис</p>
+                </div>
+              </div>
+            </details>
+
+            <details class="server problem-item" data-health="warning">
+              <summary>
+                <span class="chevron">›</span>
+                <span class="server-name">
+                  <strong>RDS-UFA-01</strong>
+                  <small>Windows · филиал Уфа</small>
+                </span>
+                <span class="row-metric">
+                  <span class="metric-label">Доступность</span>
+                  <span class="metric-value warn">99,51%</span>
+                </span>
+                <span class="row-metric">
+                  <span class="metric-label">Простой</span>
+                  <span class="metric-value warn">7 мин</span>
+                </span>
+                <span class="row-metric optional-metric">
+                  <span class="metric-label">7 дней</span>
+                  <span class="metric-value">1 событие</span>
+                </span>
+                <span class="status healthy">Сейчас доступен</span>
+              </summary>
+              <div class="server-details">
+                <div class="detail-block">
+                  <h4>Последнее событие</h4>
+                  <p><strong>14:08–14:15 МСК</strong></p>
+                  <p>7 минут недоступности</p>
+                </div>
+                <div class="detail-block">
+                  <h4>Сравнение</h4>
+                  <p>Предыдущий день: 100%</p>
+                  <p>Среднее 7 дней: 99,93%</p>
+                </div>
+                <div class="detail-block">
+                  <h4>Тренд за 7 дней</h4>
+                  <div class="sparkline">
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span style="--value:100%"></span>
+                    <span class="warning" style="--value:91%"></span>
+                  </div>
+                </div>
+                <div class="detail-block">
+                  <h4>Контекст</h4>
+                  <p>Роль: RDS</p>
+                  <p>Локация: Уфа</p>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <details class="healthy-summary healthy-group">
+          <summary>Показать 62 объекта без недоступности</summary>
+          <div class="compact-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Объект</th>
+                  <th>Роль</th>
+                  <th>Локация</th>
+                  <th>Доступность</th>
+                  <th>7 дней</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>DC-HQ-01</code></td><td>Domain Controller</td><td>HQ</td><td>100%</td><td>100%</td></tr>
+                <tr><td><code>proxy01</code></td><td>Proxy / LB</td><td>HQ</td><td>100%</td><td>99,99%</td></tr>
+                <tr><td><code>Vega-sql01</code></td><td>SQL Server</td><td>HQ</td><td>100%</td><td>100%</td></tr>
+                <tr><td colspan="5">Еще 59 объектов без недоступности</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="report-section" open>
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>SQL Server</strong>
+          <span>Состояние баз и памяти за рабочее время, 09:00–18:00 МСК</span>
+        </span>
+        <span class="section-counts">
+          <span class="status critical">1 критично</span>
+          <span class="status warning">1 внимание</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="server-list">
+          <details class="server problem-item" data-health="critical" open>
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name">
+                <strong>Vega-sql01</strong>
+                <small>SQL Server · production</small>
+              </span>
+              <span class="row-metric">
+                <span class="metric-label">Transaction log</span>
+                <span class="metric-value bad">94%</span>
+              </span>
+              <span class="row-metric">
+                <span class="metric-label">Минимальный PLE</span>
+                <span class="metric-value warn">420 сек</span>
+              </span>
+              <span class="row-metric optional-metric">
+                <span class="metric-label">7 дней log</span>
+                <span class="metric-value">76%</span>
+              </span>
+              <span class="status critical">Критично</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block">
+                <h4>Transaction log</h4>
+                <p>Предыдущий день: 81%</p>
+                <p>Вчера: <strong>94%</strong> <span class="delta up">+13 п.п.</span></p>
+                <p>Среднее 7 дней: 76%</p>
+              </div>
+              <div class="detail-block">
+                <h4>Page Life Expectancy</h4>
+                <p>Минимум: <strong>420 сек</strong></p>
+                <p>Предыдущий день: 690 сек</p>
+                <p>Среднее 7 дней: 735 сек</p>
+              </div>
+              <div class="detail-block">
+                <h4>Тренд transaction log</h4>
+                <div class="sparkline">
+                  <span style="--value:51%"></span>
+                  <span style="--value:58%"></span>
+                  <span style="--value:63%"></span>
+                  <span style="--value:69%"></span>
+                  <span class="warning" style="--value:75%"></span>
+                  <span class="warning" style="--value:81%"></span>
+                  <span class="critical" style="--value:94%"></span>
+                </div>
+              </div>
+              <div class="detail-block">
+                <h4>Базы</h4>
+                <p><strong>production:</strong> 94%</p>
+                <p>documents: 38%</p>
+                <p>analytics: 21%</p>
+              </div>
+            </div>
+          </details>
+
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name">
+                <strong>Spica-sql02</strong>
+                <small>SQL Server · 1С</small>
+              </span>
+              <span class="row-metric">
+                <span class="metric-label">Transaction log</span>
+                <span class="metric-value">48%</span>
+              </span>
+              <span class="row-metric">
+                <span class="metric-label">Минимальный PLE</span>
+                <span class="metric-value warn">510 сек</span>
+              </span>
+              <span class="row-metric optional-metric">
+                <span class="metric-label">7 дней PLE</span>
+                <span class="metric-value">680 сек</span>
+              </span>
+              <span class="status warning">Внимание</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block">
+                <h4>Transaction log</h4>
+                <p>Максимум: 48%</p>
+                <p>Среднее 7 дней: 43%</p>
+              </div>
+              <div class="detail-block">
+                <h4>Page Life Expectancy</h4>
+                <p>Минимум: <strong>510 сек</strong></p>
+                <p>Предыдущий день: 640 сек</p>
+              </div>
+              <div class="detail-block">
+                <h4>Тренд PLE</h4>
+                <div class="sparkline">
+                  <span style="--value:92%"></span>
+                  <span style="--value:88%"></span>
+                  <span style="--value:80%"></span>
+                  <span style="--value:75%"></span>
+                  <span style="--value:73%"></span>
+                  <span style="--value:69%"></span>
+                  <span class="warning" style="--value:55%"></span>
+                </div>
+              </div>
+              <div class="detail-block">
+                <h4>Комментарий</h4>
+                <p>Падение PLE было кратковременным.</p>
+                <p>Активная проблема не сохраняется.</p>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <details class="healthy-summary healthy-group">
+          <summary>Показать 3 SQL-сервера без отклонений</summary>
+          <div class="compact-table-wrap">
+            <table>
+              <thead><tr><th>Сервер</th><th>Макс. log</th><th>Мин. PLE</th><th>Вчера</th><th>7 дней</th></tr></thead>
+              <tbody>
+                <tr><td><code>SQL-REPORTS-01</code></td><td>31%</td><td>1 280 сек</td><td>Норма</td><td>Стабильно</td></tr>
+                <tr><td><code>SQL-BRANCH-01</code></td><td>19%</td><td>980 сек</td><td>Норма</td><td>Стабильно</td></tr>
+                <tr><td><code>SQL-ARCHIVE-01</code></td><td>12%</td><td>1 620 сек</td><td>Норма</td><td>Стабильно</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="report-section">
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>CPU</strong>
+          <span>Средняя и пиковая нагрузка за рабочее время, 09:00–18:00 МСК</span>
+        </span>
+        <span class="section-counts">
+          <span class="status warning">2 внимание</span>
+          <span class="status healthy">38 норма</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="server-list">
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name"><strong>proxy01</strong><small>Linux · Proxy / LB</small></span>
+              <span class="row-metric"><span class="metric-label">Среднее</span><span class="metric-value warn">73%</span></span>
+              <span class="row-metric"><span class="metric-label">Пик</span><span class="metric-value bad">96%</span></span>
+              <span class="row-metric optional-metric"><span class="metric-label">7 дней</span><span class="metric-value">58%</span></span>
+              <span class="status warning">Внимание</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block"><h4>Сравнение</h4><p>Предыдущий день: 61%</p><p>Вчера: <strong>73%</strong></p><p>7 дней: 58%</p></div>
+              <div class="detail-block"><h4>Пики</h4><p>Максимум: 96%</p><p>Выше 90%: 34 минуты</p></div>
+              <div class="detail-block"><h4>Тренд среднего CPU</h4><div class="sparkline"><span style="--value:42%"></span><span style="--value:47%"></span><span style="--value:56%"></span><span style="--value:52%"></span><span style="--value:61%"></span><span class="warning" style="--value:68%"></span><span class="warning" style="--value:73%"></span></div></div>
+              <div class="detail-block"><h4>Контекст</h4><p>Рост нагрузки после 14:00.</p><p>Доступность не снижалась.</p></div>
+            </div>
+          </details>
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name"><strong>RDS-HQ-03</strong><small>Windows · RDS</small></span>
+              <span class="row-metric"><span class="metric-label">Среднее</span><span class="metric-value warn">66%</span></span>
+              <span class="row-metric"><span class="metric-label">Пик</span><span class="metric-value">88%</span></span>
+              <span class="row-metric optional-metric"><span class="metric-label">7 дней</span><span class="metric-value">54%</span></span>
+              <span class="status warning">Внимание</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block"><h4>Сравнение</h4><p>Предыдущий день: 52%</p><p>Вчера: 66%</p><p>7 дней: 54%</p></div>
+              <div class="detail-block"><h4>Пики</h4><p>Максимум: 88%</p><p>Выше 80%: 51 минута</p></div>
+              <div class="detail-block"><h4>Тренд</h4><div class="sparkline"><span style="--value:48%"></span><span style="--value:51%"></span><span style="--value:49%"></span><span style="--value:54%"></span><span style="--value:57%"></span><span style="--value:52%"></span><span class="warning" style="--value:66%"></span></div></div>
+              <div class="detail-block"><h4>Контекст</h4><p>Нагрузка в рабочее время.</p><p>Перезагрузок не было.</p></div>
+            </div>
+          </details>
+        </div>
+        <details class="healthy-summary healthy-group">
+          <summary>Показать 38 серверов с нормальной загрузкой CPU</summary>
+          <div class="compact-table-wrap">
+            <table>
+              <thead><tr><th>Сервер</th><th>Среднее</th><th>Пик</th><th>Пред. день</th><th>7 дней</th></tr></thead>
+              <tbody>
+                <tr><td><code>DC-HQ-01</code></td><td>18%</td><td>42%</td><td>17%</td><td>19%</td></tr>
+                <tr><td><code>Vega-sql01</code></td><td>41%</td><td>72%</td><td>39%</td><td>38%</td></tr>
+                <tr><td><code>web01</code></td><td>32%</td><td>65%</td><td>30%</td><td>29%</td></tr>
+                <tr><td colspan="5">Еще 35 серверов в пределах нормы</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="report-section">
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>RAM</strong>
+          <span>Минимально доступная память за рабочее время, 09:00–18:00 МСК</span>
+        </span>
+        <span class="section-counts">
+          <span class="status warning">1 внимание</span>
+          <span class="status healthy">39 норма</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="server-list">
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name"><strong>Spica-sql02</strong><small>Windows · SQL Server</small></span>
+              <span class="row-metric"><span class="metric-label">Минимум</span><span class="metric-value warn">2,4 GB</span></span>
+              <span class="row-metric"><span class="metric-label">Доля</span><span class="metric-value warn">7,5%</span></span>
+              <span class="row-metric optional-metric"><span class="metric-label">7 дней</span><span class="metric-value">4,1 GB</span></span>
+              <span class="status warning">Внимание</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block"><h4>Минимум за день</h4><p><strong>2,4 GB</strong> из 32 GB</p><p>Зафиксирован в 15:42</p></div>
+              <div class="detail-block"><h4>Сравнение</h4><p>Предыдущий день: 3,8 GB</p><p>Среднее 7 дней: 4,1 GB</p></div>
+              <div class="detail-block"><h4>Тренд доступной RAM</h4><div class="sparkline"><span style="--value:72%"></span><span style="--value:68%"></span><span style="--value:61%"></span><span style="--value:58%"></span><span style="--value:48%"></span><span class="warning" style="--value:38%"></span><span class="critical" style="--value:24%"></span></div></div>
+              <div class="detail-block"><h4>Swap</h4><p>Использование: 6%</p><p>Порог алерта не превышен.</p></div>
+            </div>
+          </details>
+        </div>
+        <details class="healthy-summary healthy-group">
+          <summary>Показать 39 серверов без дефицита RAM</summary>
+          <div class="compact-table-wrap">
+            <table>
+              <thead><tr><th>Сервер</th><th>Минимум</th><th>Доля</th><th>Пред. день</th><th>7 дней</th></tr></thead>
+              <tbody>
+                <tr><td><code>DC-HQ-01</code></td><td>9,8 GB</td><td>31%</td><td>10,1 GB</td><td>9,6 GB</td></tr>
+                <tr><td><code>proxy01</code></td><td>5,2 GB</td><td>32%</td><td>5,4 GB</td><td>5,1 GB</td></tr>
+                <tr><td><code>Vega-sql01</code></td><td>8,7 GB</td><td>14%</td><td>9,2 GB</td><td>8,9 GB</td></tr>
+                <tr><td colspan="5">Еще 36 серверов в пределах нормы</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="report-section">
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>Диски и I/O</strong>
+          <span>Свободное место сейчас, задержки за рабочее время</span>
+        </span>
+        <span class="section-counts">
+          <span class="status warning">2 внимание</span>
+          <span class="status healthy">84 тома норма</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="server-list">
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name"><strong>Spica4 · C:</strong><small>Windows · системный том</small></span>
+              <span class="row-metric"><span class="metric-label">Свободно</span><span class="metric-value warn">7,8%</span></span>
+              <span class="row-metric"><span class="metric-label">Объем</span><span class="metric-value">18,7 GB</span></span>
+              <span class="row-metric optional-metric"><span class="metric-label">7 дней</span><span class="metric-value">10,6%</span></span>
+              <span class="status warning">Снижается</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block"><h4>Свободное место</h4><p>Сейчас: 18,7 GB</p><p>Предыдущий день: 21,4 GB</p></div>
+              <div class="detail-block"><h4>Прогрессия</h4><p>Среднее 7 дней: 10,6%</p><p>Изменение за неделю: −4,2 п.п.</p></div>
+              <div class="detail-block"><h4>Тренд</h4><div class="sparkline"><span style="--value:72%"></span><span style="--value:65%"></span><span style="--value:57%"></span><span style="--value:49%"></span><span class="warning" style="--value:41%"></span><span class="warning" style="--value:34%"></span><span class="critical" style="--value:27%"></span></div></div>
+              <div class="detail-block"><h4>I/O</h4><p>Read peak: 18 ms</p><p>Write peak: 24 ms</p></div>
+            </div>
+          </details>
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name"><strong>Vega-sql01 · D:</strong><small>Windows · SQL data</small></span>
+              <span class="row-metric"><span class="metric-label">Read peak</span><span class="metric-value warn">84 ms</span></span>
+              <span class="row-metric"><span class="metric-label">Write peak</span><span class="metric-value">47 ms</span></span>
+              <span class="row-metric optional-metric"><span class="metric-label">7 дней read</span><span class="metric-value">39 ms</span></span>
+              <span class="status warning">I/O</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block"><h4>Чтение</h4><p>Пиковая задержка: 84 ms</p><p>Предыдущий день: 42 ms</p></div>
+              <div class="detail-block"><h4>Запись</h4><p>Пиковая задержка: 47 ms</p><p>Предыдущий день: 45 ms</p></div>
+              <div class="detail-block"><h4>Тренд чтения</h4><div class="sparkline"><span style="--value:29%"></span><span style="--value:31%"></span><span style="--value:34%"></span><span style="--value:27%"></span><span style="--value:39%"></span><span style="--value:42%"></span><span class="warning" style="--value:84%"></span></div></div>
+              <div class="detail-block"><h4>Свободное место</h4><p>41% · 820 GB</p><p>Снижения не обнаружено.</p></div>
+            </div>
+          </details>
+        </div>
+        <details class="healthy-summary healthy-group">
+          <summary>Показать 84 тома без отклонений</summary>
+          <div class="compact-table-wrap">
+            <table>
+              <thead><tr><th>Сервер / том</th><th>Свободно</th><th>Read peak</th><th>Write peak</th><th>7 дней</th></tr></thead>
+              <tbody>
+                <tr><td><code>DC-HQ-01 · C:</code></td><td>46%</td><td>7 ms</td><td>9 ms</td><td>Стабильно</td></tr>
+                <tr><td><code>proxy01 · /</code></td><td>61%</td><td>4 ms</td><td>6 ms</td><td>Стабильно</td></tr>
+                <tr><td><code>RDS-HQ-03 · C:</code></td><td>28%</td><td>12 ms</td><td>19 ms</td><td>Стабильно</td></tr>
+                <tr><td colspan="5">Еще 81 том без отклонений</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="report-section">
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>Перезагрузки</strong>
+          <span>События за последние 24 часа, время МСК</span>
+        </span>
+        <span class="section-counts">
+          <span class="status info">2 события</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="compact-table-wrap">
+          <table>
+            <thead><tr><th>Сервер</th><th>ОС</th><th>Время запуска</th><th>Текущий uptime</th><th>7 дней</th></tr></thead>
+            <tbody>
+              <tr class="problem-item"><td><code>RDS-HQ-01</code></td><td>Windows</td><td>24.06 12:36 МСК</td><td>5 ч 24 мин</td><td>1 перезагрузка</td></tr>
+              <tr class="problem-item"><td><code>proxy01</code></td><td>Linux</td><td>23.06 14:18 МСК</td><td>1 д 3 ч</td><td>1 перезагрузка</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <details class="report-section">
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>Веб-ресурсы</strong>
+          <span>Успешность и время ответа за рабочее время, 09:00–18:00 МСК</span>
+        </span>
+        <span class="section-counts">
+          <span class="status warning">1 внимание</span>
+          <span class="status healthy">17 норма</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="server-list">
+          <details class="server problem-item" data-health="warning">
+            <summary>
+              <span class="chevron">›</span>
+              <span class="server-name"><strong>portal.example.ru</strong><small>Внешний веб-ресурс</small></span>
+              <span class="row-metric"><span class="metric-label">Успешность</span><span class="metric-value">100%</span></span>
+              <span class="row-metric"><span class="metric-label">Максимум</span><span class="metric-value warn">5,6 сек</span></span>
+              <span class="row-metric optional-metric"><span class="metric-label">7 дней</span><span class="metric-value">2,1 сек</span></span>
+              <span class="status warning">Медленно</span>
+            </summary>
+            <div class="server-details">
+              <div class="detail-block"><h4>Успешность</h4><p>Проверок: 1 080</p><p>Ошибок: 0</p></div>
+              <div class="detail-block"><h4>Время ответа</h4><p>Среднее: 1,4 сек</p><p>Максимум: 5,6 сек</p></div>
+              <div class="detail-block"><h4>Сравнение</h4><p>Предыдущий день: 1,2 сек</p><p>Среднее 7 дней: 2,1 сек</p></div>
+              <div class="detail-block"><h4>SSL</h4><p>Действует еще 74 дня</p><p>Ошибок сертификата нет.</p></div>
+            </div>
+          </details>
+        </div>
+        <details class="healthy-summary healthy-group">
+          <summary>Показать 17 веб-ресурсов без отклонений</summary>
+          <div class="compact-table-wrap">
+            <table>
+              <thead><tr><th>Ресурс</th><th>Успешность</th><th>Среднее</th><th>Максимум</th><th>SSL</th></tr></thead>
+              <tbody>
+                <tr><td><code>api.example.ru</code></td><td>100%</td><td>0,21 сек</td><td>0,84 сек</td><td>112 дней</td></tr>
+                <tr><td><code>wiki.example.ru</code></td><td>100%</td><td>0,47 сек</td><td>1,2 сек</td><td>89 дней</td></tr>
+                <tr><td><code>1form.example.ru</code></td><td>100%</td><td>0,76 сек</td><td>1,9 сек</td><td>61 день</td></tr>
+                <tr><td colspan="5">Еще 14 ресурсов без отклонений</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="report-section">
+      <summary>
+        <span class="chevron">›</span>
+        <span class="section-title">
+          <strong>История изменений</strong>
+          <span>Новые, повторяющиеся и завершенные события</span>
+        </span>
+        <span class="section-counts">
+          <span class="status critical">1 новое</span>
+          <span class="status info">2 завершено</span>
+        </span>
+      </summary>
+      <div class="section-body">
+        <div class="history-list">
+          <article class="history-column">
+            <h3>Новые</h3>
+            <ul>
+              <li>Vega-sql01: transaction log production выше 90%.</li>
+            </ul>
+          </article>
+          <article class="history-column">
+            <h3>Повторяются</h3>
+            <ul>
+              <li>DOCS-WIKI-01: вторая недоступность за 7 дней.</li>
+              <li>Spica4 C:: свободное место снижается 5 дней подряд.</li>
+            </ul>
+          </article>
+          <article class="history-column">
+            <h3>Завершены</h3>
+            <ul>
+              <li>RDS-UFA-01 снова доступен с 14:15 МСК.</li>
+              <li>Spica-sql02: PLE восстановился после 16:10 МСК.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </details>
+
+    <footer>
+      Отчет сформирован 25.06.2026 в 08:15 МСК (UTC+3) · снимок #128 · HTML хранится 90 дней
+    </footer>
+  </main>
+
+  <script>
+    const root = document.documentElement;
+    const themeToggle = document.getElementById("theme-toggle");
+    const themeIcon = document.getElementById("theme-icon");
+
+    function updateThemeControl() {
+      const isDark = root.dataset.theme === "dark";
+      themeIcon.textContent = isDark ? "☀" : "☾";
+      themeToggle.setAttribute(
+        "aria-label",
+        isDark ? "Включить светлую тему" : "Включить темную тему"
+      );
+      themeToggle.title = themeToggle.getAttribute("aria-label");
+    }
+
+    themeToggle.addEventListener("click", () => {
+      root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("monitoring-report-theme", root.dataset.theme);
+      } catch {
+        // Theme still works for this opened report.
+      }
+      updateThemeControl();
+    });
+
+    updateThemeControl();
+
+    document.getElementById("expand-all").addEventListener("click", () => {
+      document.querySelectorAll("details").forEach((item) => {
+        item.open = true;
+      });
+    });
+
+    document.getElementById("collapse-all").addEventListener("click", () => {
+      document.querySelectorAll("details").forEach((item) => {
+        item.open = false;
+      });
+    });
+  </script>
+</body>
+</html>

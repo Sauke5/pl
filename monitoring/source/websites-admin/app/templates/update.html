@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading-row">
+  <div><a class="back-link" href="{{ url_for('target_detail', site_id=target.site_id) }}">← Карточка цели</a><h1 class="page-title">{{ title }}</h1><p class="url-text">{{ target.url }}</p></div>
+</div>
+{% if fetch_error %}
+  <div class="notice notice-error">{{ fetch_error }}</div>
+{% else %}
+  {% if final_url != target.url %}<div class="notice notice-warning">Сайт перенаправил запрос на {{ final_url }}. URL цели не изменяется.</div>{% endif %}
+  <section class="comparison-grid">
+    <div class="panel"><h2>Сейчас</h2>
+      {% if target.fragments %}<ul class="fragment-list">{% for fragment in target.fragments %}<li><span class="presence presence-{{ 'yes' if old_presence.get(fragment) else 'no' }}">{{ 'Найден' if old_presence.get(fragment) else 'Не найден' }}</span><span>{{ fragment }}</span></li>{% endfor %}</ul>{% else %}<div class="empty-state compact">Content-check выключен.</div>{% endif %}
+    </div>
+    <div class="panel"><h2>Предлагается</h2><p class="service-note">Рекомендуются наиболее стабильные фрагменты из исходного HTML.</p>
+      {% if not candidates %}<div class="notice notice-warning">В исходном HTML не найден подходящий стабильный текст. Контентная проверка для этого сайта может быть недоступна.</div>{% endif %}
+    </div>
+  </section>
+  {% if candidates %}
+  <form class="panel apply-form" method="post" action="{{ url_for('target_update_post', site_id=target.site_id) }}" data-reason-form data-candidate-form data-max="4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <input type="hidden" name="revision" value="{{ revision }}" />
+    <input type="hidden" name="operation_token" value="{{ operation_token }}" />
+    <div class="panel-heading"><div><h2>Выберите фрагменты</h2><p>От одного до четырёх.</p></div><button class="button button-secondary pl-ui-button pl-ui-button-secondary" type="button" data-use-recommended>Использовать рекомендуемые</button></div>
+    <p class="important-note">Проверка считается успешной только в том случае, если на странице найдены все выбранные контрольные фрагменты.</p>
+    <div class="candidate-list">
+      {% for candidate in candidates %}
+      <label class="candidate"><input type="checkbox" name="fragments" value="{{ candidate.text }}" data-recommended="{{ 'true' if candidate.recommended else 'false' }}" {% if candidate.recommended %}checked{% endif %}/><span><strong>{{ candidate.text }}</strong><small>{{ candidate.source }} · оценка {{ candidate.score }}</small></span>{% if candidate.recommended %}<em>Рекомендуется</em>{% endif %}</label>
+      {% endfor %}
+    </div>
+    <label>Причина изменения<textarea class="pl-ui-textarea" name="reason" minlength="3" required placeholder="Например: редизайн главной страницы"></textarea></label>
+    <div class="form-actions"><a class="button pl-ui-button pl-ui-button-secondary" href="{{ url_for('target_detail', site_id=target.site_id) }}">Отмена</a><button class="button button-primary pl-ui-button pl-ui-button-default" type="submit">Проверить и применить</button></div>
+  </form>
+  {% endif %}
+{% endif %}
+{% endblock %}
