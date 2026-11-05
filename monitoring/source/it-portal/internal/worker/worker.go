@@ -58,7 +58,15 @@ func (w *Worker) Run(ctx context.Context) {
 		leaderCtx, cancelLeader := context.WithCancel(ctx)
 		tick := time.NewTicker(time.Second)
 		var wg sync.WaitGroup
-		slots := make(chan struct{}, 4)
+		// Health slots cannot be consumed by installs or other durable work.
+		// Keep the total execution limit at four, including when one lane is idle.
+		lanes := []struct {
+			health bool
+			slots  chan struct{}
+		}{
+			{true, make(chan struct{}, 2)},
+			{false, make(chan struct{}, 2)},
+		}
 	loop:
 		for {
 			select {
@@ -69,19 +77,29 @@ func (w *Worker) Run(ctx context.Context) {
 					break loop
 				}
 				w.schedule(leaderCtx)
-				select {
-				case slots <- struct{}{}:
-					j, e := w.Store.Claim(ctx)
-					if e != nil {
-						<-slots
-						if !errors.Is(e, store.ErrNotFound) {
-							slog.Error("job_claim_failed")
+				for _, lane := range lanes {
+				dispatch:
+					for n := 0; n < cap(lane.slots); n++ {
+						select {
+						case lane.slots <- struct{}{}:
+							j, err := w.Store.ClaimLane(leaderCtx, lane.health)
+							if err != nil {
+								<-lane.slots
+								if !errors.Is(err, store.ErrNotFound) && leaderCtx.Err() == nil {
+									slog.Error("job_claim_failed", "module_health", lane.health)
+								}
+								break dispatch
+							}
+							wg.Add(1)
+							go func(slots chan struct{}, job model.Job) {
+								defer wg.Done()
+								defer func() { <-slots }()
+								w.execute(leaderCtx, job)
+							}(lane.slots, j)
+						default:
+							break dispatch
 						}
-						continue
 					}
-					wg.Add(1)
-					go func() { defer wg.Done(); defer func() { <-slots }(); w.execute(leaderCtx, j) }()
-				default:
 				}
 			}
 		}

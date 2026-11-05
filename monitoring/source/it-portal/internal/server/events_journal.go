@@ -57,6 +57,13 @@ func (s *Server) eventJournal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if q.Get("exclude_service_refresh") != "" {
+		f.ExcludeServiceRefresh, e = strconv.ParseBool(q.Get("exclude_service_refresh"))
+		if e != nil {
+			s.fail(w, store.ErrInvalid)
+			return
+		}
+	}
 	if q.Get("limit") != "" {
 		f.Limit, e = strconv.Atoi(q.Get("limit"))
 		if e != nil || f.Limit < 1 || f.Limit > 100 {

@@ -14,7 +14,7 @@ import (
 // Historical resource_id also contains document IDs. Keep that raw field, but
 // never equate IDs across namespaces in the journal projection or correlation.
 const journalObjectKindSQL = `COALESCE(NULLIF(e.body #>> '{details,object_kind}',''),CASE
- WHEN e.body->>'kind' LIKE 'job.%' THEN 'job'
+ WHEN e.body->>'kind' LIKE 'job.%' OR e.body->>'kind'='module.queued' THEN 'job'
  WHEN e.body->>'kind' LIKE 'auth.%' THEN 'session'
  WHEN split_part(e.body->>'kind','.',1) IN ('resource','collection','integration','settings','dictionaries','preferences','dashboard_layout','workspace_preferences','chart_settings','problem_presentation','system','problem') THEN split_part(e.body->>'kind','.',1)
  ELSE '' END)`
@@ -30,6 +30,10 @@ func eventObject(kind, id string, details map[string]any) (string, string) {
 		switch prefix {
 		case "job":
 			object = "job"
+		case "module":
+			if detailString(details, "job_id") != "" {
+				object = "job"
+			}
 		case "auth":
 			object = "session"
 		case "resource", "collection", "integration", "settings", "dictionaries", "preferences", "dashboard_layout", "workspace_preferences", "chart_settings", "problem_presentation", "system", "problem":
@@ -198,11 +202,70 @@ func jobEventContext(ctx context.Context, db DB, j model.Job) (map[string]any, e
 	if j.IntegrationID != "" {
 		details["integration_id"] = j.IntegrationID
 	}
+	if j.Kind == "module" {
+		id := detailString(j.Parameters, "instance_id")
+		details["instance_id"] = id
+		details["module_action"] = detailString(j.Parameters, "action")
+		details["action"] = detailString(j.Parameters, "action")
+		var instance model.ModuleInstance
+		if result, ok := j.Result["instance"]; ok {
+			raw, _ := json.Marshal(result)
+			_ = json.Unmarshal(raw, &instance)
+		}
+		if instance.ID == "" && id != "" {
+			var raw []byte
+			err := db.QueryRow(ctx, "SELECT body FROM documents WHERE kind='module_instance' AND id=$1", id).Scan(&raw)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return nil, err
+			}
+			if err == nil {
+				_ = json.Unmarshal(raw, &instance)
+			}
+		}
+		details["module_id"] = instance.ModuleID
+		name := instance.Name
+		if name == "" {
+			if def, found := model.ModuleDefinition(instance.ModuleID); found {
+				name = def.Name
+			}
+		}
+		if name == "" {
+			name = id
+		}
+		if name != "" {
+			details["object_name"] = name
+			details["module_name"] = name
+			details["target"] = name
+		}
+	}
+	if target := detailString(j.Parameters, "target"); target != "" && detailString(details, "target") == "" {
+		details["target"] = target
+	}
+	if j.Error != "" {
+		details["error"] = j.Error
+	}
+	if summary := jobResultSummary(j); summary != "" {
+		details["result_summary"] = summary
+	}
+	// Do not copy arbitrary parameters/results: they may contain configuration secrets.
 	return details, nil
+}
+
+func moduleActionLabel(action string) string {
+	if label := map[string]string{"enable": "Включение модуля", "disable": "Отключение модуля", "refresh": "Обновление состояния модуля", "install": "Установка модуля", "connect": "Подключение модуля", "reconnect": "Переподключение модуля", "configure": "Применение конфигурации модуля", "remove": "Удаление модуля", "start": "Запуск модуля", "stop": "Остановка модуля", "restart": "Перезапуск модуля", "update": "Обновление модуля"}[action]; label != "" {
+		return label
+	}
+	if action != "" {
+		return "Модуль: " + action
+	}
+	return "Операция с модулем"
 }
 
 func jobEventTitle(j model.Job, details map[string]any) string {
 	label := map[string]string{"refresh": "Обновление источника", "check": "Проверка доступности", "enrich": "Обогащение ресурса", "report": "Формирование отчёта", "restart": "Перезапуск контейнера"}[j.Kind]
+	if j.Kind == "module" {
+		label = moduleActionLabel(detailString(details, "module_action"))
+	}
 	if label == "" {
 		label = "Задание"
 	}
@@ -245,4 +308,35 @@ func sameAuditMembers(before, after any) bool {
 		}
 	}
 	return true
+}
+
+// Only observed result fields are summarized; success never implies availability.
+func jobResultSummary(j model.Job) string {
+	if j.Kind != "module" || j.Status != "succeeded" {
+		return ""
+	}
+	if detailString(j.Parameters, "action") == "remove" {
+		return "Модуль удалён"
+	}
+	raw, ok := j.Result["instance"]
+	if !ok {
+		return ""
+	}
+	b, _ := json.Marshal(raw)
+	var instance model.ModuleInstance
+	if json.Unmarshal(b, &instance) != nil {
+		return ""
+	}
+	parts := []string{}
+	if state := instance.ObservedState; state != "" {
+		label := map[string]string{"running": "работает", "connected": "подключён", "unavailable": "недоступен", "absent": "отсутствует", "stopped": "остановлен", "disabled": "отключён", "unknown": "неизвестно"}[state]
+		if label == "" {
+			label = state
+		}
+		parts = append(parts, "Состояние: "+label)
+	}
+	if instance.Version != "" {
+		parts = append(parts, "Версия: "+instance.Version)
+	}
+	return strings.Join(parts, " · ")
 }

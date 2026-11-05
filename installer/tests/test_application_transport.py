@@ -426,6 +426,29 @@ class SignedTransportTests(unittest.TestCase):
                     for _ in range(capacity):
                         reacquired.enter_context(pl.doska_empty_input(metadata))
 
+    def test_native_asset_fanout_has_its_own_bounded_lane(self):
+        _, ordinary = self.handler(method='GET', content_type='')
+        asset = dict(ordinary, role='web', path='/doska/assets/page.js', query='')
+        events = dict(ordinary, path='/api/doska/events', query='')
+        with ExitStack() as held:
+            for _ in range(4):
+                held.enter_context(pl.doska_empty_input(ordinary))
+            for _ in range(8):
+                held.enter_context(pl.doska_empty_input(asset))
+            held.enter_context(pl.doska_empty_input(events))
+            for metadata in (ordinary, asset):
+                with self.assertRaises(pl.TransferRefused) as caught:
+                    with pl.doska_empty_input(metadata):
+                        self.fail('full native lane admitted another request')
+                self.assertEqual(caught.exception.status, 429)
+        # Errors do not leak admission into the next page navigation.
+        with self.assertRaises(OSError):
+            with pl.doska_empty_input(asset):
+                raise OSError('client disconnected')
+        with ExitStack() as held:
+            for _ in range(8):
+                held.enter_context(pl.doska_empty_input(asset))
+
     def test_real_unix_http_sse_does_not_block_get_or_positive_post(self):
         ready, release = threading.Event(), threading.Event()
         captured = []

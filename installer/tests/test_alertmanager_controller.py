@@ -262,6 +262,85 @@ class AlertmanagerTests(unittest.TestCase):
             self.assertTrue(retained['receivers'][0]['smtp']['password_set'])
             self.assertEqual(self.controller.plan(self.instance, retained['ref'])['secrets']['office']['smtp']['password'], 'fixture-smtp-password')
 
+    def test_email_message_defaults_and_literal_settings(self):
+        value = self.email_config()
+        message = {'title': '{{ .Secret }} <PL>', 'platform_url': 'https://pl.example/modules', 'footer': '<img src=x onerror=alert(1)>', 'show_labels': True}
+        value['receivers'][0]['smtp']['message'] = message
+        public = self.prepare(value)
+        self.assertEqual(public['receivers'][0]['smtp']['message'], message)
+        native = self.controller.plan(self.instance, public['ref'])['config']
+        email = native['receivers'][0]['email_configs'][0]
+        self.assertIn('{{ "{{ .Secret }} <PL>" }}', email['headers']['Subject'])
+        self.assertIn('{{ "<img src=x onerror=alert(1)>" }}', email['html'])
+        self.assertNotIn('safeHtml', email['html'])
+        self.assertIn('lt $i 20', email['html'])
+        self.assertIn('humanizeDuration', email['text'])
+        self.assertIn('StartsAt', email['html'])
+        self.assertIn('EndsAt', email['html'])
+        self.assertEqual(native['route']['routes'][0]['matchers'], ['pl_notification_test="true"', 'pl_test_receiver="office"'])
+        self.assertFalse(native['route']['routes'][0]['continue'])
+        default = self.prepare(self.email_config())
+        self.assertEqual(default['receivers'][0]['smtp']['message']['title'], 'PL · Мониторинг')
+
+    def test_email_message_rejects_template_urls_headers_and_unknown_fields(self):
+        default = am.email_message(None)
+        for patch in ({'title': ''}, {'title': 'x' * 81}, {'title': 'Header\r\nBcc: victim'},
+                      {'footer': 'x' * 241}, {'platform_url': 'javascript:alert(1)'},
+                      {'platform_url': 'https://user:pass@pl.example/'}, {'platform_url': 'https://pl.example/?token=secret'},
+                      {'platform_url': 'https://pl.example/{{ .Labels.target }}'}, {'show_labels': 1}, {'html': 'raw'}):
+            with self.subTest(patch=patch), self.assertRaises(ValueError):
+                am.email_message({**default, **patch})
+
+    def test_email_preview_uses_isolated_native_renderer_without_delivery(self):
+        output = []
+        original = self.controller.docker
+        def docker(*args, **kwargs):
+            if args[:2] == ('container', 'run'):
+                output.append(args)
+                mount = args[args.index('--mount') + 1]
+                path = Path(mount.split('source=')[1].split(',target=')[0])
+                data = json.loads((path / 'data.json').read_text())
+                self.assertEqual(len(data['alerts']), 2)
+                self.assertEqual(data['status'], 'resolved')
+                self.assertNotIn('smtp', json.dumps(data))
+                if '--template.type=text' in args:
+                    template = next(a for a in args if a.startswith('--template.text='))
+                    separator = '\n' + template.split('\n')[1] + '\n'
+                    return ('rendered' + separator + 'rendered').encode()
+                return b'rendered'
+            return original(*args, **kwargs)
+        self.controller.docker = docker
+        result = self.controller.preview({'instance_id': self.instance, 'message': am.email_message(None), 'status': 'resolved'})
+        self.assertEqual(result, {'subject': 'rendered', 'html': 'rendered', 'text': 'rendered'})
+        self.assertEqual(len(output), 2)
+        self.assertTrue(all(args[args.index('--network') + 1] == 'none' for args in output))
+        self.assertTrue(all('--template.type=html' in args or '--template.type=text' in args for args in output))
+        self.assertEqual(list(self.controller.operations.glob('email-preview-*')), [])
+
+    def test_control_email_targets_applied_receiver_and_resolves_same_alerts(self):
+        public = self.prepare(self.email_config())
+        self.engine()
+        self.controller.execute(self.operation(ref=public['ref']))
+        self.controller.native_ready = lambda obj: None
+        captured = []
+        self.controller.api = lambda obj, path, data=None: captured.append((path, json.loads(data)))
+        body = {'instance_id': self.instance, 'configuration_ref': public['ref'], 'receiver': 'office', 'test_id': str(uuid.uuid4()), 'status': 'firing'}
+        self.assertTrue(self.controller.test_notification(body)['accepted'])
+        body['status'] = 'resolved'
+        self.controller.test_notification(body)
+        self.assertEqual(len(captured), 2)
+        firing, resolved = captured[0][1], captured[1][1]
+        self.assertEqual([a['labels'] for a in firing], [a['labels'] for a in resolved])
+        self.assertEqual([a['startsAt'] for a in firing], [a['startsAt'] for a in resolved])
+        self.assertTrue(all(a['endsAt'] > b['endsAt'] for a, b in zip(firing, resolved)))
+        self.assertEqual(firing[0]['labels']['pl_test_receiver'], 'office')
+        with self.assertRaises(ValueError):
+            self.controller.test_notification({**body, 'status': 'firing'})
+        with self.assertRaises(ValueError):
+            self.controller.test_notification({**body, 'receiver': 'another'})
+        with self.assertRaises(ValueError):
+            self.controller.test_notification({**body, 'configuration_ref': str(uuid.uuid4())})
+
     def test_smtp_changed_identity_does_not_reuse_password_and_auth_can_be_removed(self):
         previous = self.prepare(self.email_config())
         for field, replacement in (('smarthost', 'other.example.invalid:587'), ('username', 'other-user'), ('tls_mode', 'implicit')):

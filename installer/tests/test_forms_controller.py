@@ -485,7 +485,7 @@ class FormsTests(unittest.TestCase):
         self.assertEqual(transport.call_count, 1)
         self.assertNotIn(self.instance, self.controller._routes)
 
-    def test_observation_and_gateway_readiness_overlap_but_writer_waits_for_both(self):
+    def test_observation_and_gateway_readiness_overlap_but_instance_writer_waits_for_both(self):
         self.install()
         self.controller._routes.clear()  # Exercise cold admission, not the established HTTP route.
         body = self.body()
@@ -509,7 +509,7 @@ class FormsTests(unittest.TestCase):
 
         def writer():
             writer_started.set()
-            with self.controller.locked():
+            with self.controller.instance_lock(self.instance, exclusive=True):
                 writer_entered.set()
 
         with patch.object(self.controller, 'http', side_effect=http), ThreadPoolExecutor(max_workers=3) as pool:
@@ -518,13 +518,13 @@ class FormsTests(unittest.TestCase):
                 self.assertTrue(all(event.wait(3) for event in entered), 'Reads serialized during readiness')
                 pending_writer = pool.submit(writer)
                 self.assertTrue(writer_started.wait(3))
-                with (self.root / 'modules/controller.lock').open('rb') as probe:
+                with (self.controller.operations / ('instance-' + self.instance + '.lock')).open('rb') as probe:
                     with self.assertRaises(BlockingIOError):
                         forms.fcntl.flock(probe, forms.fcntl.LOCK_EX | forms.fcntl.LOCK_NB)
                 self.assertFalse(writer_entered.is_set())
                 release[0].set()
                 self.assertEqual(reads[0].result(timeout=3)['state'], 'running')
-                with (self.root / 'modules/controller.lock').open('rb') as probe:
+                with (self.controller.operations / ('instance-' + self.instance + '.lock')).open('rb') as probe:
                     with self.assertRaises(BlockingIOError):
                         forms.fcntl.flock(probe, forms.fcntl.LOCK_EX | forms.fcntl.LOCK_NB)
                 self.assertFalse(writer_entered.is_set(), 'Writer bypassed the remaining reader')
@@ -536,11 +536,11 @@ class FormsTests(unittest.TestCase):
                 for event in release:
                     event.set()
 
-    def test_exclusive_lifecycle_lock_blocks_observation_and_gateway_readiness(self):
+    def test_same_instance_exclusive_lock_blocks_observation_and_gateway_readiness(self):
         self.install()
         self.controller._routes.clear()
         body = self.body()
-        lock_stat = (self.root / 'modules/controller.lock').stat()
+        lock_stat = (self.controller.operations / ('instance-' + self.instance + '.lock')).stat()
         attempted = threading.Barrier(3)
         real_flock = forms.fcntl.flock
 
@@ -551,7 +551,7 @@ class FormsTests(unittest.TestCase):
             return real_flock(stream, operation)
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            with self.controller.locked():
+            with self.controller.instance_lock(self.instance, exclusive=True):
                 with patch.object(forms.fcntl, 'flock', side_effect=flock):
                     reads = [pool.submit(self.controller.get, self.instance), pool.submit(self.controller.request, body)]
                     attempted.wait(3)

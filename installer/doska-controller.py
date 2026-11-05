@@ -16,12 +16,14 @@ import os
 from pathlib import Path
 import re
 import secrets
+import select
+import socket
 import time
 import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 _helper = Path(__file__).with_name('xray-controller.py')
 if _helper.is_symlink() or not _helper.is_file():
@@ -38,6 +40,51 @@ ROLES = ('database', 'api', 'web')
 API_GID = 10001
 DATABASE_GID = 70
 ROUTE_MAX_AGE = 30
+
+
+@contextmanager
+def client_stream_guard(handler, upstream):
+    """Release a native SSE reader when its gateway connection disappears."""
+    client = getattr(handler, 'connection', None)
+    if not isinstance(client, socket.socket) or not isinstance(upstream, socket.socket):
+        yield None
+        return
+    finished, disconnected = threading.Event(), threading.Event()
+
+    def watch():
+        while not finished.is_set():
+            try:
+                readable, _, errors = select.select([client], [], [client], 0.1)
+                if not readable and not errors:
+                    continue
+                if not errors:
+                    # The finite signed input is fully consumed, and this
+                    # response closes its connection. EOF or extra pipelined
+                    # input both end the stream; never consume client bytes.
+                    client.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+            except (BlockingIOError, InterruptedError):
+                continue
+            except (OSError, ValueError):
+                pass
+            if finished.is_set():
+                return
+            disconnected.set()
+            try:
+                # close() alone does not interrupt HTTPResponse's buffered
+                # socket read. Shutdown wakes it without waiting for heartbeat.
+                upstream.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            return
+
+    # The gateway/controller's existing SSE admission bounds these watchers.
+    watcher = threading.Thread(target=watch, name='pl-doska-sse-disconnect', daemon=True)
+    watcher.start()
+    try:
+        yield disconnected
+    finally:
+        finished.set()
+        watcher.join(timeout=1)
 
 
 def allowed_request(role, method, path, query, content_type, raw, headers):
@@ -554,8 +601,11 @@ class DoskaController:
         configured_origin = json.loads(read_file(self.root / 'state/installation.json')).get('config', {}).get('public_url')
         if 'public_url' in body and body['public_url'] != configured_origin:
             raise ValueError('Doska operation origin mismatch')
-        with self.instance_lock(instance, exclusive=True), self.locked():
-            self._routes.pop(instance, None)
+        refreshing = body['action'] == 'refresh'
+        with _files.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
+            if not refreshing:
+                self._routes.pop(instance, None)
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():
@@ -585,7 +635,7 @@ class DoskaController:
 
     def get(self, instance):
         instance = identifier(instance)
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             return self.observe(instance)
 
     def manifest(self, body):
@@ -663,6 +713,9 @@ class DoskaController:
             path = meta['path'] + ('?' + meta['query'] if meta['query'] else '')
             try:
                 connection.request(meta['method'], path, body=bodyfile if size else None, headers=headers)
+                # HTTPConnection can drop its socket reference for a response
+                # framed by EOF; retain the socket before getresponse().
+                upstream = connection.sock
                 response = connection.getresponse()
             except BaseException:
                 self._routes.pop(instance, None)
@@ -695,20 +748,26 @@ class DoskaController:
             handler.close_connection = True
             handler.end_headers()
             total = 0
-            if meta['method'] != 'HEAD' and response.status != 304:
-                while True:
-                    try:
-                        chunk = response.read1(65536)
-                    except (OSError, http.client.HTTPException):
-                        self._routes.pop(instance, None)
-                        raise
-                    if not chunk:
-                        break
-                    total += len(chunk)
-                    if not sse and total > MAX_RESPONSE:
-                        self._routes.pop(instance, None)
-                        raise ValueError('Doska transport response exceeds limit')
-                    handler.wfile.write(chunk)
-                    handler.wfile.flush()
+            with (client_stream_guard(handler, upstream) if sse else nullcontext(None)) as disconnected:
+                if meta['method'] != 'HEAD' and response.status != 304:
+                    while True:
+                        try:
+                            chunk = response.read1(65536)
+                        except (OSError, http.client.HTTPException):
+                            if disconnected is not None and disconnected.is_set():
+                                break
+                            self._routes.pop(instance, None)
+                            raise
+                        if not chunk:
+                            break
+                        total += len(chunk)
+                        if not sse and total > MAX_RESPONSE:
+                            self._routes.pop(instance, None)
+                            raise ValueError('Doska transport response exceeds limit')
+                        handler.wfile.write(chunk)
+                        handler.wfile.flush()
         finally:
-            connection.close()
+            try:
+                response.close()
+            finally:
+                connection.close()

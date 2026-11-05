@@ -107,7 +107,9 @@ function eventKind(event: JournalEvent) {
 function eventActor(event: JournalEvent) {
   return (
     event.actor_name?.trim() ||
-    (event.actor === "system" ? "Система" : "Имя не указано")
+    (event.actor === "system" || event.actor?.startsWith("system:")
+      ? `Система${event.actor?.startsWith("system:") ? ` · ${event.actor.slice(7)}` : ""}`
+      : "Имя не указано")
   );
 }
 
@@ -431,6 +433,7 @@ function EventJournal({
   }
   const [quick, setQuick] = useState(false);
   const [showCollection, setShowCollection] = useState(false);
+  const [showServiceRefresh, setShowServiceRefresh] = useState(false);
   const [actor, setActor] = useState("");
   const [page, setPage] = useState<JournalPage>();
   const [selected, setSelected] = useState<JournalEvent>();
@@ -522,6 +525,7 @@ function EventJournal({
     if (audit && actor.trim()) params.set("actor", actor.trim());
     if (!audit && quick) params.set("monitoring_only", "true");
     if (!audit && !showCollection) params.set("exclude_collection", "true");
+    if (!showServiceRefresh) params.set("exclude_service_refresh", "true");
     query.current = params.toString();
     snapshot.current = undefined;
     setPage(undefined);
@@ -563,6 +567,7 @@ function EventJournal({
     customRange,
     quick,
     showCollection,
+    showServiceRefresh,
     actor,
     retry,
   ]);
@@ -760,6 +765,7 @@ function EventJournal({
     );
   }
   const name = (event: JournalEvent) =>
+    event.object_name ||
     event.resource_name ||
     resources.data?.find((item) => item.id === event.resource_id)?.name;
 
@@ -808,6 +814,18 @@ function EventJournal({
           </small>
         </label>
       )}
+      <label className="events-collection-toggle">
+        <input
+          type="checkbox"
+          checked={showServiceRefresh}
+          onChange={(event) => setShowServiceRefresh(event.target.checked)}
+        />
+        <span>Показывать успешные служебные обновления</span>
+        <small>
+          Ручные операции, ошибки и незавершённые задания показываются всегда.
+          История сохраняется.
+        </small>
+      </label>
       <div className="events-filters">
         <label>
           Ресурс
@@ -1063,6 +1081,12 @@ function EventJournal({
                 <h3>Что произошло</h3>
                 {typeof selectedEvent.details?.description === "string" && (
                   <p>{selectedEvent.details.description}</p>
+                )}
+                {typeof selectedEvent.details?.result_summary === "string" && (
+                  <p>{selectedEvent.details.result_summary}</p>
+                )}
+                {typeof selectedEvent.details?.error === "string" && (
+                  <p className="notice">{selectedEvent.details.error}</p>
                 )}
                 <dl>
                   <dt>Объект</dt>

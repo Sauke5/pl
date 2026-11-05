@@ -21,7 +21,20 @@ type ProxySettings = {
   ca_pem?: string;
   clear_ca?: boolean;
 };
+type EmailMessage = {
+  title: string;
+  platform_url: string;
+  footer: string;
+  show_labels: boolean;
+};
+const messageDefaults = (): EmailMessage => ({
+  title: "PL · Мониторинг",
+  platform_url: location.protocol === "https:" ? location.origin : "",
+  footer: "Уведомление системы мониторинга PL",
+  show_labels: false,
+});
 type SMTPSettings = {
+  message?: EmailMessage;
   smarthost: string;
   from: string;
   to: string[];
@@ -31,6 +44,7 @@ type SMTPSettings = {
   password_set?: boolean;
 };
 const smtpDefaults = (): SMTPSettings => ({
+  message: messageDefaults(),
   smarthost: "",
   from: "",
   to: [],
@@ -129,6 +143,214 @@ function duration(value: string): number {
   if (!match) return NaN;
   const multiplier = match[2] === "h" ? 3600 : match[2] === "m" ? 60 : 1;
   return Number(match[1]) * multiplier;
+}
+
+function EmailMessageEditor({
+  instanceID,
+  value,
+  onChange,
+  applied,
+  appliedRef,
+  disabled,
+}: {
+  instanceID: string;
+  value: EmailMessage;
+  onChange: (message: EmailMessage) => void;
+  applied?: Receiver;
+  appliedRef?: string;
+  disabled: boolean;
+}) {
+  const [status, setStatus] = useState<"firing" | "resolved">("firing");
+  const [preview, setPreview] = useState<{
+    subject: string;
+    html: string;
+    text: string;
+  }>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const [notice, setNotice] = useState("");
+  const [test, setTest] = useState<{ id: string; status: string }>();
+  const serialized = JSON.stringify(value);
+  const latestPreview = useRef("");
+  latestPreview.current = serialized + status;
+  useEffect(() => {
+    setPreview(undefined);
+  }, [serialized, status]);
+  useEffect(() => {
+    setTest(undefined);
+  }, [appliedRef, applied?.name]);
+  const patch = (update: Partial<EmailMessage>) =>
+    onChange({ ...value, ...update });
+  async function render() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const requestVersion = serialized + status;
+      const result = await api<{ subject: string; html: string; text: string }>(
+        `/modules/${instanceID}/alertmanager/email/preview`,
+        "POST",
+        {
+          message: value,
+          status,
+        },
+      );
+      if (latestPreview.current === requestVersion) setPreview(result);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function send(next: "firing" | "resolved") {
+    if (!applied || !appliedRef) return;
+    setBusy(true);
+    setError(undefined);
+    setNotice("");
+    const id =
+      next === "firing" && (!test || test.status === "resolved")
+        ? crypto.randomUUID()
+        : test?.id;
+    if (!id) {
+      setBusy(false);
+      return;
+    }
+    if (next === "firing") setTest({ id, status: "pending" });
+    try {
+      await api(`/modules/${instanceID}/alertmanager/email/test`, "POST", {
+        configuration_ref: appliedRef,
+        receiver: applied.name,
+        test_id: id,
+        status: next,
+      });
+      setTest({ id, status: next });
+      setNotice(
+        `Событие ${next === "firing" ? "тревоги" : "восстановления"} принято Alertmanager. Доставку проверьте в почтовом ящике. ID: ${id}`,
+      );
+    } catch (error) {
+      setError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="am-email-message">
+      <h3>Оформление письма</h3>
+      <p className="muted">
+        HTML и текстовая версия. Состояние, важность, объект, описание и время
+        добавляются для каждого события; в письме показываются первые 20
+        событий.
+      </p>
+      <div className="am-fields">
+        <Field label="Название в письме">
+          <input
+            aria-label="Название в письме"
+            value={value.title}
+            maxLength={80}
+            onChange={(e) => patch({ title: e.target.value })}
+          />
+        </Field>
+        <Field
+          label="Ссылка на PL"
+          hint="Полный HTTPS адрес. Пустое поле убирает кнопку из письма."
+        >
+          <input
+            aria-label="Ссылка на PL в письме"
+            value={value.platform_url}
+            maxLength={2048}
+            onChange={(e) => patch({ platform_url: e.target.value })}
+          />
+        </Field>
+        <Field label="Подпись письма">
+          <input
+            aria-label="Подпись письма"
+            value={value.footer}
+            maxLength={240}
+            onChange={(e) => patch({ footer: e.target.value })}
+          />
+        </Field>
+      </div>
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          checked={value.show_labels}
+          onChange={(e) => patch({ show_labels: e.target.checked })}
+        />
+        Показывать дополнительные метки событий
+      </label>
+      <div className="actions">
+        <select
+          aria-label="Состояние предпросмотра"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as "firing" | "resolved")}
+        >
+          <option value="firing">Тревога</option>
+          <option value="resolved">Восстановлено</option>
+        </select>
+        <Button disabled={busy || disabled} onClick={() => void render()}>
+          {busy ? "Обрабатываем…" : "Предпросмотр письма"}
+        </Button>
+      </div>
+      <p className="muted">
+        Предпросмотр использует native renderer Alertmanager и два примера
+        событий. SMTP отправка не выполняется.
+      </p>
+      {preview && (
+        <div className="am-email-preview">
+          <strong>{preview.subject}</strong>
+          <iframe
+            title="Предпросмотр email Alertmanager"
+            sandbox=""
+            referrerPolicy="no-referrer"
+            srcDoc={
+              "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline';\">" +
+              preview.html
+            }
+          />
+          <details>
+            <summary>Текстовая версия</summary>
+            <pre>{preview.text}</pre>
+          </details>
+        </div>
+      )}
+      <div className="am-email-test">
+        <h3>Контрольная доставка</h3>
+        {applied?.smtp?.message && appliedRef ? (
+          <>
+            <p>
+              Применённый получатель: <strong>{applied.name}</strong>
+              <br />
+              {applied.smtp.to.join(", ")}
+            </p>
+            <p className="muted">
+              Отправляются два контрольных события через SMTP и применённый
+              шаблон. После тревоги отправьте восстановление.
+            </p>
+            <div className="actions">
+              <Button
+                disabled={busy || disabled || test?.status === "firing"}
+                onClick={() => void send("firing")}
+              >
+                Отправить контрольную тревогу
+              </Button>
+              <Button
+                disabled={busy || disabled || test?.status !== "firing"}
+                onClick={() => void send("resolved")}
+              >
+                Отправить восстановление
+              </Button>
+            </div>
+          </>
+        ) : (
+          <p className="muted">
+            Сохраните, проверьте и примените email конфигурацию перед
+            контрольной отправкой.
+          </p>
+        )}
+      </div>
+      {notice && <p role="status">{notice}</p>}
+      {!!error && <ErrorBox error={error} />}
+    </div>
+  );
 }
 
 export default function AlertmanagerModule({
@@ -455,6 +677,7 @@ export default function AlertmanagerModule({
               ...(item.kind === "email" && item.smtp
                 ? {
                     smtp: {
+                      message: item.smtp.message || messageDefaults(),
                       smarthost: item.smtp.smarthost,
                       from: item.smtp.from,
                       to: item.smtp.to
@@ -873,6 +1096,20 @@ export default function AlertmanagerModule({
                           />
                         </Field>
                       </div>
+                    )}
+                    {item.kind === "email" && (
+                      <EmailMessageEditor
+                        instanceID={instance.id}
+                        value={item.smtp?.message || messageDefaults()}
+                        onChange={(message) => smtp(index, { message })}
+                        applied={state.data.applied?.receivers.find(
+                          (r) => r.name === item.name && r.kind === "email",
+                        )}
+                        appliedRef={state.data.applied?.ref}
+                        disabled={
+                          !writable || instance.desired_state !== "enabled"
+                        }
+                      />
                     )}
                     {item.kind === "pagerduty" && (
                       <Field

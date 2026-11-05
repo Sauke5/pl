@@ -92,3 +92,31 @@ func (c *HostController) AlertmanagerStatus(ctx context.Context, id string) (mod
 	}
 	return out, err
 }
+
+// Email tools remain an optional capability for compatible controller fakes.
+type AlertmanagerEmailController interface {
+	PreviewAlertmanagerEmail(context.Context, string, model.AlertmanagerEmailMessage, string) (model.AlertmanagerEmailPreview, error)
+	TestAlertmanagerEmail(context.Context, string, model.AlertmanagerEmailTest) error
+}
+
+func (c *HostController) PreviewAlertmanagerEmail(ctx context.Context, id string, message model.AlertmanagerEmailMessage, status string) (model.AlertmanagerEmailPreview, error) {
+	var out model.AlertmanagerEmailPreview
+	if !canonicalID(id) || (status != "firing" && status != "resolved") {
+		return out, errors.New("Некорректный запрос preview")
+	}
+	err := c.alertmanagerCall(ctx, "/v1/alertmanager/preview", map[string]any{"instance_id": id, "message": message, "status": status}, &out)
+	return out, err
+}
+func (c *HostController) TestAlertmanagerEmail(ctx context.Context, id string, input model.AlertmanagerEmailTest) error {
+	if !canonicalID(id) || !canonicalID(input.ConfigurationRef) || !canonicalID(input.TestID) || (input.Status != "firing" && input.Status != "resolved") {
+		return errors.New("Некорректный запрос контрольного письма")
+	}
+	var out struct {
+		Accepted bool `json:"accepted"`
+	}
+	err := c.alertmanagerCall(ctx, "/v1/alertmanager/test-notification", map[string]any{"instance_id": id, "configuration_ref": input.ConfigurationRef, "receiver": input.Receiver, "test_id": input.TestID, "status": input.Status}, &out)
+	if err == nil && !out.Accepted {
+		return errors.New("Alertmanager не подтвердил приём контрольного события")
+	}
+	return err
+}

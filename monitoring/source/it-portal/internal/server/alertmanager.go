@@ -188,3 +188,66 @@ func (s *Server) getAlertmanagerStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, 200, status)
 }
+
+func (s *Server) previewAlertmanagerEmail(w http.ResponseWriter, r *http.Request) {
+	i, ok := s.alertmanagerInstance(w, r)
+	if !ok {
+		return
+	}
+	c, ok := s.Modules.Controller.(modules.AlertmanagerEmailController)
+	if !ok {
+		problem(w, 503, "controller_unavailable", "Host controller не поддерживает email preview")
+		return
+	}
+	var input struct {
+		Message model.AlertmanagerEmailMessage `json:"message"`
+		Status  string                         `json:"status"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if !validAlertmanagerMessage(&input.Message) || (input.Status != "firing" && input.Status != "resolved") {
+		problem(w, 400, "invalid_configuration", "Проверьте оформление письма")
+		return
+	}
+	out, err := c.PreviewAlertmanagerEmail(r.Context(), i.ID, input.Message, input.Status)
+	if err != nil {
+		problem(w, 422, "preview_failed", "Не удалось отобразить письмо native renderer Alertmanager")
+		return
+	}
+	respond(w, 200, out)
+}
+func (s *Server) testAlertmanagerEmail(w http.ResponseWriter, r *http.Request) {
+	i, ok := s.alertmanagerInstance(w, r)
+	if !ok {
+		return
+	}
+	c, ok := s.Modules.Controller.(modules.AlertmanagerEmailController)
+	if !ok {
+		problem(w, 503, "controller_unavailable", "Host controller не поддерживает контрольные письма")
+		return
+	}
+	var input model.AlertmanagerEmailTest
+	if !decode(w, r, &input) {
+		return
+	}
+	if !canonicalUUID(input.TestID) || i.AlertmanagerApplied == nil || i.AlertmanagerApplied.Ref != input.ConfigurationRef || i.DesiredState != "enabled" || (input.Status != "firing" && input.Status != "resolved") {
+		problem(w, 409, "conflict", "Выберите текущую применённую конфигурацию работающего Alertmanager")
+		return
+	}
+	found := false
+	for _, receiver := range i.AlertmanagerApplied.Receivers {
+		if receiver.Name == input.Receiver && receiver.Kind == "email" && receiver.SMTP != nil && receiver.SMTP.Message != nil {
+			found = true
+		}
+	}
+	if !found {
+		problem(w, 400, "invalid_receiver", "Сначала примените оформление выбранного email получателя")
+		return
+	}
+	if err := c.TestAlertmanagerEmail(r.Context(), i.ID, input); err != nil {
+		problem(w, 422, "notification_test_failed", "Alertmanager не принял контрольное событие; проверьте состояние и повторите через 10 секунд")
+		return
+	}
+	respond(w, 202, map[string]any{"accepted": true, "test_id": input.TestID, "status": input.Status})
+}

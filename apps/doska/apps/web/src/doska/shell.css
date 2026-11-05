@@ -69,6 +69,6 @@ html[data-doska-mode="platform"], html[data-doska-mode="platform"] body { margin
 .doska-app .doska-archive-project:hover { background:rgba(245,118,121,.16); }
 :root[data-theme="light"] .doska-app .doska-archive-project { color:#ad3038;border-color:rgba(173,48,56,.3);background:#fbeaec; }
 
-.doska-live-check { position:fixed;inset:0;display:grid;place-items:center;background:var(--background,#142435);color:var(--text,#dce6f3);z-index:100; }
+.doska-live-check { position:fixed;inset:0;display:grid;place-items:center;background:var(--pl-ui-bg,#142435);color:var(--pl-ui-text,#dce6f3);font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;z-index:100; }
 
 .doska-app .doska-panel.pl-ui-panel { margin-bottom:23px; }

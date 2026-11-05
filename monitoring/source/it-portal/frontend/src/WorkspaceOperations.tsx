@@ -12,13 +12,37 @@ import { statusLabel } from "./copy";
 import "./workspace.css";
 
 function operationAction(item: Job) {
-  return statusLabel[item.kind] || "Операция";
+  if (item.kind === "module") {
+    const action =
+      typeof item.parameters?.action === "string" ? item.parameters.action : "";
+    return (
+      (
+        {
+          enable: "Включение модуля",
+          disable: "Отключение модуля",
+          refresh: "Обновление состояния модуля",
+          install: "Установка модуля",
+          connect: "Подключение модуля",
+          reconnect: "Переподключение модуля",
+          configure: "Применение конфигурации модуля",
+          remove: "Удаление модуля",
+          start: "Запуск модуля",
+          stop: "Остановка модуля",
+          restart: "Перезапуск модуля",
+          update: "Обновление модуля",
+        } as Record<string, string>
+      )[action] || (action ? `Модуль: ${action}` : "Операция с модулем")
+    );
+  }
+  return statusLabel[item.kind] || item.kind || "Операция";
 }
 
 function operationActor(item: WorkspaceOperation) {
   return (
     item.actor_name?.trim() ||
-    (item.actor === "system" ? "Система" : "Имя не указано")
+    (item.actor === "system" || item.actor?.startsWith("system:")
+      ? `Система${item.actor?.startsWith("system:") ? ` · ${item.actor.slice(7)}` : ""}`
+      : "Имя не указано")
   );
 }
 
@@ -27,6 +51,12 @@ function operationTarget(
   resources: Map<string, string>,
   integrations: Map<string, string>,
 ) {
+  if (item.kind === "module") {
+    const name = item.parameters?.module_name;
+    if (typeof name === "string" && name.trim()) return name.trim();
+    const id = item.parameters?.instance_id;
+    if (typeof id === "string" && id.trim()) return `Экземпляр ${id}`;
+  }
   const resource = item.resource_name || resources.get(item.resource_id);
   if (resource) return resource;
   const integration =
@@ -41,6 +71,24 @@ function operationTarget(
 
 function OperationOutcome({ job }: { job: Job }) {
   if (job.status !== "succeeded") return null;
+  if (job.kind === "module") {
+    const instance = job.result?.instance as
+      Record<string, unknown> | undefined;
+    const state =
+      typeof instance?.observed_state === "string"
+        ? instance.observed_state
+        : "";
+    const version =
+      typeof instance?.version === "string" ? instance.version : "";
+    const removed = job.parameters?.action === "remove";
+    return (
+      <p className="workspace-operation-outcome">
+        {removed ? "Модуль удалён." : "Операция с модулем завершена."}
+        {state ? ` Состояние: ${statusLabel[state] || state}.` : ""}
+        {version ? ` Версия: ${version}.` : ""}
+      </p>
+    );
+  }
   if (job.kind === "refresh" && job.result?.refreshed === true)
     return (
       <p className="workspace-operation-outcome">Данные источника обновлены.</p>
@@ -92,9 +140,13 @@ export function OperationsTimeline({
   active?: boolean;
 }) {
   useHelpTopic(active ? "operations" : undefined, active ? 2 : -1);
+  const [showServiceRefresh, setShowServiceRefresh] = useState(false);
   const operations = useQuery({
-    queryKey: ["/operations"],
-    queryFn: () => api<WorkspaceOperation[]>("/operations"),
+    queryKey: ["/operations", showServiceRefresh],
+    queryFn: () =>
+      api<WorkspaceOperation[]>(
+        `/operations?exclude_service_refresh=${!showServiceRefresh}`,
+      ),
     enabled: active,
     refetchInterval: (query) =>
       query.state.data?.some(
@@ -137,6 +189,17 @@ export function OperationsTimeline({
           </Button>
         </div>
       </div>
+      <label className="events-collection-toggle">
+        <input
+          type="checkbox"
+          checked={showServiceRefresh}
+          onChange={(event) => setShowServiceRefresh(event.target.checked)}
+        />
+        <span>Показывать успешные служебные обновления</span>
+        <small>
+          Ручные операции, ошибки и незавершённые задания показываются всегда.
+        </small>
+      </label>
       <div className="workspace-operations-grid">
         <Panel title="Операции команды" icon={<Clock3 size={18} />}>
           {operations.error && (

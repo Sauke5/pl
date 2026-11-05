@@ -87,6 +87,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/configuration/apply", s.moduleAuth(s.applyAlertmanagerConfiguration))
 	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/configuration/retry", s.moduleAuth(s.retryAlertmanagerConfiguration))
 	m.HandleFunc("GET /api/v1/modules/{id}/alertmanager/status", s.moduleAuth(s.getAlertmanagerStatus))
+	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/email/preview", s.moduleAuth(s.previewAlertmanagerEmail))
+	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/email/test", s.moduleAuth(s.testAlertmanagerEmail))
 	m.HandleFunc("GET /api/v1/modules/{id}/xray/configuration", s.moduleAuth(s.getXrayConfiguration))
 	m.HandleFunc("PUT /api/v1/modules/{id}/xray/configuration", s.moduleAuth(s.saveXrayConfiguration))
 	m.HandleFunc("POST /api/v1/modules/{id}/xray/configuration/validate", s.moduleAuth(s.validateXrayConfiguration))
@@ -107,6 +109,8 @@ func (s *Server) Handler() http.Handler {
 		// the installed container and removes the unrelated Platform cookie.
 		m.HandleFunc("GET /internal/routing/grafana", s.grafanaNativeUpstream)
 		m.HandleFunc("GET /internal/routing/bookstack", s.moduleAuth(s.bookstackNativeUpstream))
+		m.HandleFunc("GET /internal/startup/grafana", s.grafanaNativeStartup)
+		m.HandleFunc("GET /internal/startup/bookstack", s.moduleAuth(s.bookstackNativeStartup))
 		m.HandleFunc(bookstackExternalPrefix+"/", s.bookstackExternalProxy)
 		m.HandleFunc("/netmap", s.netmapGateway)
 		m.HandleFunc("/netmap/", s.netmapGateway)

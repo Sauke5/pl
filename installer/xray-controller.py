@@ -21,7 +21,7 @@ import subprocess
 import time
 import urllib.parse
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 BINARY = '/usr/local/bin/xray'
 FLAGS = ['run', '-config', '/etc/xray/config.json']
@@ -89,6 +89,22 @@ def fsync_directory(path):
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+@contextmanager
+def operation_lock(operations, operation):
+    # Observational refreshes share instance admission, but the same durable
+    # operation ID must still serialize conflict detection and journal writes.
+    # Fixed stripes bound lock files even when polling creates fresh UUIDs.
+    slot = hashlib.sha256(identifier(operation).encode()).digest()[0] % 64
+    path = operations / ('operation-slot-' + format(slot, '02x') + '.lock')
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    if os.fstat(fd).st_uid != os.geteuid() or os.fstat(fd).st_mode & 0o777 != 0o600:
+        os.close(fd)
+        raise ValueError('Unsafe module operation lock')
+    with os.fdopen(fd, 'a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        yield
 
 
 def text(value, maximum=256, empty=False):
@@ -878,8 +894,11 @@ class XrayController:
         instance, operation = identifier(body['instance_id']), identifier(body['operation_id'])
         if body['action'] == 'configure':
             identifier(body['configuration_ref'])
-        with self.instance_lock(instance, exclusive=True), self.locked():
-            self.revoke_runtime(instance)
+        refreshing = body['action'] == 'refresh'
+        with operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
+            if not refreshing:
+                self.revoke_runtime(instance)
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():

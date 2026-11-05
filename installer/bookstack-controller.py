@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Owned BookStack/MariaDB lifecycle; native authentication stays in BookStack."""
 from __future__ import annotations
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import base64
 import fcntl
 import hashlib
@@ -482,7 +482,9 @@ class BookStackController:
         configured = json.loads(read_file(self.root / 'state/installation.json')).get('config', {}).get('public_url')
         if 'public_url' in body and public_origin(body['public_url']) != public_origin(configured):
             raise ValueError('BookStack operation origin mismatch')
-        with self.instance_lock(instance, exclusive=True), self.locked():
+        refreshing = body['action'] == 'refresh'
+        with _files.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():
@@ -511,7 +513,7 @@ class BookStackController:
 
     def get(self, instance):
         instance = identifier(instance)
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             return self.observe(instance)
 
     def initial_login(self, body):
@@ -519,7 +521,7 @@ class BookStackController:
                 or body.get('module_id') != 'bookstack' or body.get('service') != 'bookstack'):
             raise ValueError('Invalid BookStack initial login request')
         instance = identifier(body['instance_id'])
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             state = self.state(instance)
             obj = self.inspect(instance, 'web')
             if not obj or not obj.get('State', {}).get('Running'):

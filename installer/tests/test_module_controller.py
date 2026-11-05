@@ -550,14 +550,19 @@ class ControllerTests(unittest.TestCase):
             with self.subTest(path=path, query=query[:20]), self.assertRaises(ValueError):
                 self.controller.read({'instance_id': self.instance, 'path': path, 'query': query})
 
-    def test_read_lock_contention_has_a_distinct_transient_type(self):
+    def test_ready_read_does_not_wait_for_another_modules_lifecycle_lock(self):
+        self.controller._read_routes[self.instance] = (pl.time.monotonic(), 'http://127.0.0.1:9090')
+        def response(*args, **kwargs):
+            value = io.BytesIO(b'{"status":"success"}')
+            value.status, value.headers = 200, {'Content-Type': 'application/json'}
+            return value
+        opener = Mock(); opener.open.side_effect = response
         with (self.controller.base / 'controller.lock').open('a') as held:
             pl.fcntl.flock(held, pl.fcntl.LOCK_EX | pl.fcntl.LOCK_NB)
-            with self.assertRaises(pl.ControllerBusy):
-                self.controller.read({'instance_id': self.instance, 'path': '/api/v1/targets', 'query': ''})
-        # Admission is released on error; another shared lock is immediately possible.
-        with (self.controller.base / 'controller.lock').open('a') as free:
-            pl.fcntl.flock(free, pl.fcntl.LOCK_SH | pl.fcntl.LOCK_NB)
+            with patch.object(pl.urllib.request, 'build_opener', return_value=opener):
+                result = self.controller.read({'instance_id': self.instance, 'path': '/api/v1/targets', 'query': ''})
+            self.assertEqual(result['status'], 200)
+            self.assertEqual(json.loads(base64.b64decode(result['body'])), {'status': 'success'})
 
     def test_read_uses_owned_loopback_and_returns_bounded_real_api_without_cookies(self):
         seen = []
@@ -622,7 +627,7 @@ class ControllerTests(unittest.TestCase):
             pending = pool.submit(self.controller.read, {'instance_id': self.instance, 'path': '/api/v1/targets', 'query': ''})
             try:
                 self.assertTrue(entered.wait(3))
-                with (self.controller.base / 'controller.lock').open('rb') as probe:
+                with (self.controller.base / 'controller.lock').open('a') as probe:
                     pl.fcntl.flock(probe, pl.fcntl.LOCK_EX | pl.fcntl.LOCK_NB)
                 with (self.controller.operations / ('read-' + self.instance + '.lock')).open('rb') as probe:
                     with self.assertRaises(BlockingIOError):

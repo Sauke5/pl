@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Owned official Grafana lifecycle with native authentication and users."""
 from __future__ import annotations
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import fcntl
 import hashlib
 import importlib.util
@@ -382,7 +382,7 @@ class GrafanaController:
                 or body.get('module_id') != 'grafana' or body.get('service') != 'grafana'):
             raise ValueError('Invalid Grafana initial login request')
         instance = identifier(body['instance_id'])
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             state = self.state(instance)
             if state.get('schema') != 2 or self.image['labels']['pl.build.variant'] != 'upstream-pinned':
                 raise ValueError('Grafana initial login unavailable for legacy installation')
@@ -516,7 +516,9 @@ class GrafanaController:
                 or body.get('module_id') != 'grafana' or body.get('action') not in ('install', 'enable', 'disable', 'refresh', 'remove')):
             raise ValueError('Unsupported Grafana operation')
         instance, operation = identifier(body['instance_id']), identifier(body['operation_id'])
-        with self.instance_lock(instance, exclusive=True), self.locked():
+        refreshing = body['action'] == 'refresh'
+        with _files.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():
@@ -545,7 +547,7 @@ class GrafanaController:
                         'operation_id': operation}
 
     def get(self, instance):
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             return self.observe(identifier(instance))
 
     def request(self, body):

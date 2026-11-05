@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -67,6 +68,9 @@ func (s *Server) WaylineProxy(integrationID string, transport func(model.Integra
 		if selectedID == "" {
 			source, e := s.connectorSource(r, "wayline", "")
 			if e != nil {
+				if errors.Is(e, store.ErrNotFound) && s.tryModuleStartupPage(w, r, "wayline", "", true) {
+					return
+				}
 				problem(w, 503, "wayline_unavailable", "Подключите один активный Wayline или выберите основной источник в конфигурации")
 				return
 			}
@@ -79,6 +83,9 @@ func (s *Server) WaylineProxy(integrationID string, transport func(model.Integra
 		source, err := store.Get[model.Integration](r.Context(), s.Store, "integration", selectedID)
 		if err != nil || !source.Enabled || source.Kind != "wayline" {
 			problem(w, 503, "wayline_unavailable", "Источник Wayline недоступен")
+			return
+		}
+		if source.ManagedModuleID != "" && s.tryModuleStartupPage(w, r, "wayline", source.ManagedModuleID, false) {
 			return
 		}
 		// Only an origin or an explicitly configured gateway path is accepted. All

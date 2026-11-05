@@ -69,20 +69,39 @@ func DefaultAlertmanagerConfiguration() AlertmanagerConfiguration {
 }
 
 // SMTP is public connection metadata; the password is returned only as a flag.
+type AlertmanagerEmailMessage struct {
+	Title       string `json:"title"`
+	PlatformURL string `json:"platform_url"`
+	Footer      string `json:"footer"`
+	ShowLabels  bool   `json:"show_labels"`
+}
+type AlertmanagerEmailPreview struct {
+	Subject string `json:"subject"`
+	HTML    string `json:"html"`
+	Text    string `json:"text"`
+}
+type AlertmanagerEmailTest struct {
+	ConfigurationRef string `json:"configuration_ref"`
+	Receiver         string `json:"receiver"`
+	TestID           string `json:"test_id"`
+	Status           string `json:"status"`
+}
 type AlertmanagerSMTP struct {
-	Smarthost   string   `json:"smarthost"`
-	From        string   `json:"from"`
-	To          []string `json:"to"`
-	TLSMode     string   `json:"tls_mode"`
-	Username    string   `json:"username"`
-	PasswordSet bool     `json:"password_set"`
+	Message     *AlertmanagerEmailMessage `json:"message,omitempty"`
+	Smarthost   string                    `json:"smarthost"`
+	From        string                    `json:"from"`
+	To          []string                  `json:"to"`
+	TLSMode     string                    `json:"tls_mode"`
+	Username    string                    `json:"username"`
+	PasswordSet bool                      `json:"password_set"`
 }
 type AlertmanagerSMTPInput struct {
-	Smarthost   string   `json:"smarthost"`
-	From        string   `json:"from"`
-	To          []string `json:"to"`
-	TLSMode     string   `json:"tls_mode"`
-	Username    string   `json:"username"`
-	Password    string   `json:"password,omitempty"`
-	PasswordSet bool     `json:"password_set,omitempty"`
+	Message     *AlertmanagerEmailMessage `json:"message,omitempty"`
+	Smarthost   string                    `json:"smarthost"`
+	From        string                    `json:"from"`
+	To          []string                  `json:"to"`
+	TLSMode     string                    `json:"tls_mode"`
+	Username    string                    `json:"username"`
+	Password    string                    `json:"password,omitempty"`
+	PasswordSet bool                      `json:"password_set,omitempty"`
 }

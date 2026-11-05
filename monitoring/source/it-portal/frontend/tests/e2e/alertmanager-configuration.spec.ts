@@ -11,6 +11,12 @@ type Receiver = {
   token_set?: boolean;
   chat_id?: number;
   smtp?: {
+    message?: {
+      title: string;
+      platform_url: string;
+      footer: string;
+      show_labels: boolean;
+    };
     smarthost: string;
     from: string;
     to: string[];
@@ -115,6 +121,7 @@ async function fixture(
             ...(item.smtp
               ? {
                   smtp: {
+                    message: item.smtp.message,
                     smarthost: item.smtp.smarthost,
                     from: item.smtp.from,
                     to: item.smtp.to,
@@ -331,14 +338,20 @@ test("installed Alertmanager opens from Notifications sidebar and survives reloa
   await page.getByRole("button", { name: "Уведомления", exact: true }).click();
   await expect(page).toHaveURL(/#notifications$/);
   await expect(
-    page.getByRole("heading", { name: "Уведомления Alertmanager", exact: true }),
+    page.getByRole("heading", {
+      name: "Уведомления Alertmanager",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Добавить получателя", exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Уведомления Alertmanager", exact: true }),
+    page.getByRole("heading", {
+      name: "Уведомления Alertmanager",
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -811,4 +824,101 @@ test("Alertmanager PagerDuty Events v2 routing key is write-only and bound to en
         .configuration as Configuration
     ).receivers[0].token,
   ).toBe("explicit-new-routing-key");
+});
+
+test("Alertmanager email message persists and control sends bind to the applied receiver", async ({
+  page,
+}) => {
+  const writes = await fixture(page);
+  const emailRoot = `**/api/v1/modules/${id}/alertmanager/email/`;
+  const controls: Record<string, unknown>[] = [];
+  await page.route(emailRoot + "preview", async (route) => {
+    expect(route.request().headers()["x-csrf-token"]).toBe("am-fixture-csrf");
+    expect(route.request().postDataJSON()).toMatchObject({
+      status: "resolved",
+      message: { title: "PL lab" },
+    });
+    await route.fulfill({
+      json: {
+        subject: "PL lab · ВОССТАНОВЛЕНО",
+        html: "<p>Native preview response</p>",
+        text: "Resolved sample",
+      },
+    });
+  });
+  await page.route(emailRoot + "test", async (route) => {
+    controls.push(route.request().postDataJSON());
+    await route.fulfill({ status: 202, json: { accepted: true } });
+  });
+  await page
+    .getByRole("button", { name: "Добавить получателя", exact: true })
+    .click();
+  await page
+    .getByLabel("Канал получателя 1", { exact: true })
+    .selectOption("email");
+  await page
+    .getByLabel("SMTP сервер 1", { exact: true })
+    .fill("smtp.example.invalid:587");
+  await page
+    .getByLabel("Отправитель SMTP 1", { exact: true })
+    .fill("alerts@example.invalid");
+  await page
+    .getByLabel("Получатели SMTP 1", { exact: true })
+    .fill("ops@example.invalid");
+  await page.getByLabel("Название в письме", { exact: true }).fill("PL lab");
+  await page
+    .getByLabel("Ссылка на PL в письме", { exact: true })
+    .fill("https://pl.example/modules");
+  await page
+    .getByLabel("Подпись письма", { exact: true })
+    .fill("Control notifications");
+  await page.getByLabel("Показывать дополнительные метки событий").check();
+  await page
+    .getByLabel("Состояние предпросмотра", { exact: true })
+    .selectOption("resolved");
+  await page
+    .getByRole("button", { name: "Предпросмотр письма", exact: true })
+    .click();
+  await expect(
+    page.getByText("PL lab · ВОССТАНОВЛЕНО", { exact: true }),
+  ).toBeVisible();
+  const preview = page.locator(
+    'iframe[title="Предпросмотр email Alertmanager"]',
+  );
+  await expect(preview).toHaveAttribute("sandbox", "");
+  await expect(preview).toHaveAttribute("srcdoc", /default-src 'none'/);
+  await save(page, 1);
+  expect(
+    (writes[0].data.configuration as Configuration).receivers[0].smtp?.message,
+  ).toEqual({
+    title: "PL lab",
+    platform_url: "https://pl.example/modules",
+    footer: "Control notifications",
+    show_labels: true,
+  });
+  await apply(page);
+  const fire = page.getByRole("button", {
+    name: "Отправить контрольную тревогу",
+    exact: true,
+  });
+  await expect(fire).toBeVisible();
+  await expect(fire).toBeEnabled();
+  await fire.click();
+  const resolve = page.getByRole("button", {
+    name: "Отправить восстановление",
+    exact: true,
+  });
+  await expect(resolve).toBeEnabled();
+  await resolve.click();
+  expect(controls).toHaveLength(2);
+  expect(controls[0]).toMatchObject({
+    receiver: "receiver_1",
+    status: "firing",
+  });
+  expect(controls[1]).toMatchObject({
+    receiver: "receiver_1",
+    status: "resolved",
+    test_id: controls[0].test_id,
+    configuration_ref: controls[0].configuration_ref,
+  });
 });

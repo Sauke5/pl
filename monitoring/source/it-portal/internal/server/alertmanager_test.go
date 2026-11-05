@@ -449,3 +449,27 @@ func TestAlertmanagerTeamsAndPagerDutyStructuredInput(t *testing.T) {
 		t.Fatal("PagerDuty public plan without routing key accepted")
 	}
 }
+
+func TestAlertmanagerEmailMessageValidation(t *testing.T) {
+	good := model.AlertmanagerEmailMessage{Title: "PL · Мониторинг", PlatformURL: "https://pl.example/modules", Footer: "Уведомление", ShowLabels: true}
+	if !validAlertmanagerMessage(&good) || !validAlertmanagerMessage(nil) {
+		t.Fatal("valid message rejected")
+	}
+	for _, invalid := range []model.AlertmanagerEmailMessage{
+		{Title: ""}, {Title: "a\r\nBcc: injected"}, {Title: strings.Repeat("x", 81)},
+		{Title: "PL", Footer: strings.Repeat("x", 241)},
+		{Title: "PL", PlatformURL: "javascript:alert(1)"},
+		{Title: "PL", PlatformURL: "https://user:password@pl.example/"},
+		{Title: "PL", PlatformURL: "https://pl.example/?token=private"},
+		{Title: "PL", PlatformURL: "https://pl.example/{{ .Labels.url }}"},
+	} {
+		if validAlertmanagerMessage(&invalid) {
+			t.Fatalf("invalid message accepted: %+v", invalid)
+		}
+	}
+	// Literal text containing template delimiters is valid: controller quotes it
+	// as a Go string value rather than evaluating administrator-supplied source.
+	if !validAlertmanagerMessage(&model.AlertmanagerEmailMessage{Title: "{{ .Secret }}", Footer: "<script>"}) {
+		t.Fatal("literal text rejected")
+	}
+}

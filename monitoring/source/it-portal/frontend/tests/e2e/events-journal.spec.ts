@@ -294,7 +294,7 @@ test("operation shows source, initiator and result before technical details", as
     result: { refreshed: true },
     error: "",
   };
-  await page.route("**/api/v1/operations", (route) =>
+  await page.route("**/api/v1/operations?*", (route) =>
     route.fulfill({ json: [operation] }),
   );
   await page.route("**/api/v1/jobs/opaque-job-id", (route) =>
@@ -351,7 +351,7 @@ test("operation outcomes describe enrichment and keep failures honest", async ({
     result: {},
     error: "Источник недоступен",
   };
-  await page.route("**/api/v1/operations", (route) =>
+  await page.route("**/api/v1/operations?*", (route) =>
     route.fulfill({ json: [enrich, failed] }),
   );
   await page.route("**/api/v1/jobs/*", (route) =>
@@ -681,3 +681,130 @@ for (const width of [1920]) {
     });
   }
 }
+
+test("module operations show instance action actor result and service refresh control", async ({
+  page,
+}) => {
+  const state = await mockJournal(page);
+  const operation = {
+    id: "module-job",
+    kind: "module",
+    resource_id: "",
+    integration_id: "",
+    actor: "system:modules",
+    actor_name: "Система · modules",
+    created_at: now.toISOString(),
+    status: "succeeded",
+    error: "",
+    parameters: {
+      action: "refresh",
+      instance_id: "metrics",
+      module_id: "prometheus",
+      module_name: "Метрики стенда",
+    },
+    result: {
+      instance: {
+        name: "Метрики стенда",
+        observed_state: "connected",
+        version: "3.11.0",
+      },
+    },
+  };
+  const requests: URL[] = [];
+  await page.route("**/api/v1/operations?*", (route) => {
+    const url = new URL(route.request().url());
+    requests.push(url);
+    return route.fulfill({
+      json:
+        url.searchParams.get("exclude_service_refresh") === "true"
+          ? []
+          : [operation],
+    });
+  });
+  await page.route("**/api/v1/jobs/module-job", (route) =>
+    route.fulfill({ json: operation }),
+  );
+  await page.goto("/#events");
+  await expect.poll(() => state.requests.length).toBeGreaterThan(0);
+  expect(
+    state.requests.at(-1)?.searchParams.get("exclude_service_refresh"),
+  ).toBe("true");
+  await page
+    .getByLabel("Показывать успешные служебные обновления")
+    .first()
+    .check();
+  await expect
+    .poll(() =>
+      state.requests.at(-1)?.searchParams.has("exclude_service_refresh"),
+    )
+    .toBe(false);
+  await page.getByRole("button", { name: "Операции", exact: true }).click();
+  await expect(
+    page.getByText("Операций пока нет", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() => requests.at(-1)?.searchParams.get("exclude_service_refresh"))
+    .toBe("true");
+  await page
+    .locator("label:visible")
+    .filter({ hasText: "Показывать успешные служебные обновления" })
+    .locator("input")
+    .check();
+  const row = page.locator(".workspace-operation-row");
+  await expect(row).toContainText(
+    "Обновление состояния модуля · Метрики стенда",
+  );
+  await expect(row).toContainText("Система · modules");
+  await expect(row).not.toContainText("Цель не указана");
+  await row.click();
+  const result = page.getByLabel("Результат операции");
+  await expect(result).toContainText("Метрики стенда");
+  await expect(result).toContainText("Версия: 3.11.0");
+  await expect(result).toContainText("Операция с модулем завершена");
+  await page.screenshot({ path: "artifacts/module-operation-context.png" });
+});
+
+test("module event inspector names the instance and exposes observed outcome", async ({
+  page,
+}) => {
+  await mockJournal(page);
+  const event = {
+    ...item(0),
+    kind: "job.succeeded",
+    title: "Обновление состояния модуля · Метрики стенда — завершено",
+    event_type: "operation",
+    source: "platform",
+    source_name: "Платформа",
+    resource_id: "",
+    resource_name: "",
+    object_kind: "job",
+    object_name: "Метрики стенда",
+    job_kind: "module",
+    actor: "system:modules",
+    actor_name: "Система · modules",
+    details: {
+      module_action: "refresh",
+      result_summary: "Состояние: работает · Версия: 3.11.0",
+    },
+  };
+  await page.route("**/api/v1/event-journal?*", (route) =>
+    route.fulfill({
+      json: {
+        items: [event],
+        total: 1,
+        new_count: 0,
+        snapshot: "module",
+        next_cursor: "",
+      },
+    }),
+  );
+  await page.route("**/api/v1/event-journal/event-0?*", (route) =>
+    route.fulfill({ json: { event, related: [] } }),
+  );
+  await page.goto("/#events");
+  await page.locator(".events-entry").click();
+  const inspector = page.locator(".events-inspector");
+  await expect(inspector).toContainText("Метрики стенда");
+  await expect(inspector).toContainText("Состояние: работает · Версия: 3.11.0");
+  await expect(inspector).not.toContainText("Без привязки к объекту");
+});

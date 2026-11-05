@@ -257,6 +257,20 @@ class Controller:
             fcntl.flock(stream, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
             yield
 
+    @contextmanager
+    def operation_lock(self, operation_id):
+        # Equal operation IDs always serialize, including refreshes for different
+        # instances. A bounded set avoids another permanent file per poll job.
+        slot = hashlib.sha256(identifier(operation_id).encode()).digest()[0] % 64
+        path = self.operations / ('operation-slot-' + format(slot, '02x') + '.lock')
+        fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'a') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o7777 != 0o600:
+                raise ValueError('Invalid module operation lock')
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            yield
+
     def resolve_image(self):
         path = self.root / 'private/module-images.json'
         if not path.exists() and not path.is_symlink():
@@ -700,21 +714,17 @@ class Controller:
         read_request(body)
         instance = body['instance_id']
         with self.instance_lock(instance):
-            fd = os.open(self.base / 'controller.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(fd, 'a') as lock:
-                try:
-                    fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    raise ControllerBusy('Module controller busy; retry the read') from None
-                route = self._read_routes.get(instance)
-                if route is None or time.monotonic() - route[0] >= 30:
-                    self._read_routes.pop(instance, None)
-                    obj = self.inspect(instance)
-                    if obj is None or not obj['State'].get('Running'):
-                        raise ValueError('Managed module is not running')
-                    self.config(instance, create=False)
-                    route = (time.monotonic(), self.loopback_endpoint(obj))
-                    self._read_routes[instance] = route
+            # The instance lock excludes this module's stop/configure/remove.
+            # Another module's installation must not deny a verified read.
+            route = self._read_routes.get(instance)
+            if route is None or time.monotonic() - route[0] >= 30:
+                self._read_routes.pop(instance, None)
+                obj = self.inspect(instance)
+                if obj is None or not obj['State'].get('Running'):
+                    raise ValueError('Managed module is not running')
+                self.config(instance, create=False)
+                route = (time.monotonic(), self.loopback_endpoint(obj))
+                self._read_routes[instance] = route
             address = route[1] + body['path']
             if body['query']:
                 address += '?' + body['query']
@@ -926,10 +936,12 @@ class Controller:
                     raise ValueError('Unsupported module installation parameters')
                 if self.delivery().ensure_module(body.get('module_id')):
                     self.image = self.resolve_image()
-                    for name in ('_xray_controller', '_grafana_controller', '_wayline_controller', '_alertmanager_controller',
-                                 '_forms_controller', '_doska_controller', '_sftpgo_controller', '_netmap_controller', '_bookstack_controller'):
-                        if hasattr(self, name):
-                            delattr(self, name)
+                    # Other modules retain their verified routes while this one
+                    # is delivered. Replacing every controller forced unrelated
+                    # browser requests back through cold Docker validation.
+                    name = '_' + body['module_id'] + '_controller'
+                    if hasattr(self, name):
+                        delattr(self, name)
             with self.delivery_guard():
                 return self._execute(body)
         return self._execute(body)
@@ -948,8 +960,9 @@ class Controller:
         operation(body)
         lock_path = self.base / 'controller.lock'
         fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, 'a') as lock, self.instance_lock(body['instance_id'], exclusive=True):
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        with os.fdopen(fd, 'a') as lock, self.operation_lock(body['operation_id']), self.instance_lock(body['instance_id'], exclusive=body['action'] != 'refresh'):
+            if body['action'] != 'refresh':
+                fcntl.flock(lock, fcntl.LOCK_EX)
             self._read_routes.pop(body['instance_id'], None)
             path = self.operations / (body['operation_id'] + '.json')
             fingerprint = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
@@ -1017,9 +1030,10 @@ class Controller:
         if xray_path.exists() or xray_path.is_symlink():
             return self.xray().get(instance)
 
+        # Keep the root-private lock-file ownership/symlink check, without
+        # waiting for another instance's lifecycle writer.
         fd = os.open(self.base / 'controller.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, 'a') as lock, self.instance_lock(instance, exclusive=True):
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        with os.fdopen(fd, 'a'), self.instance_lock(instance):
             try:
                 return self.observe(instance)
             except (ValueError, OSError, KeyError, TypeError) as error:
@@ -1048,10 +1062,11 @@ def authenticated(key, headers, method, path, body, now=None):
 # native destination write. flock also excludes a second controller process.
 _application_transfer_slot = threading.BoundedSemaphore(1)
 TRANSFER_RESERVE = 256 * 1024 * 1024
-# Match the gateway's 32 total SSE streams and four active ordinary requests.
+# Match the gateway's separate asset, SSE and ordinary request lanes.
 # Empty signed requests reserve no upload disk budget and cannot monopolize it.
 _doska_empty_events = threading.BoundedSemaphore(32)
 _doska_empty_requests = threading.BoundedSemaphore(4)
+_doska_empty_assets = threading.BoundedSemaphore(8)
 
 
 @contextmanager
@@ -1061,7 +1076,9 @@ def doska_empty_input(metadata):
     events = (metadata.get('role') == 'api' and metadata.get('method') == 'GET'
               and metadata.get('path') == '/api/doska/events'
               and metadata.get('query') == '' and metadata.get('content_type') == '')
-    slot = _doska_empty_events if events else _doska_empty_requests
+    assets = (metadata.get('role') == 'web' and metadata.get('method') in ('GET', 'HEAD')
+              and metadata.get('query') == '' and metadata.get('content_type') == '')
+    slot = _doska_empty_events if events else _doska_empty_assets if assets else _doska_empty_requests
     if not slot.acquire(blocking=False):
         raise TransferRefused(429)
     try:
@@ -1217,8 +1234,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif self.command == 'POST' and self.path in ('/v1/xray/prepare', '/v1/xray/validate', '/v1/xray/status'):
                 action = self.path.rsplit('/', 1)[1]
                 result = getattr(self.server.controller.xray(), action)(json.loads(raw))
-            elif self.command == 'POST' and self.path in ('/v1/alertmanager/prepare', '/v1/alertmanager/validate', '/v1/alertmanager/status', '/v1/alertmanager/read'):
-                action = self.path.rsplit('/', 1)[1]
+            elif self.command == 'POST' and self.path in ('/v1/alertmanager/prepare', '/v1/alertmanager/validate', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/alertmanager/preview', '/v1/alertmanager/test-notification'):
+                action = self.path.rsplit('/', 1)[1].replace('-', '_')
                 result = getattr(self.server.controller.alertmanager(), action)(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/configuration/validate':
                 result = self.server.controller.validate_configuration(json.loads(raw))

@@ -13,10 +13,13 @@ from pathlib import Path
 import re
 import ssl
 import time
+import tempfile
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 import urllib.parse
 import urllib.request
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 # Shared file primitives only. This does not construct or inherit XrayController.
 _helper_path = Path(__file__).with_name('xray-controller.py')
@@ -137,8 +140,71 @@ def mailbox(value):
     return value
 
 
+def email_message(value):
+    if value is None:
+        value = {'title': 'PL · Мониторинг', 'platform_url': '', 'footer': 'Уведомление системы мониторинга PL', 'show_labels': False}
+    if not isinstance(value, dict) or set(value) != {'title', 'platform_url', 'footer', 'show_labels'}:
+        raise ValueError('Invalid email message fields')
+    text(value['title'], 80); text(value['footer'], 240, empty=True)
+    url = value['platform_url']
+    text(url, 2048, empty=True)
+    if url:
+        endpoint(url)
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.query or any(c in url for c in '?#{}'):
+            raise ValueError('Email platform link requires a literal HTTPS URL without query')
+    if type(value['show_labels']) is not bool:
+        raise ValueError('Invalid email label visibility')
+    return dict(value)
+
+
+def email_templates(message):
+    # Settings are literals, never executable template source. Dynamic alert data
+    # stays in native html/template expressions and retains contextual escaping.
+    literal = lambda value: '{{ ' + json.dumps(value, ensure_ascii=False) + ' }}'
+    title, footer = literal(message['title']), literal(message['footer'])
+    status = '{{ if eq .Status "firing" }}ТРЕВОГА{{ else }}ВОССТАНОВЛЕНО{{ end }}'
+    subject = title + ' · ' + status + ' · {{ len .Alerts }} событий'
+    timing = ('Начало: {{ .StartsAt | tz "UTC" | date "2006-01-02 15:04:05 UTC" }}'
+              '{{ if eq .Status "resolved" }} · Конец: {{ .EndsAt | tz "UTC" | date "2006-01-02 15:04:05 UTC" }}'
+              ' · Длительность: {{ humanizeDuration (.EndsAt.Sub .StartsAt).Seconds }}'
+              '{{ else }} · Длительность: {{ humanizeDuration (since .StartsAt).Seconds }}{{ end }}')
+    details = ('{{ if .Labels.instance }}{{ .Labels.instance }}{{ else if .Labels.job }}{{ .Labels.job }}{{ else }}Объект не указан{{ end }}'
+               ' · {{ if .Labels.severity }}{{ .Labels.severity }}{{ else }}severity не задана{{ end }}')
+    plain = title + '\n' + status + ' · Всего: {{ len .Alerts }} · Активных: {{ len .Alerts.Firing }} · Восстановлено: {{ len .Alerts.Resolved }}\n'
+    plain += '{{ range $i, $a := .Alerts }}{{ if lt $i 20 }}\n{{ .Labels.alertname }} · {{ .Status }}\n' + details + '\n{{ .Annotations.summary }}\n{{ .Annotations.description }}\n' + timing + '\n'
+    if message['show_labels']:
+        plain += '{{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }}\n{{ end }}'
+    plain += '{{ end }}{{ end }}{{ if gt (len .Alerts) 20 }}\nПоказаны первые 20 событий. Полный список доступен в PL.\n{{ end }}'
+    if message['platform_url']:
+        plain += '\nОткрыть PL: ' + literal(message['platform_url']) + '\n'
+    plain += '\n' + footer
+    body = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+            '<body style="margin:0;background:#f1f3f6;color:#182231;font-family:Arial,sans-serif;line-height:1.5">'
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">'
+            '<table role="presentation" width="100%" style="max-width:640px;background:white;border:1px solid #dce1e8;border-radius:12px" cellpadding="0" cellspacing="0">'
+            '<tr><td style="padding:24px;border-bottom:4px solid {{ if eq .Status "firing" }}#c43632{{ else }}#16805b{{ end }}">'
+            '<div style="font-size:13px;color:#536176">' + title + '</div><h1 style="font-size:24px;margin:8px 0">' + status + '</h1>'
+            '<div>Всего: {{ len .Alerts }} · Активных: {{ len .Alerts.Firing }} · Восстановлено: {{ len .Alerts.Resolved }}</div></td></tr>'
+            '{{ range $i, $a := .Alerts }}{{ if lt $i 20 }}<tr><td style="padding:20px 24px;border-bottom:1px solid #e2e6ec;overflow-wrap:anywhere">'
+            '<div style="font-size:12px;color:#536176">{{ if eq .Status "firing" }}АКТИВНО{{ else }}ВОССТАНОВЛЕНО{{ end }} · ' + details + '</div>'
+            '<h2 style="font-size:19px;margin:8px 0">{{ .Labels.alertname }}</h2>'
+            '<p style="margin:8px 0;font-weight:bold">{{ .Annotations.summary }}</p>'
+            '<p style="margin:8px 0;white-space:pre-wrap">{{ .Annotations.description }}</p>'
+            '<div style="font-size:12px;color:#536176">' + timing + '</div>')
+    if message['show_labels']:
+        body += '<div style="font-size:12px;margin-top:12px">{{ range .Labels.SortedPairs }}<div><b>{{ .Name }}</b>: {{ .Value }}</div>{{ end }}</div>'
+    body += '</td></tr>{{ end }}{{ end }}'
+    body += '{{ if gt (len .Alerts) 20 }}<tr><td style="padding:16px 24px">Показаны первые 20 событий. Полный список доступен в PL.</td></tr>{{ end }}'
+    body += '<tr><td style="padding:20px 24px">'
+    if message['platform_url']:
+        body += '<a style="display:inline-block;padding:10px 16px;background:#253950;color:white;border-radius:6px;text-decoration:none" href="' + literal(message['platform_url']) + '">Открыть PL</a><br><br>'
+    body += '<small style="color:#536176">' + footer + '</small></td></tr></table></td></tr></table></body></html>'
+    return {'headers': {'Subject': subject}, 'html': body, 'text': plain}
+
+
 def smtp_profile(value, previous):
-    fields = {'smarthost', 'from', 'to', 'tls_mode', 'username', 'password', 'password_set'}
+    fields = {'smarthost', 'from', 'to', 'tls_mode', 'username', 'password', 'password_set', 'message'}
     if not isinstance(value, dict) or set(value) - fields:
         raise ValueError('Invalid SMTP fields')
     hostport, username, password = value.get('smarthost', ''), value.get('username', ''), value.get('password', '')
@@ -172,6 +238,7 @@ def smtp_profile(value, previous):
     private = {'smarthost': hostport, 'from': sender, 'to': recipients, 'tls_mode': mode, 'username': username, 'password': password}
     public = {key: val for key, val in private.items() if key != 'password'}
     public['password_set'] = bool(password)
+    public['message'] = private['message'] = email_message(value.get('message'))
     return public, private
 
 
@@ -203,6 +270,8 @@ def render(public, secrets, ref=None):
             item = {'send_resolved': True, 'smarthost': smtp['smarthost'], 'from': smtp['from'],
                     'to': ','.join(smtp['to']), 'require_tls': True,
                     'force_implicit_tls': smtp['tls_mode'] == 'implicit', 'tls_config': config['tls_config']}
+            if 'message' in smtp:
+                item.update(email_templates(smtp['message']))
             if smtp['username']:
                 item.update(auth_username=smtp['username'], auth_password=smtp['password'])
             receivers.append({'name': receiver['name'], 'email_configs': [item]})
@@ -218,6 +287,11 @@ def render(public, secrets, ref=None):
     route = dict(public['route'])
     if not receivers:
         receivers, route['receiver'] = [{'name': 'pl-disabled'}], 'pl-disabled'
+    test_routes = [{'receiver': r['name'], 'matchers': ['pl_notification_test="true"', 'pl_test_receiver="' + r['name'] + '"'],
+                    'group_by': ['pl_test_id'], 'group_wait': '0s', 'group_interval': '5s', 'repeat_interval': '1h', 'continue': False}
+                   for r in public['receivers'] if r['kind'] == 'email' and 'message' in secrets[r['name']]['smtp']]
+    if test_routes:
+        route['routes'] = test_routes
     return {'route': route, 'receivers': receivers}, certificates
 
 
@@ -515,7 +589,7 @@ class AlertmanagerController:
         self.owned_volume(instance)
         return obj
 
-    def api(self, obj, path, reload=False):
+    def api(self, obj, path, reload=False, data=None):
         values = obj.get('NetworkSettings', {}).get('Ports', {}).get('9093/tcp') or []
         if len(values) != 1 or values[0].get('HostIp') != '127.0.0.1' or not str(values[0].get('HostPort', '')).isdigit():
             raise ValueError('Alertmanager loopback binding unavailable')
@@ -523,8 +597,8 @@ class AlertmanagerController:
         if not 1 <= port <= 65535:
             raise ValueError('Invalid Alertmanager loopback port')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
-        request = urllib.request.Request('http://127.0.0.1:' + str(port) + path, data=b'' if reload else None,
-                                         method='POST' if reload else 'GET')
+        request = urllib.request.Request('http://127.0.0.1:' + str(port) + path, data=data if data is not None else (b'' if reload else None),
+                                         headers={'Content-Type': 'application/json'}, method='POST' if reload or data is not None else 'GET')
         with opener.open(request, timeout=5) as response:
             body = response.read(4 * 1024 * 1024 + 1)
             if response.status != 200 or len(body) > 4 * 1024 * 1024:
@@ -571,6 +645,95 @@ class AlertmanagerController:
         finally:
             candidate.unlink(missing_ok=True); fsync_directory(candidate.parent)
         return plan
+
+    def preview(self, body):
+        if not isinstance(body, dict) or set(body) != {'instance_id', 'message', 'status'} or body['status'] not in ('firing', 'resolved'):
+            raise ValueError('Invalid email preview request')
+        instance = identifier(body['instance_id'])
+        self.paths(instance)
+        message = email_message(body['message'])
+        templates = email_templates(message)
+        now = datetime.now(timezone.utc)
+        from datetime import timedelta
+        alerts = [{'status': body['status'], 'labels': {'alertname': name, 'instance': 'server-0' + str(i) + '.example:9100', 'severity': severity, 'job': 'node'},
+                   'annotations': {'summary': summary, 'description': 'Контрольный пример. Проверка нагрузки и доступности сервиса.'},
+                   'startsAt': (now - timedelta(minutes=12)).isoformat(), 'endsAt': now.isoformat()} for i, (name, severity, summary) in enumerate([
+                       ('HighCPUUsage', 'warning', 'Загрузка CPU выше порога'), ('ServiceUnavailable', 'critical', 'Сервис недоступен')], 1)]
+        data = {'receiver': 'preview', 'status': body['status'], 'alerts': alerts, 'groupLabels': {}, 'commonLabels': {}, 'commonAnnotations': {}}
+        self.verify_image()
+        with tempfile.TemporaryDirectory(prefix='email-preview-', dir=self.operations) as folder:
+            path = Path(folder); path.chmod(0o755)
+            atomic(path / 'data.json', encoded(data), 0o444)
+            separator = '\nPL_PREVIEW_' + uuid.uuid4().hex + '\n'
+            text_template = templates['headers']['Subject'] + separator + templates['text']
+            deadline = time.monotonic() + 15
+            def run(kind, template):
+                output = self.docker('container', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+                    '--security-opt', 'no-new-privileges:true', '--user', '65534:65534', '--memory', '256m', '--cpus', '1', '--pids-limit', '64',
+                    '--entrypoint', '/bin/amtool', '--mount', 'type=bind,source=' + str(path) + ',target=/preview,readonly',
+                    self.image, 'template', 'render', '--template.glob=/preview/*.tmpl', '--template.data=/preview/data.json',
+                    '--template.type=' + kind, '--template.text=' + template, timeout=max(1, int(deadline - time.monotonic())))
+                if len(output) > 192 * 1024:
+                    raise ValueError('Email preview exceeds finite size')
+                return output.decode('utf-8')
+            # Scratch image has no shell. Two native processes preserve distinct
+            # escaping contexts and share a 15-second wall-clock budget.
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                html_future = pool.submit(run, 'html', templates['html'])
+                text_future = pool.submit(run, 'text', text_template)
+                body, combined = html_future.result(), text_future.result()
+            subject, found, plain = combined.partition(separator)
+            if not found:
+                raise ValueError('Native preview output framing failed')
+            return {'subject': subject, 'html': body, 'text': plain}
+
+    def test_notification(self, body):
+        if not isinstance(body, dict) or set(body) != {'instance_id', 'configuration_ref', 'receiver', 'test_id', 'status'} or body['status'] not in ('firing', 'resolved'):
+            raise ValueError('Invalid email test request')
+        instance, ref, test_id = identifier(body['instance_id']), identifier(body['configuration_ref']), identifier(body['test_id'])
+        with self.instance_lock(instance, exclusive=True), self.locked():
+            state = self.active(instance)
+            if state['current'] != ref:
+                raise ValueError('Email test requires current applied configuration')
+            plan = self.plan(instance, ref)
+            receiver = next((r for r in plan['public']['receivers'] if r['name'] == body['receiver'] and r['kind'] == 'email'), None)
+            if receiver is None or 'message' not in receiver['smtp']:
+                raise ValueError('Apply email template configuration before testing')
+            obj = self.inspect(instance)
+            if obj is None or not obj.get('State', {}).get('Running'):
+                raise ValueError('Alertmanager is not running')
+            self.native_ready(obj)
+            path = self.operations / ('email-test-' + instance + '-' + test_id + '.json')
+            now = time.time()
+            if path.exists():
+                test = json.loads(read_file(path))
+                if test['ref'] != ref or test['receiver'] != receiver['name'] or now - test['started'] > 3600:
+                    raise ValueError('Email test expired or belongs to another configuration')
+                if test['status'] == 'resolved' and body['status'] != 'resolved':
+                    raise ValueError('Email test has already been resolved')
+            else:
+                if body['status'] != 'firing':
+                    raise ValueError('Start email test before resolving it')
+                # Bound persistent control sends and prevent accidental button floods.
+                recent = list(self.operations.glob('email-test-' + instance + '-*.json'))
+                if any(now - item.stat().st_mtime < 10 for item in recent):
+                    raise ValueError('Wait ten seconds before another email test')
+                for item in recent:
+                    if now - item.stat().st_mtime > 86400:
+                        item.unlink()
+                test = {'ref': ref, 'receiver': receiver['name'], 'started': now, 'status': 'firing'}
+                atomic(path, test)
+            timestamp = lambda value: datetime.fromtimestamp(value, timezone.utc).isoformat()
+            end = now if body['status'] == 'resolved' else test['started'] + 1800
+            alerts = [{'labels': {'alertname': name, 'instance': 'pl-email-test', 'severity': severity,
+                                  'pl_notification_test': 'true', 'pl_test_receiver': receiver['name'], 'pl_test_id': test_id},
+                       'annotations': {'summary': summary, 'description': 'Контрольное уведомление PL. Тест: ' + test_id},
+                       'startsAt': timestamp(test['started']), 'endsAt': timestamp(end)} for name, severity, summary in [
+                           ('PLNotificationTest', 'warning', 'Проверка доставки уведомлений'),
+                           ('PLNotificationTestCritical', 'critical', 'Проверка группировки событий')]]
+            self.api(obj, '/api/v2/alerts', data=encoded(alerts))
+            test['status'] = body['status']; atomic(path, test)
+            return {'accepted': True, 'test_id': test_id, 'status': body['status']}
 
     def validate(self, body):
         if not isinstance(body, dict) or set(body) != {'instance_id', 'configuration_ref'}:
@@ -812,8 +975,11 @@ class AlertmanagerController:
         instance, operation = identifier(body['instance_id']), identifier(body['operation_id'])
         if body['action'] == 'configure':
             identifier(body['configuration_ref'])
-        with self.instance_lock(instance, exclusive=True), self.locked():
-            self.revoke_read_route(instance)
+        refreshing = body['action'] == 'refresh'
+        with _helpers.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
+            if not refreshing:
+                self.revoke_read_route(instance)
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():

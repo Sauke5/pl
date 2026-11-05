@@ -17,7 +17,22 @@ import (
 
 type managedApplicationHandlers struct {
 	sync.Mutex
-	handlers map[string]*managedApplicationHandler
+	handlers     map[string]*managedApplicationHandler
+	constructors map[string]*sync.Mutex
+}
+
+func (h *managedApplicationHandlers) instanceConstructor(id string) *sync.Mutex {
+	h.Lock()
+	defer h.Unlock()
+	if h.constructors == nil {
+		h.constructors = map[string]*sync.Mutex{}
+	}
+	lock := h.constructors[id]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		h.constructors[id] = lock
+	}
+	return lock
 }
 
 // A cached native gateway owns its spool lock and every request admitted through
@@ -77,6 +92,9 @@ func (s *Server) cachedManagedApplicationLocked(v model.ModuleInstance) *managed
 }
 
 func (s *Server) revokeManagedApplication(id string) {
+	construction := s.applications.instanceConstructor(id)
+	construction.Lock()
+	defer construction.Unlock()
 	s.applications.Lock()
 	defer s.applications.Unlock()
 	s.revokeManagedApplicationLocked(id)
@@ -94,11 +112,17 @@ func (s *Server) managedApplication(kind string, fallback http.Handler) http.Han
 			return
 		}
 		if err != nil {
+			if s.tryModuleStartupPage(w, r, kind, "", true) {
+				return
+			}
 			problem(w, 503, "module_unavailable", "Модуль приложения не готов или отключён")
 			return
 		}
 		handler, err := s.applicationHandler(r.Context(), instance)
 		if err != nil {
+			if s.tryModuleStartupPage(w, r, kind, instance.ID, true) {
+				return
+			}
 			problem(w, 503, "module_unavailable", "Не удалось подтвердить конфигурацию модуля")
 			return
 		}
@@ -107,16 +131,19 @@ func (s *Server) managedApplication(kind string, fallback http.Handler) http.Han
 }
 
 func (s *Server) applicationHandler(ctx context.Context, v model.ModuleInstance) (http.Handler, error) {
-	s.applications.Lock()
-	defer s.applications.Unlock()
-	if s.applications.handlers == nil {
-		s.applications.handlers = map[string]*managedApplicationHandler{}
-	}
+	construction := s.applications.instanceConstructor(v.ID)
+	construction.Lock()
+	defer construction.Unlock()
 	// Revalidate after taking the cache lock: a request may have selected this
 	// instance immediately before disable/remove/version replacement committed.
 	current, currentErr := s.Modules.FindApplication(ctx, v.ModuleID)
+	s.applications.Lock()
+	if s.applications.handlers == nil {
+		s.applications.handlers = map[string]*managedApplicationHandler{}
+	}
 	if currentErr != nil || current.ID != v.ID {
 		s.revokeManagedApplicationLocked(v.ID)
+		s.applications.Unlock()
 		return nil, modules.ErrApplicationUnavailable
 	}
 	if current.Version != v.Version {
@@ -125,12 +152,17 @@ func (s *Server) applicationHandler(ctx context.Context, v model.ModuleInstance)
 			delete(s.applications.handlers, staleKey)
 			_ = stale.Close()
 		}
+		s.applications.Unlock()
 		return nil, modules.ErrApplicationUnavailable
 	}
 	cacheKey := v.ID + "/" + v.Version
 	if handler := s.cachedManagedApplicationLocked(v); handler != nil {
+		s.applications.Unlock()
 		return handler, nil
 	}
+	// A cold native manifest/readiness request can be slow. Serialize only this
+	// instance's construction; other ready applications retain their fast path.
+	s.applications.Unlock()
 	key, err := s.Modules.ApplicationKey(ctx, v.ID)
 	if err != nil {
 		return nil, err
@@ -160,7 +192,9 @@ func (s *Server) applicationHandler(ctx context.Context, v model.ModuleInstance)
 		return nil, err
 	}
 	wrapped := newManagedApplicationHandler(handler)
+	s.applications.Lock()
 	s.applications.handlers[cacheKey] = wrapped
+	s.applications.Unlock()
 	return wrapped, nil
 }
 

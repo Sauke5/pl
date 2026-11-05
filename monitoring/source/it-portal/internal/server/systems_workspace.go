@@ -416,7 +416,15 @@ type workspaceOperation struct {
 }
 
 func (s *Server) loadWorkspaceOperations(r *http.Request) ([]workspaceOperation, error) {
-	jobs, err := s.Store.Jobs(r.Context())
+	exclude := false
+	if raw := r.URL.Query().Get("exclude_service_refresh"); raw != "" {
+		var err error
+		exclude, err = strconv.ParseBool(raw)
+		if err != nil {
+			return nil, store.ErrInvalid
+		}
+	}
+	jobs, err := s.Store.JobsForTimeline(r.Context(), exclude)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +441,14 @@ func (s *Server) loadWorkspaceOperations(r *http.Request) ([]workspaceOperation,
 	for _, j := range jobs {
 		name := names[j.Actor]
 		if name == "" {
-			name = "Пользователь (имя не сохранено)"
+			if j.Actor == "system" || strings.HasPrefix(j.Actor, "system:") {
+				name = "Система"
+				if j.Actor != "system" {
+					name += " · " + strings.TrimPrefix(j.Actor, "system:")
+				}
+			} else {
+				name = "Пользователь (имя не сохранено)"
+			}
 		}
 		out = append(out, workspaceOperation{j, name})
 	}

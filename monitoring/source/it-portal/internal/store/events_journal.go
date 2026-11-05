@@ -21,6 +21,7 @@ type JournalFilter struct {
 	ResourceID, Source, Type, Actor string
 	MonitoringOnly                  bool
 	ExcludeCollection               bool
+	ExcludeServiceRefresh           bool
 	Snapshot, Cursor                string
 	Limit                           int
 }
@@ -69,6 +70,9 @@ func journalScope(f JournalFilter) string {
 	scope := []any{f.Channel, f.From.UTC(), f.To.UTC(), f.ResourceID, f.Source, f.Type, f.Actor, f.MonitoringOnly}
 	if f.ExcludeCollection {
 		scope = append(scope, true)
+	}
+	if f.ExcludeServiceRefresh {
+		scope = append(scope, "exclude_service_refresh")
 	}
 	b, _ := json.Marshal(scope)
 	return fmt.Sprintf("%x", sha256.Sum256(b))
@@ -165,7 +169,7 @@ const journalTypeSQL = `CASE
  WHEN e.body->>'kind' IN ('problem.resolved','target.up') THEN 'recovery'
  WHEN e.body->>'kind' LIKE 'source.%' THEN 'connection'
  WHEN e.body->>'kind' LIKE 'discovery.%' THEN 'discovery'
- WHEN e.body->>'kind' LIKE 'job.%' OR e.body->>'kind' LIKE 'sftp%' THEN 'operation'
+ WHEN e.body->>'kind' LIKE 'job.%' OR e.body->>'kind'='module.queued' OR e.body->>'kind' LIKE 'sftp%' THEN 'operation'
  ELSE 'change' END`
 
 func journalWhere(f JournalFilter, args *[]any) string {
@@ -203,6 +207,10 @@ func journalWhere(f JournalFilter, args *[]any) string {
 	if f.ExcludeCollection && f.Channel == "events" {
 		parts = append(parts, "COALESCE(e.body->>'kind','') NOT IN ('target.down','target.up')")
 	}
+	if f.ExcludeServiceRefresh {
+		parts = append(parts, `NOT COALESCE((e.body->>'kind'='job.succeeded' AND (e.body->>'actor'='system' OR e.body->>'actor' LIKE 'system:%') AND
+        (e.body #>> '{details,job_kind}'='refresh' OR e.body #>> '{details,module_action}'='refresh' OR EXISTS (SELECT 1 FROM jobs sj WHERE sj.id=e.body #>> '{details,job_id}' AND (sj.kind='refresh' OR (sj.kind='module' AND sj.body #>> '{parameters,action}'='refresh'))))),false)`)
+	}
 	return strings.Join(parts, " AND ")
 }
 
@@ -213,7 +221,7 @@ func journalSelect(table string) string {
  COALESCE(r.body->>'name',''),COALESCE(i.body,'{}'::jsonb), COALESCE((settings.body->>'stale_after_seconds')::int,180),
  COALESCE(NULLIF(e.body->>'actor_name',''),(SELECT user_name FROM sessions WHERE user_id=e.body->>'actor' ORDER BY expires_at DESC LIMIT 1),''),
  NOT pg_visible_in_snapshot(e.arrival_tx,u.baseline) AND seen.event_id IS NULL,
- COALESCE(obj.body->>'name',''), COALESCE(job.body,'{}'::jsonb), COALESCE(job_resource.body->>'name',job_integration.body->>'name','')
+ COALESCE(obj.body->>'name',''), COALESCE(job.body,'{}'::jsonb), COALESCE(job_resource.body->>'name',job_integration.body->>'name',''), COALESCE(job_module.body,'{}'::jsonb)
  FROM ` + table + ` e
  JOIN event_journal_readers u ON u.user_id=$1
  LEFT JOIN event_journal_seen seen ON seen.user_id=$1 AND seen.channel=$2 AND seen.event_id=e.id
@@ -223,18 +231,19 @@ func journalSelect(table string) string {
  LEFT JOIN documents obj ON obj.kind=(` + journalObjectKindSQL + `) AND obj.id=(` + journalObjectIDSQL + `)
  LEFT JOIN jobs job ON job.id=e.body #>> '{details,job_id}'
  LEFT JOIN documents job_resource ON job_resource.kind='resource' AND job_resource.id=job.body->>'resource_id'
- LEFT JOIN documents job_integration ON job_integration.kind='integration' AND job_integration.id=job.body->>'integration_id'`
+ LEFT JOIN documents job_integration ON job_integration.kind='integration' AND job_integration.id=job.body->>'integration_id'
+ LEFT JOIN documents job_module ON job_module.kind='module_instance' AND job_module.id=job.body #>> '{parameters,instance_id}'`
 }
 func detailString(m map[string]any, key string) string { v, _ := m[key].(string); return v }
 func scanJournal(rows pgx.Rows) ([]JournalEvent, error) {
 	out := []JournalEvent{}
 	for rows.Next() {
 		var v JournalEvent
-		var body, integration, jobBody []byte
+		var body, integration, jobBody, moduleBody []byte
 		var objectName, jobTargetName string
 		var staleAfter int
 		var actorName string
-		if e := rows.Scan(&body, &v.OccurredAt, &v.ReceivedAt, &v.Source, &v.EventType, &v.ResourceName, &integration, &staleAfter, &actorName, &v.Unread, &objectName, &jobBody, &jobTargetName); e != nil {
+		if e := rows.Scan(&body, &v.OccurredAt, &v.ReceivedAt, &v.Source, &v.EventType, &v.ResourceName, &integration, &staleAfter, &actorName, &v.Unread, &objectName, &jobBody, &jobTargetName, &moduleBody); e != nil {
 			return nil, e
 		}
 		if e := json.Unmarshal(body, &v.Event); e != nil {
@@ -303,6 +312,61 @@ func scanJournal(rows pgx.Rows) ([]JournalEvent, error) {
 			}
 			if v.ObjectName == "" {
 				v.ObjectName = jobTargetName
+			}
+			if v.JobKind == "module" {
+				var instance model.ModuleInstance
+				_ = json.Unmarshal(moduleBody, &instance)
+				if raw, ok := job.Result["instance"]; ok {
+					b, _ := json.Marshal(raw)
+					_ = json.Unmarshal(b, &instance)
+				}
+				if detailString(v.Details, "module_action") == "" {
+					v.Details["module_action"] = detailString(job.Parameters, "action")
+				}
+				if detailString(v.Details, "instance_id") == "" {
+					v.Details["instance_id"] = detailString(job.Parameters, "instance_id")
+				}
+				if detailString(v.Details, "module_id") == "" {
+					v.Details["module_id"] = instance.ModuleID
+				}
+				if v.ObjectName == "" {
+					v.ObjectName = instance.Name
+				}
+				if v.ObjectName == "" {
+					if def, found := model.ModuleDefinition(instance.ModuleID); found {
+						v.ObjectName = def.Name
+					}
+				}
+				if v.ObjectName == "" {
+					v.ObjectName = detailString(job.Parameters, "instance_id")
+				}
+				v.Action = detailString(v.Details, "module_action")
+			}
+			if v.ObjectName != "" {
+				v.Details["object_name"] = v.ObjectName
+			}
+			job.Kind, job.Status = v.JobKind, strings.TrimPrefix(v.Kind, "job.")
+			if v.Kind == "module.queued" {
+				job.Status = "queued"
+			}
+			if detailString(v.Details, "error") == "" && job.Error != "" && (job.Status == "failed" || job.Status == "unknown") {
+				v.Details["error"] = job.Error
+			}
+			if detailString(v.Details, "result_summary") == "" && strings.HasSuffix(v.Kind, ".succeeded") {
+				if summary := jobResultSummary(job); summary != "" {
+					v.Details["result_summary"] = summary
+				}
+			}
+			// Preserve each historical event's status, not the current job status.
+			if v.JobKind != "" {
+				v.Title = jobEventTitle(job, v.Details)
+			}
+
+		}
+		if v.ActorName == "" && (v.Actor == "system" || strings.HasPrefix(v.Actor, "system:")) {
+			v.ActorName = "Система"
+			if v.Actor != "system" {
+				v.ActorName += " · " + strings.TrimPrefix(v.Actor, "system:")
 			}
 		}
 		out = append(out, v)

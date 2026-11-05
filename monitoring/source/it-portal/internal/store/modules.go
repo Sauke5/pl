@@ -304,7 +304,11 @@ func (s *Store) QueueModuleWithCredential(ctx context.Context, actor, key, id, a
 	if err != nil {
 		return instance, job, translate(err)
 	}
-	if err = record(ctx, tx, "module.queued", "Операция с модулем поставлена в очередь", id, actor, map[string]any{"job_id": job.ID, "action": action, "module_id": instance.ModuleID}, true); err != nil {
+	details, err := jobEventContext(ctx, tx, job)
+	if err != nil {
+		return instance, job, err
+	}
+	if err = record(ctx, tx, "module.queued", jobEventTitle(job, details), "", actor, details, true); err != nil {
 		return instance, job, err
 	}
 	return instance, job, tx.Commit(ctx)

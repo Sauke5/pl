@@ -293,9 +293,21 @@ class Delivery:
 
     @contextmanager
     def lock(self, exclusive=True, blocking=True):
+        # Upgrade/configuration barrier. Ordinary RPCs and artifact staging share
+        # it; only installation-wide changes take the exclusive side.
         fd = os.open(self.base / 'delivery.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a') as stream:
             fcntl.flock(stream, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | (0 if blocking else fcntl.LOCK_NB))
+            yield
+
+    @contextmanager
+    def artifact_lock(self, name):
+        # Names are fixed internally, never derived from a URL or package path.
+        if name != 'catalog' and name not in MODULES:
+            raise ValueError('Unsupported artifact lock')
+        fd = os.open(self.base / (name + '.lock'), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'a') as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX)
             yield
 
     def state(self):
@@ -383,7 +395,9 @@ class Delivery:
     def check(self, body):
         if body != {}:
             raise ValueError('Release check has no parameters')
-        with self.lock():
+        # Serialize catalog/replay and cache writers without blocking RPCs on a
+        # slow network. Take singleflight before the shared upgrade barrier.
+        with self.artifact_lock('catalog'), self.lock(exclusive=False):
             cache = {'checked_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'checked_unix': int(time.time()), 'error': ''}
             try:
                 cfgpath = self.root / 'config/delivery.json'
@@ -404,14 +418,12 @@ class Delivery:
     def ensure_module(self, kind):
         if kind not in MODULES:
             raise ValueError('Unsupported delivered module')
-        with self.lock(), self.lifecycle_lock():
+        # Different modules stage concurrently; repeated delivery of one kind
+        # waits only for that kind. No module lifecycle lock covers network or
+        # Docker work, and core/configuration changes still require our barrier.
+        with self.artifact_lock(kind), self.lock(exclusive=False):
             self.require_idle()
-            registry = read(self.root / 'private/module-images.json')
-            state = self.state()
-            if (registry.get('schema') != 1 or registry.get('installation') != self.installation
-                    or registry.get('manifest_sha256') != state.get('manifest_sha256')
-                    or set(registry) - {'schema', 'installation', 'manifest_sha256'} - MODULES):
-                raise ValueError('Module image registry does not match this installation')
+            registry = self.module_registry()
             if kind in registry:
                 return False
             catalog = self.catalog()
@@ -428,17 +440,32 @@ class Delivery:
                 self.validate_module(meta, kind, selected['version'], tmp)
                 self.parent.docker('image', 'load', '--input', str(tmp / 'images.tar'), timeout=900)
                 self.verify_images(meta['images'])
-                updated = copy.deepcopy(registry)
+                # Build only this module's descriptor outside the registry
+                # commit. Another module may have completed during staging.
                 if kind in ROLES:
-                    updated[kind] = {role: meta['images'][kind + '-' + role] for role in ROLES[kind]}
+                    descriptor = {role: meta['images'][kind + '-' + role] for role in ROLES[kind]}
                     if kind == 'doska':
                         current = read(self.root / 'releases' / self.state()['version'] / 'manifest.json')
-                        updated[kind]['database'] = current['images']['db']
+                        descriptor['database'] = current['images']['db']
                 else:
-                    updated[kind] = meta['images'][kind]
-                atomic(self.root / 'private/module-images.json', updated)
-                atomic(self.base / ('module-' + kind + '.json'), {'module_id': kind, 'version': meta['version'], 'core_api': 1, 'sha256': info['sha256']})
+                    descriptor = meta['images'][kind]
+                with self.lifecycle_lock():
+                    updated = self.module_registry()
+                    updated[kind] = descriptor
+                    # Publish compatibility evidence before making the new
+                    # descriptor visible to installation-wide operations.
+                    atomic(self.base / ('module-' + kind + '.json'), {'module_id': kind, 'version': meta['version'], 'core_api': 1, 'sha256': info['sha256']})
+                    atomic(self.root / 'private/module-images.json', updated)
             return True
+
+    def module_registry(self):
+        registry = read(self.root / 'private/module-images.json')
+        state = self.state()
+        if (registry.get('schema') != 1 or registry.get('installation') != self.installation
+                or registry.get('manifest_sha256') != state.get('manifest_sha256')
+                or set(registry) - {'schema', 'installation', 'manifest_sha256'} - MODULES):
+            raise ValueError('Module image registry does not match this installation')
+        return registry
 
     def validate_module(self, meta, kind, version, folder):
         expected = {kind + '-' + role for role in ROLES[kind]} if kind in ROLES else {kind}

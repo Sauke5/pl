@@ -24,8 +24,21 @@ func validAlertmanagerMailbox(v string) bool {
 	local, host, _ := strings.Cut(v, "@")
 	return len(local) <= 64 && !strings.HasPrefix(local, ".") && !strings.HasSuffix(local, ".") && !strings.Contains(local, "..") && !strings.HasSuffix(host, ".") && alertmanagerHost(host)
 }
+func validAlertmanagerMessage(v *model.AlertmanagerEmailMessage) bool {
+	if v == nil {
+		return true
+	}
+	if v.Title == "" || !alertmanagerText(v.Title, 80) || !alertmanagerText(v.Footer, 240) || !alertmanagerText(v.PlatformURL, 2048) {
+		return false
+	}
+	if v.PlatformURL == "" {
+		return true
+	}
+	u, err := url.Parse(v.PlatformURL)
+	return err == nil && alertmanagerURL(v.PlatformURL, false) && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsAny(v.PlatformURL, "{}?#")
+}
 func validAlertmanagerSMTP(v *model.AlertmanagerSMTPInput) bool {
-	if v == nil || !alertmanagerText(v.Smarthost, 320) || !alertmanagerText(v.Username, 128) || !alertmanagerText(v.Password, 1024) || (v.Username == "" && v.Password != "") || (v.TLSMode != "starttls" && v.TLSMode != "implicit") || !validAlertmanagerMailbox(v.From) || len(v.To) < 1 || len(v.To) > 32 {
+	if v == nil || !validAlertmanagerMessage(v.Message) || !alertmanagerText(v.Smarthost, 320) || !alertmanagerText(v.Username, 128) || !alertmanagerText(v.Password, 1024) || (v.Username == "" && v.Password != "") || (v.TLSMode != "starttls" && v.TLSMode != "implicit") || !validAlertmanagerMailbox(v.From) || len(v.To) < 1 || len(v.To) > 32 {
 		return false
 	}
 	host, rawPort, err := net.SplitHostPort(v.Smarthost)
@@ -183,7 +196,7 @@ func validAlertmanagerPublic(c model.AlertmanagerConfiguration) bool {
 		}
 		var smtp *model.AlertmanagerSMTPInput
 		if r.SMTP != nil {
-			smtp = &model.AlertmanagerSMTPInput{Smarthost: r.SMTP.Smarthost, From: r.SMTP.From, To: r.SMTP.To, TLSMode: r.SMTP.TLSMode, Username: r.SMTP.Username, PasswordSet: r.SMTP.PasswordSet}
+			smtp = &model.AlertmanagerSMTPInput{Message: r.SMTP.Message, Smarthost: r.SMTP.Smarthost, From: r.SMTP.From, To: r.SMTP.To, TLSMode: r.SMTP.TLSMode, Username: r.SMTP.Username, PasswordSet: r.SMTP.PasswordSet}
 		}
 		if r.Kind == "email" && (r.EndpointSet || r.TokenSet || r.SMTP == nil || (r.SMTP.Username != "") != r.SMTP.PasswordSet) {
 			return false

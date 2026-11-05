@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -64,7 +65,9 @@ func (s *Store) Enqueue(ctx context.Context, j model.Job) (model.Job, error) {
 	if e != nil {
 		return j, e
 	}
-	details["target"] = target
+	if target != "" {
+		details["target"] = target
+	}
 	if e = record(ctx, tx, "job.queued", jobEventTitle(j, details), j.ResourceID, j.Actor, details, true); e != nil {
 		return j, e
 	}
@@ -72,21 +75,30 @@ func (s *Store) Enqueue(ctx context.Context, j model.Job) (model.Job, error) {
 }
 
 const jobReadSQL = `SELECT CASE WHEN j.kind='check' AND j.body #>> '{parameters,kind}'='icmp' THEN j.body #- '{result,raw_output}' ELSE j.body END,
-COALESCE(r.body->>'name',''),COALESCE(i.body->>'name','') FROM jobs j
+COALESCE(r.body->>'name',''),COALESCE(i.body->>'name',''),COALESCE(m.body,'{}'::jsonb) FROM jobs j
 LEFT JOIN documents r ON r.kind='resource' AND r.id=j.body->>'resource_id'
-LEFT JOIN documents i ON i.kind='integration' AND i.id=j.body->>'integration_id'`
+LEFT JOIN documents i ON i.kind='integration' AND i.id=j.body->>'integration_id'
+LEFT JOIN documents m ON m.kind='module_instance' AND m.id=j.body #>> '{parameters,instance_id}'`
 
 func (s *Store) Jobs(ctx context.Context) ([]model.Job, error) {
-	rows, e := s.Pool.Query(ctx, jobReadSQL+" ORDER BY j.created_at DESC LIMIT 200")
+	return s.JobsForTimeline(ctx, false)
+}
+
+func (s *Store) JobsForTimeline(ctx context.Context, excludeServiceRefresh bool) ([]model.Job, error) {
+	where := ""
+	if excludeServiceRefresh {
+		where = ` WHERE NOT (j.status='succeeded' AND (j.actor='system' OR j.actor LIKE 'system:%') AND (j.kind='refresh' OR (j.kind='module' AND COALESCE(j.body #>> '{parameters,action}','')='refresh')))`
+	}
+	rows, e := s.Pool.Query(ctx, jobReadSQL+where+" ORDER BY j.created_at DESC LIMIT 200")
 	if e != nil {
 		return nil, e
 	}
 	defer rows.Close()
 	out := []model.Job{}
 	for rows.Next() {
-		var b []byte
+		var b, module []byte
 		var resourceName, integrationName string
-		if e = rows.Scan(&b, &resourceName, &integrationName); e != nil {
+		if e = rows.Scan(&b, &resourceName, &integrationName, &module); e != nil {
 			return nil, e
 		}
 		j, e := Decode[model.Job](b)
@@ -94,19 +106,23 @@ func (s *Store) Jobs(ctx context.Context) ([]model.Job, error) {
 			return nil, e
 		}
 		j.ResourceName, j.IntegrationName = resourceName, integrationName
+		jobModuleDisplay(&j, module)
 		out = append(out, j)
 	}
 	return out, rows.Err()
 }
 func (s *Store) Job(ctx context.Context, id string) (model.Job, error) {
-	var b []byte
+	var b, module []byte
 	var resourceName, integrationName string
-	e := s.Pool.QueryRow(ctx, jobReadSQL+" WHERE j.id=$1", id).Scan(&b, &resourceName, &integrationName)
+	e := s.Pool.QueryRow(ctx, jobReadSQL+" WHERE j.id=$1", id).Scan(&b, &resourceName, &integrationName, &module)
 	if e != nil {
 		return model.Job{}, translate(e)
 	}
 	j, err := Decode[model.Job](b)
 	j.ResourceName, j.IntegrationName = resourceName, integrationName
+	if err == nil {
+		jobModuleDisplay(&j, module)
+	}
 	return j, err
 }
 
@@ -126,13 +142,27 @@ AND jsonb_typeof(body #> '{result,raw_output}')='string'`, id).Scan(&raw)
 	return raw, nil
 }
 func (s *Store) Claim(ctx context.Context) (model.Job, error) {
+	return s.claim(ctx, "true")
+}
+
+// ClaimLane reserves module health progress independently of long lifecycle work.
+// The predicates are selected here, never supplied by an API/client.
+func (s *Store) ClaimLane(ctx context.Context, moduleHealth bool) (model.Job, error) {
+	const health = "(kind='module' AND COALESCE(body #>> '{parameters,action}','')='refresh')"
+	if moduleHealth {
+		return s.claim(ctx, health)
+	}
+	return s.claim(ctx, "NOT "+health)
+}
+
+func (s *Store) claim(ctx context.Context, predicate string) (model.Job, error) {
 	tx, e := s.Pool.Begin(ctx)
 	if e != nil {
 		return model.Job{}, e
 	}
 	defer tx.Rollback(ctx)
 	var b []byte
-	e = tx.QueryRow(ctx, "SELECT body FROM jobs WHERE status='queued' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1").Scan(&b)
+	e = tx.QueryRow(ctx, "SELECT body FROM jobs WHERE status='queued' AND "+predicate+" ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1").Scan(&b)
 	if e != nil {
 		return model.Job{}, translate(e)
 	}
@@ -250,4 +280,32 @@ func (s *Store) Recover(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// Read-only metadata for module jobs; result.instance preserves removed modules.
+func jobModuleDisplay(j *model.Job, raw []byte) {
+	if j.Kind != "module" {
+		return
+	}
+	var instance model.ModuleInstance
+	_ = json.Unmarshal(raw, &instance)
+	if saved, ok := j.Result["instance"]; ok {
+		b, _ := json.Marshal(saved)
+		_ = json.Unmarshal(b, &instance)
+	}
+	if j.Parameters == nil {
+		j.Parameters = map[string]any{}
+	}
+	if instance.ModuleID != "" {
+		j.Parameters["module_id"] = instance.ModuleID
+	}
+	name := instance.Name
+	if name == "" {
+		if def, found := model.ModuleDefinition(instance.ModuleID); found {
+			name = def.Name
+		}
+	}
+	if name != "" {
+		j.Parameters["module_name"] = name
+	}
 }

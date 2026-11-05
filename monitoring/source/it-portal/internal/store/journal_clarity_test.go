@@ -244,3 +244,122 @@ func TestJournalAuditResourceFilterSeparatesDocumentNamespaces(t *testing.T) {
 		}
 	}
 }
+
+func TestJournalModuleLifecycleProjectionAndServiceRefreshFilter(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.InitializeJournal(ctx, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	instance := model.ModuleInstance{ID: "module-fixture", ModuleID: "prometheus", Name: "Метрики стенда", Mode: "external"}
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO documents(kind,id,body) VALUES('module_instance',$1,$2)`, instance.ID, encode(instance)); err != nil {
+		t.Fatal(err)
+	}
+	var automatic model.Job
+	for _, row := range []struct{ actor, action, status string }{{"system:modules", "refresh", "succeeded"}, {"alice", "refresh", "succeeded"}, {"system:modules", "refresh", "failed"}, {"system:modules", "configure", "succeeded"}} {
+		j, err := s.Enqueue(ctx, model.Job{Kind: "module", Actor: row.actor, IdempotencyKey: row.actor + row.action + row.status, Parameters: map[string]any{"instance_id": instance.ID, "action": row.action, "secret": "not-for-journal"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row.status == "failed" {
+			j.Error = "Provider unavailable"
+		}
+		j.Status = row.status
+		rawInstance, getErr := s.Get(ctx, "module_instance", instance.ID)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		observed, decodeErr := Decode[model.ModuleInstance](rawInstance)
+		if decodeErr != nil {
+			t.Fatal(decodeErr)
+		}
+		observed.LastJobID = j.ID
+		observed.ObservedState = "running"
+		observed.Version = "3.11.0"
+		j.Result = map[string]any{"instance": observed}
+		if _, err = s.Pool.Exec(ctx, `UPDATE documents SET body=jsonb_set(body,'{last_job_id}',to_jsonb($1::text)) WHERE kind='module_instance' AND id=$2`, j.ID, instance.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Finish(ctx, j); err != nil {
+			t.Fatal(err)
+		}
+		if row.actor == "system:modules" && row.action == "refresh" && row.status == "succeeded" {
+			automatic = j
+		}
+	}
+	jobs, err := s.JobsForTimeline(ctx, true)
+	if err != nil || len(jobs) != 3 {
+		t.Fatalf("timeline filtering: %d %v", len(jobs), err)
+	}
+	job, err := s.Job(ctx, automatic.ID)
+	if err != nil || job.Parameters["module_name"] != instance.Name {
+		t.Fatalf("job projection: %+v %v", job, err)
+	}
+	page, err := s.Journal(ctx, "alice", JournalFilter{Channel: "events", ExcludeServiceRefresh: true, Limit: 1})
+	if err != nil || page.Total != 3 || len(page.Items) != 1 || page.NextCursor == "" {
+		t.Fatalf("filtered total/page: %+v %v", page, err)
+	}
+	all, err := s.Journal(ctx, "alice", JournalFilter{Channel: "events"})
+	if err != nil || all.Total != 4 {
+		t.Fatalf("complete history: %+v %v", all, err)
+	}
+	for _, event := range all.Items {
+		if event.JobKind != "module" || event.ObjectName != instance.Name || event.Action == "" || !strings.Contains(event.Title, instance.Name) {
+			t.Fatalf("module context: %+v", event)
+		}
+		if event.Kind == "job.succeeded" && !strings.Contains(detailString(event.Details, "result_summary"), "3.11.0") {
+			t.Fatalf("result summary missing: %+v", event)
+		}
+		if _, ok := event.Details["secret"]; ok {
+			t.Fatal("parameters leaked into journal")
+		}
+		if event.Actor == "system:modules" && event.ActorName != "Система · modules" {
+			t.Fatalf("system actor: %+v", event)
+		}
+	}
+	// Legacy completion title/context must be projected without rewriting stored history.
+	rawJournalAudit(t, s, "legacy-module", "job.succeeded", "", map[string]any{"job_id": automatic.ID, "status": "succeeded"})
+	detail, err := s.JournalDetail(ctx, "alice", "audit", "legacy-module")
+	if err != nil || detail.Event.Action != "refresh" || detail.Event.ObjectName != instance.Name || !strings.Contains(detail.Event.Title, "Обновление состояния модуля") {
+		t.Fatalf("legacy projection: %+v %v", detail, err)
+	}
+	var raw []byte
+	if err = s.Pool.QueryRow(ctx, `SELECT body FROM audit_events WHERE id='legacy-module'`).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "module_action") || strings.Contains(string(raw), instance.Name) {
+		t.Fatal("raw history rewritten")
+	}
+	rawJournalAudit(t, s, "legacy-queued-module", "module.queued", instance.ID, map[string]any{"job_id": automatic.ID, "action": "refresh"})
+	queued, err := s.JournalDetail(ctx, "alice", "audit", "legacy-queued-module")
+	if err != nil || queued.Event.ObjectKind != "job" || queued.Event.ObjectID != automatic.ID || queued.Event.EventType != "operation" || !strings.Contains(queued.Event.Title, "в очереди") {
+		t.Fatalf("queued lifecycle: %+v %v", queued, err)
+	}
+	// Scope changes must invalidate the pagination snapshot.
+	_, err = s.Journal(ctx, "alice", JournalFilter{Channel: "events", Snapshot: page.Snapshot})
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("filter scope ignored: %v", err)
+	}
+}
+
+func TestModuleQueuedAuditStoresStableContext(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	instance, job, err := s.QueueModule(ctx, "local-admin", "journal-install", "", "install", model.ModuleRequest{ModuleID: "forms", Name: "Формы стенда", Mode: "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := s.Events(ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var event model.Event
+	for _, row := range events {
+		if row.Kind == "module.queued" {
+			event = row
+		}
+	}
+	if event.ResourceID != "" || detailString(event.Details, "object_kind") != "job" || detailString(event.Details, "object_id") != job.ID || detailString(event.Details, "instance_id") != instance.ID || detailString(event.Details, "module_id") != "forms" || detailString(event.Details, "object_name") != "Формы стенда" || !strings.Contains(event.Title, "Установка модуля · Формы стенда") {
+		t.Fatalf("queued audit: %+v", event)
+	}
+}

@@ -440,6 +440,9 @@ func (g *netmapHandler) serve(w http.ResponseWriter, r *http.Request, id string,
 	defer cancel()
 	instance, err := g.backend.FindApplication(ctx, "netmap")
 	if err != nil || id != "" && id != instance.ID {
+		if err != nil && !mapped && g.startupPage(w, r, route) {
+			return
+		}
 		problem(w, 503, "netmap_unavailable", "Сетевой модуль не готов или отключён")
 		return
 	}
@@ -549,4 +552,31 @@ func netmapUUID() string {
 	raw[8] = (raw[8] & 63) | 128
 	v := hex.EncodeToString(raw[:16])
 	return v[:8] + "-" + v[8:12] + "-" + v[12:16] + "-" + v[16:20] + "-" + v[20:]
+}
+
+// Startup HTML is limited to the two finite entry documents. The caller has
+// already enforced the real session/admin, route, headers and admission policy.
+// API, native tools, scoped queries and ambiguous owners keep their JSON errors.
+func (g *netmapHandler) startupPage(w http.ResponseWriter, r *http.Request, route netmapRoute) bool {
+	if g.server == nil || g.server.Store == nil || route.native != "" || route.media != "text/html" || !gatewayDocumentRequest(r) || r.URL.RawQuery != "" || len(r.Header.Values("Upgrade")) != 0 || (r.URL.Path != "/netmap/" && r.URL.Path != "/netmap/index.html") {
+		return false
+	}
+	if dest := r.Header.Get("Sec-Fetch-Dest"); dest != "" && dest != "document" && dest != "iframe" && dest != "frame" {
+		return false
+	}
+	if mode := r.Header.Get("Sec-Fetch-Mode"); mode != "" && mode != "navigate" {
+		return false
+	}
+	instance, ok := g.server.nativeStartupInstance(r, "netmap")
+	if !ok {
+		return false
+	}
+	stage := moduleStartupFailed
+	if instance.LastJobID != "" {
+		if job, err := g.server.Store.Job(r.Context(), instance.LastJobID); err == nil {
+			stage = moduleStartupStageForJob(instance, job)
+		}
+	}
+	renderModuleStartupPage(w, r, instance, stage)
+	return true
 }

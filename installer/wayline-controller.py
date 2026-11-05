@@ -16,10 +16,11 @@ from pathlib import Path
 import re
 import secrets
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 _helper = Path(__file__).with_name('xray-controller.py')
 if _helper.is_symlink() or not _helper.is_file():
@@ -85,7 +86,7 @@ class WaylineController:
     def __init__(self, parent):
         self.parent, self.root, self.installation = parent, Path(parent.root), parent.installation
         self.docker = parent.docker
-        self._routes = {}
+        self._routes, self._route_lock = {}, threading.RLock()
         self.images = self.resolve_images()
         self.version = self.images['api']['labels']['org.opencontainers.image.version']
         self.base = self.root / 'modules' / 'wayline'
@@ -479,8 +480,11 @@ class WaylineController:
                 or body.get('module_id') != 'wayline' or body.get('action') not in ('install', 'enable', 'disable', 'refresh', 'remove')):
             raise ValueError('Unsupported Wayline operation')
         instance, operation = identifier(body['instance_id']), identifier(body['operation_id'])
-        with self.instance_lock(instance, exclusive=True), self.locked():
-            self._routes.pop(instance, None)
+        refreshing = body['action'] == 'refresh'
+        with _files.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
+            if not refreshing:
+                self._routes.pop(instance, None)
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():
@@ -509,7 +513,7 @@ class WaylineController:
                         'error': _files.module_network_error(error, 'Wayline operation unconfirmed; reconcile the same operation'), 'operation_id': operation}
 
     def get(self, instance):
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             return self.observe(identifier(instance))
 
     def request(self, body):
@@ -525,7 +529,7 @@ class WaylineController:
             if route is None or not 0 <= time.monotonic() - route[0] < ROUTE_MAX_AGE:
                 # Only a cold/expired route enters full Docker/health validation.
                 # Recheck after admission so concurrent page assets share one refresh.
-                with self.locked():
+                with self._route_lock:
                     route = self._routes.get(instance)
                     if route is None or not 0 <= time.monotonic() - route[0] < ROUTE_MAX_AGE:
                         self.ready(instance)

@@ -23,7 +23,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 _helper = Path(__file__).with_name('xray-controller.py')
 if _helper.is_symlink() or not _helper.is_file():
@@ -620,8 +620,11 @@ class NetMapController:
         configured_origin = json.loads(read_file(self.root / 'state/installation.json')).get('config', {}).get('public_url')
         if 'public_url' in body and body['public_url'] != configured_origin:
             raise ValueError('NetMap operation origin mismatch')
-        with self.instance_lock(instance, exclusive=True), self.locked():
-            self._routes.pop(instance, None)
+        refreshing = body['action'] == 'refresh'
+        with _files.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
+            if not refreshing:
+                self._routes.pop(instance, None)
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():
@@ -651,7 +654,7 @@ class NetMapController:
 
     def get(self, instance):
         instance = identifier(instance)
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             return self.observe(instance)
 
     def initial_login(self, body):
@@ -660,7 +663,7 @@ class NetMapController:
             raise ValueError('Invalid NetMap initial login request')
         instance = identifier(body['instance_id'])
         service = body['service']
-        with self.instance_lock(instance), self.locked():
+        with self.instance_lock(instance):
             state = self.state(instance)
             obj = self.inspect(instance, service)
             if not obj or not obj.get('State', {}).get('Running'):

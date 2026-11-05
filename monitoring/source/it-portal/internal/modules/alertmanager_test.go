@@ -128,3 +128,52 @@ func TestAlertmanagerReadRejectsForeignStatusHTMLMalformedAndOversizedJSON(t *te
 		})
 	}
 }
+
+func TestAlertmanagerEmailToolsUseSignedFiniteControllerRequests(t *testing.T) {
+	id, ref, testID := "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"
+	calls := 0
+	c := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		body, _ := io.ReadAll(r.Body)
+		mac := hmac.New(sha256.New, make([]byte, 32))
+		mac.Write([]byte(r.Header.Get("X-Pl-Timestamp") + "\nPOST\n" + r.URL.Path + "\n"))
+		mac.Write(body)
+		if r.Header.Get("X-Pl-Signature") != hex.EncodeToString(mac.Sum(nil)) {
+			t.Error("unsigned email operation")
+		}
+		var input map[string]json.RawMessage
+		if json.Unmarshal(body, &input) != nil || string(input["instance_id"]) != `"`+id+`"` {
+			t.Error("invalid instance binding")
+		}
+		switch r.URL.Path {
+		case "/v1/alertmanager/preview":
+			if len(input) != 3 || string(input["status"]) != `"resolved"` {
+				t.Error("unbounded preview input")
+			}
+			io.WriteString(w, `{"subject":"PL · ВОССТАНОВЛЕНО","html":"<p>native renderer</p>","text":"native renderer"}`)
+		case "/v1/alertmanager/test-notification":
+			if len(input) != 5 || string(input["configuration_ref"]) != `"`+ref+`"` || string(input["test_id"]) != `"`+testID+`"` {
+				t.Error("test identity lost")
+			}
+			io.WriteString(w, `{"accepted":true}`)
+		default:
+			t.Error("unexpected email endpoint")
+			w.WriteHeader(404)
+		}
+	})
+	preview, err := c.PreviewAlertmanagerEmail(context.Background(), id, model.AlertmanagerEmailMessage{Title: "PL"}, "resolved")
+	if err != nil || !strings.Contains(preview.Subject, "ВОССТАНОВЛЕНО") {
+		t.Fatalf("preview %+v %v", preview, err)
+	}
+	input := model.AlertmanagerEmailTest{ConfigurationRef: ref, Receiver: "mail", TestID: testID, Status: "firing"}
+	if err := c.TestAlertmanagerEmail(context.Background(), id, input); err != nil {
+		t.Fatal(err)
+	}
+	input.TestID = "invalid"
+	if err := c.TestAlertmanagerEmail(context.Background(), id, input); err == nil {
+		t.Fatal("invalid test identity accepted")
+	}
+	if calls != 2 {
+		t.Fatal("invalid request reached controller")
+	}
+}

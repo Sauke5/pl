@@ -2,7 +2,7 @@
 """Owned Forms/HeyForm lifecycle and a finite signed gateway-v2 transport."""
 from __future__ import annotations
 import base64
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 import fcntl
 import hashlib
@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import secrets
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -133,7 +134,7 @@ class FormsController:
     def __init__(self, parent):
         self.parent, self.root, self.installation = parent, Path(parent.root), parent.installation
         self._docker_observation = ContextVar('forms_docker_observation', default=None)
-        self._routes = {}
+        self._routes, self._route_lock = {}, threading.RLock()
         self.images = self.resolve_images()
         self.version = self.images['adapter']['labels']['org.opencontainers.image.version']
         self.base = self.root / 'modules/forms'
@@ -614,8 +615,11 @@ class FormsController:
         if 'public_url' in body and body['public_url'] != self.public_url():
             raise ValueError('Forms Platform origin differs from installation')
         instance, operation = identifier(body['instance_id']), identifier(body['operation_id'])
-        with self.instance_lock(instance, exclusive=True), self.locked():
-            self._routes.pop(instance, None)
+        refreshing = body['action'] == 'refresh'
+        with _files.operation_lock(self.operations, operation), self.instance_lock(instance, exclusive=not refreshing), \
+                (nullcontext() if refreshing else self.locked()):
+            if not refreshing:
+                self._routes.pop(instance, None)
             path = self.operations / (operation + '.json')
             fingerprint = hashlib.sha256(encoded(body)).hexdigest()
             if path.exists() or path.is_symlink():
@@ -644,7 +648,7 @@ class FormsController:
                         'error': _files.module_network_error(error, 'Forms operation unconfirmed; reconcile the same operation'), 'operation_id': operation}
 
     def get(self, instance):
-        with self.instance_lock(instance), self.locked(exclusive=False):
+        with self.instance_lock(instance):
             try:
                 result = self.observe(identifier(instance))
                 if result['state'] != 'running':
@@ -689,11 +693,13 @@ class FormsController:
             # Lifecycle/health observations establish the route. Page assets
             # reuse it instead of querying Docker; cold/expired routes are
             # verified once. Shared instance admission still excludes disable.
-            with self.locked(exclusive=False):
-                route = self._routes.get(instance)
-                if route is None or time.monotonic() - route[0] >= ROUTE_MAX_AGE:
-                    self.ready(instance)
-                    route = self._routes[instance]
+            route = self._routes.get(instance)
+            if route is None or time.monotonic() - route[0] >= ROUTE_MAX_AGE:
+                with self._route_lock:
+                    route = self._routes.get(instance)
+                    if route is None or time.monotonic() - route[0] >= ROUTE_MAX_AGE:
+                        self.ready(instance)
+                        route = self._routes[instance]
             try:
                 status, mime, response = self.http(instance, route[1], body['method'], body['path'], raw, forwarded, origin=route[2])
             except (ValueError, OSError):
