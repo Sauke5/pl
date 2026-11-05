@@ -134,7 +134,7 @@ def main():
             install.write_bytes(package.extractfile(member).read())
         public_url = args.public_url or default_url()
         subprocess.run(['/bin/sh', str(install), '--package', str(archive), '--public-url', public_url,
-            '--root', args.root, '--bind-address', args.bind_address], check=True)
+            '--root', args.root, '--bind-address', args.bind_address, '--self-signed'], check=True)
         print('PL: ' + public_url + '\nПервый вход: admin / admin. Измените пароль в интерфейсе PL.')
     return 0
 

@@ -73,6 +73,7 @@ class BootstrapDeliveryTests(unittest.TestCase):
             command = run.call_args_list[-1].args[0]
             self.assertEqual(command[0], '/bin/sh')
             self.assertEqual(command[command.index('--public-url') + 1], 'https://pl.example.test')
+            self.assertIn('--self-signed', command)
             self.assertEqual(len(calls), 2, 'bootstrap fetched optional modules')
 
 

@@ -25,8 +25,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "0f6d48a5b5f6f96965f527108fbb64a12e5530c5cf70d4e5ed8ddedb1913f016",
-      "size": 6681
+      "sha256": "48f60331e5275688762d9716f9e5c5d74c911a7d9c3b8b57e2a65e4226fbffd0",
+      "size": 6772
     },
     {
       "path": "apps/doska/LICENSE",
@@ -16795,13 +16795,13 @@
     },
     {
       "path": "installer/README.public.ru.md",
-      "sha256": "4d2df60da7b3d2b4a1a970d22886d1fdecd89472c6151a3f1d23a65eb18e9e98",
-      "size": 5921
+      "sha256": "acf9629a37fa74ab5e38dbf0bcd62e375957a9661de68589e26840fe405e0072",
+      "size": 6248
     },
     {
       "path": "installer/README.ru.md",
-      "sha256": "4d2df60da7b3d2b4a1a970d22886d1fdecd89472c6151a3f1d23a65eb18e9e98",
-      "size": 5921
+      "sha256": "acf9629a37fa74ab5e38dbf0bcd62e375957a9661de68589e26840fe405e0072",
+      "size": 6248
     },
     {
       "path": "installer/alertmanager-controller.py",
@@ -16845,8 +16845,8 @@
     },
     {
       "path": "installer/get-pl.sh",
-      "sha256": "1aa6d194d5bdd65f4877f23b381d5559652ae19d9b06c484785611ebe09081d7",
-      "size": 8126
+      "sha256": "eebfe9d89712731de39a9bd61d6c03667620178808d23a35ec29c87c374ddcd1",
+      "size": 8143
     },
     {
       "path": "installer/grafana-build.py",
@@ -16960,8 +16960,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "3cbb80e6eb70411816717517b9e02da60129a0efb39b18aa3b13a1149fce3ebf",
-      "size": 36422
+      "sha256": "0682d18ab16a32605330fc4f37d8c039b653a7eba023e5588e59ac73aa944f21",
+      "size": 36513
     },
     {
       "path": "installer/release-catalog.py",
@@ -17035,8 +17035,8 @@
     },
     {
       "path": "installer/tests/test_get_pl.py",
-      "sha256": "72a28b7d978ae24dc6242462e28c916a451559bb24492504ec9e77686072fd33",
-      "size": 4311
+      "sha256": "203e9cf8fb7ef04580abf8e3a8a6b0db515a018ecb782c2a65a93ba9e06def77",
+      "size": 4363
     },
     {
       "path": "installer/tests/test_grafana_build.py",
