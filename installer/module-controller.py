@@ -764,14 +764,8 @@ class Controller:
         if int(memory.get('MemAvailable', '0 kB').split()[0]) < 256 * 1024:
             raise ValueError('Prometheus requires at least 256 MiB available host memory')
 
-    def ensure(self, instance):
-        obj = self.inspect(instance)
-        if obj:
-            self.config(instance, create=False)
-            if not obj['State'].get('Running'):
-                self.preflight()
-                self.docker('container', 'start', self.name(instance))
-            return
+    def create(self, instance):
+        """Create and validate the native container without starting it."""
         self.preflight()
         config = self.config(instance)
         volume = self.name(instance) + '-data'
@@ -796,6 +790,16 @@ class Controller:
             args += ['--label', key + '=' + value]
         self.docker(*args, self.image, *FLAGS)
         self.inspect(instance)  # Refuse starting a drifted container.
+
+    def ensure(self, instance):
+        obj = self.inspect(instance)
+        if obj:
+            self.config(instance, create=False)
+            if not obj['State'].get('Running'):
+                self.preflight()
+                self.docker('container', 'start', self.name(instance))
+            return
+        self.create(instance)
         self.docker('container', 'start', self.name(instance))
 
     def observe(self, instance):
@@ -924,8 +928,8 @@ class Controller:
             self._delivery = module.Delivery(self)
         return self._delivery
 
-    def delivery_guard(self):
-        return self.delivery().rpc_guard() if self.on_demand else nullcontext()
+    def delivery_guard(self, *, allow_refresh=False):
+        return self.delivery().rpc_guard(allow_refresh=allow_refresh) if self.on_demand else nullcontext()
 
     def execute(self, body):
         if self.on_demand:
@@ -942,7 +946,7 @@ class Controller:
                     name = '_' + body['module_id'] + '_controller'
                     if hasattr(self, name):
                         delattr(self, name)
-            with self.delivery_guard():
+            with self.delivery_guard(allow_refresh=isinstance(body, dict) and body.get('action') == 'refresh'):
                 return self._execute(body)
         return self._execute(body)
 
@@ -1203,8 +1207,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             if self.command == 'POST' and self.path in ('/v1/delivery/proxy/status', '/v1/delivery/proxy/configure', '/v1/delivery/proxy/test'):
                 result = getattr(self.server.controller.delivery().github_proxy(), self.path.rsplit('/', 1)[1])(json.loads(raw))
-            elif self.command == 'POST' and self.path in ('/v1/delivery/status', '/v1/delivery/check', '/v1/delivery/upgrade', '/v1/delivery/recover'):
-                result = getattr(self.server.controller.delivery(), self.path.rsplit('/', 1)[1])(json.loads(raw))
+            elif self.command == 'POST' and self.path in ('/v1/delivery/status', '/v1/delivery/check', '/v1/delivery/upgrade', '/v1/delivery/recover', '/v1/delivery/module-upgrade'):
+                result = getattr(self.server.controller.delivery(), self.path.rsplit('/', 1)[1].replace('-', '_'))(json.loads(raw))
             elif self.command == 'POST' and self.path in ('/v1/installation/status', '/v1/installation/configure'):
                 result = getattr(self.server.controller.delivery().installation_settings(), self.path.rsplit('/', 1)[1])(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/host/status':
@@ -1373,7 +1377,9 @@ def main():
         os.chown(path, 0, marker['gid'])
         path.chmod(0o660)
         server.controller, server.key = controller, key
-        server.serve_forever(poll_interval=0.5)
+        monitor = controller.delivery().status_monitor() if controller.on_demand else nullcontext()
+        with monitor:
+            server.serve_forever(poll_interval=0.5)
 
 
 if __name__ == '__main__':

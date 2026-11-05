@@ -24,6 +24,7 @@ type GrafanaNativeConfig struct {
 type Config struct {
 	PortableRelease                                                                                             bool
 	OnDemandModules                                                                                             bool
+	MaintenanceDir                                                                                              string
 	ModuleVersions                                                                                              map[string]string
 	Edge                                                                                                        EdgeConfig
 	Forms                                                                                                       *FormsGatewayConfig
@@ -106,6 +107,10 @@ func LoadConfig() (Config, error) {
 	c.Edge = edge
 	c.PortableRelease = os.Getenv("PORTAL_PORTABLE_RELEASE") == "true"
 	c.OnDemandModules = os.Getenv("PORTAL_ON_DEMAND_MODULES") == "true"
+	c.MaintenanceDir = os.Getenv("PORTAL_MAINTENANCE_DIR")
+	if c.MaintenanceDir != "" && c.MaintenanceDir != "/run/pl-upgrade" {
+		return c, errors.New("invalid maintenance projection directory")
+	}
 	var sftpErr error
 	if c.PortableRelease {
 		for _, value := range os.Environ() {

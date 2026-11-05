@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import fcntl
 import hashlib
 import importlib.util
@@ -195,7 +195,22 @@ class Runtime:
                 or not bootstrap.VERSION.fullmatch(self.state.get("version", ""))):
             raise ValueError("A ready managed PL core installation is required")
         cfg = self.state.get("config", {})
-        if bootstrap.configuration(cfg["public_url"], cfg["bind_address"], cfg["admin_user"], cfg.get("network_cidr"), cfg.get("module_network_cidr"), cfg.get("integration_config")) != cfg:
+        if not isinstance(cfg, dict):
+            raise ValueError("Unsupported core configuration")
+        canonical = bootstrap.configuration(cfg["public_url"], cfg["bind_address"], cfg["admin_user"],
+                                             cfg.get("network_cidr"), cfg.get("module_network_cidr"),
+                                             cfg.get("integration_config"),
+                                             cfg.get("icmp_allowed_cidrs") if "icmp_allowed_cidrs" in cfg else None)
+        # The bootstrap and the web deployment editor persist these finite
+        # extensions. compose_model below validates their destination/CA rules;
+        # unrelated keys and noncanonical base/ICMP values remain rejected.
+        for name in ("allowed_cidrs", "allowed_ports", "custom_tls", "outbound_ca_pem", "icmp_policy_mode"):
+            if name in cfg:
+                canonical[name] = cfg[name]
+        if "custom_tls" in cfg and type(cfg["custom_tls"]) is not bool:
+            raise ValueError("Invalid persisted custom TLS mode")
+        bootstrap.icmp_policy(cfg)
+        if canonical != cfg:
             raise ValueError("Unsupported core configuration")
         bootstrap.validate_integration_secrets(self.root, cfg.get("integration_config"))
         self.package = self.root / "releases" / self.state["version"]
@@ -209,6 +224,7 @@ class Runtime:
         model = safe_json(self.root / "config/compose.json", private=True)
         if model != bootstrap.compose_model(self.root, self.m, cfg, self.install_id):
             raise ValueError("Core Compose differs from the managed model")
+        self.model = model
         private_regular(self.private / "runtime.env")
         if os.environ.get("DOCKER_HOST") not in (None, "unix:///var/run/docker.sock") or os.environ.get("DOCKER_CONTEXT"):
             raise ValueError("Docker endpoint overrides are refused")
@@ -287,7 +303,9 @@ class Runtime:
                 raise ValueError("Unexpected managed container mount type")
             if name == "api":
                 transfer_mounts = [x for x in mounts if x.get("Destination") == "/var/lib/pl/transfers"]
-                if self.m.get("features", {}).get("sftpgo_module") is True:
+                transfer_enabled = (self.m.get("features", {}).get("sftpgo_module") is True
+                                    or self.m.get("features", {}).get("on_demand_modules") is True)
+                if transfer_enabled:
                     expected = self.install_id + "_module-transfers"
                     if (len(transfer_mounts) != 1 or transfer_mounts[0].get("Type") != "volume"
                             or transfer_mounts[0].get("Name") != expected or transfer_mounts[0].get("RW") is not True):
@@ -302,13 +320,40 @@ class Runtime:
                     raise ValueError("Unexpected temporary transfer volume without module feature")
             if name in ("db", "api"):
                 allowed = {bootstrap.database_mount(self.m)} if name == "db" else {"/run/pl-auth", "/tmp"}
-                if name == "api" and self.m.get("features", {}).get("sftpgo_module") is True:
+                if name == "api" and transfer_enabled:
                     allowed.add("/var/lib/pl/transfers")
                 if name == "api":
                     expected_binds = {}
+                    if self.m.get("features", {}).get("upgrade_status"):
+                        expected_binds["/run/pl-upgrade"] = str(self.root / "run/upgrade-status")
                     if self.m.get("features", {}).get("module_controller"):
                         expected_binds.update({"/run/pl-module-controller": str(self.root / "run/module-controller"),
                                                "/run/secrets/module-controller-key": str(self.private / "module-controller-key")})
+                    if self.m.get("features", {}).get("icmp_probe"):
+                        expected_binds["/run/pl-icmp-probe"] = str(self.root / "run/icmp-probe")
+                    cfg = getattr(self, "state", {}).get("config", {})
+                    canonical_api = getattr(self, "model", {}).get("services", {}).get("api", {})
+                    canonical_env = canonical_api.get("environment", {})
+                    if canonical_env:
+                        env = c.get("Config", {}).get("Env", [])
+                        if not isinstance(env, list) or any(not isinstance(item, str) or "=" not in item for item in env):
+                            raise ValueError("API environment differs from the managed model")
+                        actual = dict(item.split("=", 1) for item in env)
+                        names = ("PORTAL_PUBLIC_URL", "PORTAL_ALLOWED_CIDRS", "PORTAL_ALLOWED_PORTS",
+                                 "PORTAL_CHECK_ALLOWED_CIDRS", "PORTAL_CHECK_ALLOWED_PORTS", "PORTAL_CHECK_INHERIT_INTEGRATION_POLICY",
+                                 "PORTAL_ICMP_EXECUTOR_URL", "PORTAL_ICMP_POLICY", "PORTAL_ICMP_ALLOWED_CIDRS", "PORTAL_OUTBOUND_CA_FILE")
+                        if len(actual) != len(env) or any(actual.get(name) != canonical_env.get(name) for name in names):
+                            raise ValueError("API environment differs from the managed model")
+                    if self.m.get("features", {}).get("icmp_probe"):
+                        groups = canonical_api.get("group_add", [])
+                        if not groups or not set(groups) <= set(c.get("HostConfig", {}).get("GroupAdd") or []):
+                            raise ValueError("ICMP socket API service group differs from the managed model")
+                    if cfg.get("outbound_ca_pem"):
+                        ca = self.private / "outbound-ca.pem"
+                        value = bootstrap._integration_read(ca, owner={os.geteuid()}, modes={0o444}, limit=64 * 1024)
+                        if value != cfg["outbound_ca_pem"].encode():
+                            raise ValueError("Outbound CA file differs from the persisted configuration")
+                        expected_binds["/run/secrets/outbound-ca.pem"] = str(ca)
                     if self.m.get("features", {}).get("connector_credentials"):
                         bootstrap.read_connector_key(self.root)
                         expected_binds[bootstrap.CONNECTOR_KEY_TARGET] = str(self.private / CONNECTOR_KEY_MEMBER)
@@ -325,6 +370,9 @@ class Runtime:
                         if policy["secret_names"]:
                             expected_binds["/run/secrets/portal"] = str(self.private / "integration-secrets")
                         expected_env = bootstrap.integration_environment(policy)
+                        # The web editor deliberately overrides destination
+                        # policy while retaining the credential-file contract.
+                        expected_env = {name: canonical_env.get(name, value) for name, value in expected_env.items()}
                         env = c.get("Config", {}).get("Env", [])
                         if not isinstance(env, list) or any(not isinstance(item, str) or "=" not in item for item in env):
                             raise ValueError("Integration environment differs from the managed model")
@@ -342,8 +390,11 @@ class Runtime:
                 expected_binds = {"/etc/nginx/nginx.conf": str(self.root / "config/nginx.conf"),
                                   "/run/pl/tls.crt": str(self.private / "tls.crt"),
                                   "/run/pl/tls.key": str(self.private / "tls.key")}
+                if self.m.get("features", {}).get("upgrade_status"):
+                    expected_binds["/run/pl-upgrade"] = str(self.root / "run/upgrade-status")
                 binds = [x for x in mounts if x.get("Type") == "bind"]
-                if (len(binds) != 3 or any(x.get("Source") != expected_binds.get(x.get("Destination"))
+                if (len(binds) != len(expected_binds) or len({x.get("Destination") for x in binds}) != len(binds)
+                        or any(x.get("Source") != expected_binds.get(x.get("Destination"))
                         or x.get("RW") is not False for x in binds)
                         or any(x.get("Destination") not in {*expected_binds, "/tmp"} for x in mounts)):
                     raise ValueError("Unexpected HTTPS web bind mounts")
@@ -491,20 +542,57 @@ class Runtime:
                          stdin=source, stdout=subprocess.DEVNULL)
 
 
+def lock_directory(path: Path):
+    if not path.exists() and not path.is_symlink():
+        path.mkdir(mode=0o700, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
+        raise ValueError("Unsafe maintenance lock directory")
+
+
+@contextmanager
+def maintenance_lock(path: Path, *, create=False):
+    flags = os.O_RDWR | os.O_NOFOLLOW | (os.O_CREAT if create else 0)
+    fd = os.open(path, flags, 0o600)
+    with os.fdopen(fd, "a") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
+            raise ValueError("Unsafe installation maintenance lock")
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError("Maintenance busy: another installation operation is active") from None
+        yield
+
+
 @contextmanager
 def installation(root: Path):
     if sys.platform != "linux" or os.geteuid() != 0:
         raise ValueError("Maintenance requires root on the local Linux installation host")
-    rt = Runtime(root)
-    lockpath = rt.root / "state/install.lock"
-    lockmeta = lockpath.lstat()
-    if not stat.S_ISREG(lockmeta.st_mode) or lockmeta.st_uid != os.geteuid() or lockmeta.st_mode & 0o022:
-        raise ValueError("Unsafe installation lock")
-    fd = os.open(lockpath, os.O_RDWR | os.O_NOFOLLOW)
-    with os.fdopen(fd, "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        # State/config may have changed while waiting for a concurrent installer.
+    initial = Runtime(root)
+    # This order matches delivery's queue barrier and worker -> lifecycle
+    # ordering. Nonblocking admission cannot deadlock an existing operation.
+    with ExitStack() as locks:
+        locks.enter_context(maintenance_lock(initial.root / "state/install.lock"))
+        delivery = initial.root / "state/delivery"
+        on_demand = initial.m.get("features", {}).get("on_demand_modules")
+        if on_demand:
+            lock_directory(delivery)
+            locks.enter_context(maintenance_lock(delivery / "delivery.lock", create=True))
+            locks.enter_context(maintenance_lock(delivery / "worker.lock", create=True))
+        if initial.m.get("features", {}).get("module_controller") or on_demand:
+            modules = initial.root / "modules"
+            lock_directory(modules)
+            locks.enter_context(maintenance_lock(modules / "controller.lock", create=True))
+        operation = delivery / "operation.json"
+        if on_demand and (operation.exists() or operation.is_symlink()):
+            if safe_json(operation, private=True).get("phase") not in ("complete", "failed", "rolled_back"):
+                raise ValueError("Maintenance busy: update/configuration is active or requires recovery")
+        # Re-read the complete model only after every relevant barrier is held.
         rt = Runtime(root)
+        if (rt.install_id != initial.install_id or rt.state.get("version") != initial.state.get("version")
+                or rt.state.get("manifest_sha256") != initial.state.get("manifest_sha256")):
+            raise ValueError("Installation changed during maintenance admission; retry after the operation finishes")
         rt.validate_runtime()
         yield rt
 

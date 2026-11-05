@@ -89,11 +89,11 @@ test("update notification opens settings and lost acceptance response reconciles
     .click();
   await expect(dialog).toBeHidden();
   await expect(
-    page.getByText("Резервная копия установки", { exact: true }),
+    page.getByText("Создаём резервную копию", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Обновить до 0.3.1", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("heading", { name: "Платформа обновляется", exact: true }),
+  ).toBeVisible();
   expect(state.writes).toHaveLength(1);
   expect(state.writes[0].body).toEqual({
     version: "0.3.1",

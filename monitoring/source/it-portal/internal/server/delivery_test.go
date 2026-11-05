@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"pl/portal/internal/modules"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 type deliveryControllerFixture struct {
-	calls int
-	notes *modules.DeliveryReleaseNotes
+	calls         int
+	lastAction    string
+	lastOperation *modules.DeliveryUpgrade
+	notes         *modules.DeliveryReleaseNotes
 }
 
 func (c *deliveryControllerFixture) Apply(context.Context, modules.Operation) (modules.Observation, error) {
@@ -18,6 +21,11 @@ func (c *deliveryControllerFixture) Apply(context.Context, modules.Operation) (m
 }
 func (c *deliveryControllerFixture) Delivery(_ context.Context, action string, op *modules.DeliveryUpgrade) (modules.DeliveryStatus, error) {
 	c.calls++
+	c.lastAction = action
+	if op != nil {
+		value := *op
+		c.lastOperation = &value
+	}
 	return modules.DeliveryStatus{CoreAPI: 1, CurrentVersion: "0.3.0", LatestVersion: "0.3.1", UpdateAvailable: true, Modules: []modules.DeliveryModule{{ModuleID: "forms", Version: "1.0.0"}, {ModuleID: "prometheus", Version: "3.15.0"}}, ReleaseNotes: c.notes}, nil
 }
 
@@ -68,7 +76,7 @@ func TestDeliveryRequiresCurrentAdminBrowserSessionAndFiniteInput(t *testing.T) 
 	s.Modules = modules.New(s.Store, controller)
 	viewer := apiUser(t, s, "delivery-viewer", false)
 	for _, route := range []struct{ method, path string }{
-		{"GET", "/api/v1/delivery"}, {"POST", "/api/v1/delivery/check"}, {"POST", "/api/v1/delivery/upgrade"},
+		{"GET", "/api/v1/delivery"}, {"POST", "/api/v1/delivery/check"}, {"POST", "/api/v1/delivery/upgrade"}, {"POST", "/api/v1/delivery/module-upgrade"},
 	} {
 		for _, test := range []struct {
 			who    apiIdentity
@@ -105,6 +113,42 @@ func TestDeliveryRequiresCurrentAdminBrowserSessionAndFiniteInput(t *testing.T) 
 	}
 	if got := apiCall(s, admin, "POST", "/api/v1/delivery/upgrade", map[string]any{"version": "0.3.1", "operation_id": "727b18f8-99da-410f-b94f-e677f2967731"}, nil); got.Code != 200 {
 		t.Fatal(got.Code, got.Body.String())
+	}
+}
+
+func TestDeliveryModuleUpgradeRequiresSelectedArtifactAndAdmin(t *testing.T) {
+	s, admin := localUsersFixture(t)
+	s.Config.PortableRelease = true
+	controller := &deliveryControllerFixture{}
+	s.Modules = modules.New(s.Store, controller)
+	valid := map[string]any{"operation_id": "727b18f8-99da-410f-b94f-e677f2967731", "module_id": "doska", "artifact_sha256": strings.Repeat("a", 64)}
+	for _, change := range []map[string]any{
+		{"module_id": "mailcow"}, {"module_id": "../doska"}, {"artifact_sha256": "latest"},
+		{"artifact_sha256": strings.Repeat("A", 64)}, {"operation_id": "../operation"},
+		{"url": "https://other.test/module.tar.gz"}, {"version": "2.46.2"},
+	} {
+		body := map[string]any{}
+		for key, value := range valid {
+			body[key] = value
+		}
+		for key, value := range change {
+			body[key] = value
+		}
+		if got := apiCall(s, admin, "POST", "/api/v1/delivery/module-upgrade", body, nil); got.Code != 400 {
+			t.Fatalf("invalid module request reached controller: %d %s", got.Code, got.Body.String())
+		}
+	}
+	if controller.calls != 0 {
+		t.Fatal("invalid module request executed")
+	}
+	if got := apiCall(s, admin, "POST", "/api/v1/delivery/module-upgrade", valid, map[string]string{"X-CSRF-Token": "forged"}); got.Code != 403 {
+		t.Fatal("module update accepted forged CSRF")
+	}
+	if got := apiCall(s, admin, "POST", "/api/v1/delivery/module-upgrade", valid, nil); got.Code != 200 {
+		t.Fatal(got.Code, got.Body.String())
+	}
+	if controller.calls != 1 || controller.lastAction != "module-upgrade" || controller.lastOperation.ModuleID != "doska" || controller.lastOperation.ArtifactSHA256 != strings.Repeat("a", 64) || controller.lastOperation.Version != "" {
+		t.Fatal("selected module artifact changed in the API projection")
 	}
 }
 func TestOnDemandCatalogUsesTrustedAvailableVersions(t *testing.T) {

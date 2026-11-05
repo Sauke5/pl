@@ -124,3 +124,38 @@ func TestDeliveryTransportRejectsUnconfirmedOrOversizedResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestDeliveryModuleUpdateSignsExactArtifactAndProjectsKind(t *testing.T) {
+	var client *HostController
+	calls := 0
+	selected := strings.Repeat("b", 64)
+	client = controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		body, _ := io.ReadAll(r.Body)
+		mac := hmac.New(sha256.New, client.key)
+		mac.Write([]byte(r.Header.Get("X-Pl-Timestamp") + "\nPOST\n/v1/delivery/module-upgrade\n"))
+		mac.Write(body)
+		var input map[string]string
+		if json.Unmarshal(body, &input) != nil || len(input) != 3 || input["artifact_sha256"] != selected || input["module_id"] != "doska" || r.URL.Path != "/v1/delivery/module-upgrade" || r.Header.Get("X-Pl-Signature") != hex.EncodeToString(mac.Sum(nil)) {
+			t.Fatal("module update did not bind its finite target and artifact")
+		}
+		io.WriteString(w, `{"core_api":1,"current_version":"0.4.5","modules":[{"module_id":"doska","version":"2.46.2","installed":true,"installed_version":"2.46.2","update_available":true,"upgrade_supported":true,"artifact_sha256":"`+selected+`"}],"operation":{"kind":"module_upgrade","module_id":"doska","operation_id":"727b18f8-99da-410f-b94f-e677f2967731","version":"0.4.5","phase":"queued"}}`)
+	})
+	op := &DeliveryUpgrade{ModuleID: "doska", ArtifactSHA256: selected, OperationID: "727b18f8-99da-410f-b94f-e677f2967731"}
+	got, err := client.Delivery(context.Background(), "module-upgrade", op)
+	if err != nil || got.Operation == nil || got.Operation.Kind != "module_upgrade" || got.Operation.ModuleID != "doska" || len(got.Modules) != 1 || !got.Modules[0].UpgradeSupported || got.Modules[0].ArtifactSHA256 != selected {
+		t.Fatal("module update projection lost target or compatibility", err)
+	}
+	for _, invalid := range []DeliveryUpgrade{
+		{ModuleID: "mailcow", ArtifactSHA256: selected, OperationID: op.OperationID},
+		{ModuleID: "doska", ArtifactSHA256: strings.Repeat("B", 64), OperationID: op.OperationID},
+		{ModuleID: "doska", ArtifactSHA256: selected, OperationID: op.OperationID, Version: "2.46.2"},
+	} {
+		if _, err := client.Delivery(context.Background(), "module-upgrade", &invalid); err == nil {
+			t.Fatal("invalid artifact accepted")
+		}
+	}
+	if calls != 1 {
+		t.Fatal("invalid module update reached the transport")
+	}
+}

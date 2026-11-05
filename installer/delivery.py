@@ -9,8 +9,10 @@ import hmac
 import fcntl
 import hashlib
 import http.client
+import ipaddress
 import importlib.util
 import json
+import logging
 import os
 from pathlib import Path
 import platform
@@ -76,17 +78,18 @@ def directory(path):
         raise ValueError('Unsafe delivery directory owner or permissions')
 
 
-def atomic(path, value):
+def atomic(path, value, *, mode=0o600):
     if path.is_symlink() or path.exists() and not path.is_file():
         raise ValueError('Unsafe delivery state')
     data = value if isinstance(value, bytes) else json_bytes(value)
     tmp = path.with_name('.' + path.name + '.' + uuid.uuid4().hex)
-    fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_WRONLY, 0o600)
+    fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_WRONLY, mode)
     try:
         with os.fdopen(fd, 'wb') as stream:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+            os.fchmod(stream.fileno(), mode)
         os.replace(tmp, path)
         fd = os.open(path.parent, os.O_DIRECTORY)
         try:
@@ -340,32 +343,25 @@ class Delivery:
     def status(self, body, refresh=True):
         if body != {}:
             raise ValueError('Delivery status has no parameters')
-        state = self.state()
         cache = read(self.base / 'cache.json') if (self.base / 'cache.json').exists() else {}
         try:
             catalog = self.catalog()
         except (ValueError, OSError, subprocess.SubprocessError):
             catalog = None
             cache['error'] = 'Сохранённый каталог релизов недоступен или срок его действия истёк. Повторите проверку обновлений.'
-        operation = read(self.base / 'operation.json') if (self.base / 'operation.json').exists() else None
-        # A process-local thread is only a hint. The OS worker lock is authoritative.
-        if operation and operation.get('phase') not in ('complete', 'failed', 'rolled_back', 'recovery_required'):
-            try:
-                with self.lock(exclusive=False, blocking=False), self.worker_lock(blocking=False):
-                    if not self.worker_active(operation):
-                        operation['phase'] = 'recovery_required'
-                        operation['error'] = 'Обновление прервано. Восстановите сохранённую установку через PL или штатную команду восстановления.'
-                        atomic(self.base / 'operation.json', operation)
-            except BlockingIOError:
-                pass
+        operation = self.reconcile_upgrade()
+        state = self.state()
         if refresh and time.time() - cache.get('checked_unix', 0) > 6 * 3600:
             self.start_check()
-        modules = [] if not catalog else [{'module_id': k, 'version': v['version']} for k, v in sorted(catalog['modules'].items()) if self.architecture() in v['artifacts']]
+        modules = self.module_updates(catalog) if catalog else []
         latest = catalog['version'] if catalog else ''
         public_operation = None
         if operation:
-            public_operation = {key: operation[key] for key in ('operation_id', 'kind', 'version', 'phase', 'error', 'next_url', 'started_at', 'finished_at') if key in operation}
+            public_operation = {key: operation[key] for key in ('operation_id', 'kind', 'module_id', 'version', 'phase', 'error', 'next_url', 'started_at', 'finished_at') if key in operation}
             public_operation.setdefault('kind', 'upgrade')
+            public_operation['recovery_mode'] = 'resume' if operation.get('data_committed') is True else 'rollback'
+            if operation.get('restored_snapshot') is True:
+                public_operation['restored_snapshot'] = True
         result = {'current_version': state['version'], 'latest_version': latest,
                   'update_available': bool(latest and newer(latest, state['version'])), 'core_api': 1,
                   'checked_at': cache.get('checked_at', ''), 'error': cache.get('error', ''),
@@ -373,6 +369,79 @@ class Delivery:
         if catalog and 'release_notes' in catalog:
             result['release_notes'] = copy.deepcopy(catalog['release_notes'])
         return result
+
+    def module_upgrade_capable(self):
+        path = self.package / 'manifest.json'
+        return path.exists() and read(path).get('features', {}).get('module_upgrades') is True
+
+    def module_updates(self, catalog):
+        registry = self.module_registry()
+        result = []
+        capable = self.module_upgrade_capable()
+        for kind, selected in sorted(catalog['modules'].items()):
+            if self.architecture() not in selected['artifacts']:
+                continue
+            target = selected['artifacts'][self.architecture()]
+            path = self.base / ('module-' + kind + '.json')
+            receipt = read(path) if path.exists() else {}
+            installed = kind in registry
+            current = receipt.get('sha256', '')
+            if not isinstance(current, str):
+                current = ''
+            available = installed and bool(HEX.fullmatch(current)) and current != target['sha256']
+            supported = available and capable and kind != 'sftpgo' and receipt.get('core_api') == 1 and receipt.get('version') == selected['version']
+            reason = ''
+            if available and not capable:
+                reason = 'Обновите Платформу для установки новой сборки модуля.'
+            elif available and not supported:
+                reason = ('Обновление SFTP требует отдельного окна с закрытым файловым доступом.' if kind == 'sftpgo'
+                          else 'Эта версия модуля требует отдельного плана совместимости.')
+            result.append({'module_id': kind, 'version': selected['version'], 'installed': installed,
+                           'installed_version': receipt.get('version', ''), 'update_available': available,
+                           'upgrade_supported': supported, 'artifact_sha256': target['sha256'], 'blocked_reason': reason})
+        return result
+
+    def reconcile_upgrade(self):
+        path = self.base / 'operation.json'
+        # A process-local thread is only a hint. Read the journal *after*
+        # acquiring the OS worker lock, so completion cannot be overwritten
+        # by an orphan decision made from an earlier snapshot.
+        if path.exists():
+            try:
+                with self.lock(exclusive=False, blocking=False), self.worker_lock(blocking=False):
+                    current = read(path)
+                    if current.get('phase') not in ('complete', 'failed', 'rolled_back', 'recovery_required'):
+                        if not self.worker_active(current):
+                            current['phase'] = 'recovery_required'
+                            current['error'] = 'Обновление прервано. Требуется восстановление установки.'
+                            atomic(path, current)
+            except BlockingIOError:
+                pass
+        self.publish_upgrade_status()
+        return read(path) if path.exists() else None
+
+    @contextmanager
+    def status_monitor(self, interval=2.0):
+        """Keep orphan detection available when the core API is stopped."""
+        stopped = threading.Event()
+        def monitor():
+            reported = False
+            while not stopped.is_set():
+                try:
+                    self.reconcile_upgrade()
+                    reported = False
+                except (ValueError, OSError, subprocess.SubprocessError, TypeError):
+                    if not reported:
+                        logging.warning('PL upgrade status could not be reconciled; inspect the private operation journal')
+                        reported = True
+                stopped.wait(interval)
+        thread = threading.Thread(target=monitor, name='pl-upgrade-status', daemon=True)
+        thread.start()
+        try:
+            yield
+        finally:
+            stopped.set()
+            thread.join(timeout=6)
 
     def architecture(self):
         arch = {'x86_64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine())
@@ -472,7 +541,8 @@ class Delivery:
         if (meta.get('schema') != 1 or meta.get('product') != 'PL' or meta.get('kind') != 'module'
                 or meta.get('module_id') != kind or meta.get('core_api') != 1 or meta.get('version') != version
                 or meta.get('architecture') != self.architecture() or set(meta.get('images', {})) != expected
-                or not HEX.fullmatch(meta.get('source_sha256', '')) or set(meta.get('files', {})) != {'images.tar', 'source.tar.gz'}):
+                or not HEX.fullmatch(meta.get('source_sha256', '')) or set(meta.get('files', {})) != {'images.tar', 'source.tar.gz'}
+                or 'package_version' in meta and (not isinstance(meta['package_version'], str) or not VERSION.fullmatch(meta['package_version']))):
             raise ValueError('Incompatible module package')
         for name, checksum in meta['files'].items():
             if not HEX.fullmatch(checksum) or digest(folder / name) != checksum:
@@ -510,15 +580,19 @@ class Delivery:
             fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
             yield
 
-    def require_idle(self):
+    def require_idle(self, *, allow_refresh=False):
         path = self.base / 'operation.json'
-        if path.exists() and read(path).get('phase') not in ('complete', 'failed', 'rolled_back'):
-            raise ValueError('Обновление установки выполняется или требует восстановления')
+        if path.exists():
+            operation = read(path)
+            if allow_refresh and operation.get('phase') == 'reconciling' and operation.get('data_committed') is True:
+                return
+            if operation.get('phase') not in ('complete', 'failed', 'rolled_back'):
+                raise ValueError('Обновление установки выполняется или требует восстановления')
 
     @contextmanager
-    def rpc_guard(self):
+    def rpc_guard(self, *, allow_refresh=False):
         with self.lock(exclusive=False):
-            self.require_idle()
+            self.require_idle(allow_refresh=allow_refresh)
             yield
 
     def operation(self, phase, **fields):
@@ -528,6 +602,90 @@ class Delivery:
         if phase in ('complete', 'rolled_back', 'failed'):
             current['finished_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         atomic(path, current)
+        self.publish_upgrade_status()
+
+    def publish_upgrade_status(self):
+        # This lock is separate from the lifecycle/delivery barriers: a worker
+        # already holding those barriers must be able to publish progress.
+        fd = os.open(self.base / 'public-status.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'a') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
+                raise ValueError('Unsafe upgrade status lock')
+            fcntl.flock(stream, fcntl.LOCK_EX)
+            self._publish_upgrade_status_locked()
+
+    def _publish_upgrade_status_locked(self):
+        """Publish only the finite UI projection, readable without the API.
+
+        The operation journal, artifact URLs, snapshots, configuration and
+        exception details remain private. A completed journal is not a live
+        health check; the browser must also resynchronize its own session.
+        """
+        state = self.state()
+        value = {'active': False, 'ready': False, 'current_version': state['version']}
+        path = self.base / 'operation.json'
+        operation = read(path) if path.exists() else None
+        blocking = bool(operation and (operation.get('phase') not in ('complete', 'failed', 'rolled_back')
+                                       or state.get('phase') != 'ready'))
+        if operation and operation.get('kind', 'upgrade') in ('upgrade', 'module_upgrade'):
+            # UI telemetry must not prevent recovery of a legacy/incomplete
+            # journal. Never advertise an unvalidated operation as active.
+            try:
+                canonical_id(operation.get('operation_id'))
+                if (not VERSION.fullmatch(operation.get('version', '')) or not isinstance(operation.get('phase'), str)
+                        or operation.get('kind') == 'module_upgrade' and operation.get('module_id') not in MODULES):
+                    operation = None
+            except (TypeError, ValueError, AttributeError):
+                operation = None
+        if operation and operation.get('kind', 'upgrade') in ('upgrade', 'module_upgrade'):
+            phase = operation.get('phase')
+            phases = {'queued', 'queued_recovery', 'downloading', 'preparing_host', 'quiescing', 'snapshot',
+                      'applying', 'verifying_host', 'verifying', 'restoring', 'complete', 'failed',
+                      'rolled_back', 'recovery_required', 'resuming', 'reconciling'}
+            if phase not in phases:
+                phase = 'recovery_required'
+            terminal = phase in {'complete', 'failed', 'rolled_back'}
+            public = {'operation_id': operation['operation_id'], 'kind': operation.get('kind', 'upgrade'),
+                      'version': operation['version'], 'phase': phase}
+            public['recovery_mode'] = 'resume' if operation.get('data_committed') is True else 'rollback'
+            if operation.get('restored_snapshot') is True:
+                public['restored_snapshot'] = True
+            if operation.get('kind') == 'module_upgrade':
+                public['module_id'] = operation['module_id']
+            for name in ('started_at', 'finished_at'):
+                timestamp = operation.get(name)
+                if isinstance(timestamp, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', timestamp):
+                    public[name] = timestamp
+            errors = {'failed': 'Обновление не применено. Предыдущая версия и данные сохранены.',
+                      'rolled_back': 'Обновление не завершено. Восстановлены предыдущая версия и данные.',
+                      'recovery_required': 'Обновление прервано. Требуется восстановление установки.'}
+            if operation.get('data_committed') is True:
+                errors['recovery_required'] = 'Данные сохранены. Требуется завершить запуск модулей.'
+                if operation.get('restored_snapshot') is True:
+                    errors['recovery_required'] = 'Предыдущая версия и данные восстановлены. Требуется завершить запуск модулей.'
+            if phase in errors:
+                public['error'] = errors[phase]
+            value.update(active=not terminal, ready=terminal and state.get('phase') == 'ready', operation=public)
+        directory(self.root / 'run')
+        folder = self.root / 'run/upgrade-status'
+        directory(folder)
+        folder.chmod(0o755)
+        # The ingress rejects application writes throughout the snapshot and
+        # rollback window, including the interval when the API has restarted
+        # but the operation has not committed yet. It never reads private state.
+        marker = folder / 'active'
+        if marker.is_symlink() or marker.exists() and not marker.is_file():
+            raise ValueError('Unsafe public maintenance marker')
+        if blocking:
+            if not marker.exists():
+                atomic(marker, b'', mode=0o644)
+        else:
+            marker.unlink(missing_ok=True)
+        path = folder / 'status.json'
+        if path.exists() and read(path) == value and stat.S_IMODE(path.stat().st_mode) == 0o644:
+            return
+        atomic(path, value, mode=0o644)
 
     def record_failure(self, error):
         path = self.base / 'operation.json'
@@ -548,7 +706,7 @@ class Delivery:
         with self.lock():
             existing = read(self.base / 'operation.json') if (self.base / 'operation.json').exists() else None
             if existing and existing.get('operation_id') == body['operation_id']:
-                if existing.get('version') != body['version']:
+                if existing.get('kind', 'upgrade') != 'upgrade' or existing.get('version') != body['version']:
                     raise ValueError('Upgrade operation ID was used for another version')
                 return self.status({}, refresh=False)
             self.require_idle()
@@ -579,6 +737,38 @@ class Delivery:
             self._launch(operation, recovering=True)
         return self.status({}, refresh=False)
 
+    def module_upgrade(self, body):
+        if (not isinstance(body, dict) or set(body) != {'module_id', 'artifact_sha256', 'operation_id'}
+                or not isinstance(body.get('module_id'), str) or body['module_id'] not in MODULES
+                or not isinstance(body.get('artifact_sha256'), str) or not HEX.fullmatch(body['artifact_sha256'])):
+            raise ValueError('Invalid module upgrade request')
+        canonical_id(body.get('operation_id'))
+        with self.lock():
+            path = self.base / 'operation.json'
+            existing = read(path) if path.exists() else None
+            if existing and existing.get('operation_id') == body['operation_id']:
+                if (existing.get('kind') != 'module_upgrade' or existing.get('module_id') != body['module_id']
+                        or existing.get('artifact', {}).get('sha256') != body['artifact_sha256']):
+                    raise ValueError('Operation ID belongs to another update')
+                return self.status({}, refresh=False)
+            self.require_idle()
+            if not self.module_upgrade_capable():
+                raise ValueError('This core does not support installed module updates')
+            catalog = self.catalog()
+            offers = self.module_updates(catalog) if catalog else []
+            offer = next((v for v in offers if v['module_id'] == body['module_id']), None)
+            if (not offer or not offer['update_available'] or not offer['upgrade_supported']
+                    or offer['artifact_sha256'] != body['artifact_sha256']):
+                raise ValueError('Module update is not the selected compatible signed artifact')
+            state = self.state()
+            selected = catalog['modules'][body['module_id']]
+            operation = {'operation_id': body['operation_id'], 'kind': 'module_upgrade', 'module_id': body['module_id'],
+                         'version': state['version'], 'from_version': state['version'], 'module_version': selected['version'],
+                         'phase': 'queued', 'started_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'error': '',
+                         'artifact': selected['artifacts'][self.architecture()], 'catalog_sequence': catalog['sequence']}
+            self._launch(operation, recovering=False)
+        return self.status({}, refresh=False)
+
     def _launch(self, operation, recovering):
         if (self.supervisor != self.supervisor.resolve() or self.supervisor.parent != self.root / 'releases'
                 or not (self.supervisor / 'controller-supervisor.py').is_file()):
@@ -588,6 +778,7 @@ class Delivery:
         operation['worker_unit'] = unit + '.service'
         operation['phase'] = 'queued_recovery' if recovering else 'queued'
         atomic(self.base / 'operation.json', operation)
+        self.publish_upgrade_status()
         command = ['systemd-run', '--quiet', '--collect', '--unit', unit,
                    '--property=Type=exec', '--property=TimeoutStartSec=7200', '--property=UMask=0077',
                    '--property=NoNewPrivileges=true', '--property=ProtectSystem=strict', '--property=ProtectHome=true',
@@ -744,6 +935,16 @@ class Delivery:
             spec.loader.exec_module(bootstrap)
             generated = bootstrap.compose_model(self.root, manifest, state['config'], self.installation)
             bootstrap.apply_icmp_model(self.root, model, generated)
+        if manifest.get('features', {}).get('upgrade_status'):
+            mount = {'type': 'bind', 'source': str(self.root / 'run/upgrade-status').replace('$', '$$'),
+                     'target': '/run/pl-upgrade', 'read_only': True, 'bind': {'create_host_path': False}}
+            volumes = model['services']['web']['volumes']
+            volumes[:] = [v for v in volumes if not isinstance(v, dict) or v.get('target') != '/run/pl-upgrade']
+            volumes.append(mount)
+            api = model['services']['api']
+            api['volumes'] = [v for v in api.get('volumes', []) if not isinstance(v, dict) or v.get('target') != '/run/pl-upgrade']
+            api['volumes'].append(copy.deepcopy(mount))
+            api.setdefault('environment', {})['PORTAL_MAINTENANCE_DIR'] = '/run/pl-upgrade'
         return model
 
     def installation_settings(self):
@@ -770,15 +971,136 @@ class Delivery:
 
     def run_operation(self, recovering=False):
         operation = read(self.base / 'operation.json')
-        if operation.get('kind') == 'configuration':
+        if recovering and operation.get('data_committed') is True:
+            self.resume_committed()
+        elif operation.get('kind') == 'configuration':
             if recovering:
                 self.installation_settings().rollback()
             else:
                 self.installation_settings().perform()
         elif recovering:
             self.rollback()
+        elif operation.get('kind') == 'module_upgrade':
+            self.perform_module_upgrade()
         else:
             self.perform_upgrade()
+
+    def module_upgrade_helper(self):
+        path = self.package / 'module-upgrade.py'
+        expected = read(self.package / 'manifest.json').get('files', {}).get(path.name)
+        if (not isinstance(expected, str) or not HEX.fullmatch(expected) or path.is_symlink()
+                or not path.is_file() or digest(path) != expected):
+            raise ValueError('Pinned native module upgrade helper is unavailable')
+        spec = importlib.util.spec_from_file_location('pl_native_module_upgrade', path)
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        return helper
+
+    def preserve_storage_images(self, kind, descriptor):
+        roles = {'forms': ('mongo', 'keydb'), 'netmap': ('database', 'cache'), 'bookstack': ('database',)}.get(kind, ())
+        if not roles:
+            return descriptor
+        previous = self.module_registry()[kind]
+        for role in roles:
+            old, new = previous[role], descriptor[role]
+            same_contract = (old['architecture'] == new['architecture'] and old['recipe'] == new['recipe']
+                             and old['labels'].get('org.opencontainers.image.version') == new['labels'].get('org.opencontainers.image.version')
+                             and old['labels'].get('pl.module.config.version') == new['labels'].get('pl.module.config.version'))
+            if not same_contract:
+                continue
+            equivalent = old['id'] == new['id']
+            if not equivalent:
+                values = []
+                for image in (old, new):
+                    actual = load_json(self.parent.docker('image', 'inspect', image['id']))[0]
+                    config = copy.deepcopy(actual.get('Config') or {}); config.pop('Labels', None)
+                    values.append((actual.get('Os'), actual.get('Architecture'), actual.get('RootFS'), config))
+                equivalent = values[0] == values[1] and isinstance(values[0][2], dict) and 'Layers' in values[0][2]
+            if equivalent:
+                # Keep storage bytes and identity. A package tag or build-source
+                # label is not a database migration; changed filesystem layers
+                # remain a refused transition in the native preflight.
+                descriptor[role] = copy.deepcopy(old)
+        return descriptor
+
+    def stage_module_upgrade(self, operation):
+        kind, info = operation['module_id'], artifact(operation['artifact'])
+        if shutil.disk_usage(self.root / 'releases').free < 3 * info['size'] + RESERVE:
+            raise ValueError('Insufficient free space to stage both module image versions')
+        with tempfile.TemporaryDirectory(prefix='.module-update-', dir=self.root / 'releases') as temporary:
+            folder = Path(temporary)
+            archive = folder / 'module.tar.gz'
+            self.download(info['url'], archive, info['size'], info['sha256'])
+            extract_flat(archive, folder, {'module.json', 'images.tar', 'source.tar.gz'}, {'module.json', 'images.tar', 'source.tar.gz'})
+            meta = read(folder / 'module.json')
+            self.validate_module(meta, kind, operation['module_version'], folder)
+            self.parent.docker('image', 'load', '--input', str(folder / 'images.tar'), timeout=900)
+            self.verify_images(meta['images'])
+        if kind in ROLES:
+            descriptor = {role: meta['images'][kind + '-' + role] for role in ROLES[kind]}
+            if kind == 'doska':
+                descriptor['database'] = copy.deepcopy(self.module_registry()[kind]['database'])
+        else:
+            descriptor = meta['images'][kind]
+        return meta, self.preserve_storage_images(kind, descriptor)
+
+    def checkpoint_module_upgrade(self, plan):
+        operation = read(self.base / 'operation.json')
+        if (operation.get('kind') != 'module_upgrade' or plan.get('snapshot_operation_id') != operation['operation_id']
+                or plan.get('module_id') != operation['module_id']):
+            raise ValueError('Native update checkpoint identity differs')
+        self.operation(operation['phase'], module_upgrade_plan=plan,
+                       module_upgrade_plan_sha256=hashlib.sha256(json_bytes(plan)).hexdigest())
+
+    def perform_module_upgrade(self):
+        request = read(self.base / 'operation.json')
+        changed = False
+        try:
+            self.operation('downloading')
+            meta, descriptor = self.stage_module_upgrade(request)
+            old = copy.deepcopy(self.module_registry()[request['module_id']])
+            helper = self.module_upgrade_helper()
+            plan = helper.plan(self.parent, request['module_id'], old, descriptor)
+            plan['snapshot_operation_id'] = request['operation_id']
+            self.parent.module_upgrade_checkpoint = self.checkpoint_module_upgrade
+            self.checkpoint_module_upgrade(plan)
+            old_receipt = read(self.base / ('module-' + request['module_id'] + '.json'))
+            self.operation('quiescing', old_module_receipt=old_receipt)
+            self.check_snapshot_capacity()
+            containers = self.inventory()
+            self.operation('quiescing', containers=containers)
+            self.stop(containers, keep_web=True)
+            self.operation('snapshot')
+            snapshot = self.snapshot(request, containers)
+            self.operation('applying', snapshot=str(snapshot))
+            changed = True
+            registry = self.module_registry()
+            registry[request['module_id']] = descriptor
+            atomic(self.root / 'private/module-images.json', registry)
+            helper.apply(self.parent, plan)
+            self.activate_host(request['from_version'])
+            self.operation('verifying')
+            self.restart_core()
+            target = [v for v in containers if not v['core'] and v.get('module_id') == request['module_id']]
+            self.resume_native(target, safe_only=True)
+            helper.verify(self.parent, plan)
+            self.readiness()
+            atomic(self.base / ('module-' + request['module_id'] + '.json'), {
+                'module_id': request['module_id'], 'version': meta['version'], 'core_api': 1,
+                'sha256': request['artifact']['sha256'], 'package_version': meta.get('package_version', '')})
+            self.commit_and_resume(containers)
+        except BaseException as error:
+            self.record_failure(error)
+            if read(self.base / 'operation.json').get('data_committed') is True:
+                self.operation('recovery_required', error='Версия установлена. Требуется завершить запуск модулей; новые данные сохранены.')
+            elif changed:
+                self.rollback()
+            else:
+                latest = read(self.base / 'operation.json')
+                if latest.get('containers'):
+                    self.restart(latest['containers'])
+                    self.readiness()
+                self.operation('failed', error='Обновление не применено. Предыдущая версия и данные сохранены.')
 
     def stage_core(self, request):
         info = artifact(request['artifact'])
@@ -888,8 +1210,11 @@ class Delivery:
                     source = Path(mount.get('Source', ''))
                     if not source.is_relative_to(self.root / 'modules') or source != source.resolve():
                         raise ValueError('Owned container has data outside the managed installation')
+            kind = labels.get('pl.module', '')
+            if not core and kind not in MODULES:
+                raise ValueError('Owned native container has no supported module identity')
             result.append({'name': name, 'running': obj.get('State', {}).get('Running') is True, 'core': core,
-                           'service': labels.get('com.docker.compose.service', ''), 'image': obj['Image']})
+                           'module_id': kind, 'service': labels.get('com.docker.compose.service', ''), 'image': obj['Image']})
         if require_core and {c['service'] for c in result if c['core']} != {'api', 'web', 'db'}:
             raise ValueError('Unexpected core service inventory')
         return result
@@ -918,16 +1243,18 @@ class Delivery:
                 raise ValueError('Installation volume is also mounted by a foreign container')
         return result
 
-    def stop(self, containers):
+    def stop(self, containers, *, keep_web=False):
         if not containers:
             return
-        # Close application writes before the databases are cleanly stopped.
-        first = [c['name'] for c in containers if c['running'] and c['core'] and c['service'] in ('web', 'api')]
-        rest = [c['name'] for c in containers if c['running'] and c['name'] not in first]
+        # The stateless HTTPS ingress can continue serving the update screen and
+        # its public journal. API shutdown closes writes before database stop.
+        stopped = [c for c in containers if not (keep_web and c['core'] and c['service'] == 'web')]
+        first = [c['name'] for c in stopped if c['running'] and c['core'] and c['service'] in ('web', 'api')]
+        rest = [c['name'] for c in stopped if c['running'] and c['name'] not in first]
         for group in (first, rest):
             if group:
                 self.parent.docker('container', 'stop', '--time', '30', *group, timeout=180)
-        for obj in load_json(self.parent.docker('container', 'inspect', *[c['name'] for c in containers])):
+        for obj in load_json(self.parent.docker('container', 'inspect', *[c['name'] for c in stopped])) if stopped else []:
             if obj.get('State', {}).get('Running'):
                 raise ValueError('Installation did not quiesce')
 
@@ -936,8 +1263,23 @@ class Delivery:
                                   '-f', str(self.root / 'config/compose.json'), *args, timeout=240)
 
     def restart(self, containers):
-        self.compose('up', '--detach', '--pull', 'never', '--no-build', '--wait', '--wait-timeout', '180')
-        names = [c['name'] for c in containers if c['running'] and not c['core']]
+        self.restart_core()
+        self.resume_native(containers)
+
+    def restart_core(self):
+        # Keep HTTPS and the update journal available until the new API is
+        # healthy. Recreate web explicitly: Compose does not notice atomically
+        # replaced bind-mounted config files when the image ID is unchanged.
+        self.compose('up', '--detach', '--pull', 'never', '--no-build', '--wait', '--wait-timeout', '180', 'db', 'api')
+        journal = self.base / 'operation.json'
+        if journal.exists() and read(journal).get('kind', 'upgrade') in ('upgrade', 'module_upgrade'):
+            # API has no container healthcheck. Its listener and migrations
+            # must actually be ready before replacing the existing ingress.
+            self.wait_readiness()
+        self.compose('up', '--detach', '--pull', 'never', '--no-build', '--no-deps', '--force-recreate',
+                     '--wait', '--wait-timeout', '180', 'web')
+    def resume_native(self, containers, *, safe_only=False):
+        names = [c['name'] for c in containers if c['running'] and not c['core'] and (not safe_only or c.get('module_id') != 'sftpgo')]
         if names:
             self.parent.docker('container', 'start', *names, timeout=180)
             deadline = time.monotonic() + 120
@@ -949,6 +1291,72 @@ class Delivery:
                     raise ValueError('Previously running modules did not become healthy')
                 time.sleep(2)
 
+    def commit_and_resume(self, containers):
+        # From here onward native ingress (including SFTP) may accept writes.
+        # A later failure must resume the committed installation, never restore
+        # its older full snapshot over newly accepted files or user data.
+        self.operation('resuming', data_committed=True, error='')
+        self.resume_native(containers)
+        self.operation('reconciling')
+        self.synchronize_modules()
+        self.readiness()
+        restored = read(self.base / 'operation.json').get('restored_snapshot') is True
+        self.operation('rolled_back' if restored else 'complete',
+                       error='Восстановлены предыдущая версия и данные.' if restored else '')
+
+    def synchronize_modules(self):
+        state = self.state()
+        manifest = read(self.root / 'releases' / state['version'] / 'manifest.json')
+        if not manifest.get('features', {}).get('module_upgrades'):
+            # Legacy rollback APIs have no signed reconciliation callback.
+            # Their existing scheduler resumes after the terminal operation.
+            return
+        ids = self.parent.docker('container', 'ls', '--filter', 'label=com.docker.compose.project=' + self.installation,
+                                 '--filter', 'label=com.docker.compose.service=api', '--format', '{{.ID}}').decode().split()
+        if len(ids) != 1:
+            raise ValueError('Owned core API is unavailable for reconciliation')
+        obj = load_json(self.parent.docker('container', 'inspect', ids[0]))[0]
+        labels = obj.get('Config', {}).get('Labels') or {}
+        if (obj.get('Image') != manifest['images']['api']['id'] or not obj.get('State', {}).get('Running')
+                or labels.get('com.docker.compose.project') != self.installation
+                or labels.get('com.docker.compose.service') != 'api'):
+            raise ValueError('Core reconciliation target identity differs')
+        network = obj.get('NetworkSettings', {}).get('Networks', {}).get(self.installation + '_backend', {})
+        address = ipaddress.IPv4Address(network.get('IPAddress', ''))
+        if not address.is_private:
+            raise ValueError('Core reconciliation target is outside its private network')
+        key_path = self.root / 'private/module-controller-key'
+        info = key_path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o007:
+            raise ValueError('Unsafe core reconciliation credential')
+        key = key_path.read_bytes()
+        if len(key) != 32:
+            raise ValueError('Invalid core reconciliation credential')
+        operation = read(self.base / 'operation.json')
+        body = json_bytes({'operation_id': operation['operation_id'], 'request_id': str(uuid.uuid4())})
+        timestamp = str(int(time.time())); path = '/internal/delivery/reconcile'
+        signature = hmac.new(key, b'pl-delivery-reconcile-v1\n' + (timestamp + '\nPOST\n' + path + '\n').encode() + body, hashlib.sha256).hexdigest()
+        connection = http.client.HTTPConnection(str(address), 8080, timeout=70)
+        try:
+            connection.request('POST', path, body, {'Content-Type': 'application/json',
+                'X-PL-Delivery-Timestamp': timestamp, 'X-PL-Delivery-Signature': signature})
+            response = connection.getresponse(); raw = response.read(65537)
+            if response.status != 200 or len(raw) > 65536:
+                raise ValueError('Core did not confirm refreshed module bindings')
+            value = load_json(raw)
+            if (set(value) != {'operation_id', 'ready', 'instances'} or value['operation_id'] != operation['operation_id']
+                    or value['ready'] is not True or type(value['instances']) is not int or not 0 <= value['instances'] <= 1000):
+                raise ValueError('Invalid core module reconciliation result')
+        finally:
+            connection.close()
+
+    def resume_committed(self):
+        operation = read(self.base / 'operation.json')
+        if operation.get('data_committed') is not True or not isinstance(operation.get('containers'), list):
+            raise ValueError('No committed installation is available to resume')
+        self.restart_core()
+        self.commit_and_resume(operation['containers'])
+
     def readiness(self):
         state = self.state()
         context = ssl.create_default_context(cafile=str(self.root / 'private/tls.crt'))
@@ -958,17 +1366,31 @@ class Delivery:
             if response.status != 200:
                 raise ValueError('Core readiness failed after upgrade')
 
-    def snapshot(self, operation, containers):
+    def wait_readiness(self, timeout=180):
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                self.readiness()
+                return
+            except (ValueError, OSError, http.client.HTTPException):
+                if time.monotonic() >= deadline:
+                    raise ValueError('Core readiness did not return before the HTTPS switch') from None
+                time.sleep(1)
+
+    def check_snapshot_capacity(self):
         backup_root = self.root / 'private/upgrade-backups'
         directory(backup_root)
-        destination = backup_root / operation['operation_id']
-        directory(destination)
         volumes = self.volumes()
-        # Reject capacity failure before any schema-changing process starts.
         sources = [Path(v['path']) for v in volumes] + [self.root / name for name in ('modules', 'private', 'config', 'state')]
         total = sum(tree_size(p, exclude={'upgrade-backups', 'delivery'}) for p in sources)
-        if shutil.disk_usage(destination).free < total + RESERVE:
+        if shutil.disk_usage(backup_root).free < total + RESERVE:
             raise ValueError('Insufficient free space for the complete installation snapshot')
+        return volumes
+
+    def snapshot(self, operation, containers):
+        volumes = self.check_snapshot_capacity()
+        destination = self.root / 'private/upgrade-backups' / operation['operation_id']
+        directory(destination)
         files = {}
         with tarfile.open(destination / 'installation.tar', 'w', format=tarfile.PAX_FORMAT) as tar:
             for name in ('.pl-installation.json', 'config', 'private', 'state', 'modules'):
@@ -997,14 +1419,17 @@ class Delivery:
             icmp = self.prepare_icmp(destination, manifest, state['config'])
             model = self.upgraded_model(destination, manifest, state)
             containers = self.inventory()
+            self.check_snapshot_capacity()
             self.operation('quiescing', containers=containers)
-            self.stop(containers)
+            self.stop(containers, keep_web=True)
             self.operation('snapshot')
             snapshot = self.snapshot(request, containers)
             self.operation('applying', snapshot=str(snapshot))
             changed = True
             if icmp:
                 self.icmp_host('apply')
+            if manifest.get('features', {}).get('upgrade_status'):
+                atomic(self.root / 'config/nginx.conf', (destination / 'nginx.conf').read_bytes(), mode=0o644)
             atomic(self.root / 'config/compose.json', model)
             state.update(version=manifest['version'], manifest_sha256=digest(destination / 'manifest.json'), phase='upgrading')
             atomic(self.root / 'state/installation.json', state)
@@ -1014,14 +1439,16 @@ class Delivery:
             self.operation('verifying_host')
             self.activate_host(manifest['version'])
             self.operation('verifying')
-            self.restart(containers)
+            self.restart_core()
             self.readiness()
             state['phase'] = 'ready'
             atomic(self.root / 'state/installation.json', state)
-            self.operation('complete', error='')
+            self.commit_and_resume(containers)
         except BaseException as error:
             self.record_failure(error)
-            if changed:
+            if read(self.base / 'operation.json').get('data_committed') is True:
+                self.operation('recovery_required', error='Версия установлена. Требуется завершить запуск модулей; новые данные сохранены.')
+            elif changed:
                 self.rollback()
             else:
                 latest = read(self.base / 'operation.json')
@@ -1032,9 +1459,26 @@ class Delivery:
 
     def rollback(self):
         operation = read(self.base / 'operation.json')
-        self.operation('restoring')
+        if operation.get('data_committed') is True:
+            raise ValueError('Committed installation data must be resumed, not rolled back')
         path = self.root / 'private/upgrade-backups' / operation['operation_id']
-        if (path / 'snapshot.json').exists():
+        has_snapshot = (path / 'snapshot.json').exists()
+        if operation.get('snapshot') and not has_snapshot:
+            raise ValueError('The required complete recovery snapshot is missing')
+        module_plan = None
+        if operation.get('kind') == 'module_upgrade' and has_snapshot:
+            module_plan = operation.get('module_upgrade_plan')
+            if (not isinstance(module_plan, dict) or module_plan.get('module_id') != operation.get('module_id')
+                    or module_plan.get('snapshot_operation_id') != operation.get('operation_id')
+                    or hashlib.sha256(json_bytes(module_plan)).hexdigest() != operation.get('module_upgrade_plan_sha256')):
+                raise ValueError('Native module recovery plan integrity differs')
+            receipt = operation.get('old_module_receipt')
+            if (not isinstance(receipt, dict) or receipt.get('module_id') != operation['module_id']
+                    or receipt.get('core_api') != 1 or not isinstance(receipt.get('sha256'), str)
+                    or not HEX.fullmatch(receipt['sha256'])):
+                raise ValueError('Native module recovery receipt differs')
+        self.operation('restoring')
+        if has_snapshot:
             meta = read(path / 'snapshot.json')
             if meta.get('installation') != self.installation or meta.get('operation_id') != operation['operation_id']:
                 raise ValueError('Recovery snapshot belongs to another installation')
@@ -1043,7 +1487,7 @@ class Delivery:
                     raise ValueError('Recovery snapshot integrity mismatch')
             if set(meta.get('files', {})) != {'installation.tar', *[v['archive'] for v in meta['volumes']]}:
                 raise ValueError('Incomplete recovery snapshot')
-            self.stop(self.inventory(require_core=False))
+            self.stop(self.inventory(require_core=False), keep_web=operation.get('kind', 'upgrade') in ('upgrade', 'module_upgrade'))
             self.icmp_host('restore')
             actual = {v['name']: v['path'] for v in self.volumes()}
             helper = read(self.root / 'releases' / operation['from_version'] / 'manifest.json')['images']['web']['id']
@@ -1060,13 +1504,20 @@ class Delivery:
                     '--entrypoint', '/bin/busybox', helper, 'chroot', '/host', '/usr/bin/python3', str(self.package / 'delivery.py'),
                     '--restore-volume', str(path / volume['archive']), '--target', volume['path'], timeout=1800)
             restore_tree(path / 'installation.tar', self.root, preserve={'private/upgrade-backups', 'state/delivery', 'modules/controller.lock', 'state/install.lock', 'state/icmp-host.lock'})
+            if operation.get('kind') == 'module_upgrade':
+                self.parent.module_upgrade_checkpoint = self.checkpoint_module_upgrade
+                self.module_upgrade_helper().rollback(self.parent, module_plan)
+                atomic(self.base / ('module-' + operation['module_id'] + '.json'), operation['old_module_receipt'])
             if operation.get('kind') == 'configuration' and operation.get('module_origin_plan'):
                 helper = self.installation_settings().origin_helper()
                 if helper is None:
                     raise ValueError('Native origin rollback helper is missing')
                 helper.rollback(self.parent, operation['module_origin_plan'])
             self.activate_host(operation['from_version'])
-            self.restart(meta['containers'])
+            self.operation('resuming', data_committed=True, restored_snapshot=True)
+            self.restart_core()
+            self.commit_and_resume(meta['containers'])
+            return
         elif operation.get('containers'):
             # No complete snapshot means no schema-changing stage was allowed.
             self.icmp_host('restore')

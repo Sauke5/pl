@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
+FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
 REQUIRED = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt"}
 
 
@@ -107,8 +107,10 @@ def manifest(package: Path) -> dict:
     if m.get("architecture") != arch:
         raise ValueError("Package CPU architecture does not match this host")
     features = m.get("features", {})
-    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules"} or any(type(v) is not bool for v in features.values()):
+    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
+    if features.get('module_upgrades') and (not features.get('on_demand_modules') or 'module-upgrade.py' not in m.get('files', {})):
+        raise ValueError('Installed module upgrades require their finite host helper')
     if features.get("on_demand_modules"):
         payloads = {"install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "module-controller.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py"}
         if (m.get("schema") != 2 or not features.get("module_controller") or not isinstance(m.get("files"), dict) or not payloads <= m["files"].keys()
@@ -735,6 +737,17 @@ def choose_network_cidr(occupied: list) -> str:
     raise ValueError("No unused private IPv4 /24 available; specify a dedicated --network-cidr")
 
 
+def validate_production_seed(private: Path) -> None:
+    initial = private / "initial-admin-password"
+    if initial.is_symlink() or (initial.exists() and not initial.is_file()):
+        raise ValueError("Unsafe initial password file")
+    if initial.exists():
+        password = initial.read_bytes() if initial.stat().st_size <= 1024 else b""
+        if not 12 <= len(password) <= 1024 or any(value in password for value in (b"\n", b"\r", b"\0")):
+            raise ValueError("--production cannot reuse an existing weak initial password; existing credentials were preserved. "
+                             "Resume this installation without --production.")
+
+
 class Runtime:
     def __init__(self, root: Path, package: Path, m: dict):
         self.root, self.package, self.m = root, package, m
@@ -882,8 +895,10 @@ class Runtime:
             if not allowed:
                 raise ValueError("Network CIDR overlaps a physical, VPN or foreign host route")
 
-    def credentials(self, cfg: dict, password_file: Path | None) -> None:
+    def credentials(self, cfg: dict, password_file: Path | None, *, production: bool = False) -> None:
         initial, phc = self.private / "initial-admin-password", self.private / "local-admin.hash"
+        if production:
+            validate_production_seed(self.private)
         if (self.root / "config/compose.json").exists() and not (self.private / "runtime.env").exists():
             raise ValueError("Existing installation credentials are missing; restore them before resuming")
         if not phc.exists():
@@ -893,9 +908,11 @@ class Runtime:
                 if password_file.is_symlink() or not password_file.is_file() or password_file.stat().st_mode & 0o077:
                     raise ValueError("Password input must be a private regular file")
                 password = password_file.read_bytes().rstrip(b"\r\n")
+            elif production:
+                password = secrets.token_urlsafe(32).encode("ascii")
             else:
                 password = b"admin"  # Explicit initial credential required by the product owner.
-            minimum = 12 if password_file else 1
+            minimum = 12 if production or password_file else 1
             if not minimum <= len(password) <= 1024 or b"\n" in password or b"\r" in password or b"\0" in password:
                 raise ValueError("Password file must have 12..1024 bytes on a single line")
             if not initial.exists():
@@ -1005,6 +1022,11 @@ def compose_model(root: Path, m: dict, cfg: dict, install_id: str) -> dict:
                    "local-auth": {"external": True, "name": install_id + "-auth"}},
         "networks": {"backend": {"internal": True, "labels": {"pl.installation": install_id}},
                      "ingress": {"labels": {"pl.installation": install_id}}}}
+
+    if m.get("features", {}).get("upgrade_status"):
+        model["services"]["web"]["volumes"].append(mount("run/upgrade-status", "/run/pl-upgrade"))
+        model["services"]["api"]["volumes"].append(mount("run/upgrade-status", "/run/pl-upgrade"))
+        model["services"]["api"]["environment"]["PORTAL_MAINTENANCE_DIR"] = "/run/pl-upgrade"
 
     if m.get("features", {}).get("sftpgo_module") is True or m.get("features", {}).get("on_demand_modules") is True:
         model["volumes"]["module-transfers"] = {"labels": {"pl.installation": install_id, "pl.temporary": "true"}}
@@ -1340,6 +1362,9 @@ def install(args) -> None:
         prepare_integration_secrets(root, policy, supplied, existing=True)
     if previous is not None and m.get("features", {}).get("connector_credentials"):
         read_connector_key(root)
+    production = getattr(args, "production", False)
+    if production:
+        validate_production_seed(root / "private")
     # Load and inspect the entire finite runtime set before installation state/config writes.
     rt = Runtime(root, package, m)
     rt.network_preflight(cfg, previous.get("install_id") if previous is not None else None)
@@ -1352,6 +1377,8 @@ def install(args) -> None:
         raise ValueError("Unsafe installation lock")
     with lockpath.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if production:
+            validate_production_seed(root / "private")
         statepath = root / "state/installation.json"
         package_hash = digest(package / "manifest.json")
         was_existing = statepath.exists()
@@ -1374,10 +1401,16 @@ def install(args) -> None:
             prepare_integration_secrets(root, policy, supplied, existing=was_existing)
             if m.get("features", {}).get("connector_credentials"):
                 prepare_connector_key(root, existing=was_existing)
-            rt.credentials(cfg, args.password_file)
+            rt.credentials(cfg, args.password_file, production=production)
             initial_password_active = rt.auth_volume()
             rt.tls(cfg, args.tls_cert, args.tls_key, args.self_signed)
             write_file(root / "config/nginx.conf", (package / "nginx.conf").read_bytes(), 0o644)
+            if m.get("features", {}).get("upgrade_status"):
+                directory(root / "run", 0o750)
+                directory(root / "run/upgrade-status", 0o755)
+                if not (root / "run/upgrade-status/status.json").exists():
+                    write_file(root / "run/upgrade-status/status.json", json.dumps({
+                        "active": False, "ready": False, "current_version": state["version"]}) + "\n", 0o644)
             if m.get("features", {}).get("module_controller") is True:
                 prepare_module_controller(rt)
             if m.get("features", {}).get("icmp_probe") is True:
@@ -1408,7 +1441,11 @@ def install(args) -> None:
             raise
     print("PL core ready: " + cfg["public_url"])
     print("Local administrator: " + cfg["admin_user"])
-    print("Initial credentials are documented in README.md; change the password in PL settings.")
+    if initial_password_active and pw.exists():
+        print("Initial password file (root-only): " + str(pw))
+        print("Change the initial password in PL settings.")
+    else:
+        print("Existing administrator password retained.")
     print("Self-signed TLS requires explicit client trust if selected. Manage optional modules in the PL UI.")
 
 
@@ -1424,6 +1461,7 @@ def main() -> int:
     parser.add_argument("--integration-config", type=Path, help="Private 0600 JSON of explicit integration CIDRs, ports and supplied secret files; first installation only; secrets are excluded from backup")
     parser.add_argument("--icmp-allowed-cidr", action="append", help="Explicit IPv4 CIDR for manual ICMP; repeat for several networks, none permits no destinations")
     parser.add_argument("--admin-user", default="admin")
+    parser.add_argument("--production", action="store_true", help="Generate a strong random password for a new initial administrator seed; existing credentials are never replaced")
     parser.add_argument("--password-file", type=Path)
     parser.add_argument("--tls-cert", type=Path)
     parser.add_argument("--tls-key", type=Path)

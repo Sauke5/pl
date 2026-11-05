@@ -78,6 +78,7 @@ func run() error {
 		return e
 	}
 	manager := modules.New(db, nil)
+	manager.DeliveryEnabled = c.OnDemandModules
 	manager.PublicURL = c.PublicURL
 	manager.BookStack = modules.NewBookStackConnector(guard)
 	if controller != nil {

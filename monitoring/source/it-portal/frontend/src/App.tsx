@@ -3,7 +3,8 @@ import LocalProxy, {
   installedLocalXrays,
 } from "./LocalProxy";
 import { LocalAdminPassword } from "./LocalAdminPassword";
-import { UpdateNotification } from "./UpdateSettings";
+import { ReleaseBanner, UpdateNotification } from "./UpdateSettings";
+import { requestUpgradeStatus, UpgradeBoundary } from "./UpgradeExperience";
 import {
   InstallationTransitionNotice,
   pendingInstallationTransition,
@@ -203,7 +204,17 @@ function takeLoginSuccessCandidate() {
   }
 }
 export default function App() {
+  return (
+    <UpgradeBoundary>
+      <PortalApp />
+    </UpgradeBoundary>
+  );
+}
+function PortalApp() {
   const session = useAPI<Session>("/session");
+  useEffect(() => {
+    if (session.error) requestUpgradeStatus();
+  }, [session.error]);
   const [error, setError] = useState<unknown>();
   const [successVisible, setSuccessVisible] = useState(
     takeLoginSuccessCandidate,
@@ -1000,6 +1011,7 @@ function Admin({ session }: { session: Session }) {
           </>
         }
       >
+        <ReleaseBanner enabled={!!session.user?.admin && !session.demo} />
         <LocalAdminPassword session={session} prompt />
         {!!error && (
           <ErrorBox

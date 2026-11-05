@@ -24,7 +24,7 @@ TEXT_SUFFIXES = {".py", ".go", ".sql", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".j
 ASSET_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".webmanifest", ".tgz"}
 INSTALLER_FILES = {
     "package.py", "public-export.py", "release-catalog.py", "get-pl.sh", "install.sh", "bootstrap.py", "delivery.py", "delivery-proxy.py", "delivery.ru.md", "maintenance.py",
-    "module-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
+    "module-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
     "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py",
     "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py",
     "icmp-install.py", "icmp-probe.py", "nginx.conf", "release-signing-public.pem", "LICENSES.txt",
@@ -45,6 +45,7 @@ UNIT_TEST_NAMES = {
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
     "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
+    "test_maintenance_concurrency.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py",
 }
 REPORT_FILES = {
     "monitoring_daily_summary.py", "monitoring_weekly_report.py", "monitoring_report_api.py", "manage_reports.py",

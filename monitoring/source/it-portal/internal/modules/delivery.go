@@ -56,21 +56,32 @@ type DeliveryReleaseItem struct {
 }
 
 type DeliveryModule struct {
-	ModuleID string `json:"module_id"`
-	Version  string `json:"version"`
+	ModuleID         string `json:"module_id"`
+	Version          string `json:"version"`
+	Installed        bool   `json:"installed,omitempty"`
+	InstalledVersion string `json:"installed_version,omitempty"`
+	UpdateAvailable  bool   `json:"update_available,omitempty"`
+	UpgradeSupported bool   `json:"upgrade_supported,omitempty"`
+	ArtifactSHA256   string `json:"artifact_sha256,omitempty"`
+	BlockedReason    string `json:"blocked_reason,omitempty"`
 }
 type DeliveryOperation struct {
-	Kind        string `json:"kind,omitempty"`
-	OperationID string `json:"operation_id"`
-	Version     string `json:"version,omitempty"`
-	Phase       string `json:"phase"`
-	Error       string `json:"error,omitempty"`
-	StartedAt   string `json:"started_at,omitempty"`
-	FinishedAt  string `json:"finished_at,omitempty"`
+	Kind             string `json:"kind,omitempty"`
+	ModuleID         string `json:"module_id,omitempty"`
+	RecoveryMode     string `json:"recovery_mode,omitempty"`
+	RestoredSnapshot bool   `json:"restored_snapshot,omitempty"`
+	OperationID      string `json:"operation_id"`
+	Version          string `json:"version,omitempty"`
+	Phase            string `json:"phase"`
+	Error            string `json:"error,omitempty"`
+	StartedAt        string `json:"started_at,omitempty"`
+	FinishedAt       string `json:"finished_at,omitempty"`
 }
 type DeliveryUpgrade struct {
-	Version     string `json:"version,omitempty"`
-	OperationID string `json:"operation_id"`
+	Version        string `json:"version,omitempty"`
+	OperationID    string `json:"operation_id"`
+	ModuleID       string `json:"module_id,omitempty"`
+	ArtifactSHA256 string `json:"artifact_sha256,omitempty"`
 }
 
 func (m *Manager) Delivery(ctx context.Context, action string, upgrade *DeliveryUpgrade) (DeliveryStatus, error) {
@@ -88,13 +99,21 @@ func (m *Manager) Delivery(ctx context.Context, action string, upgrade *Delivery
 
 func (c *HostController) Delivery(ctx context.Context, action string, upgrade *DeliveryUpgrade) (DeliveryStatus, error) {
 	var result DeliveryStatus
-	if action != "status" && action != "check" && action != "upgrade" && action != "recover" {
+	if action != "status" && action != "check" && action != "upgrade" && action != "recover" && action != "module-upgrade" {
 		return result, errors.New("Неизвестная операция доставки")
 	}
 	var value any = struct{}{}
-	if action == "upgrade" || action == "recover" {
-		if upgrade == nil || !canonicalID(upgrade.OperationID) || action == "upgrade" && (len(upgrade.Version) == 0 || len(upgrade.Version) > 64) || action == "recover" && upgrade.Version != "" {
+	if action == "upgrade" || action == "recover" || action == "module-upgrade" {
+		if upgrade == nil || !canonicalID(upgrade.OperationID) {
 			return result, errors.New("Некорректная версия или идентификатор обновления")
+		}
+		if action == "module-upgrade" {
+			digest, err := hex.DecodeString(upgrade.ArtifactSHA256)
+			if !deliveredModule(upgrade.ModuleID) || upgrade.Version != "" || err != nil || len(digest) != sha256.Size || hex.EncodeToString(digest) != upgrade.ArtifactSHA256 {
+				return result, errors.New("Некорректный модуль или контрольная сумма поставки")
+			}
+		} else if upgrade.ModuleID != "" || upgrade.ArtifactSHA256 != "" || action == "upgrade" && (len(upgrade.Version) == 0 || len(upgrade.Version) > 64) || action == "recover" && upgrade.Version != "" {
+			return result, errors.New("Некорректные параметры обновления")
 		}
 		value = upgrade
 	} else if upgrade != nil {
@@ -128,4 +147,13 @@ func (c *HostController) Delivery(ctx context.Context, action string, upgrade *D
 		return DeliveryStatus{}, errors.New("Host controller не подтвердил состояние доставки")
 	}
 	return result, nil
+}
+
+func deliveredModule(id string) bool {
+	switch id {
+	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack":
+		return true
+	default:
+		return false
+	}
 }

@@ -10,15 +10,18 @@ import (
 )
 
 var deliveryVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9][A-Za-z0-9.-]*)?$`)
+var deliveryArtifactHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func (s *Server) RegisterDeliveryRoutes(m *http.ServeMux) {
 	if !s.Config.PortableRelease {
 		return
 	}
 	s.registerDeliveryProxyRoutes(m)
+	s.RegisterDeliveryReconcileRoutes(m)
 	m.HandleFunc("GET /api/v1/delivery", s.moduleAuth(s.deliveryStatus))
 	m.HandleFunc("POST /api/v1/delivery/check", s.moduleAuth(s.deliveryCheck))
 	m.HandleFunc("POST /api/v1/delivery/upgrade", s.moduleAuth(s.deliveryUpgrade))
+	m.HandleFunc("POST /api/v1/delivery/module-upgrade", s.moduleAuth(s.deliveryModuleUpgrade))
 	m.HandleFunc("POST /api/v1/delivery/recover", s.moduleAuth(s.deliveryRecover))
 }
 func (s *Server) deliveryRecover(w http.ResponseWriter, r *http.Request) {
@@ -51,11 +54,33 @@ func (s *Server) deliveryUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := uuid.Parse(request.OperationID)
-	if err != nil || id.String() != request.OperationID || !deliveryVersion.MatchString(request.Version) {
+	if err != nil || id.String() != request.OperationID || !deliveryVersion.MatchString(request.Version) || request.ModuleID != "" || request.ArtifactSHA256 != "" {
 		problem(w, 400, "invalid_upgrade", "Укажите опубликованную версию и идентификатор операции")
 		return
 	}
 	s.deliveryRespond(w, r, "upgrade", &request)
+}
+func (s *Server) deliveryModuleUpgrade(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		OperationID    string `json:"operation_id"`
+		ModuleID       string `json:"module_id"`
+		ArtifactSHA256 string `json:"artifact_sha256"`
+	}
+	if !decode(w, r, &request) {
+		return
+	}
+	id, err := uuid.Parse(request.OperationID)
+	allowed := false
+	switch request.ModuleID {
+	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack":
+		allowed = true
+	}
+	if err != nil || id.String() != request.OperationID || !allowed || !deliveryArtifactHash.MatchString(request.ArtifactSHA256) {
+		problem(w, 400, "invalid_module_upgrade", "Укажите модуль, опубликованную сборку и идентификатор операции")
+		return
+	}
+	s.deliveryRespond(w, r, "module-upgrade", &modules.DeliveryUpgrade{OperationID: request.OperationID,
+		ModuleID: request.ModuleID, ArtifactSHA256: request.ArtifactSHA256})
 }
 func (s *Server) deliveryRespond(w http.ResponseWriter, r *http.Request, action string, request *modules.DeliveryUpgrade) {
 	status, err := s.Modules.Delivery(r.Context(), action, request)

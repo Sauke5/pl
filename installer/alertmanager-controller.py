@@ -745,7 +745,9 @@ class AlertmanagerController:
             self.check_plan(instance, ref)
             return {'valid': True}
 
-    def create_container(self, instance):
+    def create_container(self, instance, *, start=True):
+        if type(start) is not bool:
+            raise ValueError('Explicit Alertmanager startup policy is required')
         self.revoke_read_route(instance)
         self.verify_image()
         volume = self.name(instance) + '-data'
@@ -767,7 +769,8 @@ class AlertmanagerController:
         obj = self.inspect(instance, allow_pending=True)
         if obj is None:
             raise ValueError('Alertmanager container creation not confirmed')
-        self.docker('container', 'start', obj['Id'])
+        if start:
+            self.docker('container', 'start', obj['Id'])
 
     def ensure(self, instance):
         self.revoke_read_route(instance)

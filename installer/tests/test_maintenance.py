@@ -147,6 +147,43 @@ class MaintenanceTests(unittest.TestCase):
                 pl.Runtime(self.root)
             manifest.assert_not_called()
 
+    def test_persisted_web_configuration_reaches_package_validation(self):
+        for name in ('state', 'config', 'releases'):
+            (self.root / name).mkdir(mode=0o750, exist_ok=True)
+        base = pl.bootstrap.configuration('https://127.0.0.1:18443', '127.0.0.1', 'admin', '10.90.1.0/24')
+        configurations = (
+            dict(base, custom_tls=False),
+            dict(base, custom_tls=True, allowed_cidrs=['192.0.2.0/24'], allowed_ports=[443, 9443],
+                 outbound_ca_pem='', icmp_policy_mode='interactive', icmp_allowed_cidrs=[]),
+            dict(base, custom_tls=False, icmp_policy_mode='cidr', icmp_allowed_cidrs=['192.0.2.0/24']),
+            dict(base, icmp_allowed_cidrs=[]),
+        )
+        for cfg in configurations:
+            with self.subTest(config=cfg):
+                state = {'schema': 1, 'product': 'PL', 'phase': 'ready', 'install_id': 'pl-123456abcdef',
+                         'version': '0.1.0-test', 'config': cfg}
+                with patch.object(pl.bootstrap, 'managed_root'), patch.object(pl, 'safe_json', return_value=state), \
+                        patch.object(pl.bootstrap, 'manifest', side_effect=ValueError('package-check-reached')):
+                    with self.assertRaisesRegex(ValueError, 'package-check-reached'):
+                        pl.Runtime(self.root)
+
+    def test_unknown_or_malformed_persisted_configuration_is_rejected(self):
+        for name in ('state', 'config', 'releases'):
+            (self.root / name).mkdir(mode=0o750, exist_ok=True)
+        base = pl.bootstrap.configuration('https://127.0.0.1:18443', '127.0.0.1', 'admin')
+        changes = ({'custom_tls': 'false'}, {'custom_tls': 0}, {'disable_tls': True},
+                   {'icmp_policy_mode': 'all'}, {'icmp_policy_mode': 'interactive', 'icmp_allowed_cidrs': ['192.0.2.0/24']},
+                   {'icmp_allowed_cidrs': ['192.0.2.1/24']})
+        for change in changes:
+            with self.subTest(change=change):
+                state = {'schema': 1, 'product': 'PL', 'phase': 'ready', 'install_id': 'pl-123456abcdef',
+                         'version': '0.1.0-test', 'config': dict(base, **change)}
+                with patch.object(pl.bootstrap, 'managed_root'), patch.object(pl, 'safe_json', return_value=state), \
+                        patch.object(pl.bootstrap, 'manifest') as manifest:
+                    with self.assertRaises(ValueError):
+                        pl.Runtime(self.root)
+                    manifest.assert_not_called()
+
     def test_foreign_root_not_mutated(self):
         p = self.root / "foreign"
         p.mkdir(mode=0o755)
@@ -422,10 +459,10 @@ class MaintenanceTests(unittest.TestCase):
 
 
 class TransferSpoolRuntimeTests(unittest.TestCase):
-    def fixture(self, enabled=True):
+    def fixture(self, enabled=True, root=None):
         rt = pl.Runtime.__new__(pl.Runtime)
         rt.install_id = 'pl-123456abcdef'
-        rt.root = Path('/isolated/pl-fixture')
+        rt.root = Path('/isolated/pl-fixture') if root is None else root
         rt.private = rt.root / 'private'
         rt.image_ids = {}
         rt.m = {'schema': 2, 'architecture': 'amd64', 'database': {'major': 18},
@@ -465,7 +502,90 @@ class TransferSpoolRuntimeTests(unittest.TestCase):
         rt.docker = docker
         rt.compose = lambda *args: args[-1].encode() if args[:3] == ('ps', '--all', '--quiet') else self.fail('unexpected compose mutation')
         rt.schema_contract = lambda: {'postgres_major': 18, 'columns': [{'table_name': name} for name in pl.TABLES]}
+        rt.fixture_containers = containers
         return rt, mounts, volumes, calls
+
+    def test_upgrade_status_web_mount_is_exact_readonly_and_feature_gated(self):
+        rt, mounts, _, _ = self.fixture()
+        rt.m['features']['upgrade_status'] = True
+        mount = {'Type': 'bind', 'Source': str(rt.root / 'run/upgrade-status'),
+                 'Destination': '/run/pl-upgrade', 'RW': False}
+        mounts['web'].append(mount)
+        mounts['api'].append(dict(mount))
+        rt.validate_runtime()
+        cases = (
+            lambda values: values[-1].update(Source='/foreign/status'),
+            lambda values: values[-1].update(RW=True),
+            lambda values: values.append(copy.deepcopy(values[-1])),
+            lambda values: values.pop(),
+        )
+        for mutate in cases:
+            with self.subTest(mutate=mutate):
+                rt, mounts, _, _ = self.fixture()
+                rt.m['features']['upgrade_status'] = True
+                mounts['web'].append(copy.deepcopy(mount))
+                mounts['api'].append(copy.deepcopy(mount))
+                mutate(mounts['web'])
+                with self.assertRaisesRegex(ValueError, 'web bind mounts'):
+                    rt.validate_runtime()
+        rt, mounts, _, _ = self.fixture()
+        mounts['web'].append(copy.deepcopy(mount))
+        with self.assertRaisesRegex(ValueError, 'web bind mounts'):
+            rt.validate_runtime()
+
+    def test_icmp_socket_mount_and_environment_follow_the_managed_model(self):
+        def configured():
+            rt, mounts, _, _ = self.fixture()
+            rt.m['features']['icmp_probe'] = True
+            environment = {'PORTAL_ICMP_EXECUTOR_URL': 'unix:///run/pl-icmp-probe/probe.sock',
+                           'PORTAL_ICMP_POLICY': 'interactive'}
+            rt.model = {'services': {'api': {'environment': environment, 'group_add': ['972']}}}
+            rt.fixture_containers['api']['Config']['Env'] = [key + '=' + value for key, value in environment.items()]
+            rt.fixture_containers['api']['HostConfig'] = {'GroupAdd': ['972']}
+            mounts['api'].append({'Type': 'bind', 'Source': str(rt.root / 'run/icmp-probe'),
+                                  'Destination': '/run/pl-icmp-probe', 'RW': False})
+            return rt, mounts
+        rt, _ = configured()
+        rt.validate_runtime()
+        for mutate in (lambda rt, values: values[-1].update(Source='/foreign/icmp'),
+                       lambda rt, values: values[-1].update(RW=True),
+                       lambda rt, values: values.pop(),
+                       lambda rt, values: rt.fixture_containers['api']['Config']['Env'].append('PORTAL_ICMP_ALLOWED_CIDRS=0.0.0.0/0'),
+                       lambda rt, values: rt.fixture_containers['api']['HostConfig'].update(GroupAdd=[])):
+            with self.subTest(mutate=mutate):
+                rt, mounts = configured()
+                mutate(rt, mounts['api'])
+                with self.assertRaises(ValueError):
+                    rt.validate_runtime()
+
+    def test_web_network_override_and_outbound_ca_are_validated_against_the_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            private = root / 'private'
+            private.mkdir(mode=0o700)
+            certificate = b'public-test-outbound-CA\n'
+            ca = private / 'outbound-ca.pem'
+            ca.write_bytes(certificate)
+            ca.chmod(0o444)
+            rt, mounts, _, _ = self.fixture(root=root)
+            policy = {'schema': 1, 'allowed_cidrs': ['198.51.100.0/24'], 'allowed_ports': [9443], 'secret_names': []}
+            rt.state = {'config': {'integration_config': policy, 'allowed_cidrs': ['192.0.2.0/24'],
+                                   'allowed_ports': [443], 'outbound_ca_pem': certificate.decode()}}
+            environment = pl.bootstrap.integration_environment(policy)
+            environment.update({'PORTAL_ALLOWED_CIDRS': '192.0.2.0/24', 'PORTAL_ALLOWED_PORTS': '443',
+                                'PORTAL_CHECK_ALLOWED_CIDRS': '192.0.2.0/24', 'PORTAL_CHECK_ALLOWED_PORTS': '443',
+                                'PORTAL_CHECK_INHERIT_INTEGRATION_POLICY': 'false',
+                                'PORTAL_OUTBOUND_CA_FILE': '/run/secrets/outbound-ca.pem'})
+            rt.model = {'services': {'api': {'environment': environment}}}
+            rt.fixture_containers['api']['Config']['Env'] = [key + '=' + value for key, value in environment.items()]
+            mounts['api'].append({'Type': 'bind', 'Source': str(ca), 'Destination': '/run/secrets/outbound-ca.pem', 'RW': False})
+            with patch.object(pl.bootstrap, 'validate_integration_secrets'):
+                rt.validate_runtime()
+                ca.chmod(0o600)
+                ca.write_bytes(b'changed trust\n')
+                ca.chmod(0o444)
+                with self.assertRaisesRegex(ValueError, 'outbound|Outbound'):
+                    rt.validate_runtime()
 
     def test_owned_disk_spool_admitted_without_runtime_mutations(self):
         for enabled in (False, True):
@@ -476,6 +596,16 @@ class TransferSpoolRuntimeTests(unittest.TestCase):
                 inspected = [args[2] for args in calls if args[:2] == ('volume', 'inspect')]
                 self.assertEqual(rt.install_id + '_module-transfers' in inspected, enabled)
                 self.assertTrue(all(args[1] == 'inspect' for args in calls))
+
+    def test_on_demand_core_admits_its_owned_transfer_volume_without_bundled_sftp(self):
+        rt, mounts, _, _ = self.fixture(False)
+        rt.m['features']['on_demand_modules'] = True
+        mounts['api'].append({'Type': 'volume', 'Name': rt.install_id + '_module-transfers',
+                              'Destination': '/var/lib/pl/transfers', 'RW': True})
+        rt.validate_runtime()
+        mounts['api'].pop()
+        with self.assertRaisesRegex(ValueError, 'transfer volume mount'):
+            rt.validate_runtime()
 
     def test_foreign_transfer_mounts_are_rejected(self):
         mutations = (

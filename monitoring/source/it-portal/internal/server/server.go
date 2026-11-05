@@ -312,12 +312,13 @@ func (s *Server) Handler() http.Handler {
 	a("GET /api/v1/time", serverTime)
 	a("GET /api/v1/runtime", s.runtimeSettings)
 
+	protected := s.maintenanceGate(s.bootstrapPasswordGate(m))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
-		m.ServeHTTP(w, r)
+		protected.ServeHTTP(w, r)
 	})
 }
 func (s *Server) resources(w http.ResponseWriter, r *http.Request) {

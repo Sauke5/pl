@@ -1,5 +1,6 @@
 import importlib.util
 import base64
+import contextlib
 import io
 import json
 from pathlib import Path
@@ -51,6 +52,12 @@ class BootstrapDeliveryTests(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
 
     def test_installer_only_executed_after_whole_published_core_verified(self):
+        self.run_verified_install(production=False)
+
+    def test_production_mode_reaches_verified_installer_and_reports_private_seed_path(self):
+        self.run_verified_install(production=True)
+
+    def run_verified_install(self, *, production):
         artifact = {'url': 'https://github.com/Sauke5/pl/releases/download/v0.3.0/pl-core-amd64.tar.gz', 'size': 1234, 'sha256': 'a' * 64}
         payload = {'schema': 1, 'product': 'PL', 'core_api': 1, 'version': '0.3.0', 'core': {'amd64': artifact}, 'modules': {}}
         calls = []
@@ -62,18 +69,26 @@ class BootstrapDeliveryTests(unittest.TestCase):
                 with tarfile.open(path, 'w:gz') as archive:
                     member = tarfile.TarInfo('install.sh'); member.size = 12
                     archive.addfile(member, io.BytesIO(b'echo fixture'))
-        with patch('sys.argv', ['get-pl.sh', '--public-url', 'https://pl.example.test']), \
+        root = '/opt/pl-production-test'
+        arguments = ['get-pl.sh', '--root', root, '--public-url', 'https://pl.example.test']
+        if production:
+            arguments += ['--production']
+        with patch('sys.argv', arguments), \
              patch.object(bootstrap.os, 'geteuid', return_value=0), \
              patch.object(bootstrap.platform, 'system', return_value='Linux'), \
              patch.object(bootstrap.platform, 'machine', return_value='x86_64'), \
              patch.object(bootstrap, 'download', side_effect=download), \
-             patch.object(bootstrap.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+             patch.object(bootstrap.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(bootstrap.main(), 0)
             self.assertEqual(calls[1], (artifact['url'], (1234, 1234, 'a' * 64)))
             command = run.call_args_list[-1].args[0]
             self.assertEqual(command[0], '/bin/sh')
             self.assertEqual(command[command.index('--public-url') + 1], 'https://pl.example.test')
             self.assertIn('--self-signed', command)
+            self.assertEqual('--production' in command, production)
+            self.assertIn(root + '/private/initial-admin-password', output.getvalue())
+            self.assertNotIn('admin / admin', output.getvalue())
             self.assertEqual(len(calls), 2, 'bootstrap fetched optional modules')
 
 

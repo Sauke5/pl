@@ -36,7 +36,7 @@ if ! command -v python3 >/dev/null 2>&1; then
         *' --network-cidr '*|*' --network-cidr='*|*' --module-network-cidr '*|*' --module-network-cidr='*) echo 'PL: --network-cidr validation requires python3; install it before retrying. No host changes applied.' >&2; exit 1 ;;
     esac
     case " $* " in
-        *' --help '*|*' -h '*) echo 'Usage: install.sh --check | --package PATH --public-url HTTPS_URL | --package-url HTTPS_URL --package-sha256 SHA256 --public-url HTTPS_URL'; exit 0 ;;
+        *' --help '*|*' -h '*) echo 'Usage: install.sh --check | [--production] --package PATH --public-url HTTPS_URL | [--production] --package-url HTTPS_URL --package-sha256 SHA256 --public-url HTTPS_URL'; exit 0 ;;
         *' --check '*) echo 'PL: Python 3.10+ is missing; --check makes no changes.' >&2; exit 1 ;;
     esac
     [ "$(id -u)" = 0 ] || { echo 'PL: run as root (sudo).' >&2; exit 1; }
@@ -80,8 +80,8 @@ APT_KEY = Path('/etc/apt/keyrings/pl-docker.asc')
 MAX_PACKAGE = 8 * 1024**3
 MIN_DISK = 20 * 1024**3
 MIN_MEMORY_KIB = 4 * 1024**2
-ALLOWED = {'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
-REQUIRED = ALLOWED - {'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
+ALLOWED = {'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
+REQUIRED = ALLOWED - {'README.md', 'source.tar.gz', 'maintenance.py', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
 DOCKER_FINGERPRINT = '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
 
 
@@ -364,8 +364,10 @@ def verify_package(package, arch):
             if manifest.get('schema') not in (1, 2) or manifest.get('product') not in ('PL', 'Pl') or manifest.get('architecture') != arch:
                 fail('Package schema, product or architecture mismatch.')
             features = manifest.get('features', {})
-            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules'} or any(type(value) is not bool for value in features.values()):
+            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades'} or any(type(value) is not bool for value in features.values()):
                 fail('Unsupported core package features.')
+            if features.get('module_upgrades') and (not features.get('on_demand_modules') or 'module-upgrade.py' not in names):
+                fail('Installed module updates require their finite host helper.')
             if features.get('on_demand_modules'):
                 payloads = {'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem', 'module-controller.py', 'module-network.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py'}
                 if (manifest.get('schema') != 2 or not features.get('module_controller')
@@ -631,6 +633,7 @@ def main(argv=None):
     parser.add_argument('--integration-config', type=Path, help='Private 0600 JSON of explicit integration CIDRs, ports and secret files; first installation only; requires --network-cidr.')
     parser.add_argument('--icmp-allowed-cidr', action='append', help='Explicit canonical IPv4 CIDR for manual ICMP; repeat for several networks, empty denies all.')
     parser.add_argument('--admin-user')
+    parser.add_argument('--production', action='store_true', help='Use a strong random initial administrator password for a new installation; repeat installs preserve credentials.')
     parser.add_argument('--tls-cert')
     parser.add_argument('--tls-key')
     parser.add_argument('--self-signed', action='store_true')
@@ -736,6 +739,8 @@ def main(argv=None):
             command += ['--icmp-allowed-cidr', value]
         if args.self_signed:
             command += ['--self-signed']
+        if args.production:
+            command += ['--production']
         # Bootstrap owns interactive secret input and sanitised output.
         run(command, capture=False)
         print('PL installation finished.')

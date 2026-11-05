@@ -83,6 +83,7 @@ def main():
     parser.add_argument('--public-url', help='HTTPS адрес PL; по умолчанию адрес сервера')
     parser.add_argument('--root', default='/opt/pl')
     parser.add_argument('--bind-address', default='0.0.0.0')
+    parser.add_argument('--production', action='store_true', help='Случайный первоначальный пароль для новой установки; существующие credentials сохраняются')
     args = parser.parse_args()
     if os.geteuid() != 0 or platform.system() != 'Linux':
         raise ValueError('Требуется root на Linux')
@@ -133,9 +134,14 @@ def main():
             install = directory / 'install.sh'
             install.write_bytes(package.extractfile(member).read())
         public_url = args.public_url or default_url()
-        subprocess.run(['/bin/sh', str(install), '--package', str(archive), '--public-url', public_url,
-            '--root', args.root, '--bind-address', args.bind_address, '--self-signed'], check=True)
-        print('PL: ' + public_url + '\nПервый вход: admin / admin. Измените пароль в интерфейсе PL.')
+        command = ['/bin/sh', str(install), '--package', str(archive), '--public-url', public_url,
+                   '--root', args.root, '--bind-address', args.bind_address, '--self-signed']
+        if args.production:
+            command += ['--production']
+        subprocess.run(command, check=True)
+        print('PL: ' + public_url + '\nФайл первоначального пароля: '
+              + str(Path(args.root) / 'private/initial-admin-password')
+              + '\nФайл доступен root. При повторе действующий пароль сохраняется.')
     return 0
 
 try:

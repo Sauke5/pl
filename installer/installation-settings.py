@@ -492,7 +492,8 @@ class InstallationSettings:
             if plan:
                 self.origin_helper().apply(self.parent, plan)
                 self.delivery.activate_host(state['version'])
-                self.delivery.restart(containers)
+                self.delivery.restart_core()
+                self.delivery.resume_native(containers, safe_only=True)
                 self.origin_helper().verify(self.parent, plan)
             else:
                 self.recreate_core()
@@ -500,10 +501,15 @@ class InstallationSettings:
             self.readback(config, model)
             self.delivery.readiness()
             state['phase'] = 'ready'; files.atomic(self.root / 'state/installation.json', state)
-            self.delivery.operation('complete', error='')
+            if full:
+                self.delivery.commit_and_resume(containers)
+            else:
+                self.delivery.operation('complete', error='')
         except BaseException as error:
             self.delivery.record_failure(error)
-            if changed or full:
+            if files.read(self.delivery.base / 'operation.json').get('data_committed') is True:
+                self.delivery.operation('recovery_required', error='Настройки применены. Требуется завершить запуск модулей; новые данные сохранены.')
+            elif changed or full:
                 self.rollback()
             else:
                 if quiesced:
@@ -517,6 +523,9 @@ class InstallationSettings:
 
     def rollback(self):
         operation = files.read(self.delivery.base / 'operation.json')
+        if operation.get('data_committed') is True:
+            self.delivery.resume_committed()
+            return
         if (operation.get('full_snapshot') or operation.get('containers')
                 or (self.root / 'private/upgrade-backups' / operation['operation_id'] / 'snapshot.json').exists()):
             self.delivery.rollback()

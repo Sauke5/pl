@@ -16,13 +16,14 @@ type Prober interface {
 	Probe(context.Context, string) (Observation, error)
 }
 type Manager struct {
-	PublicURL  string
-	Store      *store.Store
-	Controller Controller
-	Probe      Prober
-	BookStack  *BookStackConnector
-	NetMap     *NetMapConnector
-	Auditor    interface {
+	DeliveryEnabled bool
+	PublicURL       string
+	Store           *store.Store
+	Controller      Controller
+	Probe           Prober
+	BookStack       *BookStackConnector
+	NetMap          *NetMapConnector
+	Auditor         interface {
 		Probe(context.Context, model.Integration) (Observation, error)
 		Read(context.Context, model.Integration, string, string) (*http.Response, error)
 	}
@@ -332,6 +333,9 @@ func (m *Manager) Execute(ctx context.Context, j model.Job) (map[string]any, err
 // Schedule uses the same queue and per-instance lock as manual actions. No
 // concurrent poll or background config writer bypasses the durable lifecycle.
 func (m *Manager) Schedule(ctx context.Context) {
+	if m.DeliveryEnabled && !m.deliveryScheduleAllowed(ctx) {
+		return
+	}
 	instances, err := store.List[model.ModuleInstance](ctx, m.Store, "module_instance")
 	if err != nil {
 		return

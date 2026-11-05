@@ -131,6 +131,66 @@ func (s *Server) sessionAPI(w http.ResponseWriter, r *http.Request) {
 	changeEnabled := builtinChange || s.Config.LocalUsersEnabled && strings.HasPrefix(v.User.ID, "local:")
 	respond(w, 200, map[string]any{"authenticated": true, "user": v.User, "csrf_token": v.CSRF, "demo": s.Config.Demo, "local_login_enabled": s.Config.LocalAdminHashFile != "", "ad_login_enabled": adConfig.adEnabled(), "oidc_login_enabled": s.Config.Issuer != "" && s.Config.ClientID != "" && s.Config.ClientSecret != "" && s.Config.AllowedGroup != "", "board_enabled": settings.BoardEnabled, "board_anonymous_enabled": settings.BoardEnabled && settings.BoardAnonymous, "timezone": settings.Timezone, "local_password_min_length": passwordMinimum(settings), "local_users_enabled": s.Config.LocalUsersEnabled && v.User.Admin, "local_password_change_enabled": changeEnabled, "local_password_change_required": builtinChange && s.localPasswordChangeRequired(), "features": features})
 }
+
+func bootstrapPasswordRequestAllowed(r *http.Request) bool {
+	if r.URL.EscapedPath() != r.URL.Path {
+		return false
+	}
+	switch r.URL.Path {
+	case "/api/v1/session", "/health/live", "/health/ready":
+		return r.Method == http.MethodGet || r.Method == http.MethodHead
+	case "/api/v1/local-admin/password", "/auth/logout", "/internal/delivery/reconcile":
+		return r.Method == http.MethodPost
+	default:
+		return false
+	}
+}
+
+func (s *Server) bootstrapPasswordPending() bool {
+	return s.Config.LocalAdminPasswordChange && s.Config.LocalAdminHashFile != "" && s.localPasswordChangeRequired()
+}
+
+func bootstrapPasswordProblem(w http.ResponseWriter) {
+	problem(w, http.StatusForbidden, "password_change_required", "Задайте собственный пароль локального администратора перед работой с Платформой")
+}
+
+// The outer gate also covers gateways and public projections which intentionally
+// authenticate without s.auth. It checks only the built-in local identity; AD
+// revalidation and scoped machine authentication retain their existing paths.
+func (s *Server) bootstrapPasswordGate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// This exact private control route owns its HMAC authentication. Reject
+		// forged cookies and wrong methods there before any session/Store IO.
+		if r.URL.Path == "/internal/delivery/reconcile" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if bootstrapPasswordRequestAllowed(r) || !s.bootstrapPasswordPending() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		cookie, err := r.Cookie("portal_session")
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		var required bool
+		err = s.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sessions
+			WHERE token_hash=$1 AND user_id='local-admin' AND admin AND expires_at>now())`, hash(cookie.Value)).Scan(&required)
+		if err != nil {
+			problem(w, http.StatusServiceUnavailable, "session_unavailable", "Не удалось проверить сессию. Повторите запрос позднее.")
+			return
+		}
+		if required {
+			bootstrapPasswordProblem(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) auth(next http.HandlerFunc, admin bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, present := r.Header["Authorization"]; present {
@@ -148,6 +208,10 @@ func (s *Server) auth(next http.HandlerFunc, admin bool) http.HandlerFunc {
 		}
 		if admin && !v.User.Admin {
 			problem(w, 403, "forbidden", "Доступ только для администратора")
+			return
+		}
+		if v.User.ID == "local-admin" && v.User.Admin && s.bootstrapPasswordPending() && !bootstrapPasswordRequestAllowed(r) {
+			bootstrapPasswordProblem(w)
 			return
 		}
 		if r.Method != "GET" && r.Method != "HEAD" {

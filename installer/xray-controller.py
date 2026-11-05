@@ -643,7 +643,9 @@ class XrayController:
                 self.docker('container', 'stop', '--time', '10', obj['Id'], timeout=20)
             self.docker('container', 'rm', obj['Id'])
 
-    def create_container(self, instance, ref):
+    def create_container(self, instance, ref, *, start=True):
+        if type(start) is not bool:
+            raise ValueError('Explicit Xray startup policy is required')
         self.revoke_runtime(instance)
         self.verify_image()
         plan = self.selected(instance, ref)
@@ -662,7 +664,8 @@ class XrayController:
         obj = self.inspect(instance, allow_pending=True)
         if obj is None:
             raise ValueError('Xray container creation not confirmed')
-        self.docker('container', 'start', obj['Id'])
+        if start:
+            self.docker('container', 'start', obj['Id'])
 
     def stats(self, instance):
         instance = identifier(instance)

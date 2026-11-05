@@ -146,8 +146,11 @@ class TrustTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'state').mkdir(mode=0o700)
+            (root / 'private').mkdir(mode=0o700)
             d.atomic(root / 'state/installation.json', {'product': 'PL', 'install_id': 'pl-notes', 'version': '0.2.0',
+                                                       'manifest_sha256': 'b' * 64,
                                                        'release_notes': {'title': 'untrusted installation state'}})
+            d.atomic(root / 'private/module-images.json', {'schema': 1, 'installation': 'pl-notes', 'manifest_sha256': 'b' * 64})
             delivery = d.Delivery(types.SimpleNamespace(root=root, installation='pl-notes'))
             delivery.key = self.public
             delivery.architecture = lambda: 'amd64'
@@ -277,12 +280,13 @@ class DeliveryTests(unittest.TestCase):
         self.delivery.supervisor, self.delivery.package = initial, active
         self.delivery.host = Mock(return_value=b'')
         if os.geteuid() != 0:
-            original_stat, original_lstat = Path.stat, Path.lstat
+            original_stat, original_lstat, original_fstat = Path.stat, Path.lstat, os.fstat
             def as_root(result):
                 values = list(result); values[4] = 0
                 return os.stat_result(values)
             patches = (patch.object(Path, 'stat', lambda path, *a, **k: as_root(original_stat(path, *a, **k))),
                        patch.object(Path, 'lstat', lambda path, *a, **k: as_root(original_lstat(path, *a, **k))),
+                       patch.object(d.os, 'fstat', lambda fd: as_root(original_fstat(fd))),
                        patch.object(d.os, 'geteuid', return_value=0))
             for change in patches: change.start(); self.addCleanup(change.stop)
         return initial, active
@@ -559,6 +563,9 @@ class UpgradeTransactionTests(unittest.TestCase):
                 (self.volume_roots[0] / 'database').write_bytes(d.json_bytes(value))
                 (self.volume_roots[2] / 'new-file-after-upgrade').write_text('new runtime data')
         self.delivery.restart = restart
+        self.delivery.restart_core = lambda: restart(self.containers)
+        self.delivery.resume_native = Mock()
+        self.delivery.synchronize_modules = Mock()
         self.delivery.readiness = Mock()
         self.delivery.activate_host = Mock()
         def engine(*args, **kwargs):

@@ -270,6 +270,23 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(str(secret), calls[-1])
         self.assertNotIn(secret.read_text(), repr(calls) + output.getvalue())
 
+    def test_production_mode_is_forwarded_with_explicit_password_path_only(self):
+        package, _ = self.package()
+        secret = self.base / 'private-password'
+        secret.write_text('EXPLICIT_PRIVATE_PRODUCTION_PASSWORD')
+        secret.chmod(0o600)
+        calls = []
+        with self.host(), patch.object(self.module, 'prepare_root', side_effect=lambda root: (root / 'releases').mkdir(parents=True)), \
+                patch.object(self.module, 'preflight', return_value={'distribution': 'ubuntu', 'codename': 'resolute', 'architecture': 'amd64', 'docker_present': True}), \
+                patch.object(self.module, 'install_docker'), patch.object(self.module, 'run', side_effect=lambda cmd, **kw: calls.append(cmd)), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.module.main(['--root', str(self.root), '--package', str(package), '--public-url', 'https://pl.example',
+                              '--self-signed', '--production', '--password-file', str(secret)])
+        self.assertIn('--production', calls[-1])
+        self.assertIn('--password-file', calls[-1])
+        self.assertIn(str(secret), calls[-1])
+        self.assertNotIn(secret.read_text(), repr(calls) + output.getvalue())
+
     def test_network_cidr_is_validated_before_host_preflight_or_mutations(self):
         for value in ("10.20.30.1/24", "192.168.1.0/25", "8.8.8.0/24", "100.64.1.0/24", "10.20.30.0/255.255.255.0", "fc00::/24"):
             with self.subTest(value=value), patch.object(self.module, 'preflight') as preflight, patch.object(self.module, 'prepare_root') as prepare:
