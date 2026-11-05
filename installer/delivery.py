@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import copy
 import hmac
 import fcntl
@@ -403,18 +403,23 @@ class Delivery:
 
     def reconcile_upgrade(self):
         path = self.base / 'operation.json'
-        # A process-local thread is only a hint. Read the journal *after*
-        # acquiring the OS worker lock, so completion cannot be overwritten
-        # by an orphan decision made from an earlier snapshot.
+        # Launchers hold the delivery barrier until systemd confirms exec. An
+        # active unit may still be hashing its payload before acquiring its OS
+        # worker lock: status readers must leave that startup lock available.
         if path.exists():
             try:
-                with self.lock(exclusive=False, blocking=False), self.worker_lock(blocking=False):
+                with self.lock(exclusive=False, blocking=False):
                     current = read(path)
-                    if current.get('phase') not in ('complete', 'failed', 'rolled_back', 'recovery_required'):
-                        if not self.worker_active(current):
-                            current['phase'] = 'recovery_required'
-                            current['error'] = 'Обновление прервано. Требуется восстановление установки.'
-                            atomic(path, current)
+                    terminal = ('complete', 'failed', 'rolled_back', 'recovery_required')
+                    if current.get('phase') not in terminal and self.worker_active(current) is False:
+                        with self.worker_lock(blocking=False):
+                            # Re-read under the lock: a worker may have completed
+                            # while the unit-status query was in flight.
+                            current = read(path)
+                            if current.get('phase') not in terminal and self.worker_active(current) is False:
+                                current['phase'] = 'recovery_required'
+                                current['error'] = 'Обновление прервано. Требуется восстановление установки.'
+                                atomic(path, current)
             except BlockingIOError:
                 pass
         self.publish_upgrade_status()
@@ -578,6 +583,16 @@ class Delivery:
         fd = os.open(self.base / 'worker.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a') as stream:
             fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+            yield
+
+    @contextmanager
+    def worker_admission(self):
+        # The direct recovery CLI has no _launch caller holding this barrier.
+        # Exclude status probes only while taking the startup lock; lifecycle
+        # work then keeps the worker lock without blocking status/delivery RPCs.
+        with ExitStack() as acquired:
+            with self.lock():
+                acquired.enter_context(self.worker_lock(blocking=False))
             yield
 
     def require_idle(self, *, allow_refresh=False):
@@ -866,9 +881,15 @@ class Delivery:
         if not re.fullmatch(re.escape(self.installation) + r'-upgrade-[0-9a-f]{32}\.service', unit):
             return False
         try:
-            return self.host(['systemctl', 'show', '--property=ActiveState', '--value', unit], timeout=5).strip() in (b'active', b'activating', b'reloading')
+            state = self.host(['systemctl', 'show', '--property=ActiveState', '--value', unit], timeout=5).strip()
+            if state in (b'active', b'activating', b'reloading', b'deactivating'):
+                return True
+            if state in (b'inactive', b'failed'):
+                return False
+            return None
         except (ValueError, OSError, subprocess.SubprocessError):
-            return False
+            # An unavailable service manager cannot establish that a unit died.
+            return None
 
     def bootstrap(self):
         spec = importlib.util.spec_from_file_location('pl_delivery_bootstrap', self.package / 'bootstrap.py')
@@ -1671,7 +1692,7 @@ if __name__ == '__main__':
         controller = controller_module.Controller(root, installation)
         delivery = Delivery(controller)
         delivery.supervisor = initial
-        with delivery.worker_lock(blocking=False), delivery.lifecycle_lock():
+        with delivery.worker_admission(), delivery.lifecycle_lock():
             operation = read(delivery.base / 'operation.json')
             if operation.get('operation_id') != arguments.operation_id or operation.get('phase') in ('complete', 'failed', 'rolled_back'):
                 raise ValueError('No interrupted upgrade with the requested identity')

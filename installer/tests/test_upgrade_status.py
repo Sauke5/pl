@@ -159,7 +159,7 @@ class UpgradeStatusTests(unittest.TestCase):
         self.d.reconcile_upgrade()
         self.assertEqual(delivery.read(journal)['phase'], 'complete')
         self.assertEqual(self.public()['operation']['phase'], 'complete')
-        self.d.worker_active.assert_not_called()
+        self.d.worker_active.assert_called_once()
 
     def test_background_orphan_detection_does_not_need_a_running_api(self):
         delivery.atomic(self.d.base / 'operation.json', {**self.operation, 'phase': 'snapshot'})
@@ -177,6 +177,108 @@ class UpgradeStatusTests(unittest.TestCase):
         self.assertEqual(delivery.read(self.d.base / 'operation.json')['phase'], 'recovery_required')
         self.parent.docker.assert_not_called()
 
+    def test_active_unit_status_probe_does_not_steal_starting_workers_os_lock(self):
+        delivery.atomic(self.d.base / 'operation.json', self.operation)
+        entered, release = threading.Event(), threading.Event()
+        errors = []
+        def unit_active(operation):
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError('status query did not finish')
+            return True
+        self.d.worker_active = unit_active
+        def observe():
+            try:
+                self.d.reconcile_upgrade()
+            except BaseException as error:
+                errors.append(error)
+        reader = threading.Thread(target=observe)
+        reader.start()
+        try:
+            self.assertTrue(entered.wait(2))
+            script = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
+                      'fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)')
+            worker = subprocess.run([sys.executable, '-c', script, str(self.d.base / 'worker.lock')],
+                                    capture_output=True, text=True, timeout=2)
+            self.assertEqual(worker.returncode, 0, 'an active-unit status read blocked real worker startup: ' + worker.stderr)
+        finally:
+            release.set()
+            reader.join(4)
+        self.assertEqual(errors, [])
+        self.assertEqual(delivery.read(self.d.base / 'operation.json')['phase'], 'queued')
+
+    def test_unknown_unit_liveness_neither_takes_worker_lock_nor_declares_an_orphan(self):
+        operation = {**self.operation, 'worker_unit': self.state['install_id'] + '-upgrade-' + uuid.uuid4().hex + '.service'}
+        delivery.atomic(self.d.base / 'operation.json', operation)
+        self.d.host = Mock(side_effect=OSError('service manager unavailable'))
+        self.d.worker_lock = Mock(side_effect=AssertionError('unknown liveness must not take the startup lock'))
+        self.d.reconcile_upgrade()
+        self.assertEqual(delivery.read(self.d.base / 'operation.json')['phase'], 'queued')
+        self.d.worker_lock.assert_not_called()
+
+    def test_worker_liveness_requires_a_known_service_manager_state(self):
+        operation = {**self.operation, 'worker_unit': self.state['install_id'] + '-upgrade-' + uuid.uuid4().hex + '.service'}
+        for state, expected in ((b'active', True), (b'activating', True), (b'reloading', True),
+                                (b'deactivating', True), (b'inactive', False), (b'failed', False),
+                                (b'', None), (b'unknown-future-state', None)):
+            with self.subTest(state=state):
+                self.d.host = Mock(return_value=state + b'\n')
+                self.assertIs(self.d.worker_active(operation), expected)
+
+    def test_direct_worker_admission_waits_for_orphan_reader_and_releases_delivery_barrier(self):
+        delivery.atomic(self.d.base / 'operation.json', {**self.operation, 'phase': 'snapshot'})
+        entered, release = threading.Event(), threading.Event()
+        probes = []
+        errors = []
+        def inactive(operation):
+            probes.append(operation['phase'])
+            if len(probes) == 2:
+                entered.set()
+                if not release.wait(3):
+                    raise RuntimeError('orphan query did not finish')
+            return False
+        self.d.worker_active = inactive
+        def observe():
+            try:
+                self.d.reconcile_upgrade()
+            except BaseException as error:
+                errors.append(error)
+        reader = threading.Thread(target=observe)
+        reader.start()
+        child = None
+        try:
+            self.assertTrue(entered.wait(2))
+            script = ('import importlib.util,sys,types; from pathlib import Path; '
+                      's=importlib.util.spec_from_file_location("worker_fixture",sys.argv[1]); '
+                      'm=importlib.util.module_from_spec(s); s.loader.exec_module(m); '
+                      'd=m.Delivery(types.SimpleNamespace(root=Path(sys.argv[2]),installation=sys.argv[3])); '
+                      '\nwith d.worker_admission():\n print("acquired",flush=True)\n sys.stdin.readline()\n')
+            child = subprocess.Popen([sys.executable, '-c', script, str(BASE / 'delivery.py'),
+                                      str(self.root), self.state['install_id']],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            time.sleep(0.1)
+            self.assertIsNone(child.poll(), 'direct recovery must wait for the reader instead of failing startup')
+            release.set()
+            reader.join(4)
+            import select
+            self.assertTrue(select.select([child.stdout], [], [], 3)[0], 'direct worker did not acquire its startup lock')
+            self.assertEqual(child.stdout.readline().strip(), 'acquired')
+            with self.d.lock(exclusive=False, blocking=False):
+                with self.assertRaises(BlockingIOError):
+                    with self.d.worker_lock(blocking=False):
+                        pass
+            child.stdin.write('\n'); child.stdin.flush()
+            self.assertEqual(child.wait(timeout=3), 0)
+        finally:
+            release.set()
+            reader.join(4)
+            if child is not None:
+                if child.poll() is None:
+                    child.kill(); child.wait(timeout=3)
+                for stream in (child.stdin, child.stdout, child.stderr):
+                    stream.close()
+        self.assertEqual(errors, [])
+
     def test_killed_worker_is_detected_after_its_real_os_lock_is_released(self):
         delivery.atomic(self.d.base / 'operation.json', {**self.operation, 'phase': 'snapshot'})
         script = ('import fcntl,sys,time; f=open(sys.argv[1],"a"); '
@@ -191,7 +293,7 @@ class UpgradeStatusTests(unittest.TestCase):
                 while not self.path.exists() and time.monotonic() < deadline:
                     time.sleep(0.01)
                 self.assertEqual(self.public()['operation']['phase'], 'snapshot')
-                self.d.worker_active.assert_not_called()
+                self.d.worker_active.assert_called()
                 child.kill(); child.wait(timeout=3)
                 deadline = time.monotonic() + 2
                 while time.monotonic() < deadline:

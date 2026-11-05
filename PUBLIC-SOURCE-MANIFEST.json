@@ -16829,6 +16829,11 @@
       "size": 3864
     },
     {
+      "path": "docs/releases/0.5.2.json",
+      "sha256": "8d1f22498256f48441759ce3e4643015978a4c2fdf0fc64ea6d0496a7a25411f",
+      "size": 3917
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16875,8 +16880,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "bde37b3d4983321181fb67ad2d25e5ad7a2c5561976f3ead7f49869d8bae74b6",
-      "size": 100037
+      "sha256": "238f6378734aaf604e8f77f53f1dd7e1e9cdcba1f40b8e31a9aa5ef3a536f20c",
+      "size": 101136
     },
     {
       "path": "installer/delivery.ru.md",
@@ -17335,8 +17340,8 @@
     },
     {
       "path": "installer/tests/test_upgrade_status.py",
-      "sha256": "3653eed0f8d69396f874502cfac2fa46736ffc0af28019468202f2167732ce89",
-      "size": 15421
+      "sha256": "3200322306840421416dacc42c06b191e007a7a02cb6021215a226b125b0994f",
+      "size": 20937
     },
     {
       "path": "installer/tests/test_wayline_controller.py",
