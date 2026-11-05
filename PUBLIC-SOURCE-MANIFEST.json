@@ -17835,8 +17835,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/App.tsx",
-      "sha256": "3c8a9bc078a41a3daa4f35d1f9868b50b7ace26325067fd7d4bb2ae31e7dfb97",
-      "size": 49185
+      "sha256": "179f027b58dd4257ec6310e797ce659db665b806493923dc63d2a79cd8dd81a7",
+      "size": 49766
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AuthScenes.tsx",
@@ -17925,8 +17925,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/LocalAdminPassword.tsx",
-      "sha256": "b7cefaed509aeb8c89c1fe649853620ea9303646d319ecba0bcdbcef11b65543",
-      "size": 6923
+      "sha256": "34502a7cea090ffb2f86bc3b556a1d09ada42514b0b362d44b02225ffbc31d3d",
+      "size": 10012
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/LocalProxy.tsx",
@@ -18359,6 +18359,11 @@
       "size": 2899
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/required-password.css",
+      "sha256": "3cfa2c389e24da4953f78cd4c7ea4a45ffcfd557c061a60dedca2e35ba7fd4e9",
+      "size": 2086
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/resource-details.css",
       "sha256": "3dd78bc01929849926173853f1e6655cca222654ff4cfe1b507302d7159c84a0",
       "size": 9074
@@ -18660,8 +18665,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/pl-merge.spec.ts",
-      "sha256": "da0b46c2bf8a61f05cadfe9d37ff89d8984c9c4a1dfc51dc35f67c46c55a04ec",
-      "size": 4750
+      "sha256": "7026a89e53b7ad3b902155c87f5d58f061c0aa4607e670f2140585f642f7e3eb",
+      "size": 4939
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/portal.spec.ts",
@@ -18692,6 +18697,11 @@
       "path": "monitoring/source/it-portal/frontend/tests/e2e/release-runtime.spec.ts",
       "sha256": "5a079eedb4f1445e4f56ea3e60adb17b354cf9a0387d3d775064ccda710720e0",
       "size": 1761
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/required-password.spec.ts",
+      "sha256": "58eee34148f59f1d9a04c8b53f0d70010ddf221ba2293287bc139f823a32e38a",
+      "size": 10548
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/resource-icon-picker.spec.ts",

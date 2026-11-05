@@ -6,13 +6,25 @@ async function fixture(page: Page) {
     const path = new URL(route.request().url()).pathname.replace("/api/v1", "");
     requests.push(path);
     const data: Record<string, unknown> = {
+      "/delivery": {
+        current_version: "0.4.4",
+        latest_version: "0.4.4",
+        update_available: false,
+        core_api: 1,
+        modules: [],
+      },
+      "/upgrade-status": {
+        active: false,
+        ready: false,
+        current_version: "0.4.4",
+      },
       "/session": {
         authenticated: true,
         user: { id: "merge-admin", name: "Администратор", admin: true },
         csrf_token: "merge-fixture",
         local_users_enabled: true,
         local_password_change_enabled: true,
-        local_password_change_required: true,
+        local_password_change_required: false,
         features: { doska: false, sftp: false, sftp_exchange: false },
       },
       "/settings": {
@@ -89,20 +101,37 @@ test("unconfigured SFTP does not make requests to the optional service", async (
   ).toEqual([]);
 });
 
-test("PL local admin password prompt and local users survive the shared shell", async ({ page }) => {
+test("optional local admin password change and local users remain available in settings", async ({
+  page,
+}) => {
   await fixture(page);
   const writes: string[] = [];
-  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
-  await page.goto('/');
-  await expect(page.getByText('Задайте собственный пароль локального администратора.', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Изменить пароль', exact: true }).click();
-  const password = page.getByRole('dialog', { name: 'Изменить пароль', exact: true });
-  await expect(password.getByLabel('Текущий пароль', { exact: true })).toBeVisible();
-  await password.getByRole('button', { name: 'Закрыть', exact: true }).click();
-  await page.goto('/#settings');
-  await page.getByRole('button', { name: 'Пользователи', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Локальные пользователи', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Добавить пользователя', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Добавить пользователя', exact: true }).getByRole('textbox', { name: /^Логин/ })).toBeVisible();
+  page.on("request", (request) => {
+    if (request.method() === "POST") writes.push(request.url());
+  });
+  await page.goto("/#settings");
+  await page.getByRole("button", { name: "Пользователи", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Локальные пользователи", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Изменить пароль", exact: true })
+    .click();
+  const password = page.getByRole("dialog", {
+    name: "Изменить пароль",
+    exact: true,
+  });
+  await expect(
+    password.getByLabel("Текущий пароль", { exact: true }),
+  ).toBeVisible();
+  await password.getByRole("button", { name: "Закрыть", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Добавить пользователя", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Добавить пользователя", exact: true })
+      .getByRole("textbox", { name: /^Логин/ }),
+  ).toBeVisible();
   expect(writes).toEqual([]);
 });

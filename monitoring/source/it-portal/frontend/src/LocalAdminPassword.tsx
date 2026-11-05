@@ -1,22 +1,29 @@
 import { ActionFeedback } from "./ActionNotifications";
 import { withSettingsNavigation } from "./settings/navigation";
 import { useDraftRegistration } from "./settings/Draft";
-import { useRef, useState } from "react";
-import { KeyRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { KeyRound, LogOut } from "lucide-react";
 import { APIError, api, queryClient } from "./api";
 import type { Session } from "./types";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
 import { ErrorBox, Field, Panel } from "./components/common";
+import { Brand } from "./AuthScenes";
+import { ThemeToggle } from "./Theme";
+import "./required-password.css";
 
 export function LocalAdminPassword({
   session,
   prompt = false,
   compact = false,
+  requiredScreen = false,
+  onBusyChange,
 }: {
   session?: Session;
   prompt?: boolean;
   compact?: boolean;
+  requiredScreen?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const minimum = session?.local_password_min_length || 12;
   const [open, setOpen] = useState(false);
@@ -27,6 +34,13 @@ export function LocalAdminPassword({
   const [error, setError] = useState<unknown>();
   const [inlineError, setInlineError] = useState(true);
   const pending = useRef(false);
+  const currentInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+  useEffect(() => {
+    if (requiredScreen) currentInput.current?.focus();
+  }, [requiredScreen]);
   function clear() {
     setCurrent("");
     setPassword("");
@@ -97,13 +111,84 @@ export function LocalAdminPassword({
     } finally {
       pending.current = false;
       setBusy(false);
+      if (requiredScreen)
+        requestAnimationFrame(() => currentInput.current?.focus());
     }
   }
   if (
-    !session?.local_password_change_enabled ||
-    (prompt && !session.local_password_change_required)
+    (!requiredScreen && !session?.local_password_change_enabled) ||
+    (prompt && !session?.local_password_change_required)
   )
     return null;
+  const form = (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+      aria-label={requiredScreen ? "Обязательная смена пароля" : "Смена пароля"}
+      aria-busy={busy}
+    >
+      <Field label="Текущий пароль">
+        <input
+          ref={currentInput}
+          type="password"
+          name="current-password"
+          autoComplete="current-password"
+          value={current}
+          onChange={(event) => setCurrent(event.target.value)}
+          required
+          disabled={busy}
+          maxLength={1024}
+        />
+      </Field>
+      <Field label="Новый пароль">
+        <input
+          type="password"
+          name="new-password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          disabled={busy}
+          maxLength={1024}
+          aria-describedby={
+            requiredScreen ? "required-password-minimum" : undefined
+          }
+        />
+      </Field>
+      {requiredScreen && (
+        <p id="required-password-minimum" className="required-password-minimum">
+          Не менее {minimum} символов.
+        </p>
+      )}
+      <Field label="Повторите новый пароль">
+        <input
+          type="password"
+          name="confirm-password"
+          autoComplete="new-password"
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
+          required
+          disabled={busy}
+          maxLength={1024}
+        />
+      </Field>
+      <ActionFeedback error={!inlineError ? error : undefined} />
+      {inlineError && !!error && <ErrorBox error={error} />}
+      <div className="dialog-actions">
+        {!requiredScreen && (
+          <Button type="button" onClick={close} disabled={busy}>
+            Отмена
+          </Button>
+        )}
+        <Button type="submit" variant="default" disabled={busy}>
+          {busy ? "Сохраняем…" : "Сохранить пароль"}
+        </Button>
+      </div>
+    </form>
+  );
+  if (requiredScreen) return form;
   const button = (
     <Button onClick={() => withSettingsNavigation(() => setOpen(true))}>
       <KeyRound size={16} />
@@ -146,62 +231,77 @@ export function LocalAdminPassword({
           description={`Все сессии вашей учётной записи будут завершены. Новый пароль должен содержать не менее ${minimum} символов.`}
           onClose={close}
         >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
-            }}
-          >
-            <Field label="Текущий пароль">
-              <input
-                type="password"
-                name="current-password"
-                autoComplete="current-password"
-                value={current}
-                onChange={(event) => setCurrent(event.target.value)}
-                required
-                disabled={busy}
-                maxLength={1024}
-              />
-            </Field>
-            <Field label="Новый пароль">
-              <input
-                type="password"
-                name="new-password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                disabled={busy}
-                maxLength={1024}
-              />
-            </Field>
-            <Field label="Повторите новый пароль">
-              <input
-                type="password"
-                name="confirm-password"
-                autoComplete="new-password"
-                value={confirmation}
-                onChange={(event) => setConfirmation(event.target.value)}
-                required
-                disabled={busy}
-                maxLength={1024}
-              />
-            </Field>
-            <ActionFeedback error={!inlineError ? error : undefined} />
-            {inlineError && !!error && <ErrorBox error={error} />}
-            <div className="dialog-actions">
-              <Button type="button" onClick={close} disabled={busy}>
-                Отмена
-              </Button>
-              <Button type="submit" variant="default" disabled={busy}>
-                {busy ? "Сохраняем…" : "Сохранить пароль"}
-              </Button>
-            </div>
-          </form>
+          {form}
         </Dialog>
       )}
     </>
+  );
+}
+
+export function RequiredLocalPassword({ session }: { session: Session }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const pending = useRef(false);
+  async function logout() {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api("/auth/logout", "POST", {});
+      queryClient.clear();
+      location.assign("/");
+    } catch (e) {
+      setError(e);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="required-password-scene">
+      <header className="required-password-header">
+        <Brand />
+        <div>
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            disabled={busy || passwordBusy}
+            onClick={() => void logout()}
+          >
+            <LogOut size={17} aria-hidden="true" />
+            {busy ? "Выходим…" : "Выйти"}
+          </Button>
+        </div>
+      </header>
+      <main className="required-password-main">
+        <section
+          className="required-password-card"
+          aria-labelledby="required-password-title"
+        >
+          <div className="required-password-icon" aria-hidden="true">
+            <KeyRound size={27} strokeWidth={1.5} />
+          </div>
+          <p className="required-password-eyebrow">
+            Первый вход · локальный администратор
+          </p>
+          <h1 id="required-password-title">Задайте пароль</h1>
+          <p className="required-password-intro">
+            Замените начальный пароль, чтобы открыть Платформу. После сохранения
+            войдите с новым паролем.
+          </p>
+          <fieldset className="required-password-fields" disabled={busy}>
+            <LocalAdminPassword
+              session={session}
+              requiredScreen
+              onBusyChange={setPasswordBusy}
+            />
+          </fieldset>
+          {!!error && <ErrorBox error={error} />}
+        </section>
+      </main>
+    </div>
   );
 }
 

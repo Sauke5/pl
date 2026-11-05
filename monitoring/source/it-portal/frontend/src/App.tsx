@@ -2,7 +2,10 @@ import LocalProxy, {
   type LocalProxyInstance,
   installedLocalXrays,
 } from "./LocalProxy";
-import { LocalAdminPassword } from "./LocalAdminPassword";
+import {
+  LocalAdminPassword,
+  RequiredLocalPassword,
+} from "./LocalAdminPassword";
 import { ReleaseBanner, UpdateNotification } from "./UpdateSettings";
 import { requestUpgradeStatus, UpgradeBoundary } from "./UpgradeExperience";
 import {
@@ -232,6 +235,7 @@ function PortalApp() {
     if (
       !session.data?.authenticated ||
       !session.data.user?.admin ||
+      session.data.local_password_change_required ||
       session.error ||
       !pendingInstallationTransition()
     )
@@ -244,10 +248,20 @@ function PortalApp() {
       .then(settleInstallationTransition)
       .catch(() => {});
     return () => controller.abort();
-  }, [session.data?.authenticated, session.data?.user?.admin, session.error]);
+  }, [
+    session.data?.authenticated,
+    session.data?.user?.admin,
+    session.data?.local_password_change_required,
+    session.error,
+  ]);
   useEffect(() => {
     const target = pendingLoginReturn();
-    if (!session.data?.authenticated || returningToService.current) return;
+    if (
+      !session.data?.authenticated ||
+      session.data.local_password_change_required ||
+      returningToService.current
+    )
+      return;
     if (successVisible) {
       const delay = window.matchMedia("(prefers-reduced-motion: reduce)")
         .matches
@@ -302,11 +316,24 @@ function PortalApp() {
       returningToService.current = true;
       location.replace("/");
     }
-  }, [session.data?.authenticated, successVisible, boardServiceID]);
+  }, [
+    session.data?.authenticated,
+    session.data?.local_password_change_required,
+    successVisible,
+    boardServiceID,
+  ]);
   useEffect(() => {
-    if (!knownPages.has(route()) && location.pathname === "/")
+    if (
+      session.data &&
+      !session.data.local_password_change_required &&
+      !knownPages.has(route()) &&
+      location.pathname === "/"
+    )
       location.replace("/404");
-  }, []);
+  }, [
+    session.data?.local_password_change_required,
+    session.data?.authenticated,
+  ]);
   if (session.isPending)
     return (
       <AuthScene kind="login">
@@ -334,6 +361,8 @@ function PortalApp() {
     );
   const s = session.data!;
   if (s.timezone) setTimezone(s.timezone);
+  if (s.authenticated && s.local_password_change_required)
+    return <RequiredLocalPassword session={s} />;
   const requestedReturn =
     location.pathname === "/401" && location.hash.startsWith("#return_to:")
       ? location.hash.slice("#return_to:".length)
