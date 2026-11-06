@@ -396,7 +396,11 @@ class Delivery:
             if not isinstance(current, str):
                 current = ''
             available = installed and bool(HEX.fullmatch(current)) and current != target['sha256']
-            supported = available and capable and kind != 'sftpgo' and receipt.get('core_api') == 1 and receipt.get('version') == selected['version']
+            compatible = receipt.get('version') == selected['version']
+            if available and capable and kind != 'sftpgo' and not compatible:
+                policy = getattr(self.module_upgrade_helper(), 'supported_version_transition', None)
+                compatible = callable(policy) and policy(kind, receipt.get('version'), selected['version'])
+            supported = available and capable and kind != 'sftpgo' and receipt.get('core_api') == 1 and compatible
             reason = ''
             if available and not capable:
                 reason = 'Обновите Платформу для установки новой сборки модуля.'
@@ -1033,11 +1037,19 @@ class Delivery:
         if not roles:
             return descriptor
         previous = self.module_registry()[kind]
+        policy = getattr(self.module_upgrade_helper(), 'supported_version_transition', None) if kind == 'netmap' else None
         for role in roles:
             old, new = previous[role], descriptor[role]
             same_contract = (old['architecture'] == new['architecture'] and old['recipe'] == new['recipe']
-                             and old['labels'].get('org.opencontainers.image.version') == new['labels'].get('org.opencontainers.image.version')
+                             and (old['labels'].get('org.opencontainers.image.version') == new['labels'].get('org.opencontainers.image.version')
+                                  or callable(policy) and policy(kind, old['labels'].get('org.opencontainers.image.version'),
+                                                               new['labels'].get('org.opencontainers.image.version')))
                              and old['labels'].get('pl.module.config.version') == new['labels'].get('pl.module.config.version'))
+            if kind == 'netmap':
+                a, b = dict(old['labels']), dict(new['labels'])
+                for labels in (a, b):
+                    labels.pop('org.opencontainers.image.version', None); labels.pop('pl.source.sha256', None)
+                same_contract = same_contract and a == b and a.get('pl.module.config.version') == '1'
             if not same_contract:
                 continue
             equivalent = old['id'] == new['id']
@@ -1047,11 +1059,20 @@ class Delivery:
                     actual = load_json(self.parent.docker('image', 'inspect', image['id']))[0]
                     config = copy.deepcopy(actual.get('Config') or {}); config.pop('Labels', None)
                     values.append((actual.get('Os'), actual.get('Architecture'), actual.get('RootFS'), config))
-                equivalent = values[0] == values[1] and isinstance(values[0][2], dict) and 'Layers' in values[0][2]
+                retain_installed = (kind == 'netmap'
+                    and old['labels'].get('org.opencontainers.image.version') == '1.0.0'
+                    and new['labels'].get('org.opencontainers.image.version') == '1.1.0')
+                if retain_installed:
+                    # This approved extension keeps the exact installed storage
+                    # image. Discarded candidate COPY layers are never executed;
+                    # this does not select new database/cache bytes or migrate data.
+                    equivalent = (values[0][:2], values[0][3]) == (values[1][:2], values[1][3])
+                else:
+                    equivalent = values[0] == values[1] and isinstance(values[0][2], dict) and 'Layers' in values[0][2]
             if equivalent:
                 # Keep storage bytes and identity. A package tag or build-source
-                # label is not a database migration; changed filesystem layers
-                # remain a refused transition in the native preflight.
+                # label is not a database migration. Other transitions still
+                # require equal layers before preserving the installed image.
                 descriptor[role] = copy.deepcopy(old)
         return descriptor
 

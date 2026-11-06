@@ -42,6 +42,21 @@ class UnsupportedTransition(ValueError):
     status = 409
 
 
+def supported_version_transition(kind, previous, candidate):
+    """Only a rebuild, or the explicitly verified NetMap inventory extension."""
+    return (kind in ROLES and isinstance(previous, str) and bool(previous)
+            and isinstance(candidate, str) and (previous == candidate
+                or (kind, previous, candidate) == ('netmap', '1.0.0', '1.1.0')))
+
+
+def _shape_versions(value):
+    if value.get('module_id') != 'netmap':
+        return None
+    pair = tuple(value.get(name, {}).get('adapter', {}).get('labels', {}).get('org.opencontainers.image.version')
+                 for name in ('old_descriptor', 'new_descriptor'))
+    return pair if pair == ('1.0.0', '1.1.0') else None
+
+
 def digest(value):
     return hashlib.sha256(files.encoded(value)).hexdigest()
 
@@ -68,6 +83,7 @@ def _roles(kind, descriptor):
 
 def _transition(parent, kind, old, new):
     previous, candidate = _roles(kind, old), _roles(kind, new)
+    pair = _shape_versions({'module_id': kind, 'old_descriptor': old, 'new_descriptor': new})
     changed = []
     for role in ROLES[kind]:
         left, right = previous[role], candidate[role]
@@ -77,7 +93,13 @@ def _transition(parent, kind, old, new):
         else:
             a, b = dict(left['labels']), dict(right['labels'])
             a.pop('pl.source.sha256', None); b.pop('pl.source.sha256', None)
-            if (set(left['labels']) != set(right['labels']) or not a.get('org.opencontainers.image.version') or a != b
+            if pair:
+                if (a.get('org.opencontainers.image.version'), b.get('org.opencontainers.image.version')) != pair:
+                    raise UnsupportedTransition('Mixed native module release versions')
+                a.pop('org.opencontainers.image.version'); b.pop('org.opencontainers.image.version')
+                if a.get('pl.module.config.version') != '1' or a.get('pl.module.role') != role:
+                    raise UnsupportedTransition('NetMap configuration or role contract changed')
+            if (set(left['labels']) != set(right['labels']) or (not pair and not a.get('org.opencontainers.image.version')) or a != b
                     or left['architecture'] != right['architecture'] or left['recipe'] != right['recipe']):
                 raise UnsupportedTransition('Only identical upstream and native launch contracts are supported')
         if left['id'] != right['id']:
@@ -94,6 +116,8 @@ def _transition(parent, kind, old, new):
                     or any((config.get('Labels') or {}).get(k) != v for k, v in image['labels'].items())):
                 raise UnsupportedTransition('Native image identity differs')
             labels = dict(config.get('Labels') or {}); labels.pop('pl.source.sha256', None)
+            if pair and role not in STORAGE.get(kind, ()):
+                labels.pop('org.opencontainers.image.version', None)
             values.append({**{k: config.get(k) for k in IMAGE_DEFAULTS}, 'Labels': labels})
         if values[0] != values[1]:
             raise UnsupportedTransition('Native runtime defaults changed; an explicit migration is required')
@@ -153,7 +177,10 @@ def _controller(parent, kind, descriptor):
         c.image_contract = copy.deepcopy(descriptor); c.image = descriptor['id']
     elif kind == 'grafana': c.image = copy.deepcopy(descriptor)
     elif kind == 'sftpgo': c.image = copy.deepcopy(descriptor['server'])
-    else: c.images = copy.deepcopy(descriptor)
+    else:
+        c.images = copy.deepcopy(descriptor)
+        if kind == 'netmap':
+            c.version = descriptor['adapter']['labels']['org.opencontainers.image.version']
     return c
 
 
@@ -245,7 +272,7 @@ def _fingerprint_version(value):
     raise ValueError('Unsupported native module fingerprint version')
 
 
-def _fingerprint(obj, kind, *, shape=False, version=2):
+def _fingerprint(obj, kind, *, shape=False, version=2, version_pair=None):
     if type(version) is not int or version not in (1, 2):
         raise ValueError('Unsupported native module fingerprint version')
     config = copy.deepcopy(obj.get('Config', {})); host = copy.deepcopy(obj.get('HostConfig', {}))
@@ -258,6 +285,10 @@ def _fingerprint(obj, kind, *, shape=False, version=2):
     if shape:
         config['Image'] = '<native-image>'
         config.setdefault('Labels', {}).pop('pl.source.sha256', None)
+        if kind == 'netmap' and version_pair == ('1.0.0', '1.1.0'):
+            labels = config['Labels']
+            if labels.get('org.opencontainers.image.version') in version_pair:
+                labels['org.opencontainers.image.version'] = '<netmap-compatible-version>'
     for port, bindings in (host.get('PortBindings') or {}).items():
         if kind == 'xray' or kind == 'sftpgo' and port == '2022/tcp': continue
         for binding in bindings or []:
@@ -272,7 +303,7 @@ def _fingerprint(obj, kind, *, shape=False, version=2):
 
 def _fingerprint_matches(value, obj, expected, *, shape=False):
     version = _fingerprint_version(value); kind = value['module_id']
-    if _fingerprint(obj, kind, shape=shape, version=version) == expected:
+    if _fingerprint(obj, kind, shape=shape, version=version, version_pair=_shape_versions(value)) == expected:
         return True
     if version == 1:
         host = obj.get('HostConfig', {})
@@ -366,7 +397,8 @@ def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
             _launch_contract(parent, c, kind, instance, role, native, obj)
             expected_ids.add(obj['Id'])
             item['containers'].append({'role': role, 'id': obj['Id'], 'name': obj['Name'].removeprefix('/'), 'image': obj['Image'],
-                'running': all(running), 'fingerprint': _fingerprint(obj, kind), 'shape': _fingerprint(obj, kind, shape=True),
+                'running': all(running), 'fingerprint': _fingerprint(obj, kind),
+                'shape': _fingerprint(obj, kind, shape=True, version_pair=_shape_versions(result)),
                 'env_sha256': digest(sorted(obj.get('Config', {}).get('Env') or [])), 'mounts_sha256': digest(obj.get('Mounts', []))})
         result['instances'].append(item)
     if {obj['Id'] for obj in _inventory(parent, kind=kind)} != expected_ids:

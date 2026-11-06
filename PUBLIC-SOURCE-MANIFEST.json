@@ -16815,8 +16815,8 @@
     },
     {
       "path": "docs/product/netmap-auto-enrollment.md",
-      "sha256": "cd0b53d79fd9f129b0d8b4c1a7e0dc5c2fc6902f821e6102da831b23f2edd8cf",
-      "size": 40851
+      "sha256": "d3e79d14ad44dd1e317bfa06c801614dc1e2acde210386b632bb42da5da86859",
+      "size": 41426
     },
     {
       "path": "docs/releases/0.4.0-rc.1.json",
@@ -16899,6 +16899,11 @@
       "size": 3719
     },
     {
+      "path": "docs/releases/0.6.1.json",
+      "sha256": "5b0d9008c9caf536adaefa85336a157eb2730700ecb3f86b31b747af520d31f1",
+      "size": 3453
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16945,8 +16950,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "3f12cadcba9b82d18eb4c25ef55fe01d7bfc63a7acb2d60728bbd93ae70ccefe",
-      "size": 118741
+      "sha256": "00c51007fd6c92c31b95cca3b583d31418ace1c20cf299550c27a8c5ed1678a4",
+      "size": 120423
     },
     {
       "path": "installer/delivery.ru.md",
@@ -17060,13 +17065,13 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "f7f469f98d5e6a12adf0dd557e9241070b9c2009ebfc93a05645701781f3a213",
-      "size": 38578
+      "sha256": "330a94e2b5ea53303b2f96ef2db25e58532303765f4510367e6a2f3d126acc89",
+      "size": 40548
     },
     {
       "path": "installer/netmap-controller.py",
-      "sha256": "59de642000bc9018c59a84f71792ae07941b89ee5cfc32d0758cfc7017d71e68",
-      "size": 48033
+      "sha256": "c327fd0ed3f996fca941840e4fcb1f2b1187e4df9fb29126d8a6c69b75bca98f",
+      "size": 48898
     },
     {
       "path": "installer/netmap-standalone-package.py",
