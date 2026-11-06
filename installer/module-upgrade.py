@@ -1,4 +1,4 @@
-"""Finite same-upstream native module rebuild, called by the full-snapshot worker.
+"""Finite same-upstream native module rebuild, called by the snapshot worker.
 
 Descriptors are registry[kind], not artifact manifests. The caller authenticates
 artifacts, holds installation/lifecycle locks, persists the immutable plan and
@@ -199,6 +199,35 @@ def _bind_sources(parent, objects):
     return sorted(result)
 
 
+def _snapshot_paths(parent, paths, objects):
+    """Only target instance trees are restorable; shared binds must be read-only."""
+    root = Path(parent.root)
+    selected = []
+    for path in paths:
+        if path != path.resolve() or not path.is_relative_to(root / 'modules'):
+            raise ValueError('Unsafe native module snapshot instance path')
+        files.directory(path, create=False)
+        selected.append(str(path.relative_to(root)))
+    for obj in objects:
+        for mount in obj.get('Mounts', []):
+            if mount.get('Type') != 'bind': continue
+            source = Path(mount['Source'])
+            if source != source.resolve() or not source.is_relative_to(root):
+                raise ValueError('Native bind is outside this installation')
+            if not any(source.is_relative_to(path) for path in paths) and mount.get('RW') is not False:
+                raise ValueError('Writable native bind is outside target instance snapshot roots')
+    return sorted(name for name in set(selected)
+                  if not any(name != other and Path(name).is_relative_to(other) for other in selected))
+
+
+def _scoped(value):
+    if value.get('snapshot_scope') == 'module' and value.get('requires_full_snapshot') is False:
+        return True
+    if 'snapshot_scope' not in value and value.get('requires_full_snapshot') is True:
+        return False
+    raise ValueError('Invalid native module snapshot scope')
+
+
 def _binding_digest(parent, sources):
     root = Path(parent.root); result = {}
     for name in sources:
@@ -297,7 +326,9 @@ def _inventory(parent, *, kind=None):
     return json.loads(parent.docker('container', 'inspect', *sorted(ids))) if ids else []
 
 
-def plan(parent, kind, old_descriptor, new_descriptor):
+def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
+    if type(scoped) is not bool:
+        raise ValueError('Invalid native module snapshot scope')
     state, registry = _registry(parent)
     if registry.get(kind) != old_descriptor:
         raise ValueError('Installed native descriptor changed before module preflight')
@@ -308,6 +339,9 @@ def plan(parent, kind, old_descriptor, new_descriptor):
               'other_registry_sha256': digest({k: v for k, v in registry.items() if k != kind}),
               'old_descriptor': copy.deepcopy(old_descriptor), 'new_descriptor': copy.deepcopy(new_descriptor),
               'requires_full_snapshot': True, 'changed_roles': changed, 'instances': [], 'ledger': {}}
+    if scoped:
+        result.update(snapshot_scope='module', requires_full_snapshot=False,
+                      snapshot_paths=_snapshot_paths(parent, paths, []))
     if not paths and _inventory(parent, kind=kind):
         raise ValueError('Owned module containers have no complete native state')
     c = _controller(parent, kind, old_descriptor) if paths else None
@@ -317,6 +351,8 @@ def plan(parent, kind, old_descriptor, new_descriptor):
         objects = [_inspect(c, kind, instance, role) for role in ROLES[kind]]
         if any(obj is None for obj in objects):
             raise ValueError('Incomplete native module must be reconciled before an update')
+        if scoped:
+            _snapshot_paths(parent, paths, objects)
         running = [obj.get('State', {}).get('Running') is True for obj in objects]
         if any(running) != all(running):
             raise UnsupportedTransition('Mixed native role states require reconciliation before an update')
@@ -343,6 +379,28 @@ def _snapshot(parent, value):
     root = Path(parent.root); folder = root / 'private/upgrade-backups' / identifier
     if folder != folder.resolve(): raise ValueError('Unsafe native module snapshot path')
     meta = _record(folder / 'snapshot.json')
+    if _scoped(value):
+        containers = meta.get('containers', [])
+        volumes = meta.get('volumes', [])
+        names = [c.get('name') for c in containers]
+        volume_names = [v.get('name') for v in volumes]
+        expected_names = {c['name'] for item in value['instances'] for c in item['containers']}
+        expected_volumes = {name for item in value['instances'] for name in item['volumes']}
+        archives = [v.get('archive') for v in volumes]
+        checksums = meta.get('files', {})
+        paths = _snapshot_paths(parent, _paths(parent, value['module_id']), [])
+        if (meta.get('schema') != 2 or meta.get('scope') != 'module'
+                or meta.get('module_id') != value['module_id'] or meta.get('installation') != parent.installation
+                or meta.get('operation_id') != identifier or meta.get('from_version') != value['core_version']
+                or len(names) != len(expected_names) or set(names) != expected_names
+                or any(c.get('core') or c.get('module_id', value['module_id']) != value['module_id'] for c in containers)
+                or len(volume_names) != len(expected_volumes) or set(volume_names) != expected_volumes
+                or set(archives) != {'volume-' + str(i) + '.tar' for i in range(len(volumes))}
+                or not isinstance(checksums, dict) or set(checksums) != {'installation.tar', *archives}
+                or any(not isinstance(v, str) or not re.fullmatch(r'[0-9a-f]{64}', v) for v in checksums.values())
+                or value.get('snapshot_paths') != paths):
+            raise ValueError('Scoped native module snapshot does not match this plan')
+        return meta
     required = {parent.installation + '-auth', parent.installation + '_db',
                 *[name for item in value['instances'] for name in item['volumes']]}
     if (meta.get('schema') != 1 or meta.get('installation') != parent.installation
@@ -459,27 +517,29 @@ def _create(parent, value, item, spec, descriptor, direction):
 
 
 def _execute(parent, value, direction):
-    if (not isinstance(value, dict) or value.get('schema') != 1 or value.get('requires_full_snapshot') is not True
+    if (not isinstance(value, dict) or value.get('schema') != 1
             or value.get('installation') != parent.installation or value.get('root') != str(parent.root)
             or value.get('module_id') not in ROLES or not isinstance(value.get('instances'), list)
             or not isinstance(value.get('ledger'), dict) or not callable(getattr(parent, 'module_upgrade_checkpoint', None))):
         raise ValueError('Invalid native module reconstruction plan or checkpoint contract')
+    scoped = _scoped(value)
     _fingerprint_version(value)
     state, registry = _registry(parent); kind = value['module_id']
     descriptor = value['new_descriptor'] if direction == 'apply' else value['old_descriptor']
     if (state.get('version') != value['core_version'] or registry.get('manifest_sha256') != value['core_manifest_sha256']
             or registry.get(kind) != descriptor
-            or digest({k: v for k, v in registry.items() if k != kind}) != value['other_registry_sha256']):
+            or (not scoped and digest({k: v for k, v in registry.items() if k != kind}) != value['other_registry_sha256'])):
         raise ValueError('Native module registry/core was not selected or restored as required')
     if _transition(parent, kind, value['old_descriptor'], value['new_descriptor']) != value['changed_roles']:
         raise ValueError('Native module upgrade image transition changed')
     meta = _snapshot(parent, value)
     expected_names = {c['name'] for c in meta['containers']}
-    for obj in _inventory(parent):
+    for obj in _inventory(parent, kind=kind) if scoped else _inventory(parent):
         labels = obj.get('Config', {}).get('Labels') or {}
         web = labels.get('com.docker.compose.project') == parent.installation and labels.get('com.docker.compose.service') == 'web'
-        if obj.get('Name', '').removeprefix('/') not in expected_names or obj.get('State', {}).get('Running') and not web:
-            raise ValueError('Global native writes are not quiesced against the complete snapshot')
+        if obj.get('Name', '').removeprefix('/') not in expected_names or obj.get('State', {}).get('Running') and (scoped or not web):
+            raise ValueError('Native writes are not quiesced against the module snapshot' if scoped else
+                             'Global native writes are not quiesced against the complete snapshot')
     paths = _paths(parent, kind)
     if {p.name for p in paths} != {item['instance_id'] for item in value['instances']}:
         raise ValueError('Native instance inventory changed since module preflight')
@@ -496,6 +556,8 @@ def _execute(parent, value, direction):
                 raise ValueError('Existing native replacement changed its preserved launch contract')
             checks.append((item, spec, obj, status))
             if obj is not None: objects.append(obj)
+        if scoped:
+            _snapshot_paths(parent, paths, objects)
         if _binding_digest(parent, item['bind_sources']) != item['binds_sha256']:
             raise ValueError('Native bound configuration changed since module preflight')
     planned_ids = {obj['Id'] for _, _, obj, _ in checks if obj is not None}
@@ -559,22 +621,25 @@ def _verification_budget(seconds):
             signal.setitimer(signal.ITIMER_REAL, max(0.000001, previous[0] - (time.monotonic() - before)), previous[1])
 
 
-def verify(parent, value):
+def verify(parent, value, *, direction='apply'):
     """Inspect selected images and original states; probe only running instances.
 
     The root worker has started its originally running names in dependency order.
     No lifecycle ensure/get method or scheduler/database write is used here.
     """
+    if direction not in ('apply', 'rollback'):
+        raise ValueError('Invalid native module verification direction')
     with _verification_budget(120):
         _fingerprint_version(value)
         state, registry = _registry(parent)
         kind = value['module_id']
+        descriptor = value['new_descriptor'] if direction == 'apply' else value['old_descriptor']
         if (value.get('schema') != 1 or value.get('installation') != parent.installation
-                or state.get('version') != value['core_version'] or registry.get(kind) != value['new_descriptor']
+                or state.get('version') != value['core_version'] or registry.get(kind) != descriptor
                 or registry.get('manifest_sha256') != value['core_manifest_sha256']):
             raise ValueError('Native module verification registry differs')
         _snapshot(parent, value)
-        c = _controller(parent, kind, value['new_descriptor']) if value['instances'] else None
+        c = _controller(parent, kind, descriptor) if value['instances'] else None
         deadline = time.monotonic() + 120
         for item in value['instances']:
             if digest(_state(c, kind, item['instance_id'])) != item['state_sha256']:
@@ -588,8 +653,12 @@ def verify(parent, value):
                         if obj is None: raise ValueError('Native verification container is absent')
                         _owned(parent, kind, item['instance_id'], obj)
                         records = value['ledger'].get(spec['name'], {}).get('replacements', [])
-                        permitted = {r['id'] for r in records if r['direction'] == 'apply'} if spec['role'] in value['changed_roles'] else {spec['id']}
-                        if (obj['Id'] not in permitted or obj['Image'] != _roles(kind, value['new_descriptor'])[spec['role']]['id']
+                        permitted = {spec['id']}
+                        if spec['role'] in value['changed_roles']:
+                            permitted = {r['id'] for r in records if r['direction'] == direction}
+                            if direction == 'rollback':
+                                permitted.add(spec['id'])  # An untouched original needs no reconstruction.
+                        if (obj['Id'] not in permitted or obj['Image'] != _roles(kind, descriptor)[spec['role']]['id']
                                 or obj.get('State', {}).get('Running') is not item['running']
                                 or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
                             raise ValueError('Native images, ownership or original running state were not preserved')

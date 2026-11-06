@@ -68,35 +68,56 @@ func (m *Manager) VerifyDeliveryReconcile(method, path, timestamp, signature str
 	return ok && verifier.VerifyDeliveryReconcile(method, path, timestamp, signature, body)
 }
 
-func (m *Manager) deliveryScheduleAllowed(ctx context.Context) bool {
+func validDeliveryScope(op *DeliveryOperation) bool {
+	return op != nil && (op.Scope == "" || op.Scope == "module" && op.Kind == "module_upgrade" && deliveredModule(op.ModuleID))
+}
+
+func (m *Manager) deliveryScheduleOperation(ctx context.Context) (*DeliveryOperation, bool) {
 	status, err := m.Delivery(ctx, "status", nil)
 	if err != nil {
-		return false
+		return nil, false
 	}
 	if status.Operation == nil {
-		return true
+		return nil, true
 	}
-	switch status.Operation.Phase {
+	op := status.Operation
+	if !validDeliveryScope(op) {
+		return nil, false
+	}
+	if op.Scope == "module" {
+		return op, true
+	}
+	switch op.Phase {
 	case "complete", "failed", "rolled_back", "reconciling":
-		return true
+		return op, true
 	default:
-		return false
+		return op, false
 	}
 }
 
-func (m *Manager) deliveryReconcileActive(ctx context.Context, id string) error {
+func (m *Manager) deliveryScheduleAllowed(ctx context.Context) bool {
+	_, allowed := m.deliveryScheduleOperation(ctx)
+	return allowed
+}
+
+func (m *Manager) deliveryReconcileOperation(ctx context.Context, id string) (DeliveryOperation, error) {
 	if m == nil || !m.DeliveryEnabled {
-		return ErrDeliveryReconcileInactive
+		return DeliveryOperation{}, ErrDeliveryReconcileInactive
 	}
 	status, err := m.Delivery(ctx, "status", nil)
 	if err != nil {
-		return ErrDeliveryReconcileInactive
+		return DeliveryOperation{}, ErrDeliveryReconcileInactive
 	}
 	op := status.Operation
-	if op == nil || op.OperationID != id || op.Phase != "reconciling" || op.Kind != "upgrade" && op.Kind != "module_upgrade" && op.Kind != "configuration" {
-		return ErrDeliveryReconcileInactive
+	if !validDeliveryScope(op) || op.OperationID != id || op.Phase != "reconciling" || op.Kind != "upgrade" && op.Kind != "module_upgrade" && op.Kind != "configuration" {
+		return DeliveryOperation{}, ErrDeliveryReconcileInactive
 	}
-	return nil
+	return *op, nil
+}
+
+func (m *Manager) deliveryReconcileActive(ctx context.Context, id string) error {
+	_, err := m.deliveryReconcileOperation(ctx, id)
+	return err
 }
 
 func nativeReconcileInstance(instance model.ModuleInstance) bool {
@@ -154,8 +175,19 @@ func (m *Manager) ReconcileDelivery(ctx context.Context, request DeliveryReconci
 			err = ErrDeliveryReconcileTimeout
 		}
 	}()
-	if err := m.deliveryReconcileActive(ctx, request.OperationID); err != nil {
+	op, err := m.deliveryReconcileOperation(ctx, request.OperationID)
+	if err != nil {
 		return result, err
+	}
+	active := func() error {
+		current, err := m.deliveryReconcileOperation(ctx, request.OperationID)
+		if err != nil {
+			return err
+		}
+		if current.Scope != op.Scope || current.Kind != op.Kind || current.ModuleID != op.ModuleID {
+			return ErrDeliveryReconcileInactive
+		}
+		return nil
 	}
 	if m.Store == nil || m.Store.Pool == nil {
 		return result, ErrDeliveryReconcileFailed
@@ -166,7 +198,7 @@ func (m *Manager) ReconcileDelivery(ctx context.Context, request DeliveryReconci
 	}
 	ids := []string{}
 	for _, instance := range instances {
-		if nativeReconcileInstance(instance) {
+		if nativeReconcileInstance(instance) && (op.Scope != "module" || instance.ModuleID == op.ModuleID) {
 			ids = append(ids, instance.ID)
 		}
 	}
@@ -178,7 +210,7 @@ func (m *Manager) ReconcileDelivery(ctx context.Context, request DeliveryReconci
 		if ctx.Err() != nil {
 			return result, ErrDeliveryReconcileTimeout
 		}
-		if err := m.deliveryReconcileActive(ctx, request.OperationID); err != nil {
+		if err := active(); err != nil {
 			if ctx.Err() != nil {
 				return result, ErrDeliveryReconcileTimeout
 			}
@@ -188,7 +220,7 @@ func (m *Manager) ReconcileDelivery(ctx context.Context, request DeliveryReconci
 		for _, id := range ids {
 			if jobs[id] == "" {
 				instance, loadErr := store.Get[model.ModuleInstance](ctx, m.Store, "module_instance", id)
-				if loadErr != nil || !nativeReconcileInstance(instance) {
+				if loadErr != nil || !nativeReconcileInstance(instance) || op.Scope == "module" && instance.ModuleID != op.ModuleID {
 					return result, ErrDeliveryReconcileFailed
 				}
 				key := "delivery:" + request.OperationID + ":" + request.RequestID + ":" + id
@@ -214,7 +246,7 @@ func (m *Manager) ReconcileDelivery(ctx context.Context, request DeliveryReconci
 			}
 		}
 		if ready == len(ids) {
-			if err := m.deliveryReconcileActive(ctx, request.OperationID); err != nil {
+			if err := active(); err != nil {
 				return result, err
 			}
 			if ctx.Err() != nil {

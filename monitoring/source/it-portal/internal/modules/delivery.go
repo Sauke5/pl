@@ -67,6 +67,7 @@ type DeliveryModule struct {
 }
 type DeliveryOperation struct {
 	Kind             string `json:"kind,omitempty"`
+	Scope            string `json:"scope,omitempty"`
 	ModuleID         string `json:"module_id,omitempty"`
 	RecoveryMode     string `json:"recovery_mode,omitempty"`
 	RestoredSnapshot bool   `json:"restored_snapshot,omitempty"`

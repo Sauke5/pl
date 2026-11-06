@@ -91,6 +91,43 @@ func TestDeliveryReconcileAcceptsCommittedConfigurationPhase(t *testing.T) {
 	}
 }
 
+func TestDeliveryReconcileRejectsMalformedOperationScopeBeforeStore(t *testing.T) {
+	id := "727b18f8-99da-410f-b94f-e677f2967731"
+	for _, op := range []DeliveryOperation{
+		{Kind: "module_upgrade", Scope: "installation", ModuleID: "doska"},
+		{Kind: "upgrade", Scope: "module", ModuleID: "doska"},
+		{Kind: "configuration", Scope: "module", ModuleID: "doska"},
+		{Kind: "module_upgrade", Scope: "module"},
+		{Kind: "module_upgrade", Scope: "module", ModuleID: "Doska"},
+		{Kind: "module_upgrade", Scope: "module", ModuleID: "unknown"},
+		{Kind: "module_upgrade", Scope: "module", ModuleID: "mailcow"},
+	} {
+		op.OperationID, op.Phase = id, "reconciling"
+		c := &reconcileScheduleController{status: DeliveryStatus{CoreAPI: 1, Operation: &op}}
+		m := New(nil, c)
+		m.DeliveryEnabled = true
+		if err := m.deliveryReconcileActive(context.Background(), id); !errors.Is(err, ErrDeliveryReconcileInactive) {
+			t.Fatalf("malformed scope reached reconciliation: %#v, %v", op, err)
+		}
+		if m.deliveryScheduleAllowed(context.Background()) {
+			t.Fatalf("malformed scope admitted scheduling: %#v", op)
+		}
+	}
+}
+
+func TestDeliverySchedulerAdmitsNeighboursDuringScopedModuleUpdate(t *testing.T) {
+	c := &reconcileScheduleController{status: DeliveryStatus{CoreAPI: 1,
+		Operation: &DeliveryOperation{Kind: "module_upgrade", Scope: "module", ModuleID: "doska"}}}
+	m := New(nil, c)
+	m.DeliveryEnabled = true
+	for _, phase := range []string{"downloading", "quiescing", "snapshot", "applying", "verifying", "resuming", "reconciling", "recovery_required", "complete", "failed", "rolled_back"} {
+		c.status.Operation.Phase = phase
+		if !m.deliveryScheduleAllowed(context.Background()) {
+			t.Fatal("scoped update suppressed all neighbouring schedules", phase)
+		}
+	}
+}
+
 func TestDeliverySchedulerSuppressesMaintenanceBeforeAnyStoreRead(t *testing.T) {
 	c := &reconcileScheduleController{status: DeliveryStatus{CoreAPI: 1}}
 	m := New(nil, c)

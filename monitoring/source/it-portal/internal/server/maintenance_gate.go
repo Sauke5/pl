@@ -10,11 +10,18 @@ import (
 // buffering an older request after the API has already been replaced.
 func (s *Server) maintenanceGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.Config.PortableRelease || s.Config.MaintenanceDir == "" || maintenanceReadOrControl(r) {
+		if !s.Config.PortableRelease || s.Config.MaintenanceDir == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
 		_, err := os.Lstat(filepath.Join(s.Config.MaintenanceDir, "active"))
+		if os.IsNotExist(err) && s.scopedModuleMaintenance(w, r) {
+			return
+		}
+		if maintenanceReadOrControl(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if os.IsNotExist(err) {
 			next.ServeHTTP(w, r)
 			return

@@ -79,7 +79,8 @@ APT_SOURCES = Path('/etc/apt/sources.list.d/pl-docker.sources')
 APT_KEY = Path('/etc/apt/keyrings/pl-docker.asc')
 MAX_PACKAGE = 8 * 1024**3
 MIN_DISK = 20 * 1024**3
-MIN_MEMORY_KIB = 4 * 1024**2
+# A VM assigned 4 GiB exposes less MemTotal after kernel reservations.
+MIN_MEMORY_KIB = 3584 * 1024
 ALLOWED = {'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
 REQUIRED = ALLOWED - {'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
 DOCKER_FINGERPRINT = '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
@@ -292,7 +293,7 @@ def preflight(root):
         fail('Only amd64 and arm64 are supported.')
     memory = re.search(r'^MemTotal:\s+(\d+)\s+kB$', MEMINFO.read_text(), re.M)
     if not memory or int(memory[1]) < MIN_MEMORY_KIB:
-        fail('At least 4 GiB of usable RAM is required.')
+        fail('Assign at least 4 GiB of RAM to the VM; Linux MemTotal must be at least 3584 MiB after kernel reservations.')
     ancestor = root
     while not ancestor.exists():
         ancestor = ancestor.parent

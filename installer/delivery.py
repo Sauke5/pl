@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from contextlib import contextmanager, ExitStack
+from contextlib import contextmanager, ExitStack, nullcontext
 import copy
 import hmac
 import fcntl
@@ -47,6 +47,13 @@ _threads = threading.Lock()
 
 def json_bytes(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':')).encode() + b'\n'
+
+
+def scoped_module(operation):
+    # Old module journals used a whole-installation snapshot. Their recovery
+    # must retain that contract even after a newer worker is installed.
+    return (isinstance(operation, dict) and operation.get('scope') == 'module'
+            and operation.get('kind') == 'module_upgrade' and operation.get('module_id') in MODULES)
 
 
 def _object(pairs):
@@ -357,7 +364,7 @@ class Delivery:
         latest = catalog['version'] if catalog else ''
         public_operation = None
         if operation:
-            public_operation = {key: operation[key] for key in ('operation_id', 'kind', 'module_id', 'version', 'phase', 'error', 'next_url', 'started_at', 'finished_at') if key in operation}
+            public_operation = {key: operation[key] for key in ('operation_id', 'kind', 'module_id', 'scope', 'version', 'phase', 'error', 'next_url', 'started_at', 'finished_at') if key in operation}
             public_operation.setdefault('kind', 'upgrade')
             public_operation['recovery_mode'] = 'resume' if operation.get('data_committed') is True else 'rollback'
             if operation.get('restored_snapshot') is True:
@@ -496,7 +503,7 @@ class Delivery:
         # waits only for that kind. No module lifecycle lock covers network or
         # Docker work, and core/configuration changes still require our barrier.
         with self.artifact_lock(kind), self.lock(exclusive=False):
-            self.require_idle()
+            self.require_idle(module_id=kind)
             registry = self.module_registry()
             if kind in registry:
                 return False
@@ -595,19 +602,21 @@ class Delivery:
                 acquired.enter_context(self.worker_lock(blocking=False))
             yield
 
-    def require_idle(self, *, allow_refresh=False):
+    def require_idle(self, *, allow_refresh=False, module_id=None):
         path = self.base / 'operation.json'
         if path.exists():
             operation = read(path)
+            if scoped_module(operation) and (module_id in MODULES or module_id == 'core') and module_id != operation['module_id']:
+                return
             if allow_refresh and operation.get('phase') == 'reconciling' and operation.get('data_committed') is True:
                 return
             if operation.get('phase') not in ('complete', 'failed', 'rolled_back'):
                 raise ValueError('Обновление установки выполняется или требует восстановления')
 
     @contextmanager
-    def rpc_guard(self, *, allow_refresh=False):
+    def rpc_guard(self, *, allow_refresh=False, module_id=None):
         with self.lock(exclusive=False):
-            self.require_idle(allow_refresh=allow_refresh)
+            self.require_idle(allow_refresh=allow_refresh, module_id=module_id)
             yield
 
     def operation(self, phase, **fields):
@@ -668,6 +677,8 @@ class Delivery:
                 public['restored_snapshot'] = True
             if operation.get('kind') == 'module_upgrade':
                 public['module_id'] = operation['module_id']
+                if scoped_module(operation):
+                    public['scope'] = 'module'
             for name in ('started_at', 'finished_at'):
                 timestamp = operation.get(name)
                 if isinstance(timestamp, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', timestamp):
@@ -692,7 +703,7 @@ class Delivery:
         marker = folder / 'active'
         if marker.is_symlink() or marker.exists() and not marker.is_file():
             raise ValueError('Unsafe public maintenance marker')
-        if blocking:
+        if blocking and not scoped_module(operation):
             if not marker.exists():
                 atomic(marker, b'', mode=0o644)
         else:
@@ -777,7 +788,7 @@ class Delivery:
                 raise ValueError('Module update is not the selected compatible signed artifact')
             state = self.state()
             selected = catalog['modules'][body['module_id']]
-            operation = {'operation_id': body['operation_id'], 'kind': 'module_upgrade', 'module_id': body['module_id'],
+            operation = {'operation_id': body['operation_id'], 'kind': 'module_upgrade', 'module_id': body['module_id'], 'scope': 'module',
                          'version': state['version'], 'from_version': state['version'], 'module_version': selected['version'],
                          'phase': 'queued', 'started_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'error': '',
                          'artifact': selected['artifacts'][self.architecture()], 'catalog_sequence': catalog['sequence']}
@@ -1075,6 +1086,8 @@ class Delivery:
 
     def perform_module_upgrade(self):
         request = read(self.base / 'operation.json')
+        if scoped_module(request):
+            return self.perform_scoped_module_upgrade(request)
         changed = False
         try:
             self.operation('downloading')
@@ -1122,6 +1135,174 @@ class Delivery:
                     self.restart(latest['containers'])
                     self.readiness()
                 self.operation('failed', error='Обновление не применено. Предыдущая версия и данные сохранены.')
+
+    def module_snapshot_volumes(self, plan):
+        expected = {name for item in plan['instances'] for name in item['volumes']}
+        volumes = [v for v in self.volumes() if v['name'] in expected]
+        if {v['name'] for v in volumes} != expected:
+            raise ValueError('Native module snapshot volume inventory differs')
+        # Same-installation ownership is insufficient: a neighbour mounting a
+        # selected volume would remain writable during snapshot and rollback.
+        ids = self.parent.docker('container', 'ls', '-a', '--format', '{{.ID}}').decode().split()
+        for obj in load_json(self.parent.docker('container', 'inspect', *ids)) if ids else []:
+            if not any(m.get('Type') == 'volume' and m.get('Name') in expected for m in obj.get('Mounts', [])):
+                continue
+            labels = obj.get('Config', {}).get('Labels') or {}
+            if labels.get('pl.installation') != self.installation or labels.get('pl.module') != plan['module_id']:
+                raise ValueError('Native module data is also mounted outside the update scope')
+        return volumes
+
+    def snapshot_module(self, request, plan, containers):
+        volumes = self.module_snapshot_volumes(plan)
+        paths = plan['snapshot_paths']
+        total = sum(tree_size(self.root / p) for p in paths) + sum(tree_size(Path(v['path'])) for v in volumes)
+        directory(self.root / 'private/upgrade-backups')
+        destination = self.root / 'private/upgrade-backups' / request['operation_id']
+        directory(destination)
+        if shutil.disk_usage(destination).free < total + RESERVE:
+            raise ValueError('Insufficient free space for the selected module snapshot')
+        files = {}
+        with tarfile.open(destination / 'installation.tar', 'w', format=tarfile.PAX_FORMAT) as tar:
+            for name in paths:
+                path = self.root / name
+                if path != path.resolve() or not path.is_relative_to(self.root / 'modules'):
+                    raise ValueError('Native module snapshot path escaped its scope')
+                add_tree(tar, path, name)
+        (destination / 'installation.tar').chmod(0o600)
+        files['installation.tar'] = digest(destination / 'installation.tar')
+        for index, volume in enumerate(volumes):
+            filename = 'volume-' + str(index) + '.tar'
+            with tarfile.open(destination / filename, 'w', format=tarfile.PAX_FORMAT) as tar:
+                add_tree(tar, Path(volume['path']), '.')
+            (destination / filename).chmod(0o600)
+            files[filename] = digest(destination / filename)
+            volume['archive'] = filename
+        atomic(destination / 'snapshot.json', {'schema': 2, 'scope': 'module', 'module_id': request['module_id'],
+            'installation': self.installation, 'operation_id': request['operation_id'], 'from_version': request['from_version'],
+            'containers': containers, 'volumes': volumes, 'files': files, 'snapshot_paths': paths})
+        return destination
+
+    def select_module_descriptor(self, plan, *, rollback=False):
+        kind = plan['module_id']
+        # Neighbours may finish installation/configuration concurrently. Merge
+        # only the selected descriptor instead of restoring their older registry.
+        with self.lifecycle_lock():
+            registry = self.module_registry()
+            expected = (plan['old_descriptor'], plan['new_descriptor']) if rollback else (plan['old_descriptor'],)
+            if registry.get(kind) not in expected or registry['manifest_sha256'] != plan['core_manifest_sha256']:
+                raise ValueError('Native module descriptor changed outside its update')
+            registry[kind] = copy.deepcopy(plan['old_descriptor'] if rollback else plan['new_descriptor'])
+            atomic(self.root / 'private/module-images.json', registry)
+
+    def perform_scoped_module_upgrade(self, request):
+        changed = False
+        try:
+            self.operation('downloading')
+            meta, descriptor = self.stage_module_upgrade(request)
+            helper = self.module_upgrade_helper()
+            plan = helper.plan(self.parent, request['module_id'], copy.deepcopy(self.module_registry()[request['module_id']]),
+                               descriptor, scoped=True)
+            plan['snapshot_operation_id'] = request['operation_id']
+            self.parent.module_upgrade_checkpoint = self.checkpoint_module_upgrade
+            self.checkpoint_module_upgrade(plan)
+            receipt = read(self.base / ('module-' + request['module_id'] + '.json'))
+            containers = [c for c in self.inventory() if not c['core'] and c.get('module_id') == request['module_id']]
+            self.operation('quiescing', old_module_receipt=receipt, containers=containers)
+            self.stop(containers)
+            self.operation('snapshot')
+            snapshot = self.snapshot_module(request, plan, containers)
+            self.operation('applying', snapshot=str(snapshot))
+            changed = True
+            self.select_module_descriptor(plan)
+            helper.apply(self.parent, plan)
+            atomic(self.base / ('module-' + request['module_id'] + '.json'), {'module_id': request['module_id'],
+                'version': meta['version'], 'core_api': 1, 'sha256': request['artifact']['sha256'],
+                'package_version': meta.get('package_version', '')})
+            self.finish_scoped_module(containers)
+        except BaseException as error:
+            self.record_failure(error)
+            operation = read(self.base / 'operation.json')
+            if operation.get('data_committed') is True:
+                self.operation('recovery_required', error='Обновление модуля установлено. Требуется завершить его запуск; данные сохранены.')
+            elif changed:
+                self.rollback_scoped_module(operation)
+            elif operation.get('containers'):
+                self.operation('resuming', data_committed=True, restored_snapshot=True)
+                self.finish_scoped_module(operation['containers'], verify=False)
+            else:
+                self.operation('failed', error='Обновление не применено. Предыдущая версия и данные сохранены.')
+
+    def finish_scoped_module(self, containers, *, verify=True):
+        operation = read(self.base / 'operation.json')
+        if any(c.get('core') or c.get('module_id') != operation['module_id'] for c in containers):
+            raise ValueError('Native module resume escaped its update scope')
+        # Starting even one role can accept writes from a direct ingress or a
+        # neighbour (Alertmanager, Xray, SFTP). Never roll its data back later.
+        self.operation('resuming', data_committed=True, error='')
+        self.resume_native(containers)
+        if verify:
+            self.module_upgrade_helper().verify(self.parent, operation['module_upgrade_plan'],
+                direction='rollback' if operation.get('restored_snapshot') is True else 'apply')
+        self.operation('reconciling')
+        self.synchronize_modules()
+        restored = operation.get('restored_snapshot') is True
+        self.operation('rolled_back' if restored else 'complete',
+                       error='Восстановлены предыдущая версия и данные модуля.' if restored else '')
+
+    def rollback_scoped_module(self, operation):
+        if operation.get('data_committed') is True:
+            raise ValueError('Committed native module data must be resumed, not rolled back')
+        path = self.root / 'private/upgrade-backups' / operation['operation_id']
+        if not operation.get('snapshot'):
+            if operation.get('containers'):
+                self.operation('resuming', data_committed=True, restored_snapshot=True)
+                return self.finish_scoped_module(operation['containers'], verify=False)
+            self.operation('rolled_back', error='Обновление модуля не применено. Предыдущая версия сохранена.')
+            return
+        plan = operation.get('module_upgrade_plan')
+        if (not isinstance(plan, dict) or plan.get('module_id') != operation['module_id']
+                or plan.get('snapshot_operation_id') != operation['operation_id']
+                or hashlib.sha256(json_bytes(plan)).hexdigest() != operation.get('module_upgrade_plan_sha256')):
+            raise ValueError('Native module recovery plan integrity differs')
+        helper = self.module_upgrade_helper()
+        meta = helper._snapshot(self.parent, plan)
+        for name, checksum in meta['files'].items():
+            if digest(path / name) != checksum:
+                raise ValueError('Native module recovery snapshot integrity mismatch')
+        # Do not let even a correctly hashed but out-of-scope archive restore a
+        # core file, neighbouring module or shared credential.
+        roots = [Path(name) for name in plan['snapshot_paths']]
+        with tarfile.open(path / 'installation.tar', 'r:*') as archive:
+            for member in archive.getmembers():
+                name = Path(member.name)
+                if not any(name == root or name.is_relative_to(root) for root in roots):
+                    raise ValueError('Native recovery archive escaped its selected paths')
+        self.operation('restoring')
+        self.stop([c for c in self.inventory(require_core=False) if not c['core'] and c.get('module_id') == operation['module_id']])
+        actual = {v['name']: v['path'] for v in self.module_snapshot_volumes(plan)}
+        image = read(self.root / 'releases' / operation['from_version'] / 'manifest.json')['images']['web']['id']
+        for volume in meta['volumes']:
+            if actual.get(volume['name']) != volume['path']:
+                raise ValueError('Native module recovery volume ownership has changed')
+            self.parent.docker('run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
+                '--cap-drop', 'ALL', '--cap-add', 'SYS_CHROOT', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE',
+                '--cap-add', 'FOWNER', '--cap-add', 'FSETID', '--cap-add', 'SETFCAP', '--security-opt', 'no-new-privileges:true',
+                '--mount', 'type=bind,source=/,target=/host,readonly',
+                '--mount', 'type=volume,source=' + volume['name'] + ',target=/host' + volume['path'],
+                '--entrypoint', '/bin/busybox', image, 'chroot', '/host', '/usr/bin/python3', str(self.package / 'delivery.py'),
+                '--restore-volume', str(path / volume['archive']), '--target', volume['path'], timeout=1800)
+        if plan['snapshot_paths']:
+            restore_tree(path / 'installation.tar', self.root, preserve=set(), allowed_roots=set(plan['snapshot_paths']))
+        self.select_module_descriptor(plan, rollback=True)
+        self.parent.module_upgrade_checkpoint = self.checkpoint_module_upgrade
+        helper.rollback(self.parent, plan)
+        receipt = operation.get('old_module_receipt')
+        if (not isinstance(receipt, dict) or receipt.get('module_id') != operation['module_id'] or receipt.get('core_api') != 1
+                or not isinstance(receipt.get('sha256'), str) or not HEX.fullmatch(receipt['sha256'])):
+            raise ValueError('Native module recovery receipt differs')
+        atomic(self.base / ('module-' + operation['module_id'] + '.json'), receipt)
+        self.operation('resuming', restored_snapshot=True)
+        self.finish_scoped_module(meta['containers'])
 
     def stage_core(self, request):
         info = artifact(request['artifact'])
@@ -1431,6 +1612,8 @@ class Delivery:
         operation = read(self.base / 'operation.json')
         if operation.get('data_committed') is not True or not isinstance(operation.get('containers'), list):
             raise ValueError('No committed installation is available to resume')
+        if scoped_module(operation):
+            return self.finish_scoped_module(operation['containers'])
         self.restart_core()
         self.commit_and_resume(operation['containers'])
 
@@ -1536,6 +1719,8 @@ class Delivery:
 
     def rollback(self):
         operation = read(self.base / 'operation.json')
+        if scoped_module(operation):
+            return self.rollback_scoped_module(operation)
         if operation.get('data_committed') is True:
             raise ValueError('Committed installation data must be resumed, not rolled back')
         path = self.root / 'private/upgrade-backups' / operation['operation_id']
@@ -1645,7 +1830,7 @@ def add_tree(tar, path, name, exclude=frozenset()):
             add_tree(tar, child, name.rstrip('/') + '/' + child.name, exclude)
 
 
-def restore_tree(archive, target, preserve=frozenset()):
+def restore_tree(archive, target, preserve=frozenset(), *, allowed_roots=None):
     """Restore our verified snapshot without following archive-created symlinks."""
     target = Path(target)
     if target != target.resolve() or not target.is_dir():
@@ -1653,6 +1838,11 @@ def restore_tree(archive, target, preserve=frozenset()):
     with tarfile.open(archive, 'r:') as tar:
         entries = tar.getmembers()
         names = set()
+        scoped_roots = {Path(name) for name in allowed_roots} if allowed_roots is not None else None
+        if scoped_roots is not None:
+            if not scoped_roots or any(name.is_absolute() or '..' in name.parts or str(name) == '.'
+                                       or target / name != (target / name).resolve() for name in scoped_roots):
+                raise ValueError('Unsafe scoped snapshot restoration roots')
         symlinks = {Path(v.name) for v in entries if v.issym()}
         for member in entries:
             name = Path(member.name)
@@ -1660,10 +1850,17 @@ def restore_tree(archive, target, preserve=frozenset()):
                     or any(parent in symlinks for parent in name.parents)
                     or not (member.isfile() or member.isdir() or member.issym() or member.islnk())):
                 raise ValueError('Unsafe restoration snapshot')
+            if scoped_roots is not None and not any(name == root or name.is_relative_to(root) for root in scoped_roots):
+                raise ValueError('Snapshot entry is outside the selected restoration roots')
             if member.islnk() and (Path(member.linkname).is_absolute() or '..' in Path(member.linkname).parts):
                 raise ValueError('Unsafe snapshot hard link')
+            if member.islnk() and scoped_roots is not None and not any(
+                    Path(member.linkname) == root or Path(member.linkname).is_relative_to(root) for root in scoped_roots):
+                raise ValueError('Snapshot hard link is outside the selected restoration roots')
             names.add(member.name)
-        roots = {v.name.split('/', 1)[0] for v in entries}
+        roots = {str(root) for root in scoped_roots} if scoped_roots is not None else {v.name.split('/', 1)[0] for v in entries}
+        if scoped_roots is not None and not {str(root) for root in scoped_roots} <= names:
+            raise ValueError('Scoped restoration archive is missing its selected roots')
         def clear(path, relative):
             if relative in preserve:
                 return
@@ -1748,7 +1945,7 @@ if __name__ == '__main__':
         controller = controller_module.Controller(root, installation)
         delivery = Delivery(controller)
         delivery.supervisor = initial
-        with delivery.worker_admission(), delivery.lifecycle_lock():
+        with delivery.worker_admission(), (nullcontext() if scoped_module(journal) else delivery.lifecycle_lock()):
             operation = read(delivery.base / 'operation.json')
             if operation.get('operation_id') != arguments.operation_id or operation.get('phase') in ('complete', 'failed', 'rolled_back'):
                 raise ValueError('No interrupted upgrade with the requested identity')

@@ -242,6 +242,19 @@ class InstallerTests(unittest.TestCase):
                 with self.assertRaises(self.module.InstallError):
                     self.module.preflight(self.root)
 
+    def test_four_gib_vm_passes_with_kernel_memory_reservations(self):
+        # A nominal 4 GiB VM commonly reports about 3.7 GiB usable MemTotal.
+        for memory in (int(3.7 * 1024**2), 3584 * 1024):
+            with self.subTest(memtotal_kib=memory), self.host(memory=memory):
+                self.module.preflight(self.root)
+        self.assertFalse(self.root.exists(), 'Preflight must not mutate the installation')
+
+    def test_memory_below_reserved_four_gib_vm_boundary_fails(self):
+        with self.host(memory=3584 * 1024 - 1):
+            with self.assertRaisesRegex(self.module.InstallError, '4 GiB.*3584 MiB'):
+                self.module.preflight(self.root)
+        self.assertFalse(self.root.exists())
+
     def test_refuse_unrelated_root_and_symlink(self):
         self.root.mkdir()
         (self.root / 'user-data').write_text('preserve')

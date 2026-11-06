@@ -10,6 +10,7 @@ import "./upgrade-experience.css";
 export type UpgradeOperation = {
   operation_id: string;
   kind?: string;
+  scope?: "module";
   module_id?: string;
   recovery_mode?: "resume" | "rollback";
   restored_snapshot?: boolean;
@@ -32,6 +33,32 @@ const checkStatus = "pl:check-upgrade-status";
 const lifetime = 2 * 60 * 60_000;
 const success = new Set(["complete", "completed", "succeeded"]);
 const failures = new Set(["failed", "rolled_back", "recovery_required"]);
+const deliveredModules = new Set([
+  "prometheus",
+  "alertmanager",
+  "grafana",
+  "bookstack",
+  "netmap",
+  "doska",
+  "forms",
+  "wayline",
+  "sftpgo",
+  "xray",
+]);
+const moduleGateways: Record<string, string> = {
+  doska: "/doska",
+  forms: "/forms",
+  wayline: "/wayline",
+  grafana: "/grafana",
+  netmap: "/netmap",
+  bookstack: "/wiki",
+  sftpgo: "/sftpgo",
+};
+function upgradeAffectsPath(operation: UpgradeOperation, pathname: string) {
+  if (operation.scope !== "module") return true;
+  const prefix = moduleGateways[operation.module_id || ""];
+  return !!prefix && (pathname === prefix || pathname.startsWith(prefix + "/"));
+}
 export function upgradeModuleName(id?: string) {
   const names: Record<string, string> = {
     prometheus: "Prometheus",
@@ -90,6 +117,10 @@ function validOperation(value: unknown): value is UpgradeOperation {
       op.recovery_mode === "rollback") &&
     (op.restored_snapshot === undefined ||
       typeof op.restored_snapshot === "boolean") &&
+    (op.scope === undefined ||
+      (op.scope === "module" &&
+        op.kind === "module_upgrade" &&
+        deliveredModules.has(op.module_id || ""))) &&
     (!op.kind ||
       op.kind === "upgrade" ||
       (op.kind === "module_upgrade" &&
@@ -185,11 +216,16 @@ export function UpgradeScreen({
     operation.kind === "module_upgrade"
       ? upgradeModuleName(operation.module_id)
       : undefined;
+  const scoped = operation.scope === "module";
   const stageLabel =
     operation.phase === "queued_recovery" &&
     operation.recovery_mode === "resume"
-      ? "Готовим запуск модулей"
-      : stages[operation.phase];
+      ? scoped
+        ? `Готовим запуск ${moduleName}`
+        : "Готовим запуск модулей"
+      : scoped && ["starting", "resuming"].includes(operation.phase)
+        ? `Запускаем ${moduleName}`
+        : stages[operation.phase];
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -245,18 +281,24 @@ export function UpgradeScreen({
           </h1>
           <p className="upgrade-description">
             {resume
-              ? restoredResume
-                ? "Данные восстановлены. Нужно завершить запуск модулей."
-                : "Нужно завершить запуск модулей. Продолжение использует текущую версию и текущие данные установки."
+              ? scoped
+                ? `Нужно завершить запуск ${moduleName}. Текущие данные модуля сохранены.`
+                : restoredResume
+                  ? "Данные восстановлены. Нужно завершить запуск модулей."
+                  : "Нужно завершить запуск модулей. Продолжение использует текущую версию и текущие данные установки."
               : failed
                 ? operation.phase === "rolled_back"
                   ? moduleName
-                    ? "Новая поставка не прошла проверку. Установка восстановлена из резервной копии."
+                    ? scoped
+                      ? "Новая поставка не прошла проверку. Данные модуля возвращены к сохранённой версии."
+                      : "Новая поставка не прошла проверку. Установка восстановлена из резервной копии."
                     : "Новая версия не прошла проверку. PL вернулась к сохранённой версии."
                   : "Автоматическое обновление остановлено. Проверьте состояние установки перед повторной попыткой."
                 : unavailable
                   ? "Обновление было принято, но сейчас не удаётся получить его состояние. Проверяем связь автоматически."
-                  : "Платформа и локальные модули временно недоступны. Страница откроется автоматически, когда проверка готовности завершится."}
+                  : scoped
+                    ? `${moduleName} временно недоступен. Страница откроется автоматически, когда проверка готовности завершится.`
+                    : "Платформа и локальные модули временно недоступны. Страница откроется автоматически, когда проверка готовности завершится."}
           </p>
           <div
             className="upgrade-stage"
@@ -270,7 +312,9 @@ export function UpgradeScreen({
             <div>
               <strong>
                 {resume
-                  ? "Нужно завершить запуск модулей"
+                  ? scoped
+                    ? "Нужно завершить запуск модуля"
+                    : "Нужно завершить запуск модулей"
                   : failed
                     ? "Обновление остановлено"
                     : unavailable
@@ -306,8 +350,12 @@ export function UpgradeScreen({
                     {recovering
                       ? "Запускаем восстановление…"
                       : resume
-                        ? "Завершить запуск модулей"
-                        : "Восстановить установку"}
+                        ? scoped
+                          ? "Завершить запуск модуля"
+                          : "Завершить запуск модулей"
+                        : scoped
+                          ? "Восстановить модуль"
+                          : "Восстановить установку"}
                   </Button>
                 )}
             </div>
@@ -360,7 +408,21 @@ export function UpgradeBoundary({ children }: { children: ReactNode }) {
     let recoveryConfirmed = false;
     let timer: ReturnType<typeof setTimeout>;
     let controller: AbortController | undefined;
+    const clearReceipt = () => {
+      forgetUpgrade();
+      current = undefined;
+      setReceipt(undefined);
+      setUnavailable(false);
+      setChecking(false);
+    };
     const returnToPlatform = async () => {
+      if (
+        current?.operation.scope === "module" &&
+        !upgradeAffectsPath(current.operation, location.pathname)
+      ) {
+        clearReceipt();
+        return;
+      }
       setChecking(true);
       const sessionController = new AbortController();
       const sessionTimeout = window.setTimeout(
@@ -580,7 +642,7 @@ export function UpgradeBoundary({ children }: { children: ReactNode }) {
       window.removeEventListener(checkStatus, checkNow);
     };
   }, []);
-  return receipt ? (
+  return receipt && upgradeAffectsPath(receipt.operation, location.pathname) ? (
     <UpgradeScreen
       operation={receipt.operation}
       unavailable={unavailable}

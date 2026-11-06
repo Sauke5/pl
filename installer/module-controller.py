@@ -928,8 +928,37 @@ class Controller:
             self._delivery = module.Delivery(self)
         return self._delivery
 
-    def delivery_guard(self, *, allow_refresh=False):
-        return self.delivery().rpc_guard(allow_refresh=allow_refresh) if self.on_demand else nullcontext()
+    def instance_kind(self, instance):
+        identifier(instance)
+        for kind in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'grafana', 'wayline', 'alertmanager', 'xray'):
+            path = self.base / kind / 'instances' / instance
+            if path.exists() or path.is_symlink():
+                return kind
+        return 'prometheus'
+
+    def refresh_module_descriptor(self, kind):
+        if kind not in ('prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+            return
+        selected = self.delivery().module_registry().get(kind)
+        identities = getattr(self, '_module_descriptor_identities', {})
+        previous = identities.get(kind)
+        if previous != selected:
+            if kind == 'prometheus':
+                self.image = self.resolve_image()
+                self._read_routes.clear()
+            else:
+                self.__dict__.pop('_' + kind + '_controller', None)
+        identities[kind] = selected
+        self._module_descriptor_identities = identities
+
+    @contextmanager
+    def delivery_guard(self, *, allow_refresh=False, module_id=None):
+        if not self.on_demand:
+            yield
+            return
+        with self.delivery().rpc_guard(allow_refresh=allow_refresh, module_id=module_id):
+            self.refresh_module_descriptor(module_id)
+            yield
 
     def execute(self, body):
         if self.on_demand:
@@ -946,7 +975,8 @@ class Controller:
                     name = '_' + body['module_id'] + '_controller'
                     if hasattr(self, name):
                         delattr(self, name)
-            with self.delivery_guard(allow_refresh=isinstance(body, dict) and body.get('action') == 'refresh'):
+            with self.delivery_guard(allow_refresh=isinstance(body, dict) and body.get('action') == 'refresh',
+                                     module_id=body.get('module_id') if isinstance(body, dict) else None):
                 return self._execute(body)
         return self._execute(body)
 
@@ -1198,24 +1228,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # native streams may outlive the request that stops the core API. They
         # are rejected while an upgrade is active and closed by quiescence.
         if (self.path.startswith(('/v1/delivery/', '/v1/installation/')) or self.path == '/v1/operations'
-                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream')
+                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream', '/v1/native/initial-login')
                 or self.command == 'POST' and self.path in (
                     '/v1/read', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request')):
             self._handle_request()
             return
         try:
-            guard = self.server.controller.delivery_guard() if getattr(self.server.controller, 'on_demand', False) is True else nullcontext()
+            controller = self.server.controller
+            kind = self.rpc_module() if getattr(controller, 'on_demand', False) is True else None
+            guard = controller.delivery_guard(module_id=kind) if getattr(controller, 'on_demand', False) is True else nullcontext()
             with guard:
                 self._handle_request()
         except ValueError:
             self.reply(503, {'error': 'Installation update is active; retry after recovery'})
+
+    def rpc_module(self):
+        parts = self.path.split('/')
+        if len(parts) >= 3 and parts[2] in ('xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+            return parts[2]
+        if self.path in ('/v1/read', '/v1/configuration/validate'):
+            return 'prometheus'
+        if self.path == '/v1/host/status':
+            return 'core'
+        if self.command == 'GET' and self.path.startswith('/v1/instances/'):
+            return self.server.controller.instance_kind(self.path[len('/v1/instances/'):])
+        return None
 
     def _handle_request(self):
         self._response_started = False
         try:
             if self.command == 'POST' and self.path in ('/v1/doska/transport', '/v1/sftpgo/stream'):
                 if getattr(self.server.controller, 'on_demand', False) is True:
-                    self.server.controller.delivery().require_idle()
+                    self.server.controller.delivery().require_idle(module_id=self.rpc_module())
                 if self.path == '/v1/doska/transport':
                     self.handle_doska_transport()
                 else:
@@ -1259,9 +1303,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if (not isinstance(payload, dict) or set(payload) != {'instance_id', 'module_id', 'service'}
                         or payload.get('module_id') not in ('netmap', 'bookstack', 'grafana')):
                     raise ValueError('Invalid native initial login request')
-                native = (self.server.controller.grafana() if payload['module_id'] == 'grafana'
-                          else self.server.controller.application(payload['module_id']))
-                result = native.initial_login(payload)
+                admission = (self.server.controller.delivery_guard(module_id=payload['module_id'])
+                             if getattr(self.server.controller, 'on_demand', False) is True else nullcontext())
+                with admission:
+                    native = (self.server.controller.grafana() if payload['module_id'] == 'grafana'
+                              else self.server.controller.application(payload['module_id']))
+                    result = native.initial_login(payload)
             elif self.command == 'POST' and self.path == '/v1/forms/request':
                 result = self.server.controller.application('forms').request(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/doska/manifest':
@@ -1334,7 +1381,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with ExitStack() as admission:
             if getattr(controller, 'on_demand', False) is True:
                 try:
-                    admission.enter_context(controller.delivery_guard(allow_refresh=read_only))
+                    admission.enter_context(controller.delivery_guard(allow_refresh=read_only, module_id=self.rpc_module()))
                 except ValueError:
                     self.reply(503, {'error': 'Installation update is active; retry after recovery'})
                     return
@@ -1387,7 +1434,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not hmac.compare_digest(checksum.hexdigest(), expected):
                 raise ValueError('Transport body digest mismatch')
             spool.seek(0)
-            controller = self.server.controller.application(kind)
+            parent = self.server.controller
+            # Re-check after spooling too: an upload may have started before
+            # the update was queued. Do not hold the barrier across long SSE
+            # streams; stopping the selected native containers closes those.
+            guard = parent.delivery_guard(module_id=kind) if getattr(parent, 'on_demand', False) is True else nullcontext()
+            with guard:
+                controller = parent.application(kind)
             if kind == 'doska':
                 controller.transport(metadata, spool, self)
             else:

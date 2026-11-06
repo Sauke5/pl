@@ -11,7 +11,14 @@ const operation: UpgradeOperation = {
   version: "0.4.5",
   phase: "snapshot",
 };
-async function fixture(page: Page, admin = true) {
+const scopedOperation: UpgradeOperation = {
+  ...operation,
+  kind: "module_upgrade",
+  scope: "module",
+  module_id: "doska",
+  version: "0.4.4",
+};
+async function fixture(page: Page, admin = true, moduleScope?: "module") {
   let delivery: Delivery = {
     current_version: "0.4.4",
     latest_version: "0.4.5",
@@ -46,6 +53,7 @@ async function fixture(page: Page, admin = true) {
   let sessionAdmin = admin;
   let sessionCSRF = "delivery-csrf";
   let recoverNetworkError = false;
+  let upgradeReads = 0;
   let deliveryReads = 0,
     sessionReads = 0;
   let loseAcceptance = false;
@@ -54,10 +62,17 @@ async function fixture(page: Page, admin = true) {
   const requests: { path: string; body: Record<string, unknown> }[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname.replace("/api/v1", "");
-    if (path === "/upgrade-status")
+    if (path === "/stream")
+      return route.fulfill({
+        contentType: "text/event-stream",
+        body: ": fixture\n\n",
+      });
+    if (path === "/upgrade-status") {
+      upgradeReads++;
       return unavailable
         ? route.abort("connectionreset")
         : route.fulfill({ json: status });
+    }
     if (path === "/delivery") {
       deliveryReads++;
       if (deliveryUnavailable) return route.abort("connectionreset");
@@ -91,6 +106,7 @@ async function fixture(page: Page, admin = true) {
           ...operation,
           operation_id: body.operation_id,
           kind: "module_upgrade",
+          scope: moduleScope,
           module_id: body.module_id,
           version: delivery.current_version,
         },
@@ -138,6 +154,7 @@ async function fixture(page: Page, admin = true) {
         local_password_min_length: 12,
       },
       "/runtime": {},
+      "/dashboard-layout": { revision: 1, tiles: [], hidden: [] },
       "/modules": { items: [] },
       "/workspace-preferences": { revision: 1, system_ids: [], groups: [] },
       "/preferences": {
@@ -176,6 +193,9 @@ async function fixture(page: Page, admin = true) {
     },
     get deliveryReads() {
       return deliveryReads;
+    },
+    get upgradeReads() {
+      return upgradeReads;
     },
     get sessionReads() {
       return sessionReads;
@@ -1107,3 +1127,203 @@ test("restored snapshot resume identifies the previous version and only manually
   });
   expect(state.writes).toEqual(["/delivery/recover"]);
 });
+
+test("scoped module update preserves the core page and draft through completion", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.setStatus({
+    active: true,
+    ready: false,
+    current_version: "0.4.4",
+    operation: scopedOperation,
+  });
+  await page.goto("/#catalog");
+  await expect(page.locator(".pl-ui-shell")).toBeVisible();
+  await expect.poll(() => state.upgradeReads).toBeGreaterThan(0);
+  await expect(page.locator(".upgrade-scene")).toHaveCount(0);
+  await page.locator(".pl-ui-shell").evaluate((host) => {
+    const input = document.createElement("input");
+    input.id = "scoped-unsaved-draft";
+    input.value = "Мой незавершённый текст";
+    host.append(input);
+  });
+  let navigations = 0;
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) navigations++;
+  });
+  const reads = state.upgradeReads;
+  state.setStatus({
+    active: false,
+    ready: true,
+    current_version: "0.4.4",
+    operation: { ...scopedOperation, phase: "complete" },
+  });
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("pl:check-upgrade-status")),
+  );
+  await expect.poll(() => state.upgradeReads).toBeGreaterThan(reads);
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("pl.confirmed-upgrade")),
+    )
+    .toBeNull();
+  await expect(page.locator("#scoped-unsaved-draft")).toHaveValue(
+    "Мой незавершённый текст",
+  );
+  expect(navigations).toBe(0);
+  expect(state.writes).toHaveLength(0);
+});
+
+test("scoped module progress remains in update settings after manual acceptance", async ({
+  page,
+}) => {
+  const state = await fixture(page, true, "module");
+  state.setModules([doskaUpdate]);
+  await moduleSettings(page);
+  await page
+    .getByRole("button", { name: "Обновить Doska", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Обновление Doska", exact: true })
+    .getByRole("button", { name: "Обновить модуль", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Обновление Doska", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".pl-ui-shell")).toBeVisible();
+  await expect(page.locator(".upgrade-scene")).toHaveCount(0);
+  await expect(
+    page.getByText("Обновление Doska", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Резервная копия модуля", { exact: true }),
+  ).toBeVisible();
+  expect(state.writes).toEqual(["/delivery/module-upgrade"]);
+  const receipt = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("pl.confirmed-upgrade")!),
+  );
+  expect(receipt.operation).toMatchObject({
+    scope: "module",
+    kind: "module_upgrade",
+    module_id: "doska",
+  });
+});
+
+test("scoped module screen matches only its gateway path", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const state = await fixture(page);
+  state.setStatus({
+    active: true,
+    ready: false,
+    current_version: "0.4.4",
+    operation: scopedOperation,
+  });
+  for (const pathname of ["/forms/", "/doska-other/", "/"]) {
+    const reads = state.upgradeReads;
+    await page.goto(pathname);
+    await expect.poll(() => state.upgradeReads).toBeGreaterThan(reads);
+    await expect(page.locator(".upgrade-scene")).toHaveCount(0);
+    await expect(page.locator("#root")).toContainText(/./);
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("pl.confirmed-upgrade")!).operation
+            .scope,
+      ),
+    ).toBe("module");
+  }
+  for (const pathname of ["/doska", "/doska/projects"]) {
+    await page.goto(pathname);
+    await expect(
+      page.getByRole("heading", { name: "Обновляем Doska", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Doska временно недоступен.", { exact: false }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Платформа и локальные модули временно недоступны.", {
+        exact: false,
+      }),
+    ).toHaveCount(0);
+  }
+  expect(state.writes).toHaveLength(0);
+  expect(errors).toEqual([]);
+});
+
+test("malformed scoped receipts cannot suppress the core", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/");
+  await expect(page.locator(".pl-ui-shell")).toBeVisible();
+  for (const invalid of [
+    { ...scopedOperation, scope: "installation" },
+    { ...scopedOperation, kind: "upgrade" },
+    { ...scopedOperation, module_id: "unknown" },
+    { ...scopedOperation, module_id: "mailcow" },
+  ]) {
+    await page.evaluate(
+      (operation) =>
+        localStorage.setItem(
+          "pl.confirmed-upgrade",
+          JSON.stringify({ operation, confirmedAt: Date.now() }),
+        ),
+      invalid,
+    );
+    await page.reload();
+    await expect(page.locator(".pl-ui-shell")).toBeVisible();
+    await expect(page.locator(".upgrade-scene")).toHaveCount(0);
+    expect(
+      await page.evaluate(() => localStorage.getItem("pl.confirmed-upgrade")),
+    ).toBeNull();
+  }
+});
+
+for (const recovery_mode of ["rollback", "resume"] as const)
+  test(`scoped module ${recovery_mode} recovery stays local and requires a manual POST`, async ({
+    page,
+  }) => {
+    const state = await fixture(page);
+    const op: UpgradeOperation = {
+      ...scopedOperation,
+      phase: "recovery_required",
+      recovery_mode,
+    };
+    state.setStatus({
+      active: true,
+      ready: false,
+      current_version: "0.4.4",
+      operation: op,
+    });
+    await page.addInitScript(
+      (operation) =>
+        localStorage.setItem(
+          "pl.confirmed-upgrade",
+          JSON.stringify({ operation, confirmedAt: Date.now() }),
+        ),
+      op,
+    );
+    await page.goto("/doska/projects");
+    const label =
+      recovery_mode === "resume"
+        ? "Завершить запуск модуля"
+        : "Восстановить модуль";
+    await expect(
+      page.getByRole("button", { name: label, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Восстановить установку", exact: true }),
+    ).toHaveCount(0);
+    expect(state.writes).toHaveLength(0);
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect.poll(() => state.writes).toEqual(["/delivery/recover"]);
+    expect(state.requests[0].body).toEqual({ operation_id: op.operation_id });
+    expect(
+      (
+        await page.evaluate(
+          () =>
+            JSON.parse(localStorage.getItem("pl.confirmed-upgrade")!).operation,
+        )
+      ).scope,
+    ).toBe("module");
+  });

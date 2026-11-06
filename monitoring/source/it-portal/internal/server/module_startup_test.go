@@ -19,6 +19,7 @@ func TestModuleStartupPageStages(t *testing.T) {
 		{moduleStartupQueued, "Модуль ожидает запуска", true},
 		{moduleStartupInstalling, "Устанавливаем модуль", true},
 		{moduleStartupStarting, "Модуль запускается", true},
+		{moduleStartupUpdating, "Модуль обновляется", true},
 		{moduleStartupFailed, "Не удалось запустить модуль", false},
 		{"unexpected", "Не удалось запустить модуль", false},
 	} {

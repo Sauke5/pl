@@ -333,8 +333,19 @@ func (m *Manager) Execute(ctx context.Context, j model.Job) (map[string]any, err
 // Schedule uses the same queue and per-instance lock as manual actions. No
 // concurrent poll or background config writer bypasses the durable lifecycle.
 func (m *Manager) Schedule(ctx context.Context) {
-	if m.DeliveryEnabled && !m.deliveryScheduleAllowed(ctx) {
-		return
+	blockedModule := ""
+	if m.DeliveryEnabled {
+		op, allowed := m.deliveryScheduleOperation(ctx)
+		if !allowed {
+			return
+		}
+		if op != nil && op.Scope == "module" {
+			switch op.Phase {
+			case "complete", "failed", "rolled_back", "reconciling":
+			default:
+				blockedModule = op.ModuleID
+			}
+		}
 	}
 	instances, err := store.List[model.ModuleInstance](ctx, m.Store, "module_instance")
 	if err != nil {
@@ -342,6 +353,9 @@ func (m *Manager) Schedule(ctx context.Context) {
 	}
 	now := time.Now().UTC()
 	for _, instance := range instances {
+		if blockedModule != "" && instance.ModuleID == blockedModule {
+			continue
+		}
 		if instance.ModuleID == "mailcow" {
 			continue
 		}

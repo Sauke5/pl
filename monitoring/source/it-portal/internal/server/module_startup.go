@@ -12,15 +12,17 @@ import (
 	"pl/portal/internal/model"
 )
 
-// The gateway selects this page only after authorization and document-route
-// validation. API, assets, authentication failures and ready apps keep their
-// normal handlers. A startup page is a real 503, never an application health signal.
+// Startup gateways select this page after authorization and document-route
+// validation. The maintenance gate may also show the updating stage using only
+// public release state and a fixed module name. No page forwards app requests.
+// A startup page is a real 503, never an application health signal.
 type moduleStartupStage string
 
 const (
 	moduleStartupQueued     moduleStartupStage = "queued"
 	moduleStartupInstalling moduleStartupStage = "installing"
 	moduleStartupStarting   moduleStartupStage = "starting"
+	moduleStartupUpdating   moduleStartupStage = "updating"
 	moduleStartupFailed     moduleStartupStage = "failed"
 )
 
@@ -82,6 +84,10 @@ func renderModuleStartupPage(w http.ResponseWriter, r *http.Request, instance mo
 	case moduleStartupStarting:
 		data.Title = "Модуль запускается"
 		data.Description = "Ожидаем готовности приложения. Как только оно запустится, эта страница откроет его автоматически."
+		data.Automatic = true
+	case moduleStartupUpdating:
+		data.Title = "Модуль обновляется"
+		data.Description = "Обновление ещё не завершено. Приложение откроется автоматически после проверки готовности."
 		data.Automatic = true
 	default:
 		data.Title = "Не удалось запустить модуль"

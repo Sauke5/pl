@@ -44,7 +44,7 @@ UNIT_TEST_NAMES = {
     "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_netmap_store.py", "test_network_stack_install.py", "test_package.py",
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
-    "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
+    "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_get_pl_proxy.py", "test_scoped_module_delivery.py", "test_installation_settings.py", "test_module_origin.py",
     "test_maintenance_concurrency.py", "test_managed_compose.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py", "test_disaster_recovery_history.py",
 }
 REPORT_FILES = {

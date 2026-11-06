@@ -202,6 +202,132 @@ class NativeRebuildTests(unittest.TestCase):
         self.calls.clear()
         return value
 
+    def prepare_scoped(self):
+        value = upgrade.plan(self.parent, 'doska', self.old, self.new, scoped=True)
+        folder = self.snapshot(value)
+        names = {spec['name'] for item in value['instances'] for spec in item['containers']}
+        volumes = sorted({name for item in value['instances'] for name in item['volumes']})
+        meta = json.loads((folder / 'snapshot.json').read_text())
+        meta.update(schema=2, scope='module', module_id='doska',
+                    containers=[c for c in meta['containers'] if c['name'] in names],
+                    volumes=[{'name': name, 'archive': 'volume-' + str(i) + '.tar'} for i, name in enumerate(volumes)])
+        meta['files'] = {name: 'a' * 64 for name in ['installation.tar', *[v['archive'] for v in meta['volumes']]]}
+        upgrade.files.atomic(folder / 'snapshot.json', meta)
+        for name in names: self.containers[name]['State']['Running'] = False
+        self.registry['doska'] = self.new
+        upgrade.files.atomic(self.root / 'private/module-images.json', self.registry)
+        self.calls.clear()
+        return value, folder
+
+    def test_scoped_rebuild_and_verify_keep_core_running_and_allow_neighbor_registry_update(self):
+        value, _ = self.prepare_scoped()
+        self.assertFalse(value['requires_full_snapshot'])
+        self.assertEqual(value['snapshot_scope'], 'module')
+        self.assertEqual(value['snapshot_paths'], sorted('modules/doska/instances/' + i for i in self.instances))
+        self.assertFalse(any(p.startswith('private/') for p in value['snapshot_paths']))
+        core = {name: copy.deepcopy(obj) for name, obj in self.containers.items()
+                if 'com.docker.compose.project' in obj['Config']['Labels']}
+        self.registry['grafana'] = {'independent': 'concurrent install'}
+        upgrade.files.atomic(self.root / 'private/module-images.json', self.registry)
+        upgrade.apply(self.parent, value)
+        self.assertEqual({name: self.containers[name] for name in core}, core)
+        self.assertFalse(any(call[:2] == ('container', 'start') for call in self.calls))
+        for item in value['instances']:
+            if item['running']:
+                for spec in item['containers']: self.docker('container', 'start', spec['name'])
+        self.assertTrue(upgrade.verify(self.parent, value)['verified'])
+
+    def test_scoped_rollback_preserves_running_neighbor_and_rejects_changed_target_descriptor(self):
+        value, _ = self.prepare_scoped()
+        neighbor = copy.deepcopy(next(iter(self.containers.values())))
+        neighbor.update(Id='e' * 64, Name='/independent-grafana')
+        neighbor['Config']['Labels'].update({'pl.module': 'grafana', 'pl.instance': str(uuid.uuid4())})
+        neighbor['State']['Running'] = True
+        neighbor['NetworkSettings']['Networks'] = {}
+        self.containers['independent-grafana'] = neighbor
+        upgrade.apply(self.parent, value)
+        self.registry['doska'] = self.old
+        self.registry['grafana'] = {'independent': 'concurrent install'}
+        upgrade.files.atomic(self.root / 'private/module-images.json', self.registry)
+        with self.assertRaisesRegex(ValueError, 'registry'): upgrade.apply(self.parent, value)
+        upgrade.rollback(self.parent, value)
+        self.assertEqual(self.containers['independent-grafana'], neighbor)
+        self.assertEqual(json.loads((self.root / 'private/module-images.json').read_text())['grafana'],
+                         {'independent': 'concurrent install'})
+        for item in value['instances']:
+            for spec in item['containers']:
+                self.assertEqual(self.containers[spec['name']]['Image'], self.old[spec['role']]['id'])
+
+    def test_scoped_rollback_verifies_only_original_or_proven_rollback_container_ids(self):
+        value, _ = self.prepare_scoped()
+        upgrade.apply(self.parent, value)
+        self.restore_registry()
+        upgrade.rollback(self.parent, value)
+        for item in value['instances']:
+            if item['running']:
+                for spec in item['containers']: self.docker('container', 'start', spec['name'])
+        result = upgrade.verify(self.parent, value, direction='rollback')
+        self.assertTrue(result['verified'])
+        self.assertEqual(value['new_descriptor'], self.new, 'Verification must preserve the immutable transition')
+        stopped = next(item for item in value['instances'] if not item['running'])
+        spec = next(spec for spec in stopped['containers'] if spec['role'] in value['changed_roles'])
+        identifier = self.containers[spec['name']]['Id']
+        record = next(record for record in value['ledger'][spec['name']]['replacements'] if record['id'] == identifier)
+        self.assertEqual(record['direction'], 'rollback')
+        record['direction'] = 'apply'
+        with self.assertRaisesRegex(ValueError, 'unconfirmed'):
+            upgrade.verify(self.parent, value, direction='rollback')
+
+    def test_scoped_rollback_verification_accepts_untouched_originals_and_rejects_unknown_direction(self):
+        value, _ = self.prepare_scoped()
+        self.restore_registry()
+        upgrade.rollback(self.parent, value)
+        for item in value['instances']:
+            if item['running']:
+                for spec in item['containers']: self.docker('container', 'start', spec['name'])
+        self.assertTrue(upgrade.verify(self.parent, value, direction='rollback')['verified'])
+        with self.assertRaisesRegex(ValueError, 'direction'):
+            upgrade.verify(self.parent, value, direction='other')
+
+    def test_scoped_snapshot_rejects_extra_or_missing_container_volume_and_core(self):
+        for mutation in ('core', 'extra_container', 'missing_container', 'extra_volume', 'missing_volume', 'missing_archive', 'wrong_module'):
+            with self.subTest(mutation=mutation):
+                value, folder = self.prepare_scoped()
+                meta = json.loads((folder / 'snapshot.json').read_text())
+                if mutation == 'core': meta['containers'][0]['core'] = True
+                elif mutation == 'extra_container': meta['containers'].append({'name': 'neighbor', 'core': False})
+                elif mutation == 'missing_container': meta['containers'].pop()
+                elif mutation == 'extra_volume': meta['volumes'].append({'name': 'neighbor', 'archive': 'volume-99.tar'})
+                elif mutation == 'missing_volume': meta['volumes'].pop()
+                elif mutation == 'missing_archive': meta['files'].pop('installation.tar')
+                elif mutation == 'wrong_module': meta['module_id'] = 'grafana'
+                upgrade.files.atomic(folder / 'snapshot.json', meta)
+                with self.assertRaisesRegex(ValueError, 'snapshot'): upgrade.apply(self.parent, value)
+                self.registry['doska'] = self.old
+                upgrade.files.atomic(self.root / 'private/module-images.json', self.registry)
+
+    def test_scoped_rejects_running_target_and_changed_core_descriptor(self):
+        value, _ = self.prepare_scoped()
+        spec = value['instances'][0]['containers'][0]
+        self.containers[spec['name']]['State']['Running'] = True
+        with self.assertRaisesRegex(ValueError, 'quiesced'): upgrade.apply(self.parent, value)
+        self.containers[spec['name']]['State']['Running'] = False
+        self.registry['manifest_sha256'] = 'd' * 64
+        upgrade.files.atomic(self.root / 'private/module-images.json', self.registry)
+        with self.assertRaisesRegex(ValueError, 'identity|registry'): upgrade.apply(self.parent, value)
+
+    def test_scoped_snapshot_bind_policy_rejects_shared_writes_and_symlink(self):
+        paths = upgrade._paths(self.parent, 'doska')
+        shared = self.root / 'private/module-controller-key'
+        self.assertEqual(upgrade._snapshot_paths(self.parent, paths, [{'Mounts': [
+            {'Type': 'bind', 'Source': str(shared), 'RW': False}]}]),
+            sorted(str(p.relative_to(self.root)) for p in paths))
+        with self.assertRaisesRegex(ValueError, 'Writable'):
+            upgrade._snapshot_paths(self.parent, paths, [{'Mounts': [{'Type': 'bind', 'Source': str(shared), 'RW': True}]}])
+        link = paths[0] / 'outside'; link.symlink_to('/tmp')
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            upgrade._snapshot_paths(self.parent, paths, [{'Mounts': [{'Type': 'bind', 'Source': str(link), 'RW': False}]}])
+
     def native_files(self):
         return {str(p.relative_to(self.root)): p.read_bytes() for p in (self.root / 'modules').rglob('*') if p.is_file()}
 

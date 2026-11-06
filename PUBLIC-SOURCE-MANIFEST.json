@@ -16859,6 +16859,11 @@
       "size": 4150
     },
     {
+      "path": "docs/releases/0.5.7.json",
+      "sha256": "b0e7a4e740b667fcb868a9bd64d7f7961ff7fa63aafb944614ee2fa9d2c8d29d",
+      "size": 2699
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16870,8 +16875,8 @@
     },
     {
       "path": "installer/README.public.ru.md",
-      "sha256": "21787dd248fb4fe78384701236007c38250ed4eae04a4a1736b65ea41b4aa36c",
-      "size": 11606
+      "sha256": "8363e7e51e5779247112731dcbf4a7d31654fd8bc6820d2e8dced04cf9ac8b53",
+      "size": 13186
     },
     {
       "path": "installer/README.ru.md",
@@ -16905,8 +16910,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "9f2c80cae3c0988feb7354b531ce4fa46b7daef420f3354f7e20197a211b1e15",
-      "size": 104816
+      "sha256": "3f12cadcba9b82d18eb4c25ef55fe01d7bfc63a7acb2d60728bbd93ae70ccefe",
+      "size": 118741
     },
     {
       "path": "installer/delivery.ru.md",
@@ -16980,8 +16985,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "636ef6ccfd310d44608cb24d08a378fadd519bbd80ef89af65e6834c53b180d7",
-      "size": 43379
+      "sha256": "3d9f81881284c2828c4feff95d1541df8e60cfdce3c51e195b7ba94492452a33",
+      "size": 43516
     },
     {
       "path": "installer/installation-settings.py",
@@ -17005,8 +17010,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "bd67bd2ac9bfd9dc14c88d3a9af17ae83162bdc2ebecebd3bacd2f1e6af89baf",
-      "size": 81923
+      "sha256": "10588701de582f2a553b7c8019d61ce09e1081ecaf0d805943b6e43cfcf9dcfd",
+      "size": 84739
     },
     {
       "path": "installer/module-network.py",
@@ -17020,8 +17025,8 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "10643c8fd28a7425d33d2b0564af57640cd62b7e49208449fd214ebb03bcd5c2",
-      "size": 34471
+      "sha256": "f7f469f98d5e6a12adf0dd557e9241070b9c2009ebfc93a05645701781f3a213",
+      "size": 38578
     },
     {
       "path": "installer/netmap-controller.py",
@@ -17055,8 +17060,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "318f1ed6e192cde2c04ac79bf56fabd99714a26e15b5d4b6e1d9a6f9d12e33b9",
-      "size": 39669
+      "sha256": "72be010e7d1d13115546ab9b520efc74e32b37c70fb1c6c5ea6535ff437dd5d1",
+      "size": 39727
     },
     {
       "path": "installer/release-catalog.py",
@@ -17215,8 +17220,8 @@
     },
     {
       "path": "installer/tests/test_install_sh.py",
-      "sha256": "d62b9ab2be2200ae6b2075e9f5b90a75914b5065514494bb9f180c63188de608",
-      "size": 23537
+      "sha256": "539485b1f38b853207eff89241ececb958fab3450cf38ebf138023b710c1106e",
+      "size": 24259
     },
     {
       "path": "installer/tests/test_installation_settings.py",
@@ -17275,8 +17280,8 @@
     },
     {
       "path": "installer/tests/test_module_upgrade.py",
-      "sha256": "31613811fd202ad7dc8d5d62128906eb397400901d331c49ab3367af2488c2a6",
-      "size": 36559
+      "sha256": "7c604e171445a53ce7fdd8337f10a687f02ffe76663d8be9bdc8f12ac99dc364",
+      "size": 44962
     },
     {
       "path": "installer/tests/test_native_initial_login.py",
@@ -17387,6 +17392,11 @@
       "path": "installer/tests/test_reports_portability.py",
       "sha256": "cf15e1434435059c6c75c0604583640d22f909ae0cd32399b89b4d6b099d947c",
       "size": 1471
+    },
+    {
+      "path": "installer/tests/test_scoped_module_delivery.py",
+      "sha256": "693958c9e0e16725b5086eeb4dc69df963d7a077f3bcb3474544aaf370efe9d0",
+      "size": 11535
     },
     {
       "path": "installer/tests/test_sftpgo_controller.py",
@@ -18175,13 +18185,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpdateSettings.tsx",
-      "sha256": "0936ed11b745de9c8835b83ebc5400a7cb4b765cb8e1ea177f4a7409f84194c4",
-      "size": 23344
+      "sha256": "65c8aa9c5e39bcf37ce869ae4a204e3a1d2c152d77816293254d164a66a8bce6",
+      "size": 23542
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpgradeExperience.tsx",
-      "sha256": "0ee3ae4955a508bcab621e65228fe2e2939aa5befcf44be9e9c471d331d0d980",
-      "size": 22045
+      "sha256": "96832d321726d7d360a8925c2a28801cf2b81175518916ba58c6e5fd72250731",
+      "size": 24452
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Wayline.tsx",
@@ -18825,8 +18835,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/upgrade-experience.spec.ts",
-      "sha256": "c7996c598f38daca5d36991fbd88d3d41773917024ee09ff403bbd3497fa1605",
-      "size": 38005
+      "sha256": "940f15f20f0e15c4158d87a09d3d14925eac3522ba588486ed8e40f6d16338ba",
+      "size": 45278
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/xray-configuration.spec.ts",
@@ -19100,8 +19110,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery.go",
-      "sha256": "40f8a99f5063a3253f66987bf317cae642a50a88d188f1c8b3914377311f6d8a",
-      "size": 6439
+      "sha256": "057f971fca296b2076806b69a84f048697742d01fc730d50e83bdd7922d3b5fa",
+      "size": 6489
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_proxy.go",
@@ -19115,13 +19125,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_reconcile.go",
-      "sha256": "0836066f9342613372fda287ffd6049beac978d81e77f83de31695626d0a5664",
-      "size": 8352
+      "sha256": "372c064609448b0c1ed653d3e29469bd567b6c19db112a0caed7d8ee39c6b5f6",
+      "size": 9408
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_reconcile_test.go",
-      "sha256": "10ec1e1aa93d29e91a3c3aa0ccfee823bf3dd6fabe9deaf53162f88f356df5df",
-      "size": 5173
+      "sha256": "7435ef0e4a204a340ed94bc4d03615a6e4baeb2f9d6eb2e4edf5a79d475be8e4",
+      "size": 6924
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_test.go",
@@ -19160,8 +19170,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/manager.go",
-      "sha256": "9bd1c42ca7c65ee3882f7333b3b8cb3e2a90dff215679312ac793c00e4833d20",
-      "size": 14436
+      "sha256": "c72d1e610c85cf451b367fb7a53aafb6d9be4401735f2b0d30b5146c61baf4fa",
+      "size": 14749
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/native_login.go",
@@ -19725,8 +19735,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/delivery_reconcile_test.go",
-      "sha256": "5282aba517b46cb999bcc75bd17ee64ef38202723b0a6fe1554bf16d7a99e46c",
-      "size": 17274
+      "sha256": "75ec31d5cfc7992217c1491e42ead9948b21cc4922eebd52e2b8ed692bd81140",
+      "size": 22302
     },
     {
       "path": "monitoring/source/it-portal/internal/server/delivery_test.go",
@@ -20245,8 +20255,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/maintenance_gate.go",
-      "sha256": "921f6f285d8524e218441c5f7b53172f3e8186e45a2fb6e8e62064b7d7e8bf45",
-      "size": 1376
+      "sha256": "f293a726f7cc8fd4309d241bfc28ba4e1e04297263e5784e2ec9742904772a5c",
+      "size": 1493
     },
     {
       "path": "monitoring/source/it-portal/internal/server/maintenance_gate_test.go",
@@ -20300,8 +20310,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/module_startup.go",
-      "sha256": "93a9601480f0ac4049bc2b4ba6ce46272e826bd574ce809690d8598d3c0c9b20",
-      "size": 7727
+      "sha256": "9ea10ddd9e26451408273d6fd5a36e4b3a9561e1745d8aaa09b9eb53a88a6abb",
+      "size": 8147
     },
     {
       "path": "monitoring/source/it-portal/internal/server/module_startup_gate.go",
@@ -20315,8 +20325,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/module_startup_test.go",
-      "sha256": "3d25f48535d27c14c31c99075c0e2a3938dc289841dd1d8ec058c740f1778800",
-      "size": 6737
+      "sha256": "93154df1cac02c02dfb708e3d32e1a5959bdaac966fc05a6f390f2ab2bcf0d87",
+      "size": 6809
     },
     {
       "path": "monitoring/source/it-portal/internal/server/module_versions_test.go",
@@ -20502,6 +20512,16 @@
       "path": "monitoring/source/it-portal/internal/server/runtime_settings_test.go",
       "sha256": "0d83c1a3690674fa89edb4eb510804d70676c6b3999df890e80c2df870413041",
       "size": 5373
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/scoped_module_maintenance.go",
+      "sha256": "24a3b13021ecc2edae1d5aa01fb72d8c7e18a4f694e5b2cb071e9239d864d042",
+      "size": 5498
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/scoped_module_maintenance_test.go",
+      "sha256": "d30ab3bcadfbe8d86fc6926ad6264e96a97e533d9212da82516cc39446aed442",
+      "size": 14695
     },
     {
       "path": "monitoring/source/it-portal/internal/server/server.go",

@@ -376,7 +376,10 @@ export function UpdateSettings() {
                       ? value.operation.restored_snapshot === true
                         ? "Данные восстановлены. Нужно завершить запуск модулей"
                         : "Версия установлена. Нужно завершить запуск модулей"
-                      : phases[value.operation.phase] || "Операция обновления"
+                      : value.operation.scope === "module" &&
+                          value.operation.phase === "snapshot"
+                        ? "Резервная копия модуля"
+                        : phases[value.operation.phase] || "Операция обновления"
                 }
               />
               <p>

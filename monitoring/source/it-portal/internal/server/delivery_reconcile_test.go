@@ -36,6 +36,7 @@ type reconcileTestController struct {
 	endpoints map[string]string
 	fail      bool
 	stopAfter int
+	observe   func(int, *modules.DeliveryOperation)
 }
 
 func reconcileController(t *testing.T) *reconcileTestController {
@@ -60,6 +61,9 @@ func (c *reconcileTestController) Delivery(context.Context, string, *modules.Del
 	defer c.mu.Unlock()
 	c.status++
 	op := c.op
+	if c.observe != nil {
+		c.observe(c.status, &op)
+	}
 	if c.stopAfter > 0 && c.status >= c.stopAfter {
 		op.Phase = "complete"
 	}
@@ -343,6 +347,137 @@ func TestDeliveryReconcileRealPostgresWorkerPublishesFreshPortsAndReplaysSameJob
 	c.mu.Unlock()
 	if response := reconcileCall(s, reconcileBody(c.op.OperationID, uuid.NewString())); response.Code != http.StatusOK {
 		t.Fatalf("new request could not retry failed refresh: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestDeliveryReconcileScopedModuleUsesOnlyItsFreshPostgresJobs(t *testing.T) {
+	s := apiFixture(t)
+	s.Config.OnDemandModules = true
+	c := reconcileController(t)
+	c.op.Kind, c.op.Scope, c.op.ModuleID = "module_upgrade", "module", "doska"
+	m := modules.New(s.Store, c)
+	m.DeliveryEnabled, m.PublicURL = true, s.Config.PublicURL
+	m.Poll = func(context.Context, model.Integration) (model.Snapshot, error) {
+		return model.Snapshot{Candidates: []model.Candidate{}}, nil
+	}
+	s.Modules = m
+	target := reconcileSeed(t, s, "doska", "local", "enabled")
+	neighbour := reconcileSeed(t, s, "prometheus", "local", "enabled")
+	reconcileSeed(t, s, "xray", "local", "enabled")
+	c.endpoints[target.ID] = "http://127.0.0.1:32973"
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	w := worker.New(s.Store, providers.New(nil, ""), func(string) {})
+	w.Modules = m
+	go func() { defer close(done); w.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("worker did not stop")
+		}
+	})
+	raw := reconcileBody(c.op.OperationID, uuid.NewString())
+	result := apiDecode[modules.DeliveryReconcileResult](t, reconcileCall(s, raw), http.StatusOK)
+	if !result.Ready || result.Instances != 1 {
+		t.Fatalf("scoped result included neighbours: %#v", result)
+	}
+	updated, err := store.Get[model.ModuleInstance](ctx, s.Store, "module_instance", target.ID)
+	if err != nil || updated.Endpoint != c.endpoints[target.ID] || updated.LastSuccess == nil || !updated.LastSuccess.After(*target.LastSuccess) {
+		t.Fatal("target binding was not freshly committed")
+	}
+	untouched, err := store.Get[model.ModuleInstance](ctx, s.Store, "module_instance", neighbour.ID)
+	if err != nil || untouched.Revision != neighbour.Revision || untouched.Endpoint != neighbour.Endpoint || !untouched.LastSuccess.Equal(*neighbour.LastSuccess) {
+		t.Fatal("neighbour was changed by scoped reconciliation")
+	}
+	before, _ := s.Store.Jobs(ctx)
+	apiDecode[modules.DeliveryReconcileResult](t, reconcileCall(s, raw), http.StatusOK)
+	after, _ := s.Store.Jobs(ctx)
+	if len(after) != len(before) {
+		t.Fatal("scoped replay queued additional jobs")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.applies) != 1 || c.applies[0].InstanceID != target.ID || c.applies[0].Action != "refresh" {
+		t.Fatalf("scoped refresh reached another module: %#v", c.applies)
+	}
+}
+
+func TestDeliveryScopedSchedulerKeepsNeighbourPollingAndResumesTarget(t *testing.T) {
+	s := apiFixture(t)
+	c := reconcileController(t)
+	c.op.Kind, c.op.Scope, c.op.ModuleID, c.op.Phase = "module_upgrade", "module", "doska", "applying"
+	m := modules.New(s.Store, c)
+	m.DeliveryEnabled = true
+	target := reconcileSeed(t, s, "doska", "local", "enabled")
+	neighbour := reconcileSeed(t, s, "prometheus", "local", "enabled")
+	ctx := context.Background()
+	old := time.Now().Add(-time.Hour)
+	for _, instance := range []model.ModuleInstance{target, neighbour} {
+		instance.LastAttempt = &old
+		if _, err := s.Store.Save(ctx, "module_instance", instance.ID, instance.Revision, instance, "fixture"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.Schedule(ctx)
+	jobs, err := s.Store.Jobs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	polls := map[string]int{}
+	for _, job := range jobs {
+		if strings.HasPrefix(job.IdempotencyKey, "poll:") {
+			polls[job.Parameters["instance_id"].(string)]++
+		}
+	}
+	if polls[target.ID] != 0 || polls[neighbour.ID] != 1 {
+		t.Fatalf("scoped maintenance suppressed or admitted the wrong poll: %#v", polls)
+	}
+	c.op.Phase = "reconciling"
+	m.Schedule(ctx)
+	jobs, err = s.Store.Jobs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range jobs {
+		if strings.HasPrefix(job.IdempotencyKey, "poll:") && job.Parameters["instance_id"] == target.ID {
+			return
+		}
+	}
+	t.Fatal("target polling did not resume at reconciliation")
+}
+
+func TestDeliveryReconcileRejectsScopeOrTargetChangesBeforeQueue(t *testing.T) {
+	for _, field := range []string{"scope", "module"} {
+		t.Run(field, func(t *testing.T) {
+			s := apiFixture(t)
+			s.Config.OnDemandModules = true
+			c := reconcileController(t)
+			c.op.Kind, c.op.Scope, c.op.ModuleID = "module_upgrade", "module", "doska"
+			c.observe = func(call int, op *modules.DeliveryOperation) {
+				if call > 1 {
+					if field == "scope" {
+						op.Scope = ""
+					} else {
+						op.ModuleID = "forms"
+					}
+				}
+			}
+			m := modules.New(s.Store, c)
+			m.DeliveryEnabled = true
+			s.Modules = m
+			reconcileSeed(t, s, "doska", "local", "enabled")
+			before, _ := s.Store.Jobs(context.Background())
+			response := reconcileCall(s, reconcileBody(c.op.OperationID, uuid.NewString()))
+			if response.Code != http.StatusConflict {
+				t.Fatalf("changed operation accepted: %d %s", response.Code, response.Body.String())
+			}
+			after, _ := s.Store.Jobs(context.Background())
+			if len(after) != len(before) || len(c.applies) != 0 {
+				t.Fatal("changed scope or target queued a job")
+			}
+		})
 	}
 }
 
