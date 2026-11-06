@@ -16790,8 +16790,8 @@
     },
     {
       "path": "docs/product/netmap-auto-enrollment.md",
-      "sha256": "ded354f7f28dc7da8769e374f8610fd76d0a212d59ebd070f25dea6efb0bd11d",
-      "size": 25776
+      "sha256": "9a29bd95a2b0e8aae5ddb50669b1b00a99fa2999510a1c3b3fce11d91e2ee2ee",
+      "size": 28610
     },
     {
       "path": "docs/releases/0.4.0-rc.1.json",
