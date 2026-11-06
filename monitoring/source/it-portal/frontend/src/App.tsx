@@ -7,6 +7,7 @@ import {
   RequiredLocalPassword,
 } from "./LocalAdminPassword";
 import { ReleaseBanner, UpdateNotification } from "./UpdateSettings";
+import { UpdateBatchRunner } from "./UpdateBatch";
 import { requestUpgradeStatus, UpgradeBoundary } from "./UpgradeExperience";
 import {
   InstallationTransitionNotice,
@@ -1002,6 +1003,7 @@ function Admin({ session }: { session: Session }) {
           </>
         }
       >
+        <UpdateBatchRunner session={session} />
         <ReleaseBanner enabled={!!session.user?.admin && !session.demo} />
         <LocalAdminPassword session={session} prompt />
         {!!error && (

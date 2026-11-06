@@ -26,7 +26,7 @@ func (c *deliveryControllerFixture) Delivery(_ context.Context, action string, o
 		value := *op
 		c.lastOperation = &value
 	}
-	return modules.DeliveryStatus{CoreAPI: 1, CurrentVersion: "0.3.0", LatestVersion: "0.3.1", UpdateAvailable: true, Modules: []modules.DeliveryModule{{ModuleID: "forms", Version: "1.0.0"}, {ModuleID: "prometheus", Version: "3.15.0"}}, ReleaseNotes: c.notes}, nil
+	return modules.DeliveryStatus{CoreAPI: 1, CurrentVersion: "0.3.0", LatestVersion: "0.3.1", UpdateAvailable: true, Modules: []modules.DeliveryModule{{ModuleID: "forms", Version: "1.0.0"}, {ModuleID: "doska", Version: "2.46.2", ArtifactSHA256: strings.Repeat("a", 64)}}, ReleaseNotes: c.notes}, nil
 }
 
 func TestDeliveryForwardsOptionalReleaseNotesAndPreservesLegacyStatus(t *testing.T) {
@@ -147,7 +147,7 @@ func TestDeliveryModuleUpgradeRequiresSelectedArtifactAndAdmin(t *testing.T) {
 	if got := apiCall(s, admin, "POST", "/api/v1/delivery/module-upgrade", valid, nil); got.Code != 200 {
 		t.Fatal(got.Code, got.Body.String())
 	}
-	if controller.calls != 1 || controller.lastAction != "module-upgrade" || controller.lastOperation.ModuleID != "doska" || controller.lastOperation.ArtifactSHA256 != strings.Repeat("a", 64) || controller.lastOperation.Version != "" {
+	if controller.calls != 2 || controller.lastAction != "module-upgrade" || controller.lastOperation.ModuleID != "doska" || controller.lastOperation.ArtifactSHA256 != strings.Repeat("a", 64) || controller.lastOperation.Version != "" {
 		t.Fatal("selected module artifact changed in the API projection")
 	}
 }

@@ -162,7 +162,7 @@ func (s *Store) claim(ctx context.Context, predicate string) (model.Job, error) 
 	}
 	defer tx.Rollback(ctx)
 	var b []byte
-	e = tx.QueryRow(ctx, "SELECT body FROM jobs WHERE status='queued' AND "+predicate+" ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1").Scan(&b)
+	e = tx.QueryRow(ctx, "SELECT body FROM jobs WHERE status='queued' AND kind<>'delivery' AND "+predicate+" ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1").Scan(&b)
 	if e != nil {
 		return model.Job{}, translate(e)
 	}
@@ -271,7 +271,7 @@ FROM jobs WHERE id=$1 FOR UPDATE`, j.ID, encode(j.Result), encode(parameters)).S
 	return tx.Commit(ctx)
 }
 func (s *Store) Recover(ctx context.Context) error {
-	rows, e := s.Pool.Query(ctx, "SELECT body FROM jobs WHERE status='running'")
+	rows, e := s.Pool.Query(ctx, "SELECT body FROM jobs WHERE status='running' AND kind<>'delivery'")
 	if e != nil {
 		return e
 	}

@@ -682,6 +682,7 @@ func (s *Server) saveObject(w http.ResponseWriter, r *http.Request, kind string)
 	respond(w, status, b)
 }
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	s.reconcileDelivery(r.Context())
 	items, e := s.Store.Events(r.Context(), strings.HasSuffix(r.URL.Path, "/audit"))
 	if e != nil {
 		s.fail(w, e)

@@ -766,6 +766,129 @@ test("module operations show instance action actor result and service refresh co
   await page.screenshot({ path: "artifacts/module-operation-context.png" });
 });
 
+test("delivery operations show target versions original actors rollback and unconfirmed outcomes", async ({
+  page,
+}) => {
+  await mockJournal(page);
+  const base = {
+    kind: "delivery",
+    resource_id: "",
+    integration_id: "",
+    actor: "local:original-admin",
+    actor_name: "Анна Смирнова",
+    created_at: now.toISOString(),
+    error: "",
+  };
+  const jobs = [
+    {
+      ...base,
+      id: "delivery-core",
+      status: "succeeded",
+      parameters: { action: "upgrade", target: "Платформа", version: "0.6.3" },
+      result: {
+        phase: "complete",
+        target_version: "0.6.3",
+        summary: "PL 0.6.3 установлена.",
+      },
+    },
+    {
+      ...base,
+      id: "delivery-rollback",
+      status: "failed",
+      parameters: {
+        action: "module-upgrade",
+        target: "Doska",
+        module_id: "doska",
+        version: "2.46.3",
+      },
+      result: {
+        phase: "rolled_back",
+        target_version: "2.46.3",
+        current_version: "0.6.2",
+        recovery_mode: "rollback",
+        restored_snapshot: true,
+        summary: "Обновление отменено. Предыдущая версия Doska восстановлена.",
+      },
+    },
+    {
+      ...base,
+      id: "delivery-unconfirmed",
+      status: "unknown",
+      actor_name: "",
+      parameters: {
+        action: "module-upgrade",
+        target: "Forms",
+        module_id: "forms",
+        version: "0.1.1",
+      },
+      result: {
+        phase: "unconfirmed",
+        target_version: "0.1.1",
+        current_version: "0.6.2",
+        recovery_mode: "rollback",
+        restored_snapshot: false,
+      },
+    },
+    {
+      ...base,
+      id: "delivery-running",
+      status: "running",
+      parameters: {
+        action: "module-upgrade",
+        target: "NetMap",
+        module_id: "netmap",
+        version: "1.1.0",
+      },
+      result: { phase: "verifying", target_version: "1.1.0" },
+    },
+  ];
+  await page.route("**/api/v1/operations?*", (route) =>
+    route.fulfill({ json: jobs }),
+  );
+  await page.route("**/api/v1/jobs/delivery-*", (route) =>
+    route.fulfill({
+      json: jobs.find((job) => route.request().url().endsWith(job.id)),
+    }),
+  );
+  await page.goto("/#events");
+  await page.getByRole("button", { name: "Операции", exact: true }).click();
+  const rows = page.locator(".workspace-operation-row");
+  await expect(rows).toHaveCount(4);
+  const result = page.getByLabel("Результат операции");
+  await rows
+    .filter({ hasText: "Обновление PL · Платформа · до 0.6.3" })
+    .click();
+  await expect(result).toContainText("Анна Смирнова");
+  await expect(result).toContainText("PL 0.6.3 установлена.");
+  await expect(
+    result.getByText("Обновление завершено", { exact: true }),
+  ).toBeVisible();
+  await rows
+    .filter({ hasText: "Обновление модуля · Doska · до 2.46.3" })
+    .click();
+  await expect(
+    result.getByText("Предыдущая версия восстановлена", { exact: true }),
+  ).toHaveCount(2);
+  await expect(result).toContainText("Предыдущая версия Doska восстановлена.");
+  await expect(result.getByText("2.46.3", { exact: true })).toBeVisible();
+  await expect(result.getByText("0.6.2", { exact: true })).toHaveCount(0);
+  await rows
+    .filter({ hasText: "Обновление модуля · Forms · до 0.1.1" })
+    .click();
+  await expect(
+    result.getByText("Не подтверждено", { exact: true }),
+  ).toBeVisible();
+  await expect(result).toContainText("local:original-admin");
+  await expect(result).toContainText("Сервер пока не подтвердил результат");
+  await expect(result).toContainText("Ожидаем подтверждения сервера");
+  await expect(result).not.toContainText("Предыдущее состояние восстановлено");
+  await expect(result).not.toContainText("Обновление не завершено");
+  await rows
+    .filter({ hasText: "Обновление модуля · NetMap · до 1.1.0" })
+    .click();
+  await expect(result).toContainText("Проверяем новую версию");
+});
+
 test("module event inspector names the instance and exposes observed outcome", async ({
   page,
 }) => {

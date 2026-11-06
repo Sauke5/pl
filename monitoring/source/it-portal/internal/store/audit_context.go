@@ -202,6 +202,16 @@ func jobEventContext(ctx context.Context, db DB, j model.Job) (map[string]any, e
 	if j.IntegrationID != "" {
 		details["integration_id"] = j.IntegrationID
 	}
+	if j.Kind == "delivery" {
+		for _, key := range []string{"operation_id", "action", "target", "version", "module_id"} {
+			if value := detailString(j.Parameters, key); value != "" {
+				details[key] = value
+			}
+		}
+		details["object_name"] = detailString(j.Parameters, "target")
+		details["phase"] = detailString(j.Result, "phase")
+		details["result_summary"] = detailString(j.Result, "summary")
+	}
 	if j.Kind == "module" {
 		id := detailString(j.Parameters, "instance_id")
 		details["instance_id"] = id
@@ -263,6 +273,12 @@ func moduleActionLabel(action string) string {
 
 func jobEventTitle(j model.Job, details map[string]any) string {
 	label := map[string]string{"refresh": "Обновление источника", "check": "Проверка доступности", "enrich": "Обогащение ресурса", "report": "Формирование отчёта", "restart": "Перезапуск контейнера"}[j.Kind]
+	if j.Kind == "delivery" {
+		label = "Обновление Платформы"
+		if detailString(j.Parameters, "action") == "module-upgrade" {
+			label = "Обновление модуля"
+		}
+	}
 	if j.Kind == "module" {
 		label = moduleActionLabel(detailString(details, "module_action"))
 	}

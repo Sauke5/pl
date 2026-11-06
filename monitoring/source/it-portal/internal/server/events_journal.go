@@ -20,6 +20,7 @@ func journalChannel(r *http.Request) (string, error) {
 	return channel, nil
 }
 func (s *Server) eventJournal(w http.ResponseWriter, r *http.Request) {
+	s.reconcileDelivery(r.Context())
 	q := r.URL.Query()
 	channel, e := journalChannel(r)
 	if e != nil {

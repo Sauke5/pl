@@ -12,6 +12,10 @@ import { statusLabel } from "./copy";
 import "./workspace.css";
 
 function operationAction(item: Job) {
+  if (item.kind === "delivery")
+    return item.parameters?.action === "module-upgrade"
+      ? "Обновление модуля"
+      : "Обновление PL";
   if (item.kind === "module") {
     const action =
       typeof item.parameters?.action === "string" ? item.parameters.action : "";
@@ -42,7 +46,7 @@ function operationActor(item: WorkspaceOperation) {
     item.actor_name?.trim() ||
     (item.actor === "system" || item.actor?.startsWith("system:")
       ? `Система${item.actor?.startsWith("system:") ? ` · ${item.actor.slice(7)}` : ""}`
-      : "Имя не указано")
+      : (item.kind === "delivery" && item.actor?.trim()) || "Имя не указано")
   );
 }
 
@@ -51,6 +55,13 @@ function operationTarget(
   resources: Map<string, string>,
   integrations: Map<string, string>,
 ) {
+  if (item.kind === "delivery") {
+    const target = item.parameters?.target;
+    if (typeof target === "string" && target.trim()) return target.trim();
+    return item.parameters?.action === "module-upgrade"
+      ? "Модуль"
+      : "Платформа";
+  }
   if (item.kind === "module") {
     const name = item.parameters?.module_name;
     if (typeof name === "string" && name.trim()) return name.trim();
@@ -80,7 +91,63 @@ const moduleStateLabels: Record<string, string> = {
   absent: "Удалён",
 };
 
+const deliveryPhaseLabels: Record<string, string> = {
+  requesting: "Передаём запрос на обновление",
+  queued: "Ожидает запуска",
+  queued_recovery: "Ожидает продолжения обновления",
+  downloading: "Загружаем обновление",
+  preparing_host: "Готовим сервер",
+  verifying_host: "Проверяем готовность сервера",
+  preparing: "Готовим обновление",
+  staging: "Подготавливаем файлы",
+  quiescing: "Приостанавливаем приложения",
+  snapshot: "Сохраняем текущее состояние",
+  applying: "Устанавливаем обновление",
+  verifying: "Проверяем новую версию",
+  resuming: "Запускаем приложения",
+  reconciling: "Уточняем состояние обновления",
+  restoring: "Восстанавливаем предыдущую версию",
+  complete: "Обновление завершено",
+  failed: "Обновление не завершено",
+  rolled_back: "Предыдущая версия восстановлена",
+  recovery_required: "Нужно проверить состояние установки",
+  unconfirmed: "Ожидаем подтверждения сервера",
+};
+
+function deliveryVersion(item: Job) {
+  const version = item.parameters?.version || item.result?.target_version;
+  return typeof version === "string" ? version.trim() : "";
+}
+
+function operationStatus(item: Job) {
+  if (item.kind === "delivery") {
+    if (item.status === "unknown") return "Не подтверждено";
+    if (item.result?.phase === "rolled_back")
+      return "Предыдущая версия восстановлена";
+  }
+  return statusLabel[item.status] || "Неизвестно";
+}
+
 function OperationOutcome({ job }: { job: Job }) {
+  if (job.kind === "delivery") {
+    const summary = job.result?.summary;
+    return (
+      <div className="workspace-operation-outcome">
+        {typeof summary === "string" && summary.trim() && <p>{summary}</p>}
+        {job.status === "unknown" ? (
+          <p>
+            Сервер пока не подтвердил результат. Проверьте состояние этой
+            операции в настройках обновлений.
+          </p>
+        ) : (
+          job.result?.restored_snapshot === true &&
+          job.result?.phase !== "rolled_back" && (
+            <p>Предыдущее состояние восстановлено.</p>
+          )
+        )}
+      </div>
+    );
+  }
   if (job.status !== "succeeded") return null;
   if (job.kind === "module") {
     const instance = job.result?.instance as
@@ -241,10 +308,13 @@ export function OperationsTimeline({
                     <strong>
                       {operationAction(item)} ·{" "}
                       {operationTarget(item, resourceNames, integrationNames)}
+                      {item.kind === "delivery" && deliveryVersion(item)
+                        ? ` · до ${deliveryVersion(item)}`
+                        : ""}
                     </strong>
                     <small>
                       Инициатор: {operationActor(item)} ·{" "}
-                      <Badge value={item.status} />
+                      <Badge value={item.status}>{operationStatus(item)}</Badge>
                     </small>
                   </span>
                   <time>{date(item.created_at)}</time>
@@ -295,9 +365,28 @@ export function OperationsTimeline({
                 <div>
                   <dt>Результат</dt>
                   <dd>
-                    {statusLabel[selectedJob?.status || ""] || "Неизвестно"}
+                    {selectedJob ? operationStatus(selectedJob) : "Неизвестно"}
                   </dd>
                 </div>
+                {selectedJob?.kind === "delivery" && (
+                  <>
+                    {deliveryVersion(selectedJob) && (
+                      <div>
+                        <dt>Версия обновления</dt>
+                        <dd>{deliveryVersion(selectedJob)}</dd>
+                      </div>
+                    )}
+                    {typeof selectedJob.result?.phase === "string" && (
+                      <div>
+                        <dt>Этап</dt>
+                        <dd>
+                          {deliveryPhaseLabels[selectedJob.result.phase] ||
+                            "Проверяем состояние операции"}
+                        </dd>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div>
                   <dt>Создано</dt>
                   <dd>{date(selected.created_at)}</dd>

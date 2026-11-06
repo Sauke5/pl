@@ -8,6 +8,7 @@ import { Badge, ErrorBox, Panel } from "./components/common";
 import { withSettingsNavigation } from "./settings/navigation";
 import { ReleaseNotesArticle, type ReleaseNotes } from "./ReleaseNotes";
 import "./upgrade-experience.css";
+import { startUpdateBatch, useUpdateBatch } from "./UpdateBatch";
 import {
   rememberUpgrade,
   requestUpgradeStatus,
@@ -217,12 +218,22 @@ export function UpdateSettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [confirm, setConfirm] = useState(false);
+  const [allConfirm, setAllConfirm] = useState(false);
+  const batch = useUpdateBatch();
   const [moduleConfirm, setModuleConfirm] = useState<DeliveryModule>();
   const moduleOperationID = useRef<string | undefined>(undefined);
   const operationID = useRef<string | undefined>(undefined);
   const lastVersion = useRef<string | undefined>(undefined);
   const value = status.data;
-  const running = !!value?.operation && !terminal.has(value.operation.phase);
+  const batchRunning =
+    !!batch &&
+    !batch.error &&
+    batch.steps.some(
+      (step) => step.state === "pending" || step.state === "sent",
+    );
+  const running =
+    batchRunning ||
+    (!!value?.operation && !terminal.has(value.operation.phase));
   const resumeRequired =
     value?.operation?.phase === "recovery_required" &&
     value.operation.recovery_mode === "resume";
@@ -402,6 +413,21 @@ export function UpdateSettings() {
       )}
       {!!error && <ErrorBox error={error} />}
       <div className="actions">
+        {value &&
+          (value.update_available ||
+            value.modules.some((m) => m.installed && m.update_available)) && (
+            <Button
+              disabled={
+                busy ||
+                running ||
+                !!batch ||
+                value.operation?.phase === "recovery_required"
+              }
+              onClick={() => setAllConfirm(true)}
+            >
+              Обновить всё
+            </Button>
+          )}
         <Button
           variant="secondary"
           disabled={busy || running}
@@ -531,6 +557,47 @@ export function UpdateSettings() {
             </p>
           )}
         </section>
+      )}
+      {allConfirm && value && (
+        <Dialog
+          title="Обновить Платформу и модули"
+          onClose={() => {
+            if (!busy) setAllConfirm(false);
+          }}
+        >
+          <p>
+            Сначала обновится PL, затем — установленные модули с доступной
+            совместимой поставкой. Модули обновляются по одному; при ошибке
+            очередь остановится.
+          </p>
+          <p>
+            Оставьте вкладку открытой. После перезагрузки страницы очередь
+            продолжится. Неподдерживаемые поставки будут показаны отдельно.
+          </p>
+          {!!error && <p role="alert">{errorText(error)}</p>}
+          <div className="actions">
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => setAllConfirm(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              disabled={busy || running}
+              onClick={() => {
+                setBusy(true);
+                setError(undefined);
+                void startUpdateBatch(value)
+                  .then(() => setAllConfirm(false))
+                  .catch(setError)
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {busy ? "Подготовка очереди…" : "Запустить обновления"}
+            </Button>
+          </div>
+        </Dialog>
       )}
       {moduleConfirm && (
         <Dialog

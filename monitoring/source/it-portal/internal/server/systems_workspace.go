@@ -416,6 +416,7 @@ type workspaceOperation struct {
 }
 
 func (s *Server) loadWorkspaceOperations(r *http.Request) ([]workspaceOperation, error) {
+	s.reconcileDelivery(r.Context())
 	exclude := false
 	if raw := r.URL.Query().Get("exclude_service_refresh"); raw != "" {
 		var err error

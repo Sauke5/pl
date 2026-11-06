@@ -42,7 +42,42 @@ MAX_PACKAGE = 8 * 1024**3
 MAX_RELEASE_NOTES = 24 * 1024
 RESERVE = 512 * 1024**2
 HOST_FEATURE_API = 3
+# Attested Forms 0.1.0 provenance COPY layers: sources.json content SHA256
+# ac12391b2cce684c93dd41bfaec3615593607436f94fa9e9006ea67538f377b1
+# is unchanged; only file mode 0664 -> 0644 and directory/file mtimes differ.
+# Ordered old -> candidate diff-ID pairs, never a general metadata exemption.
+FORMS_STORAGE_METADATA_PAIRS = {
+    'mongo': ('sha256:59d6350a5a9616d78bc4b1b573bc71c5226340137048061974c7060f203c8174',
+              'sha256:a70cada625bfa48128fe225f9e5e47a8f23d5dcacc5ed70129ddf8ecd1d0eaad'),
+    'keydb': ('sha256:c87e4aef35c9c97793697a32c2f58b91e0d76501d97a293e935b0f8d00fc94d5',
+              'sha256:47f92549d53e95386be14e052f9cc4ae9efdc015a3ab3f57e0612151fa3242a2'),
+}
 _threads = threading.Lock()
+
+
+def forms_storage_metadata_equivalent(role, old, new, values):
+    pair = FORMS_STORAGE_METADATA_PAIRS.get(role)
+    if pair is None or len(values) != 2:
+        return False
+    labels = []
+    for image in (old, new):
+        selected = dict(image['labels']); selected.pop('pl.source.sha256', None)
+        if (image['recipe'] != 'deploy/images/forms.Dockerfile'
+                or selected.get('org.opencontainers.image.version') != '0.1.0'
+                or selected.get('pl.module.config.version') != '1'
+                or selected.get('pl.module.id') != 'forms' or selected.get('pl.module.role') != role
+                or selected.get('pl.build.variant') != 'upstream-pinned'):
+            return False
+        labels.append(selected)
+    a, b = values
+    roots = [value[2] for value in values]
+    if (labels[0] != labels[1] or a[0] != 'linux' or a[:2] != b[:2] or a[3] != b[3]
+            or a[1] not in ('amd64', 'arm64') or a[1] != old['architecture'] or a[1] != new['architecture']
+            or any(not isinstance(root, dict) or root.get('Type') != 'layers'
+                   or not isinstance(root.get('Layers'), list) or len(root['Layers']) < 2 for root in roots)):
+        return False
+    left, right = (root['Layers'] for root in roots)
+    return len(left) == len(right) and left[:-1] == right[:-1] and (left[-1], right[-1]) == pair
 
 
 def json_bytes(value):
@@ -1069,6 +1104,8 @@ class Delivery:
                     equivalent = (values[0][:2], values[0][3]) == (values[1][:2], values[1][3])
                 else:
                     equivalent = values[0] == values[1] and isinstance(values[0][2], dict) and 'Layers' in values[0][2]
+                    if not equivalent and kind == 'forms':
+                        equivalent = forms_storage_metadata_equivalent(role, old, new, values)
             if equivalent:
                 # Keep storage bytes and identity. A package tag or build-source
                 # label is not a database migration. Other transitions still

@@ -12,6 +12,7 @@ import (
 )
 
 func (s *Server) jobs(w http.ResponseWriter, r *http.Request) {
+	s.reconcileDelivery(r.Context())
 	if id := r.PathValue("id"); id != "" {
 		j, e := s.Store.Job(r.Context(), id)
 		if e != nil {
