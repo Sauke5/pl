@@ -16854,6 +16854,11 @@
       "size": 5046
     },
     {
+      "path": "docs/releases/0.5.6.json",
+      "sha256": "78c53fc7b4ac748e2bfba91f91bde7dc046795d3e9a7bf5ea434204edefa259d",
+      "size": 4152
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
