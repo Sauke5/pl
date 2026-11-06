@@ -151,6 +151,7 @@ export function DoskaTaskDescription({
             ).map(({ kind, Icon, label: controlLabel }) => (
               <button
                 type="button"
+                className="doska-icon"
                 key={kind}
                 title={t(controlLabel)}
                 aria-label={t(controlLabel)}
