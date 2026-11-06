@@ -37,6 +37,9 @@ func validAlertmanagerMessage(v *model.AlertmanagerEmailMessage) bool {
 	u, err := url.Parse(v.PlatformURL)
 	return err == nil && alertmanagerURL(v.PlatformURL, false) && u.RawQuery == "" && !u.ForceQuery && !strings.ContainsAny(v.PlatformURL, "{}?#")
 }
+func alertmanagerMessageKind(kind string) bool {
+	return kind == "webhook" || kind == "telegram" || kind == "slack" || kind == "discord" || kind == "msteamsv2" || kind == "pagerduty"
+}
 func validAlertmanagerSMTP(v *model.AlertmanagerSMTPInput) bool {
 	if v == nil || !validAlertmanagerMessage(v.Message) || !alertmanagerText(v.Smarthost, 320) || !alertmanagerText(v.Username, 128) || !alertmanagerText(v.Password, 1024) || (v.Username == "" && v.Password != "") || (v.TLSMode != "starttls" && v.TLSMode != "implicit") || !validAlertmanagerMailbox(v.From) || len(v.To) < 1 || len(v.To) > 32 {
 		return false
@@ -133,8 +136,11 @@ func validAlertmanagerInput(c model.AlertmanagerConfigurationInput) bool {
 			return false
 		}
 		names[r.Name] = true
+		if !validAlertmanagerMessage(r.Message) || (r.ClearMessage && r.Message != nil) {
+			return false
+		}
 		if r.Kind == "email" {
-			if !validAlertmanagerSMTP(r.SMTP) || r.Endpoint != "" || r.Token != "" || r.ChatID != 0 || r.Proxy.Mode != "direct" {
+			if !validAlertmanagerSMTP(r.SMTP) || r.Message != nil || r.ClearMessage || r.Endpoint != "" || r.Token != "" || r.ChatID != 0 || r.Proxy.Mode != "direct" {
 				return false
 			}
 		} else if r.SMTP != nil {
@@ -201,7 +207,7 @@ func validAlertmanagerPublic(c model.AlertmanagerConfiguration) bool {
 		if r.Kind == "email" && (r.EndpointSet || r.TokenSet || r.SMTP == nil || (r.SMTP.Username != "") != r.SMTP.PasswordSet) {
 			return false
 		}
-		input.Receivers = append(input.Receivers, model.AlertmanagerReceiverInput{Name: r.Name, Kind: r.Kind, ChatID: r.ChatID, SMTP: smtp, Proxy: model.AlertmanagerProxyInput{Mode: r.Proxy.Mode, URL: r.Proxy.URL, Username: r.Proxy.Username, NoProxy: r.Proxy.NoProxy}})
+		input.Receivers = append(input.Receivers, model.AlertmanagerReceiverInput{Name: r.Name, Kind: r.Kind, ChatID: r.ChatID, SMTP: smtp, Message: r.Message, Proxy: model.AlertmanagerProxyInput{Mode: r.Proxy.Mode, URL: r.Proxy.URL, Username: r.Proxy.Username, NoProxy: r.Proxy.NoProxy}})
 	}
 	return validAlertmanagerInput(input)
 }

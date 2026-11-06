@@ -222,7 +222,7 @@ class Runtime:
         if self.m.get("features", {}).get("connector_credentials"):
             bootstrap.read_connector_key(self.root)
         model = safe_json(self.root / "config/compose.json", private=True)
-        if model != bootstrap.compose_model(self.root, self.m, cfg, self.install_id):
+        if not bootstrap.managed_model_equal(model, bootstrap.compose_model(self.root, self.m, cfg, self.install_id)):
             raise ValueError("Core Compose differs from the managed model")
         self.model = model
         private_regular(self.private / "runtime.env")

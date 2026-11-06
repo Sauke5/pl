@@ -2,6 +2,7 @@
 import base64
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -290,6 +291,118 @@ class AlertmanagerTests(unittest.TestCase):
                       {'platform_url': 'https://pl.example/{{ .Labels.target }}'}, {'show_labels': 1}, {'html': 'raw'}):
             with self.subTest(patch=patch), self.assertRaises(ValueError):
                 am.email_message({**default, **patch})
+
+    def test_nonemail_message_optin_native_fields_and_secret_roundtrip(self):
+        fields = {'webhook': 'payload', 'telegram': 'message', 'slack': 'text',
+                  'discord': 'message', 'msteamsv2': 'text', 'pagerduty': 'details'}
+        message = {**am.email_message(None), 'title': '{{ .Secret }} · PL',
+                   'platform_url': 'https://pl.example/modules', 'show_labels': True}
+        for kind, field in fields.items():
+            with self.subTest(kind=kind):
+                value = self.config(kind)
+                if kind == 'pagerduty': value['receivers'][0]['token'] = 'fixture-routing-key'
+                legacy = self.prepare(value)
+                before = self.controller.plan(self.instance, legacy['ref'])
+                self.assertNotIn(field, before['config']['receivers'][0][kind + '_configs'][0])
+                value = copy.deepcopy(legacy)
+                value['receivers'][0]['message'] = message
+                public = self.prepare(value)
+                plan = self.controller.plan(self.instance, public['ref'])
+                self.assertEqual(plan['schema'], 2)
+                self.assertEqual(public['receivers'][0]['message'], message)
+                self.assertIn(field, plan['config']['receivers'][0][kind + '_configs'][0])
+                self.assertEqual(plan['secrets'], before['secrets'])
+                self.assertNotIn('fixture-password', json.dumps(public))
+                # An old open client omits a field it does not know. Preserve it.
+                omitted = copy.deepcopy(public); omitted['receivers'][0].pop('message')
+                retained = self.prepare(omitted)
+                self.assertEqual(retained['receivers'][0]['message'], message)
+                cleared = copy.deepcopy(retained)
+                cleared['receivers'][0].pop('message'); cleared['receivers'][0]['clear_message'] = True
+                final = self.prepare(cleared)
+                self.assertNotIn('message', final['receivers'][0])
+                self.assertNotIn('clear_message', json.dumps(final))
+                self.assertEqual(self.controller.plan(self.instance, final['ref'])['config'], before['config'])
+
+    def test_nonemail_message_rejects_ambiguous_or_wrong_channel_fields(self):
+        message = am.email_message(None)
+        for patch in ({'message': message, 'clear_message': True}, {'clear_message': 'true'},
+                      {'message': None}, {'message': {**message, 'footer': 'bad\u0085control'}}):
+            value = self.config(); value['receivers'][0].update(patch)
+            with self.subTest(patch=patch), self.assertRaises(ValueError): self.prepare(value)
+        for patch in ({'message': message}, {'clear_message': True}):
+            value = self.email_config(); value['receivers'][0].update(patch)
+            with self.assertRaises(ValueError): self.prepare(value)
+
+    def test_generic_preview_uses_one_native_process_and_no_delivery(self):
+        original = self.controller.docker
+        runs = []
+        def docker(*args, **kwargs):
+            if args[:2] == ('container', 'run'):
+                runs.append(args)
+                self.assertIn('--network', args); self.assertIn('none', args)
+                self.assertIn('--read-only', args); self.assertIn('--cap-drop', args)
+                self.assertIn('--template.type=text', args)
+                template = next(a for a in args if a.startswith('--template.text='))
+                separator = '\n' + template.split('\n')[1] + '\n'
+                return ('PL · ТРЕВОГА' + separator + 'native message').encode()
+            return original(*args, **kwargs)
+        self.controller.docker = docker
+        result = self.controller.preview({'instance_id': self.instance, 'kind': 'slack',
+                    'message': am.email_message(None), 'status': 'firing'})
+        self.assertEqual(result, {'kind': 'slack', 'title': 'PL · ТРЕВОГА', 'text': 'native message'})
+        self.assertEqual(len(runs), 1)
+
+    def test_schema_one_plan_bytes_remain_valid_and_migrate_only_on_prepare(self):
+        message = {'title': 'PL · Мониторинг', 'platform_url': 'https://pl.example/modules',
+                   'footer': 'Уведомление', 'show_labels': True}
+        # Golden produced by the frozen 0.5.4 renderer, not by the new renderer.
+        self.assertEqual(hashlib.sha256(am.encoded(am.email_templates(message))).hexdigest(),
+                         'c8434e29bc82e3c395905f2337e80802f58d85d924d066f25392e43f8c402bc5')
+        value = self.email_config(); value['receivers'][0]['smtp']['message'] = message
+        public = self.prepare(value)
+        path = self.controller.paths(self.instance) / 'plans' / (public['ref'] + '.json')
+        legacy = self.controller.plan(self.instance, public['ref'])
+        legacy['schema'] = 1
+        legacy['config'], legacy['certificates'] = am.render(legacy['public'], legacy['secrets'], public['ref'])
+        am.atomic(path, legacy)
+        before = path.read_bytes()
+        self.assertEqual(self.controller.plan(self.instance, public['ref']), legacy)
+        # Preparing a new draft creates schema 2 without rewriting old plans.
+        prepared = self.prepare(copy.deepcopy(public))
+        self.assertEqual(self.controller.plan(self.instance, prepared['ref'])['schema'], 2)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.controller.plan(self.instance, public['ref']), legacy)
+        self.assertNotEqual(self.controller.plan(self.instance, prepared['ref'])['config'], legacy['config'])
+        # This exact reader is shared by artifact-upgrade inventory and the DR
+        # collector. Both schema-1 and schema-2 active plans must pass it.
+        spec = importlib.util.spec_from_file_location('pl_am_upgrade_consumer', BASE / 'module-upgrade.py')
+        upgrade = importlib.util.module_from_spec(spec); spec.loader.exec_module(upgrade)
+        for selected in (public, prepared):
+            plan = self.controller.plan(self.instance, selected['ref'])
+            am.atomic(self.controller.paths(self.instance) / 'config/config.json', am.encoded(plan['config']), 0o444)
+            am.atomic(self.controller.paths(self.instance) / 'state.json', {'current': selected['ref'], 'pending': None})
+            self.assertEqual(upgrade._state(self.controller, 'alertmanager', self.instance),
+                             {'current': selected['ref'], 'pending': None})
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_message_preview_rejects_unsupported_kind_or_unbounded_native_output(self):
+        for patch in ({'kind': 'email'}, {'kind': 'unknown'}, {'status': 'pending'},
+                      {'message': None}, {'template': 'arbitrary Go source'}):
+            body = {'instance_id': self.instance, 'kind': 'slack', 'message': am.email_message(None), 'status': 'firing', **patch}
+            calls = len(self.calls)
+            with self.assertRaises(ValueError): self.controller.preview(body)
+            self.assertEqual(len(self.calls), calls)
+        original = self.controller.docker
+        def docker(*args, **kwargs):
+            if args[:2] == ('container', 'run'):
+                template = next(a for a in args if a.startswith('--template.text='))
+                separator = '\n' + template.split('\n')[1] + '\n'
+                return ('PL' + separator + 'x' * 6001).encode()
+            return original(*args, **kwargs)
+        self.controller.docker = docker
+        with self.assertRaises(ValueError):
+            self.controller.preview({'instance_id': self.instance, 'kind': 'slack', 'message': am.email_message(None), 'status': 'firing'})
 
     def test_email_preview_uses_isolated_native_renderer_without_delivery(self):
         output = []

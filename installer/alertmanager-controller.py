@@ -34,6 +34,8 @@ read_file, atomic, fsync_directory, text = _helpers.read_file, _helpers.atomic, 
 BINARY = '/bin/alertmanager'
 FLAGS = ['--config.file=/etc/alertmanager/config.json', '--storage.path=/alertmanager',
          '--web.listen-address=0.0.0.0:9093', '--cluster.listen-address=', '--data.retention=120h']
+MESSAGE_KINDS = ('webhook', 'telegram', 'slack', 'discord', 'msteamsv2', 'pagerduty')
+MESSAGE_LIMITS = {'telegram': 3800, 'slack': 6000, 'discord': 3800, 'msteamsv2': 4000, 'pagerduty': 8192, 'webhook': 8192}
 
 
 def default_public():
@@ -148,6 +150,8 @@ def email_message(value):
     text(value['title'], 80); text(value['footer'], 240, empty=True)
     url = value['platform_url']
     text(url, 2048, empty=True)
+    if any(ord(c) < 32 or 127 <= ord(c) <= 159 for key in ('title', 'footer', 'platform_url') for c in value[key]):
+        raise ValueError('Message settings do not accept control characters')
     if url:
         endpoint(url)
         parsed = urllib.parse.urlsplit(url)
@@ -159,6 +163,7 @@ def email_message(value):
 
 
 def email_templates(message):
+    # Schema 1 plans are immutable: retain this renderer byte for byte.
     # Settings are literals, never executable template source. Dynamic alert data
     # stays in native html/template expressions and retains contextual escaping.
     literal = lambda value: '{{ ' + json.dumps(value, ensure_ascii=False) + ' }}'
@@ -203,6 +208,121 @@ def email_templates(message):
     return {'headers': {'Subject': subject}, 'html': body, 'text': plain}
 
 
+def _go(value):
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _display(expression, limit, kind='email'):
+    # Bound Unicode before escaping. Alert data never becomes template source.
+    value = '(printf "%%.%ds" (reReplaceAll "[\\\\x00-\\\\x1F\\\\x7F-\\\\x9F]" " " (%s)))' % (limit, expression)
+    if kind == 'slack':
+        for before, after in (('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')):
+            value = '(reReplaceAll %s %s %s)' % (_go(before), _go(after), value)
+    elif kind in ('discord', 'msteamsv2'):
+        value = '(reReplaceAll %s %s %s)' % (_go(r'([\\`*_{}\[\]()#+.!|<>~])'), _go(r'\$1'), value)
+        if kind == 'discord':
+            value = '(reReplaceAll "@" "＠" %s)' % value
+    return value
+
+
+def bounded_email_templates(message):
+    result = email_templates(message)
+    for key in ('html', 'text'):
+        source = result[key]
+        for expression, limit in (('.Labels.alertname', 48), ('.Labels.instance', 48), ('.Labels.job', 48),
+                                  ('.Labels.severity', 16), ('.Annotations.summary', 64), ('.Annotations.description', 80)):
+            source = source.replace('{{ ' + expression + ' }}', '{{ ' + _display(expression, limit) + ' }}')
+        name, value = '{{ ' + _display('.Name', 12) + ' }}', '{{ ' + _display('.Value', 24) + ' }}'
+        source = source.replace('{{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }}\n{{ end }}',
+            '{{ range $j, $label := .Labels.SortedPairs }}{{ if lt $j 2 }}' + name + '=' + value + '\n{{ end }}{{ end }}')
+        source = source.replace('{{ range .Labels.SortedPairs }}<div><b>{{ .Name }}</b>: {{ .Value }}</div>{{ end }}',
+            '{{ range $j, $label := .Labels.SortedPairs }}{{ if lt $j 2 }}<div><b>' + name + '</b>: ' + value + '</div>{{ end }}{{ end }}')
+        source = source.replace('{{ .StartsAt | tz "UTC" | date "2006-01-02 15:04:05 UTC" }}',
+            '{{ if not .StartsAt.IsZero }}{{ .StartsAt.UTC.Format "2006-01-02 15:04:05 UTC" }}{{ else }}неизвестно{{ end }}')
+        source = source.replace('{{ .EndsAt | tz "UTC" | date "2006-01-02 15:04:05 UTC" }}',
+            '{{ if not .EndsAt.IsZero }}{{ .EndsAt.UTC.Format "2006-01-02 15:04:05 UTC" }}{{ else }}неизвестно{{ end }}')
+        source = source.replace('{{ humanizeDuration (.EndsAt.Sub .StartsAt).Seconds }}',
+            '{{ if and (not .StartsAt.IsZero) (not .EndsAt.IsZero) (not (.EndsAt.Before .StartsAt)) }}{{ humanizeDuration (.EndsAt.Sub .StartsAt).Seconds }}{{ else }}неизвестна{{ end }}')
+        source = source.replace('{{ humanizeDuration (since .StartsAt).Seconds }}',
+            '{{ if and (not .StartsAt.IsZero) (not (.StartsAt.After now)) }}{{ humanizeDuration (since .StartsAt).Seconds }}{{ else }}неизвестна{{ end }}')
+        source = source.replace('Показаны первые 20 событий. Полный список доступен в PL.', 'Показаны первые 20 из {{ len .Alerts }} событий.')
+        result[key] = source
+    return result
+
+
+def notification_templates(kind, message):
+    """Fixed native templates, shared by immutable apply plans and amtool preview."""
+    if kind not in MESSAGE_KINDS:
+        raise ValueError('Unsupported notification message kind')
+    message = email_message(message)
+    # Short channels retain the complete literal link, even at the 2048-byte
+    # input limit. With a long link show one complete alert instead of cutting it.
+    count = {'webhook': 10, 'pagerduty': 8, 'slack': 2}.get(kind, 2)
+    if kind in ('discord', 'msteamsv2') and len(message['platform_url']) > 1000:
+        count = 1
+    show = lambda expr, limit: _display(expr, limit, kind)
+    # Webhook carries both readable text and typed records. Budget their JSON
+    # HTML escaping together, including a complete 2048-byte platform URL.
+    name_limit, object_limit, summary_limit, description_limit = (32, 40, 48, 56) if kind == 'webhook' else (40, 48, 64, 64)
+    title = show(_go(message['title']), 24 if kind == 'slack' else 64 if kind in ('discord', 'msteamsv2') else 80)
+    footer = show(_go(message['footer']), 40 if kind == 'slack' else 240)
+    program = ('{{ $state := "ВОССТАНОВЛЕНО" }}{{ if eq .Status "firing" }}{{ $state = "ТРЕВОГА" }}{{ end }}'
+               '{{ $title := printf "%s · %s" ' + title + ' $state }}'
+               '{{ $footer := ' + footer + ' }}'
+               '{{ $body := printf "Всего: %d · Активных: %d · Восстановлено: %d\\n" (len .Alerts) (len .Alerts.Firing) (len .Alerts.Resolved) }}'
+               '{{ $records := list }}{{ range $i, $a := .Alerts }}{{ if lt $i ' + str(count) + ' }}'
+               '{{ $name := ' + show('(or .Labels.alertname "Событие без названия")', name_limit) + ' }}'
+               '{{ $object := ' + show('(or .Labels.instance .Labels.job "Объект не указан")', object_limit) + ' }}'
+               '{{ $severity := ' + show('(or .Labels.severity "не задана")', 16) + ' }}'
+               '{{ $summary := ' + show('.Annotations.summary', summary_limit) + ' }}'
+               '{{ $description := ' + show('.Annotations.description', description_limit) + ' }}'
+               '{{ $status := "ВОССТАНОВЛЕНО" }}{{ if eq .Status "firing" }}{{ $status = "АКТИВНО" }}{{ end }}'
+               '{{ $start := "неизвестно" }}{{ $end := "—" }}{{ $duration := "неизвестна" }}'
+               '{{ if not .StartsAt.IsZero }}{{ $start = .StartsAt.UTC.Format "2006-01-02 15:04:05 UTC" }}'
+               '{{ if eq .Status "resolved" }}{{ if and (not .EndsAt.IsZero) (not (.EndsAt.Before .StartsAt)) }}'
+               '{{ $end = .EndsAt.UTC.Format "2006-01-02 15:04:05 UTC" }}{{ $duration = printf "%.24s" (humanizeDuration (.EndsAt.Sub .StartsAt).Seconds) }}{{ end }}'
+               '{{ else }}{{ if not (.StartsAt.After now) }}{{ $duration = printf "%.24s" (humanizeDuration (since .StartsAt).Seconds) }}{{ end }}{{ end }}{{ end }}'
+               '{{ $body = printf "%s\\n%s · %s\\nВажность: %s · Объект: %s\\n%s\\n%s\\nНачало: %s" $body $status $name $severity $object $summary $description $start }}'
+               '{{ if eq .Status "resolved" }}{{ $body = printf "%s · Конец: %s" $body $end }}{{ end }}'
+               '{{ $body = printf "%s · Длительность: %s\\n" $body $duration }}{{ $labels := list }}')
+    if message['show_labels']:
+        program += ('{{ range $j, $label := (.Labels.Remove (stringSlice "alertname" "instance" "job" "severity")).SortedPairs }}{{ if lt $j 2 }}'
+                    '{{ $key := ' + show('.Name', 12) + ' }}{{ $value := ' + show('.Value', 20) + ' }}'
+                    '{{ $body = printf "%s%s=%s\\n" $body $key $value }}{{ $labels = append $labels (dict "name" $key "value" $value) }}{{ end }}{{ end }}')
+    program += ('{{ $records = append $records (dict "status" .Status "name" $name "severity" $severity "object" $object "summary" $summary '
+                '"description" $description "starts_at" $start "ends_at" $end "duration" $duration "labels" $labels) }}'
+                '{{ end }}{{ end }}{{ if gt (len .Alerts) ' + str(count) + ' }}'
+                '{{ $body = printf "%s\\nПоказаны первые ' + str(count) + ' из %d событий.\\n" $body (len .Alerts) }}{{ end }}')
+    if kind not in ('slack', 'pagerduty'):
+        if message['platform_url']:
+            program += '{{ $body = printf "%s\\nОткрыть PL: %s\\n" $body ' + _go(message['platform_url']) + ' }}'
+        program += '{{ $body = printf "%s\\n%s" $body $footer }}'
+    title_template, body_template = program + '{{ $title }}', program + '{{ $body }}'
+    link = '{{ ' + _go(message['platform_url']) + ' }}'
+    if kind == 'telegram':
+        return {'message': program + '{{ $title }}\n\n{{ $body }}', 'parse_mode': ''}
+    if kind == 'slack':
+        return {'title': title_template, 'text': body_template, 'title_link': link,
+                'footer': '{{ ' + footer + ' }}', 'mrkdwn_in': [], 'link_names': False,
+                'color': '{{ if eq .Status "firing" }}#c43632{{ else }}#16805b{{ end }}'}
+    if kind == 'discord':
+        return {'title': title_template, 'message': body_template, 'content': ''}
+    if kind == 'msteamsv2':
+        return {'title': title_template, 'text': body_template}
+    if kind == 'pagerduty':
+        severity = '{{ if eq .CommonLabels.severity "critical" }}critical{{ else if eq .CommonLabels.severity "error" }}error{{ else if eq .CommonLabels.severity "warning" }}warning{{ else }}info{{ end }}'
+        return {'description': title_template, 'details': {'events': body_template, 'footer': '{{ ' + footer + ' }}', 'platform_url': link},
+                'source': '{{ ' + show('(or .CommonLabels.instance .CommonLabels.job "PL")', 80) + ' }}',
+                'severity': severity, 'client': 'PL', 'client_url': link}
+    # DeepCopyWithTemplate YAML-decodes strings. Render one complete JSON object
+    # so leaf strings such as "true", "001" and "a: b" retain their JSON types.
+    payload = program + '{{ dict "schema" "pl.notification.v1" "status" .Status "title" $title "text" $body '
+    payload += '"platform_url" ' + _go(message['platform_url']) + ' "footer" $footer '
+    payload += '"total" (len .Alerts) "firing" (len .Alerts.Firing) "resolved" (len .Alerts.Resolved) "shown" (len $records) '
+    payload += '"truncated" (gt (len .Alerts) ' + str(count) + ') "alerts" $records | toJson }}'
+    return {'payload': {'pl_notification': payload}}
+
+
 def smtp_profile(value, previous):
     fields = {'smarthost', 'from', 'to', 'tls_mode', 'username', 'password', 'password_set', 'message'}
     if not isinstance(value, dict) or set(value) - fields:
@@ -242,7 +362,7 @@ def smtp_profile(value, previous):
     return public, private
 
 
-def render(public, secrets, ref=None):
+def render(public, secrets, ref=None, *, schema=1):
     receivers, certificates = [], {}
     for index, receiver in enumerate(public['receivers']):
         secret = secrets[receiver['name']]
@@ -271,7 +391,7 @@ def render(public, secrets, ref=None):
                     'to': ','.join(smtp['to']), 'require_tls': True,
                     'force_implicit_tls': smtp['tls_mode'] == 'implicit', 'tls_config': config['tls_config']}
             if 'message' in smtp:
-                item.update(email_templates(smtp['message']))
+                item.update((bounded_email_templates if schema == 2 else email_templates)(smtp['message']))
             if smtp['username']:
                 item.update(auth_username=smtp['username'], auth_password=smtp['password'])
             receivers.append({'name': receiver['name'], 'email_configs': [item]})
@@ -283,6 +403,10 @@ def render(public, secrets, ref=None):
             item.update(url=secret['endpoint'], routing_key=secret['token'])
         else:
             item[{'webhook': 'url', 'slack': 'api_url', 'discord': 'webhook_url', 'msteamsv2': 'webhook_url'}[kind]] = secret['endpoint']
+        if 'message' in receiver:
+            if schema != 2:
+                raise ValueError('Message settings require a versioned native plan')
+            item.update(notification_templates(kind, receiver['message']))
         receivers.append({'name': receiver['name'], kind + '_configs': [item]})
     route = dict(public['route'])
     if not receivers:
@@ -389,11 +513,11 @@ class AlertmanagerController:
     def plan(self, instance, ref):
         value = json.loads(read_file(self.paths(instance) / 'plans' / (identifier(ref) + '.json'), limit=1024 * 1024))
         if (not isinstance(value, dict) or set(value) != {'schema', 'installation', 'instance_id', 'public', 'config', 'secrets', 'certificates'}
-                or value.get('schema') != 1 or value.get('installation') != self.installation or value.get('instance_id') != instance
+                or type(value.get('schema')) is not int or value['schema'] not in (1, 2) or value.get('installation') != self.installation or value.get('instance_id') != instance
                 or value.get('public', {}).get('ref') != ref or type(value['public'].get('revision')) is not int
                 or value['public']['revision'] < 1):
             raise ValueError('Invalid immutable Alertmanager plan')
-        config, certificates = render(value['public'], value['secrets'], ref)
+        config, certificates = render(value['public'], value['secrets'], ref, schema=value['schema'])
         if value['config'] != config or value['certificates'] != certificates:
             raise ValueError('Alertmanager plan content mismatch')
         return value
@@ -473,7 +597,7 @@ class AlertmanagerController:
                 raise ValueError('Invalid Alertmanager grouping or receiver count')
             names, public_receivers, private = set(), [], {}
             for receiver in receivers:
-                fields = {'name', 'kind', 'endpoint_set', 'token_set', 'chat_id', 'proxy', 'endpoint', 'token', 'smtp'}
+                fields = {'name', 'kind', 'endpoint_set', 'token_set', 'chat_id', 'proxy', 'endpoint', 'token', 'smtp', 'message', 'clear_message'}
                 if not isinstance(receiver, dict) or set(receiver) - fields:
                     raise ValueError('Invalid Alertmanager receiver fields')
                 name, kind = receiver.get('name'), receiver.get('kind')
@@ -482,7 +606,12 @@ class AlertmanagerController:
                 names.add(name)
                 old_public = next((item for item in previous['public']['receivers'] if item['name'] == name and item['kind'] == kind), None)
                 old = previous['secrets'].get(name, {}) if old_public else {}
+                clear_message = receiver.get('clear_message', False)
+                if type(clear_message) is not bool or (clear_message and 'message' in receiver):
+                    raise ValueError('Message replacement and removal cannot be combined')
                 if kind == 'email':
+                    if 'message' in receiver or 'clear_message' in receiver:
+                        raise ValueError('Email uses smtp.message')
                     if receiver.get('endpoint') or receiver.get('token') or receiver.get('chat_id') not in (None, 0):
                         raise ValueError('SMTP does not accept HTTP receiver fields')
                     smtp_public, smtp_private = smtp_profile(receiver.get('smtp'), old.get('smtp', {}))
@@ -514,6 +643,14 @@ class AlertmanagerController:
                     old_proxy.pop('ca_pem', None)
                 public_proxy, secret_proxy = proxy_profile(receiver.get('proxy'), old_proxy)
                 summary = {'name': name, 'kind': kind, 'endpoint_set': True, 'token_set': bool(token), 'proxy': public_proxy}
+                if 'message' in receiver:
+                    if receiver['message'] is None:
+                        raise ValueError('Use clear_message to remove message settings')
+                    summary['message'] = email_message(receiver['message'])
+                elif not clear_message and old_public and 'message' in old_public:
+                    summary['message'] = email_message(old_public['message'])
+                if 'message' in summary and self.version != '0.34.1':
+                    raise ValueError('PL messages require the supported Alertmanager 0.34.1 image')
                 if kind == 'telegram':
                     chat = receiver.get('chat_id')
                     if type(chat) is not int or not -(2**53) < chat < 2**53 or chat == 0 or not token:
@@ -529,8 +666,8 @@ class AlertmanagerController:
                 raise ValueError('Route must reference an existing notification receiver')
             ref = str(uuid.uuid4())
             summary = {'revision': value['revision'] + 1, 'ref': ref, 'route': dict(route), 'receivers': public_receivers}
-            config, certificates = render(summary, private, ref)
-            plan = {'schema': 1, 'installation': self.installation, 'instance_id': instance,
+            config, certificates = render(summary, private, ref, schema=2)
+            plan = {'schema': 2, 'installation': self.installation, 'instance_id': instance,
                     'public': summary, 'config': config, 'secrets': private, 'certificates': certificates}
             data = encoded(plan)
             if len(data) > 1024 * 1024:
@@ -647,12 +784,18 @@ class AlertmanagerController:
         return plan
 
     def preview(self, body):
-        if not isinstance(body, dict) or set(body) != {'instance_id', 'message', 'status'} or body['status'] not in ('firing', 'resolved'):
-            raise ValueError('Invalid email preview request')
+        if not isinstance(body, dict):
+            raise ValueError('Invalid message preview request')
+        kind = body.get('kind', 'email')
+        if (kind not in ('email', *MESSAGE_KINDS) or set(body) != ({'instance_id', 'message', 'status'} if kind == 'email' else {'instance_id', 'kind', 'message', 'status'})
+                or body['status'] not in ('firing', 'resolved') or body['message'] is None):
+            raise ValueError('Invalid message preview request')
         instance = identifier(body['instance_id'])
         self.paths(instance)
         message = email_message(body['message'])
-        templates = email_templates(message)
+        if kind != 'email' and self.version != '0.34.1':
+            raise ValueError('PL messages require the supported Alertmanager 0.34.1 image')
+        templates = bounded_email_templates(message) if kind == 'email' else notification_templates(kind, message)
         now = datetime.now(timezone.utc)
         from datetime import timedelta
         alerts = [{'status': body['status'], 'labels': {'alertname': name, 'instance': 'server-0' + str(i) + '.example:9100', 'severity': severity, 'job': 'node'},
@@ -661,21 +804,50 @@ class AlertmanagerController:
                        ('HighCPUUsage', 'warning', 'Загрузка CPU выше порога'), ('ServiceUnavailable', 'critical', 'Сервис недоступен')], 1)]
         data = {'receiver': 'preview', 'status': body['status'], 'alerts': alerts, 'groupLabels': {}, 'commonLabels': {}, 'commonAnnotations': {}}
         self.verify_image()
-        with tempfile.TemporaryDirectory(prefix='email-preview-', dir=self.operations) as folder:
+        with tempfile.TemporaryDirectory(prefix='email-preview-' if kind == 'email' else 'message-preview-', dir=self.operations) as folder:
             path = Path(folder); path.chmod(0o755)
             atomic(path / 'data.json', encoded(data), 0o444)
             separator = '\nPL_PREVIEW_' + uuid.uuid4().hex + '\n'
-            text_template = templates['headers']['Subject'] + separator + templates['text']
             deadline = time.monotonic() + 15
-            def run(kind, template):
+            def run(template_kind, template):
                 output = self.docker('container', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
                     '--security-opt', 'no-new-privileges:true', '--user', '65534:65534', '--memory', '256m', '--cpus', '1', '--pids-limit', '64',
                     '--entrypoint', '/bin/amtool', '--mount', 'type=bind,source=' + str(path) + ',target=/preview,readonly',
                     self.image, 'template', 'render', '--template.glob=/preview/*.tmpl', '--template.data=/preview/data.json',
-                    '--template.type=' + kind, '--template.text=' + template, timeout=max(1, int(deadline - time.monotonic())))
+                    '--template.type=' + template_kind, '--template.text=' + template, timeout=max(1, int(deadline - time.monotonic())))
                 if len(output) > 192 * 1024:
-                    raise ValueError('Email preview exceeds finite size')
+                    raise ValueError('Message preview exceeds finite size')
                 return output.decode('utf-8')
+            if kind != 'email':
+                if kind == 'webhook':
+                    native_json = run('text', templates['payload']['pl_notification'])
+                    payload = {'pl_notification': json.loads(native_json)}
+                    value = payload['pl_notification']
+                    if (not isinstance(value, dict) or not isinstance(value.get('title'), str) or not isinstance(value.get('text'), str)
+                            or len(native_json.encode()) + len('{"pl_notification":}\n') > 64 * 1024):
+                        raise ValueError('Native webhook preview exceeds finite contract')
+                    result = {'kind': kind, 'title': value['title'], 'text': value['text'], 'payload': payload}
+                elif kind == 'telegram':
+                    title, found, plain = run('text', templates['message']).partition('\n\n')
+                    if not found:
+                        raise ValueError('Native message preview output framing failed')
+                    result = {'kind': kind, 'title': title, 'text': plain}
+                else:
+                    title = templates['description'] if kind == 'pagerduty' else templates['title']
+                    plain = templates['details']['events'] if kind == 'pagerduty' else templates['message'] if kind == 'discord' else templates['text']
+                    if kind in ('slack', 'pagerduty'):
+                        details = templates['details'] if kind == 'pagerduty' else templates
+                        plain += '\n\n' + details['footer'] + '\n' + (details['platform_url'] if kind == 'pagerduty' else templates['title_link'])
+                    title, found, plain = run('text', title + separator + plain).partition(separator)
+                    if not found:
+                        raise ValueError('Native message preview output framing failed')
+                    result = {'kind': kind, 'title': title, 'text': plain}
+                if (len(result['title']) > 160 or len(result['text']) > MESSAGE_LIMITS[kind]
+                        or (kind == 'telegram' and len(result['title']) + 2 + len(result['text']) > MESSAGE_LIMITS[kind])
+                        or len(encoded(result)) > 256 * 1024):
+                    raise ValueError('Native message preview exceeds channel bounds')
+                return result
+            text_template = templates['headers']['Subject'] + separator + templates['text']
             # Scratch image has no shell. Two native processes preserve distinct
             # escaping contexts and share a 15-second wall-clock budget.
             with ThreadPoolExecutor(max_workers=2) as pool:
@@ -685,7 +857,12 @@ class AlertmanagerController:
             subject, found, plain = combined.partition(separator)
             if not found:
                 raise ValueError('Native preview output framing failed')
-            return {'subject': subject, 'html': body, 'text': plain}
+            if len(subject) > 160 or len(body.encode()) > 128 * 1024 or len(plain.encode()) > 64 * 1024:
+                raise ValueError('Native email preview exceeds channel bounds')
+            result = {'subject': subject, 'html': body, 'text': plain}
+            if len(encoded(result)) > 192 * 1024:
+                raise ValueError('Native email preview exceeds encoded RPC bounds')
+            return result
 
     def test_notification(self, body):
         if not isinstance(body, dict) or set(body) != {'instance_id', 'configuration_ref', 'receiver', 'test_id', 'status'} or body['status'] not in ('firing', 'resolved'):

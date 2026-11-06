@@ -177,3 +177,64 @@ func TestAlertmanagerEmailToolsUseSignedFiniteControllerRequests(t *testing.T) {
 		t.Fatal("invalid request reached controller")
 	}
 }
+
+func TestAlertmanagerMessagesUseExistingSignedRPCAndValidateNativeOutput(t *testing.T) {
+	id := "11111111-1111-4111-8111-111111111111"
+	message := model.AlertmanagerEmailMessage{Title: "{{ .Secret }} · PL", PlatformURL: "https://pl.example/", Footer: "Дежурная смена", ShowLabels: true}
+	calls := 0
+	c := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		body, _ := io.ReadAll(r.Body)
+		mac := hmac.New(sha256.New, make([]byte, 32))
+		mac.Write([]byte(r.Header.Get("X-Pl-Timestamp") + "\nPOST\n" + r.URL.Path + "\n"))
+		mac.Write(body)
+		if r.Method != "POST" || r.URL.Path != "/v1/alertmanager/preview" || r.Header.Get("X-Pl-Signature") != hex.EncodeToString(mac.Sum(nil)) {
+			t.Error("generic preview did not use the signed finite endpoint")
+		}
+		var input struct {
+			Instance string                         `json:"instance_id"`
+			Kind     string                         `json:"kind"`
+			Message  model.AlertmanagerEmailMessage `json:"message"`
+			Status   string                         `json:"status"`
+		}
+		if json.Unmarshal(body, &input) != nil || input.Instance != id || input.Message != message || input.Status != "resolved" {
+			t.Error("message preview changed literal settings or identity")
+		}
+		out := model.AlertmanagerMessagePreview{Kind: input.Kind, Title: "PL · ВОССТАНОВЛЕНО", Text: "Важность: critical · Объект: node-1"}
+		if input.Kind == "webhook" {
+			out.Payload = map[string]any{"pl_notification": map[string]any{"schema": "pl.notification.v1", "name": "true"}}
+		}
+		json.NewEncoder(w).Encode(out)
+	})
+	for _, kind := range []string{"webhook", "telegram", "slack", "discord", "msteamsv2", "pagerduty"} {
+		out, err := c.PreviewAlertmanagerMessage(context.Background(), id, kind, message, "resolved")
+		if err != nil || out.Kind != kind || !strings.Contains(out.Title, "ВОССТАНОВЛЕНО") {
+			t.Fatalf("%s preview: %+v %v", kind, out, err)
+		}
+	}
+	for _, kind := range []string{"email", "unknown", ""} {
+		if _, err := c.PreviewAlertmanagerMessage(context.Background(), id, kind, message, "resolved"); err == nil {
+			t.Fatal("unsupported kind reached RPC")
+		}
+	}
+	if _, err := c.PreviewAlertmanagerMessage(context.Background(), "foreign", "slack", message, "resolved"); err == nil {
+		t.Fatal("invalid instance reached RPC")
+	}
+	if _, err := c.PreviewAlertmanagerMessage(context.Background(), id, "slack", message, "pending"); err == nil {
+		t.Fatal("invalid status reached RPC")
+	}
+	if calls != 6 {
+		t.Fatalf("invalid input performed IO: calls=%d", calls)
+	}
+	for _, out := range []model.AlertmanagerMessagePreview{
+		{Kind: "telegram", Title: "PL", Text: "wrong kind"},
+		{Kind: "slack", Title: strings.Repeat("Я", 161)},
+		{Kind: "slack", Title: "PL", Text: strings.Repeat("Я", 6001)},
+		{Kind: "slack", Title: "PL", Payload: map[string]any{"private": "unexpected"}},
+	} {
+		bad := controllerFixture(t, func(w http.ResponseWriter, r *http.Request) { json.NewEncoder(w).Encode(out) })
+		if _, err := bad.PreviewAlertmanagerMessage(context.Background(), id, "slack", message, "resolved"); err == nil {
+			t.Fatal("invalid native output accepted")
+		}
+	}
+}

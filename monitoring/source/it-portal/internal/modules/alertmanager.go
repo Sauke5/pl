@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"pl/portal/internal/model"
 )
@@ -97,6 +98,35 @@ func (c *HostController) AlertmanagerStatus(ctx context.Context, id string) (mod
 type AlertmanagerEmailController interface {
 	PreviewAlertmanagerEmail(context.Context, string, model.AlertmanagerEmailMessage, string) (model.AlertmanagerEmailPreview, error)
 	TestAlertmanagerEmail(context.Context, string, model.AlertmanagerEmailTest) error
+}
+
+type AlertmanagerMessageController interface {
+	PreviewAlertmanagerMessage(context.Context, string, string, model.AlertmanagerEmailMessage, string) (model.AlertmanagerMessagePreview, error)
+}
+
+func (c *HostController) PreviewAlertmanagerMessage(ctx context.Context, id, kind string, message model.AlertmanagerEmailMessage, status string) (model.AlertmanagerMessagePreview, error) {
+	var out model.AlertmanagerMessagePreview
+	limits := map[string]int{"webhook": 8192, "telegram": 3800, "slack": 6000, "discord": 3800, "msteamsv2": 4000, "pagerduty": 8192}
+	limit, supported := limits[kind]
+	if !canonicalID(id) || !supported || (status != "firing" && status != "resolved") {
+		return out, errors.New("Некорректный запрос предпросмотра")
+	}
+	err := c.alertmanagerCall(ctx, "/v1/alertmanager/preview", map[string]any{"instance_id": id, "kind": kind, "message": message, "status": status}, &out)
+	if err != nil {
+		return model.AlertmanagerMessagePreview{}, err
+	}
+	if out.Kind != kind || out.Title == "" || utf8.RuneCountInString(out.Title) > 160 || utf8.RuneCountInString(out.Text) > limit || (kind == "telegram" && utf8.RuneCountInString(out.Title+"\n\n"+out.Text) > limit) {
+		return model.AlertmanagerMessagePreview{}, errors.New("Native renderer вернул некорректный предпросмотр")
+	}
+	if kind == "webhook" {
+		payload, err := json.Marshal(out.Payload)
+		if err != nil || len(payload) > 64<<10 || len(out.Payload) != 1 || out.Payload["pl_notification"] == nil {
+			return model.AlertmanagerMessagePreview{}, errors.New("Native renderer вернул некорректный webhook payload")
+		}
+	} else if out.Payload != nil {
+		return model.AlertmanagerMessagePreview{}, errors.New("Native renderer вернул неожиданный payload")
+	}
+	return out, nil
 }
 
 func (c *HostController) PreviewAlertmanagerEmail(ctx context.Context, id string, message model.AlertmanagerEmailMessage, status string) (model.AlertmanagerEmailPreview, error) {

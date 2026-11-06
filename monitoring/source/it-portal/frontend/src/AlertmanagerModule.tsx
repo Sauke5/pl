@@ -72,6 +72,8 @@ type Receiver = {
     | "msteamsv2"
     | "pagerduty";
   smtp?: SMTPSettings;
+  message?: EmailMessage;
+  clear_message?: boolean;
   endpoint_set?: boolean;
   token_set?: boolean;
   chat_id?: number;
@@ -191,6 +193,12 @@ function AppliedConfiguration({ value }: { value: Configuration }) {
                   </p>
                 )}
                 {item.kind === "telegram" && <p>Чат {item.chat_id}</p>}
+                {(item.message || item.smtp?.message) && (
+                  <small>
+                    Оформление PL ·{" "}
+                    {(item.message || item.smtp?.message)?.title}
+                  </small>
+                )}
                 <small>
                   {item.kind !== "email" && item.proxy.mode === "http"
                     ? "Через proxy"
@@ -226,6 +234,217 @@ function AppliedConfiguration({ value }: { value: Configuration }) {
           </div>
         </dl>
       </section>
+    </div>
+  );
+}
+
+function validateMessage(value: EmailMessage) {
+  const encoder = new TextEncoder();
+  if (
+    !value.title.trim() ||
+    encoder.encode(value.title).length > 80 ||
+    encoder.encode(value.footer).length > 240 ||
+    encoder.encode(value.platform_url).length > 2048 ||
+    [value.title, value.footer, value.platform_url].some((text) =>
+      /[\u0000-\u001f\u007f-\u009f]/.test(text),
+    )
+  )
+    throw new Error(
+      "Сократите название или подпись уведомления и уберите управляющие символы.",
+    );
+  if (value.platform_url) {
+    let url: URL;
+    try {
+      url = new URL(value.platform_url);
+    } catch {
+      throw new Error("Укажите полный HTTPS адрес PL.");
+    }
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      /[{}?#]/.test(value.platform_url)
+    )
+      throw new Error(
+        "Ссылка на PL: HTTPS адрес без логина, пароля, параметров и шаблонов.",
+      );
+  }
+}
+
+function NotificationMessageEditor({
+  instanceID,
+  index,
+  kind,
+  value,
+  onChange,
+  disabled,
+}: {
+  instanceID: string;
+  index: number;
+  kind: Exclude<Receiver["kind"], "email">;
+  value?: EmailMessage;
+  onChange: (message: EmailMessage | undefined) => void;
+  disabled: boolean;
+}) {
+  const [status, setStatus] = useState<"firing" | "resolved">("firing");
+  const [preview, setPreview] = useState<{
+    kind: string;
+    title: string;
+    text: string;
+    payload?: Record<string, unknown>;
+  }>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const version = JSON.stringify([kind, value, status]);
+  const latest = useRef(version);
+  latest.current = version;
+  useEffect(() => {
+    setPreview(undefined);
+    setError(undefined);
+  }, [version]);
+  const patch = (update: Partial<EmailMessage>) =>
+    onChange({ ...(value || messageDefaults()), ...update });
+  async function render() {
+    if (!value) return;
+    setBusy(true);
+    setError(undefined);
+    const requested = version;
+    try {
+      validateMessage(value);
+      const result = await api<{
+        kind: string;
+        title: string;
+        text: string;
+        payload?: Record<string, unknown>;
+      }>(
+        `/modules/${instanceID}/alertmanager/message/preview`,
+        "POST",
+        { kind, message: value, status },
+        {},
+        AbortSignal.timeout(20000),
+      );
+      if (latest.current === requested) setPreview(result);
+    } catch (error) {
+      if (latest.current === requested) setError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="am-notification-message">
+      <h3>Оформление уведомления</h3>
+      <Field
+        label="Формат сообщения"
+        hint={
+          kind === "webhook"
+            ? "Формат PL меняет JSON тело запроса. Выберите его только для endpoint, который принимает схему pl.notification.v1."
+            : "Стандартный шаблон сохраняет поведение Alertmanager. В сообщении PL добавляются статус, важность, объект и время событий."
+        }
+      >
+        <select
+          aria-label={`Формат сообщения ${index}`}
+          disabled={disabled}
+          value={value ? "pl" : "standard"}
+          onChange={(event) =>
+            onChange(
+              event.target.value === "pl" ? messageDefaults() : undefined,
+            )
+          }
+        >
+          <option value="standard">
+            {kind === "webhook"
+              ? "Стандартный Alertmanager JSON"
+              : "Стандартный шаблон Alertmanager"}
+          </option>
+          <option value="pl">
+            {kind === "webhook" ? "Формат PL" : "Сообщение PL"}
+          </option>
+        </select>
+      </Field>
+      {value && (
+        <>
+          <div className="am-fields">
+            <Field label="Название уведомления">
+              <input
+                aria-label={`Название уведомления ${index}`}
+                value={value.title}
+                maxLength={80}
+                disabled={disabled}
+                onChange={(event) => patch({ title: event.target.value })}
+              />
+            </Field>
+            <Field
+              label="Ссылка на PL"
+              hint="Полный HTTPS адрес. Оставьте пустым, чтобы убрать ссылку."
+            >
+              <input
+                aria-label={`Ссылка на PL в уведомлении ${index}`}
+                value={value.platform_url}
+                maxLength={2048}
+                disabled={disabled}
+                onChange={(event) =>
+                  patch({ platform_url: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Подпись уведомления">
+              <input
+                aria-label={`Подпись уведомления ${index}`}
+                value={value.footer}
+                maxLength={240}
+                disabled={disabled}
+                onChange={(event) => patch({ footer: event.target.value })}
+              />
+            </Field>
+          </div>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              aria-label={`Дополнительные метки уведомления ${index}`}
+              checked={value.show_labels}
+              disabled={disabled}
+              onChange={(event) => patch({ show_labels: event.target.checked })}
+            />
+            Показывать дополнительные метки событий
+          </label>
+          <div className="actions">
+            <select
+              aria-label={`Состояние предпросмотра уведомления ${index}`}
+              value={status}
+              disabled={disabled || busy}
+              onChange={(event) =>
+                setStatus(event.target.value as "firing" | "resolved")
+              }
+            >
+              <option value="firing">Тревога</option>
+              <option value="resolved">Восстановлено</option>
+            </select>
+            <Button disabled={disabled || busy} onClick={() => void render()}>
+              {busy ? "Обрабатываем…" : "Предпросмотр уведомления"}
+            </Button>
+          </div>
+          <p className="muted">
+            Предпросмотр показывает два примера событий. Длинные значения и
+            большие группы сокращаются под формат канала.
+          </p>
+          {error && <ErrorBox error={error} />}
+          {preview && (
+            <div
+              className="am-message-preview"
+              aria-label={`Предпросмотр уведомления ${index}`}
+            >
+              <strong>{preview.title}</strong>
+              <pre>{preview.text}</pre>
+              {preview.payload && (
+                <details>
+                  <summary>JSON тело webhook</summary>
+                  <pre>{JSON.stringify(preview.payload, null, 2)}</pre>
+                </details>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -655,6 +874,7 @@ export default function AlertmanagerModule({
       const old = state.data?.draft?.receivers.find(
         (other) => other.name === item.name && other.kind === item.kind,
       );
+      if (item.kind !== "email" && item.message) validateMessage(item.message);
       if (item.kind === "email") {
         const mail = item.smtp
           ? {
@@ -804,6 +1024,13 @@ export default function AlertmanagerModule({
               ...(item.endpoint ? { endpoint: item.endpoint.trim() } : {}),
               ...(item.token ? { token: item.token } : {}),
               ...(item.kind === "telegram" ? { chat_id: item.chat_id } : {}),
+              ...(item.kind !== "email"
+                ? item.message
+                  ? { message: item.message }
+                  : item.clear_message
+                    ? { clear_message: true }
+                    : {}
+                : {}),
               ...(item.kind === "email" && item.smtp
                 ? {
                     smtp: {
@@ -1125,6 +1352,8 @@ export default function AlertmanagerModule({
                                   endpoint_set: false,
                                   token_set: false,
                                   chat_id: undefined,
+                                  message: undefined,
+                                  clear_message: undefined,
                                   smtp:
                                     event.target.value === "email"
                                       ? smtpDefaults()
@@ -1304,6 +1533,23 @@ export default function AlertmanagerModule({
                                 ...current,
                                 [`${applied?.ref || ""}:${item.name}`]: test,
                               }))
+                            }
+                            disabled={
+                              !writable || instance.desired_state !== "enabled"
+                            }
+                          />
+                        )}
+                        {item.kind !== "email" && (
+                          <NotificationMessageEditor
+                            instanceID={instance.id}
+                            index={index + 1}
+                            kind={item.kind}
+                            value={item.message}
+                            onChange={(message) =>
+                              receiver(index, {
+                                message,
+                                clear_message: !message,
+                              })
                             }
                             disabled={
                               !writable || instance.desired_state !== "enabled"

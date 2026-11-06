@@ -16405,8 +16405,8 @@
     },
     {
       "path": "apps/forms/static/app.js",
-      "sha256": "07dfe2769b049f910afa53e46077907643a426185c3b132b6de5f0f3be6d7505",
-      "size": 71584
+      "sha256": "5bda05a629a5328db78b79e01bf87e3f46648144e30bacf0acdd57498c377a2f",
+      "size": 71728
     },
     {
       "path": "apps/forms/static/index.html",
@@ -16465,8 +16465,8 @@
     },
     {
       "path": "apps/netmap-stack/service.py",
-      "sha256": "a63db47bd65388c472663fd70d4648afb71c6ce13510d5e05fd1e06bab06ff44",
-      "size": 64392
+      "sha256": "928a7bb381f514fb5d295bd837679cd32125b3c1963b98ed9d1fe797ea03a3ef",
+      "size": 64591
     },
     {
       "path": "apps/netmap/address_inventory.py",
@@ -16849,6 +16849,11 @@
       "size": 3140
     },
     {
+      "path": "docs/releases/0.5.5.json",
+      "sha256": "05af207e8c8446895f3bb1255809241275322613c8d1ef92850a64599a9bb21a",
+      "size": 3973
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16870,8 +16875,8 @@
     },
     {
       "path": "installer/alertmanager-controller.py",
-      "sha256": "e9457e824b42aedcdd70b8ab450b6a56b58ca3a5ef74d098102fb27909037aee",
-      "size": 64537
+      "sha256": "34eb44fe8942d5f352098b11b5ee5ceafde78596ce308ecc42789605c3d3a032",
+      "size": 79218
     },
     {
       "path": "installer/bookstack-controller.py",
@@ -16880,8 +16885,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "4b23d86e0cbe668dcbd582d7dcc0f5f1097cb804deb28214102ef55309072b1e",
-      "size": 93373
+      "sha256": "a8555319b4c9fc97ed67512722023ddded16adb12dfe263727cccb667eea2a1d",
+      "size": 96951
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -16905,8 +16910,8 @@
     },
     {
       "path": "installer/disaster-recovery.py",
-      "sha256": "872fabeb21518986931a9aaf5bb3e9ec436bb37b8487add6d78428e62d70c216",
-      "size": 124542
+      "sha256": "2e7b12b591481939fb4c82a226bb8778df336e297545c4c3327c39ba7fb49110",
+      "size": 124575
     },
     {
       "path": "installer/disaster-recovery.ru.md",
@@ -16985,8 +16990,8 @@
     },
     {
       "path": "installer/maintenance.py",
-      "sha256": "384dba60db81e19a6571184b432c7e2c379723bcba50be56b8096f317b90586c",
-      "size": 55793
+      "sha256": "12e7b2d7f732c2e56178742c70765d49ab365a690cabc7c6084048cf85167532",
+      "size": 55826
     },
     {
       "path": "installer/maintenance.ru.md",
@@ -17045,8 +17050,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "3a02f5f28bb6dafb285d9a760c34538058dd226e457aa6585cae733f74ec9c24",
-      "size": 39482
+      "sha256": "69074c4ab8e1dddd7853b418490da3a346ea574dde1503929f47181353d539fd",
+      "size": 39533
     },
     {
       "path": "installer/release-catalog.py",
@@ -17065,8 +17070,8 @@
     },
     {
       "path": "installer/tests/test_alertmanager_controller.py",
-      "sha256": "b9fb222ae8b0e5e92d145461674dea6660c3cfed2e344dac7469ea6126b62bb9",
-      "size": 44648
+      "sha256": "722a277cadb8d49d346f5ca3a68955d2b01fe6de452a2d51c50e3d7f86bd9b61",
+      "size": 52328
     },
     {
       "path": "installer/tests/test_alertmanager_package.py",
@@ -17219,6 +17224,11 @@
       "size": 7230
     },
     {
+      "path": "installer/tests/test_managed_compose.py",
+      "sha256": "befcacdc1afd2613c146221e74074cf00e9633060988c08fce7d871e8f91c3d5",
+      "size": 13363
+    },
+    {
       "path": "installer/tests/test_minimal_package.py",
       "sha256": "f7cbccc3326e1262ef4c9fea99cc4b9b4079f20010555038c3e49f56940e5581",
       "size": 15391
@@ -17312,6 +17322,11 @@
       "path": "installer/tests/test_netmap_standalone.py",
       "sha256": "202a8ed57f1e55bee0d6fede700f04763afd8bb064af4e77821ace1cc920cd3d",
       "size": 44507
+    },
+    {
+      "path": "installer/tests/test_netmap_store.py",
+      "sha256": "8bbf32c895740adc79dc2f628718d74f3c5c663e54619d2e86617a23aaa91b2c",
+      "size": 4705
     },
     {
       "path": "installer/tests/test_network_stack_install.py",
@@ -17870,8 +17885,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AlertmanagerModule.tsx",
-      "sha256": "81079ce3b78ecc18b2b07acccd4d5ceeffd613bb36072d7643b50db8d2569b7a",
-      "size": 74511
+      "sha256": "468aafec76ecf951ddfdc8b4204798abe0a7246ffcd5478e88e3025a2c03f080",
+      "size": 83608
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/App.tsx",
@@ -18185,8 +18200,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/alertmanager-module.css",
-      "sha256": "5fd265e9f03a9ae321568fc34fdb942790c1d4b776f559b583b689482ef7bc31",
-      "size": 8733
+      "sha256": "066add1acb8f618eb6707cf6d8bf81b313532c8f3324aa9faa750e898a860d01",
+      "size": 9458
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/alertmanager.css",
@@ -18520,8 +18535,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/alertmanager-configuration.spec.ts",
-      "sha256": "7d15b0a59a39fc9f053a907c4d2ea7cf6604c14e370ac62fb69e137d8b74962e",
-      "size": 42723
+      "sha256": "737cc42054b45a99f44b7beda1e19436dc6f532df7f772752221ac3c88227c05",
+      "size": 49487
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/auth-pages.spec.ts",
@@ -18875,8 +18890,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/model/alertmanager.go",
-      "sha256": "9f5d5a2ae2efa4b999337aebbd40dac8116a07620c8c925d38e392b54af53e15",
-      "size": 4483
+      "sha256": "5b5513a4db03df288e38c181203f51fb776c7cccc75934a4bc940bb0c207aa30",
+      "size": 4990
     },
     {
       "path": "monitoring/source/it-portal/internal/model/chart_settings.go",
@@ -18985,8 +19000,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/alertmanager.go",
-      "sha256": "288c849eb587977281ba698a7eac6f979ca074bf447f875d8914f173678cf1d5",
-      "size": 5526
+      "sha256": "7e75820229c2a62442177b9a6c22a6e05b8acef5a1a37d1f09f267893850bd8b",
+      "size": 7374
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/alertmanager_read.go",
@@ -18995,8 +19010,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/alertmanager_test.go",
-      "sha256": "a5b0331c9452670a9865529a48569af7e30545b3b04cc55c7d019903655c7b95",
-      "size": 7313
+      "sha256": "3473d6f417a773527c574400ecad689e2b60768e4eba24f916daa6e98999ebad",
+      "size": 10488
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/application.go",
@@ -19545,18 +19560,18 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/alertmanager.go",
-      "sha256": "d170910320f68def50489a926fe934c2386fadf79e04d628b115b343ff52d477",
-      "size": 8849
+      "sha256": "c286542c01c17767be807068bca77d1af1b27b364424d35e9d2e491bc1dd8635",
+      "size": 10154
     },
     {
       "path": "monitoring/source/it-portal/internal/server/alertmanager_test.go",
-      "sha256": "6fb146b03f368d9ffa06e321c7ff73ca658b005a915b1d078b0f5696ad31f362",
-      "size": 25232
+      "sha256": "4a818846a5bf853785d5c619730fd90f9e57788acd16a24a05597033db540503",
+      "size": 33197
     },
     {
       "path": "monitoring/source/it-portal/internal/server/alertmanager_validation.go",
-      "sha256": "8a2eaff57444c467784469cfd08824d7a084da14bf072b74bd2bf5ebde788540",
-      "size": 7265
+      "sha256": "c323e570fd432a277a68135eb0f965379305c0c67c234bc39a3fa760c6c0348a",
+      "size": 7612
     },
     {
       "path": "monitoring/source/it-portal/internal/server/api_integration_test.go",
@@ -20460,8 +20475,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/server.go",
-      "sha256": "af72f34c6350da47ccac786c78b41c2c96eda9a719761d19c3074946256e9cc9",
-      "size": 27572
+      "sha256": "dc6cf0594a19f037f578715d9196243fd36c2c06afb18578a9a3f31003a612a5",
+      "size": 27688
     },
     {
       "path": "monitoring/source/it-portal/internal/server/service_card_eligibility.go",

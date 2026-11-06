@@ -460,7 +460,14 @@
         if (!result.saved) throw new Error('Сервис не подтвердил сохранение. Повторите отправку.');
         clearPending();try { sessionStorage.removeItem(attemptKey); } catch {}
         const secondary=result.outcome?.secondary;
-        form.replaceChildren(node('div',{class:'success-mark'},icon('check')),node('h2',{},result.outcome ? result.outcome.title : 'Спасибо за ответ'),node('p',{class:'dialog-description'},result.outcome ? result.outcome.description : 'Ваши ответы сохранены.'),secondary ? node('section',{class:'secondary-result'},node('span',{class:'hint'},'Также вам близок этот результат'),node('h3',{},secondary.title),node('p',{class:'dialog-description'},secondary.description)) : null,node('div',{class:'dialog-footer'},stepped && survey.kind==='quiz' ? button('Пройти ещё раз',() => answerSurvey(summary)) : null,button('Готово',() => modal.close(),'primary')));
+        const confirmation = [
+          node('div',{class:'success-mark'},icon('check')),
+          node('h2',{},result.outcome ? result.outcome.title : 'Спасибо за ответ'),
+          node('p',{class:'dialog-description'},result.outcome ? result.outcome.description : 'Ваши ответы сохранены.'),
+          secondary ? node('section',{class:'secondary-result'},node('span',{class:'hint'},'Также вам близок этот результат'),node('h3',{},secondary.title),node('p',{class:'dialog-description'},secondary.description)) : null,
+          node('div',{class:'dialog-footer'},stepped && survey.kind==='quiz' ? button('Пройти ещё раз',() => answerSurvey(summary)) : null,button('Готово',() => modal.close(),'primary')),
+        ];
+        form.replaceChildren(...confirmation.filter(child => child != null));
       } catch (error) {
         if ((error.status >= 400 && error.status < 500 && error.status !== 408) || (!requestStarted && !hadPending && pending?.stage==='unknown')) { clearPending();drawStage(); }
         errors.append(errorBox(error)); errors.scrollIntoView({block:'nearest'});

@@ -41,11 +41,11 @@ UNIT_TEST_NAMES = {
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
     "test_netmap_controller.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
     "test_netmap_instance_descriptor.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",
-    "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_network_stack_install.py", "test_package.py",
+    "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_netmap_store.py", "test_network_stack_install.py", "test_package.py",
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
     "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
-    "test_maintenance_concurrency.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py",
+    "test_maintenance_concurrency.py", "test_managed_compose.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py",
 }
 REPORT_FILES = {
     "monitoring_daily_summary.py", "monitoring_weekly_report.py", "monitoring_report_api.py", "manage_reports.py",

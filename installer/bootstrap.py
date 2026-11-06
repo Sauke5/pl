@@ -9,6 +9,7 @@ import http.cookiejar
 import ipaddress
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -989,6 +990,75 @@ class Runtime:
         b = self.run(["openssl", "pkey", "-in", str(dst_key), "-pubout"])
         if a != b:
             raise ValueError("TLS certificate and key do not match")
+
+
+def managed_model_equal(actual: dict, expected: dict) -> bool:
+    """Compare the complete typed recipe; only API/web mount order is immaterial.
+
+    Used releases can append their trusted ICMP/status binds in a different
+    order. Match unique destinations while retaining each entire mount record,
+    and keep every other list ordered. This does not rewrite either model.
+    """
+    def absolute_target(value):
+        return (type(value) is str and value.startswith("/") and value != "/"
+                and all(part not in ("", ".", "..") for part in value[1:].split("/"))
+                and not any(ord(char) < 32 or ord(char) == 127 for char in value))
+
+    def mounts(values):
+        if type(values) is not list:
+            return None
+        result = {}
+        for mount in values:
+            if type(mount) is str:
+                parts = mount.split(":")
+                if (len(parts) not in (2, 3) or not parts[0]
+                        or not (re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", parts[0]) or absolute_target(parts[0]))
+                        or len(parts) == 3 and parts[2] not in ("ro", "rw")):
+                    return None
+                target = parts[1]
+            elif type(mount) is dict:
+                kind, source, target = mount.get("type"), mount.get("source"), mount.get("target")
+                if (kind not in ("bind", "volume") or type(source) is not str or not source
+                        or kind == "bind" and not absolute_target(source)
+                        or kind == "volume" and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", source)
+                        or "read_only" in mount and type(mount["read_only"]) is not bool
+                        or "bind" in mount and (kind != "bind" or type(mount["bind"]) is not dict)
+                        or "volume" in mount and (kind != "volume" or type(mount["volume"]) is not dict)):
+                    return None
+            else:
+                return None
+            if not absolute_target(target) or target in result:
+                return None
+            result[target] = mount
+        return result
+
+    unordered = {("services", "api", "volumes"), ("services", "web", "volumes")}
+
+    def equal(left, right, path=()):
+        if type(left) is not type(right):
+            return False
+        if type(left) is dict:
+            return (all(type(key) is str for key in left) and all(type(key) is str for key in right)
+                    and left.keys() == right.keys()
+                    and all(equal(left[key], right[key], path + (key,)) for key in left))
+        if type(left) is list:
+            if path in unordered:
+                a, b = mounts(left), mounts(right)
+                return (a is not None and b is not None and a.keys() == b.keys()
+                        and all(equal(a[key], b[key], path + (key,)) for key in a))
+            return len(left) == len(right) and all(equal(a, b, path + (index,)) for index, (a, b) in enumerate(zip(left, right)))
+        if type(left) is float:
+            return math.isfinite(left) and math.isfinite(right) and left == right
+        return type(left) in (str, int, bool, type(None)) and left == right
+
+    for model in (actual, expected):
+        if type(model) is not dict or type(model.get("services")) is not dict:
+            return False
+        for service in ("api", "web"):
+            value = model["services"].get(service)
+            if type(value) is not dict or type(value.get("volumes")) is not list:
+                return False
+    return equal(actual, expected)
 
 
 def compose_model(root: Path, m: dict, cfg: dict, install_id: str) -> dict:

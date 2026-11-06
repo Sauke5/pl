@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/configuration/retry", s.moduleAuth(s.retryAlertmanagerConfiguration))
 	m.HandleFunc("GET /api/v1/modules/{id}/alertmanager/status", s.moduleAuth(s.getAlertmanagerStatus))
 	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/email/preview", s.moduleAuth(s.previewAlertmanagerEmail))
+	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/message/preview", s.moduleAuth(s.previewAlertmanagerMessage))
 	m.HandleFunc("POST /api/v1/modules/{id}/alertmanager/email/test", s.moduleAuth(s.testAlertmanagerEmail))
 	m.HandleFunc("GET /api/v1/modules/{id}/xray/configuration", s.moduleAuth(s.getXrayConfiguration))
 	m.HandleFunc("PUT /api/v1/modules/{id}/xray/configuration", s.moduleAuth(s.saveXrayConfiguration))

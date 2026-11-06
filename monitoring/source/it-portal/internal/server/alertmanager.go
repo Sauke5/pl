@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"pl/portal/internal/model"
@@ -217,6 +219,39 @@ func (s *Server) previewAlertmanagerEmail(w http.ResponseWriter, r *http.Request
 	}
 	respond(w, 200, out)
 }
+
+func (s *Server) previewAlertmanagerMessage(w http.ResponseWriter, r *http.Request) {
+	i, ok := s.alertmanagerInstance(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Kind    string                          `json:"kind"`
+		Message *model.AlertmanagerEmailMessage `json:"message"`
+		Status  string                          `json:"status"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if !alertmanagerMessageKind(input.Kind) || input.Message == nil || !validAlertmanagerMessage(input.Message) || (input.Status != "firing" && input.Status != "resolved") {
+		problem(w, 400, "invalid_configuration", "Проверьте канал и оформление уведомления")
+		return
+	}
+	c, ok := s.Modules.Controller.(modules.AlertmanagerMessageController)
+	if !ok {
+		problem(w, 503, "controller_unavailable", "Предпросмотр уведомлений пока недоступен")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	out, err := c.PreviewAlertmanagerMessage(ctx, i.ID, input.Kind, *input.Message, input.Status)
+	if err != nil {
+		problem(w, 422, "preview_failed", "Не удалось показать пример уведомления. Повторите попытку.")
+		return
+	}
+	respond(w, 200, out)
+}
+
 func (s *Server) testAlertmanagerEmail(w http.ResponseWriter, r *http.Request) {
 	i, ok := s.alertmanagerInstance(w, r)
 	if !ok {

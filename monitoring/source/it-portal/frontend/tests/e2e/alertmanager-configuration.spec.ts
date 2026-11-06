@@ -2,6 +2,12 @@ import { test, expect, type Page } from "@playwright/test";
 
 const id = "66666666-6666-4666-8666-666666666666";
 const base = `/modules/${id}/alertmanager/configuration`;
+type Message = {
+  title: string;
+  platform_url: string;
+  footer: string;
+  show_labels: boolean;
+};
 type Receiver = {
   name: string;
   kind: string;
@@ -10,6 +16,8 @@ type Receiver = {
   endpoint_set?: boolean;
   token_set?: boolean;
   chat_id?: number;
+  message?: Message;
+  clear_message?: boolean;
   smtp?: {
     message?: {
       title: string;
@@ -153,6 +161,9 @@ async function fixture(
             token_set: !!item.token || !!previous?.token_set,
             ...(item.chat_id === undefined ? {} : { chat_id: item.chat_id }),
             proxy,
+            ...(!item.clear_message && (item.message || previous?.message)
+              ? { message: item.message || previous?.message }
+              : {}),
             ...(item.smtp
               ? {
                   smtp: {
@@ -1206,3 +1217,178 @@ test("Alertmanager email message persists and control sends bind to the applied 
     configuration_ref: controls[0].configuration_ref,
   });
 });
+
+for (const kind of [
+  "webhook",
+  "telegram",
+  "slack",
+  "discord",
+  "msteamsv2",
+  "pagerduty",
+] as const) {
+  test(`Alertmanager ${kind} PL message preview, apply, reload and explicit opt-out`, async ({
+    page,
+  }, testInfo) => {
+    const writes = await fixture(page);
+    const previews: Record<string, unknown>[] = [];
+    const message = {
+      title: "{{ .Secret }} · PL",
+      platform_url: "https://pl.example/modules",
+      footer: "Duty team",
+      show_labels: true,
+    };
+    await page.route(
+      `**/api/v1/modules/${id}/alertmanager/message/preview`,
+      async (route) => {
+        expect(route.request().headers()["x-csrf-token"]).toBe(
+          "am-fixture-csrf",
+        );
+        const body = route.request().postDataJSON();
+        previews.push(body);
+        expect(body).toMatchObject({ kind, message });
+        await route.fulfill({
+          json: {
+            kind,
+            title:
+              body.status === "resolved"
+                ? "PL · ВОССТАНОВЛЕНО"
+                : "PL · ТРЕВОГА",
+            text: "Severity: critical\nObject: node-1\nUTC · 12m\n<script>literal</script>",
+            ...(kind === "webhook"
+              ? {
+                  payload: {
+                    pl_notification: {
+                      schema: "pl.notification.v1",
+                      summary: "true",
+                    },
+                  },
+                }
+              : {}),
+          },
+        });
+      },
+    );
+    await page
+      .getByRole("button", { name: "Добавить получателя", exact: true })
+      .click();
+    await page
+      .getByLabel("Канал получателя 1", { exact: true })
+      .selectOption(kind);
+    if (kind === "telegram") {
+      await page
+        .getByLabel("Токен Telegram 1", { exact: true })
+        .fill("fixture-bot-token");
+      await page
+        .getByLabel("Telegram chat ID 1", { exact: true })
+        .fill("-10012345");
+    } else if (kind === "pagerduty") {
+      await page
+        .getByLabel("Routing key PagerDuty 1", { exact: true })
+        .fill("fixture-routing-key");
+    } else
+      await page
+        .getByLabel("Endpoint получателя 1", { exact: true })
+        .fill("https://notify.example/private-hook");
+    await expect(
+      page.getByLabel("Формат сообщения 1", { exact: true }),
+    ).toHaveValue("standard");
+    if (kind === "webhook")
+      await expect(
+        page.getByRole("option", {
+          name: "Стандартный Alertmanager JSON",
+          exact: true,
+        }),
+      ).toBeAttached();
+    await page
+      .getByLabel("Формат сообщения 1", { exact: true })
+      .selectOption("pl");
+    await page
+      .getByLabel("Название уведомления 1", { exact: true })
+      .fill(message.title);
+    await page
+      .getByLabel("Ссылка на PL в уведомлении 1", { exact: true })
+      .fill(message.platform_url);
+    await page
+      .getByLabel("Подпись уведомления 1", { exact: true })
+      .fill(message.footer);
+    await page
+      .getByLabel("Дополнительные метки уведомления 1", { exact: true })
+      .check();
+    for (const status of ["firing", "resolved"]) {
+      await page
+        .getByLabel("Состояние предпросмотра уведомления 1", { exact: true })
+        .selectOption(status);
+      await page
+        .getByRole("button", { name: "Предпросмотр уведомления", exact: true })
+        .click();
+      const preview = page.getByLabel("Предпросмотр уведомления 1", {
+        exact: true,
+      });
+      await expect(preview).toContainText(
+        status === "firing" ? "ТРЕВОГА" : "ВОССТАНОВЛЕНО",
+      );
+      await expect(preview).toContainText("<script>literal</script>");
+      expect(await preview.locator("script").count()).toBe(0);
+    }
+    expect(previews).toHaveLength(2);
+    if (kind === "webhook") {
+      await page.locator(".am-receiver").screenshot({
+        path: testInfo.outputPath("webhook-pl-editor-dark.png"),
+      });
+      await page.evaluate(() => {
+        document.documentElement.dataset.theme = "light";
+      });
+      await page.locator(".am-receiver").screenshot({
+        path: testInfo.outputPath("webhook-pl-editor-light.png"),
+      });
+    }
+    await save(page, 1);
+    const first = (writes[0].data.configuration as Configuration).receivers[0];
+    expect(first.message).toEqual(message);
+    expect(first).not.toHaveProperty("clear_message");
+    await apply(page);
+    await expect(page.getByLabel("Действующие получатели")).toContainText(
+      "Оформление PL",
+    );
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Редактировать", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Название уведомления 1", { exact: true }),
+    ).toHaveValue(message.title);
+    await expect(
+      page.getByLabel("Endpoint получателя 1", { exact: true }),
+    ).toHaveValue("");
+    await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+    await save(page, 2);
+    const saved = writes.filter((write) => write.path === base).at(-1)!.data
+      .configuration as Configuration;
+    expect(saved.receivers[0].message).toEqual(message);
+    expect(saved.receivers[0]).not.toHaveProperty("token");
+    expect(saved.receivers[0]).not.toHaveProperty("endpoint");
+    await page
+      .getByLabel("Формат сообщения 1", { exact: true })
+      .selectOption("standard");
+    await expect(
+      page.getByRole("button", {
+        name: "Предпросмотр уведомления",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await save(page, 3);
+    const cleared = (
+      writes.filter((write) => write.path === base).at(-1)!.data
+        .configuration as Configuration
+    ).receivers[0];
+    expect(cleared.clear_message).toBe(true);
+    expect(cleared).not.toHaveProperty("message");
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Продолжить редактирование", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Формат сообщения 1", { exact: true }),
+    ).toHaveValue("standard");
+  });
+}

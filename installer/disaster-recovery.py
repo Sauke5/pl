@@ -755,7 +755,7 @@ def validate_package_tree(root, meta):
                 if not source.is_relative_to(root):
                     raise ValueError("Unexpected canonical recovery bind source")
                 mount["source"] = str(Path(meta["root"]) / source.relative_to(root))
-    if load_json((root / "config/compose.json").read_bytes()) != model or "network_cidr" not in cfg:
+    if not bootstrap.managed_model_equal(load_json((root / "config/compose.json").read_bytes()), model) or "network_cidr" not in cfg:
         raise ValueError("Recovery Compose differs from its canonical finite recipe")
     subnets = bootstrap.network_subnets(cfg["network_cidr"])
     pools = bootstrap.module_networks().pools(cfg)

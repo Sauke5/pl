@@ -122,6 +122,14 @@ class NetBox:
         return found[0] if found else self.request('POST', path, body)
 
 
+class StoreConnection(sqlite3.Connection):
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
+
 class Store:
     def __init__(self, path):
         self.path = str(path)
@@ -135,7 +143,7 @@ class Store:
         os.chmod(path, 0o600)
 
     def connect(self):
-        connection = sqlite3.connect(self.path, timeout=10)
+        connection = sqlite3.connect(self.path, timeout=10, factory=StoreConnection)
         connection.row_factory = sqlite3.Row
         return connection
 

@@ -15,13 +15,14 @@ type AlertmanagerRoute struct {
 	RepeatInterval string `json:"repeat_interval"`
 }
 type AlertmanagerReceiver struct {
-	Name        string            `json:"name"`
-	Kind        string            `json:"kind"`
-	EndpointSet bool              `json:"endpoint_set"`
-	TokenSet    bool              `json:"token_set"`
-	ChatID      int64             `json:"chat_id,omitempty"`
-	Proxy       AlertmanagerProxy `json:"proxy"`
-	SMTP        *AlertmanagerSMTP `json:"smtp,omitempty"`
+	Name        string                    `json:"name"`
+	Kind        string                    `json:"kind"`
+	EndpointSet bool                      `json:"endpoint_set"`
+	TokenSet    bool                      `json:"token_set"`
+	ChatID      int64                     `json:"chat_id,omitempty"`
+	Proxy       AlertmanagerProxy         `json:"proxy"`
+	SMTP        *AlertmanagerSMTP         `json:"smtp,omitempty"`
+	Message     *AlertmanagerEmailMessage `json:"message,omitempty"`
 }
 type AlertmanagerProxy struct {
 	Mode        string   `json:"mode"`
@@ -38,15 +39,17 @@ type AlertmanagerConfigurationInput struct {
 	Receivers []AlertmanagerReceiverInput `json:"receivers"`
 }
 type AlertmanagerReceiverInput struct {
-	Name        string                 `json:"name"`
-	Kind        string                 `json:"kind"`
-	Endpoint    string                 `json:"endpoint,omitempty"`
-	Token       string                 `json:"token,omitempty"`
-	EndpointSet bool                   `json:"endpoint_set,omitempty"`
-	TokenSet    bool                   `json:"token_set,omitempty"`
-	ChatID      int64                  `json:"chat_id,omitempty"`
-	Proxy       AlertmanagerProxyInput `json:"proxy"`
-	SMTP        *AlertmanagerSMTPInput `json:"smtp,omitempty"`
+	Name         string                    `json:"name"`
+	Kind         string                    `json:"kind"`
+	Endpoint     string                    `json:"endpoint,omitempty"`
+	Token        string                    `json:"token,omitempty"`
+	EndpointSet  bool                      `json:"endpoint_set,omitempty"`
+	TokenSet     bool                      `json:"token_set,omitempty"`
+	ChatID       int64                     `json:"chat_id,omitempty"`
+	Proxy        AlertmanagerProxyInput    `json:"proxy"`
+	SMTP         *AlertmanagerSMTPInput    `json:"smtp,omitempty"`
+	Message      *AlertmanagerEmailMessage `json:"message,omitempty"`
+	ClearMessage bool                      `json:"clear_message,omitempty"`
 }
 type AlertmanagerProxyInput struct {
 	ClearCA     bool     `json:"clear_ca,omitempty"`
@@ -79,6 +82,12 @@ type AlertmanagerEmailPreview struct {
 	Subject string `json:"subject"`
 	HTML    string `json:"html"`
 	Text    string `json:"text"`
+}
+type AlertmanagerMessagePreview struct {
+	Kind    string         `json:"kind"`
+	Title   string         `json:"title"`
+	Text    string         `json:"text"`
+	Payload map[string]any `json:"payload,omitempty"`
 }
 type AlertmanagerEmailTest struct {
 	ConfigurationRef string `json:"configuration_ref"`

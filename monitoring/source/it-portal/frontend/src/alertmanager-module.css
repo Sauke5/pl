@@ -136,6 +136,35 @@
   font-size: 0.85rem;
   white-space: nowrap;
 }
+.am-notification-layout .am-notification-message {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.am-notification-layout .am-notification-message .checkbox-label {
+  color: inherit;
+}
+.am-notification-layout .am-message-preview {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.am-notification-layout .am-message-preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 0.875rem;
+}
+.am-notification-layout .am-message-preview details pre {
+  margin-top: 0.75rem;
+  font-family: monospace;
+}
 .am-notification-layout .am-editor-columns {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(19rem, 1fr);

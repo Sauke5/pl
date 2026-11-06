@@ -473,3 +473,143 @@ func TestAlertmanagerEmailMessageValidation(t *testing.T) {
 		t.Fatal("literal text rejected")
 	}
 }
+
+type alertmanagerMessageFixture struct {
+	*alertmanagerControllerFixture
+	preview func(string, model.AlertmanagerEmailMessage, string) (model.AlertmanagerMessagePreview, error)
+}
+
+func (f *alertmanagerMessageFixture) PreviewAlertmanagerMessage(_ context.Context, _ string, kind string, message model.AlertmanagerEmailMessage, status string) (model.AlertmanagerMessagePreview, error) {
+	return f.preview(kind, message, status)
+}
+
+func TestAlertmanagerMessageAPIAndPGPublicRoundtrip(t *testing.T) {
+	s, admin := localUsersFixture(t)
+	viewer := apiUser(t, s, "message.viewer", false)
+	baseController := &alertmanagerControllerFixture{apply: func(op modules.Operation) (modules.Observation, error) {
+		return modules.Observation{State: "running", Endpoint: "http://127.0.0.1:19093", OperationID: op.OperationID}, nil
+	}}
+	calls := 0
+	controller := &alertmanagerMessageFixture{alertmanagerControllerFixture: baseController, preview: func(kind string, message model.AlertmanagerEmailMessage, status string) (model.AlertmanagerMessagePreview, error) {
+		calls++
+		if !alertmanagerMessageKind(kind) || message.Title != "{{ .Secret }} · PL" || status != "resolved" {
+			t.Fatal("literal message changed before native preview")
+		}
+		return model.AlertmanagerMessagePreview{Kind: kind, Title: "PL · ВОССТАНОВЛЕНО", Text: "native renderer"}, nil
+	}}
+	s.Modules = modules.New(s.Store, controller)
+	w := apiCall(s, admin, "POST", "/api/v1/modules", map[string]any{"module_id": "alertmanager", "name": "Messages", "mode": "local", "idempotency_key": "messages:install"}, nil)
+	if w.Code != 202 {
+		t.Fatalf("create %d %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		Instance model.ModuleInstance `json:"instance"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	baseController.read = func(context.Context, string) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader("[]"))}, nil
+	}
+	registry := providers.New(nil, "")
+	registry.ManagedRead = s.Modules.ReadIntegration
+	s.Modules.Poll = registry.Poll
+	if _, err := finishModuleFixture(t, s); err != nil {
+		t.Fatal(err)
+	}
+	root := "/api/v1/modules/" + created.Instance.ID + "/alertmanager"
+	message := model.AlertmanagerEmailMessage{Title: "{{ .Secret }} · PL", Footer: "Смена", PlatformURL: "https://pl.example/", ShowLabels: true}
+	for _, kind := range []string{"webhook", "telegram", "slack", "discord", "msteamsv2", "pagerduty"} {
+		body := map[string]any{"kind": kind, "message": message, "status": "resolved"}
+		if response := apiCall(s, viewer, "POST", root+"/message/preview", body, nil); response.Code != 403 {
+			t.Fatalf("viewer preview %d", response.Code)
+		}
+		if response := apiCall(s, admin, "POST", root+"/message/preview", body, map[string]string{"X-CSRF-Token": "forged"}); response.Code != 403 {
+			t.Fatalf("csrf preview %d", response.Code)
+		}
+		if response := apiCall(s, admin, "POST", root+"/message/preview", body, nil); response.Code != 200 {
+			t.Fatalf("preview %s %d %s", kind, response.Code, response.Body.String())
+		}
+	}
+	for _, body := range []map[string]any{
+		{"kind": "email", "message": message, "status": "resolved"},
+		{"kind": "slack", "message": nil, "status": "resolved"},
+		{"kind": "slack", "message": message, "status": "pending"},
+		{"kind": "slack", "message": message, "status": "resolved", "template": "arbitrary Go"},
+	} {
+		if response := apiCall(s, admin, "POST", root+"/message/preview", body, nil); response.Code != 400 {
+			t.Fatalf("invalid preview %d", response.Code)
+		}
+	}
+	if calls != 6 {
+		t.Fatalf("invalid preview reached controller: %d", calls)
+	}
+	controller.preview = func(string, model.AlertmanagerEmailMessage, string) (model.AlertmanagerMessagePreview, error) {
+		return model.AlertmanagerMessagePreview{}, errors.New("private native endpoint and token")
+	}
+	failed := apiCall(s, admin, "POST", root+"/message/preview", map[string]any{"kind": "slack", "message": message, "status": "resolved"}, nil)
+	if failed.Code != 422 || !strings.Contains(failed.Body.String(), "preview_failed") || strings.Contains(failed.Body.String(), "private") || strings.Contains(failed.Body.String(), "native") {
+		t.Fatal("preview error leaked implementation or private diagnostics")
+	}
+	input := model.AlertmanagerConfigurationInput{Route: model.AlertmanagerRoute{Receiver: "ops", GroupWait: "0s", GroupInterval: "1s", RepeatInterval: "1h"}, Receivers: []model.AlertmanagerReceiverInput{{Name: "ops", Kind: "webhook", Endpoint: "https://notify.example/private-key", Message: &message, Proxy: model.AlertmanagerProxyInput{Mode: "direct", NoProxy: []string{}}}}}
+	baseController.prepare = func(v model.AlertmanagerConfigurationInput) (model.AlertmanagerConfiguration, error) {
+		if v.Receivers[0].Message == nil || *v.Receivers[0].Message != message || v.Receivers[0].ClearMessage {
+			t.Fatal("message not sent to private prepare")
+		}
+		return model.AlertmanagerConfiguration{Revision: v.Revision + 1, Ref: uuid.NewString(), Route: v.Route, Receivers: []model.AlertmanagerReceiver{{Name: "ops", Kind: "webhook", EndpointSet: true, Message: v.Receivers[0].Message, Proxy: model.AlertmanagerProxy{Mode: "direct", NoProxy: []string{}}}}}, nil
+	}
+	w = apiCall(s, admin, "PUT", root+"/configuration", map[string]any{"configuration": input}, nil)
+	if w.Code != 200 {
+		t.Fatalf("save %d %s", w.Code, w.Body.String())
+	}
+	stored, err := store.Get[model.ModuleInstance](context.Background(), s.Store, "module_instance", created.Instance.ID)
+	if err != nil || stored.AlertmanagerDraft == nil || stored.AlertmanagerDraft.Receivers[0].Message == nil || *stored.AlertmanagerDraft.Receivers[0].Message != message {
+		t.Fatalf("PG message roundtrip: %v", err)
+	}
+	if strings.Contains(w.Body.String(), "private-key") || strings.Contains(w.Body.String(), "clear_message") {
+		t.Fatal("private input persisted in public response")
+	}
+	if response := apiCall(s, admin, "GET", root+"/configuration", nil, nil); response.Code != 200 || !strings.Contains(response.Body.String(), "platform_url") {
+		t.Fatal("reload lost message settings")
+	}
+	input.Revision = stored.AlertmanagerDraft.Revision
+	input.Ref = stored.AlertmanagerDraft.Ref
+	input.Receivers[0].Message = nil
+	baseController.prepare = func(v model.AlertmanagerConfigurationInput) (model.AlertmanagerConfiguration, error) {
+		if v.Receivers[0].Message != nil || v.Receivers[0].ClearMessage {
+			t.Fatal("old-client omission became a clear operation")
+		}
+		retained := *stored.AlertmanagerDraft
+		retained.Ref = uuid.NewString()
+		retained.Revision++
+		return retained, nil
+	}
+	if response := apiCall(s, admin, "PUT", root+"/configuration", map[string]any{"configuration": input}, nil); response.Code != 200 {
+		t.Fatalf("old client save %d", response.Code)
+	}
+}
+
+func TestAlertmanagerNonEmailMessageValidationAndExplicitClear(t *testing.T) {
+	message := &model.AlertmanagerEmailMessage{Title: "PL"}
+	for _, kind := range []string{"webhook", "telegram", "slack", "discord", "msteamsv2", "pagerduty"} {
+		r := model.AlertmanagerReceiverInput{Name: "ops", Kind: kind, Message: message, Proxy: model.AlertmanagerProxyInput{Mode: "direct", NoProxy: []string{}}}
+		if kind == "telegram" {
+			r.ChatID = 42
+		}
+		c := model.AlertmanagerConfigurationInput{Route: model.AlertmanagerRoute{Receiver: "ops", GroupWait: "0s", GroupInterval: "1s", RepeatInterval: "1h"}, Receivers: []model.AlertmanagerReceiverInput{r}}
+		if !validAlertmanagerInput(c) {
+			t.Fatalf("valid %s message rejected", kind)
+		}
+		c.Receivers[0].ClearMessage = true
+		if validAlertmanagerInput(c) {
+			t.Fatal("ambiguous clear+message accepted")
+		}
+		c.Receivers[0].Message = nil
+		if !validAlertmanagerInput(c) {
+			t.Fatal("explicit clear rejected")
+		}
+	}
+	if validAlertmanagerMessage(&model.AlertmanagerEmailMessage{Title: "PL\u0085injected"}) {
+		t.Fatal("C1 control accepted")
+	}
+}
