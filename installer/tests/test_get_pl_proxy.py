@@ -67,7 +67,7 @@ class SocksFixture(socketserver.BaseRequestHandler):
                 auth_version, count = exact(2)
                 user = exact(count)
                 password = exact(exact(1)[0])
-                if auth_version != 1 or (user, password) != (b'fixture-user', b'fixture-password') or self.server.reject_auth:
+                if auth_version != 1 or (user, password) != getattr(self.server, 'credentials', (b'fixture-user', b'fixture-password')) or self.server.reject_auth:
                     self.request.sendall(b'\x01\x01'); return
                 self.request.sendall(b'\x01\x00')
             version, command, reserved, kind = exact(4)
@@ -311,6 +311,8 @@ class BootstrapProxyTests(unittest.TestCase):
 
     def test_socks_signed_bootstrap_and_legacy_installer_download_share_live_adapter(self):
         server, profile = self.start_socks()
+        profile['password'] = 'fixture:пароль:tail'
+        server.credentials = (profile['username'].encode(), profile['password'].encode())
         self.profile_path.write_text(json.dumps(profile)); self.profile_path.chmod(0o600)
         # The bundled 0.5.6 installer is still HTTP-only: exercise its actual
         # profile parser/downloader while the bootstrap keeps the adapter alive.
@@ -323,12 +325,54 @@ class BootstrapProxyTests(unittest.TestCase):
             install.download('https://download.docker.com:' + str(self.origin.server_port) + '/linux/debian/gpg',
                              target, proxy=http_profile)
             self.assertEqual(target.read_bytes(), b'fixture Docker signing key')
-        installed, _ = self.run_bootstrap(['--proxy-file', str(self.profile_path)], installer_download=installer_download)
+        with patch.dict(os.environ, {'SSL_CERT_FILE': profile['ca_file']}):
+            installed, output = self.run_bootstrap(['--proxy', profile['url'], '--proxy-user',
+                profile['username'] + ':' + profile['password']], installer_download=installer_download)
+        self.assertNotIn(profile['username'], output)
+        self.assertNotIn(profile['password'], output)
         self.assertEqual(len(installed), 1)
         self.assertEqual(server.observations, [('origin.test', self.origin.server_port)] * 2
                          + [('download.docker.com', self.origin.server_port)])
         self.assertFalse(Path(installed[0][0][-1]).exists())
         self.assertNotEqual(installed[0][1]['password'], profile['password'])
+
+    def test_inline_http_credentials_reach_real_connect_and_verified_installer(self):
+        credentials = self.profile['username'] + ':' + self.profile['password']
+        endpoint = self.module.urllib.parse.urlsplit(self.profile['url'])
+        encoded_url = endpoint._replace(netloc=self.module.urllib.parse.quote(self.profile['username'], safe='') + ':'
+            + self.module.urllib.parse.quote(self.profile['password'], safe='') + '@' + endpoint.netloc).geturl()
+        for arguments in (['--proxy', self.profile['url'], '--proxy-user', credentials], ['--proxy', encoded_url]):
+            with self.subTest(style=arguments[0]), patch.dict(os.environ, {'SSL_CERT_FILE': self.profile['ca_file']}):
+                installed, output = self.run_bootstrap(arguments)
+            self.assertEqual(installed[0][1], {key: self.profile[key] for key in ('url', 'username', 'password')})
+            self.assertNotIn(self.profile['username'], output)
+            self.assertNotIn(self.profile['password'], output)
+        self.assertEqual(len(self.proxy.observations), 4)
+        self.assertFalse(any('Proxy-Authorization' in event['headers'] for event in self.origin.observations))
+
+    def test_inline_credentials_preserve_utf8_password_colons_and_decode_url_userinfo(self):
+        user, password = 'fixture-user', 'пароль:with:colons@%'
+        endpoint = 'socks5h://proxy.test:1080'
+        expected = {'url': endpoint, 'username': user, 'password': password}
+        self.assertEqual(self.module.inline_proxy_profile(endpoint, user + ':' + password), expected)
+        parsed = self.module.urllib.parse.urlsplit(endpoint)
+        url = parsed._replace(netloc=self.module.urllib.parse.quote(user, safe='') + ':'
+            + self.module.urllib.parse.quote(password, safe='') + '@' + parsed.netloc).geturl()
+        self.assertEqual(self.module.inline_proxy_profile(url), expected)
+        self.profile_path.write_text(json.dumps(expected)); self.profile_path.chmod(0o600)
+        self.assertEqual(self.module.load_download_proxy(self.profile_path), expected)
+        for credentials in ('missing-separator', ':password', 'user:', 'user:line\nbreak'):
+            with self.subTest(style='invalid credentials'):
+                with self.assertRaises(ValueError) as error:
+                    profile = self.module.inline_proxy_profile(endpoint, credentials)
+                    self.profile_path.write_text(json.dumps(profile))
+                    self.module.load_download_proxy(self.profile_path)
+                self.assertNotIn(credentials, str(error.exception))
+        with self.assertRaises(ValueError): self.module.inline_proxy_profile(url, user + ':' + password)
+        for arguments in (['--proxy-user', 'fixture:password'],
+                          ['--proxy-file', str(self.profile_path), '--proxy-user', 'fixture:password']):
+            with self.assertRaisesRegex(ValueError, '--proxy-user'):
+                self.module.main(arguments)
 
     def test_unsigned_catalog_never_reaches_payload_or_installer(self):
         installed, _ = self.run_bootstrap(['--proxy-file', str(self.profile_path)], bad_signature=True)

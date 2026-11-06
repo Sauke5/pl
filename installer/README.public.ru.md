@@ -36,9 +36,22 @@ curl -fsSL --proxy socks5h://PROXY_HOST:PORT https://raw.githubusercontent.com/S
 Проверка HTTPS-сертификатов сохраняется. Прокси будущих обновлений и загрузок
 модулей настраивается отдельно в интерфейсе PL.
 
-Для прокси с авторизацией сохраните приватный JSON-профиль владельца root с
-правами `0600`: `{"url":"socks5h://PROXY_HOST:PORT","username":"USER","password":"PASSWORD"}`.
-Скачанный скрипт запускается командой
+Логин и пароль передаются через `--proxy-user 'LOGIN:PASSWORD'` в обеих частях команды, как в curl:
+
+```sh
+curl -fsSL --proxy socks5h://PROXY_HOST:PORT --proxy-user 'LOGIN:PASSWORD' https://raw.githubusercontent.com/Sauke5/pl/main/installer/get-pl.sh | sudo sh -s -- --production --proxy socks5h://PROXY_HOST:PORT --proxy-user 'LOGIN:PASSWORD'
+```
+
+Для HTTP CONNECT замените `socks5h://` на `http://`. Пароль может содержать
+двоеточия: разделителем служит только первое. Также поддерживается
+userinfo в адресе `--proxy`: логин и пароль перед host; специальные символы
+кодируются по правилам URL, например `@` как `%40`.
+Не смешивайте userinfo и `--proxy-user`.
+
+При необходимости вместо inline-параметров можно использовать приватный
+JSON-профиль владельца root с правами `0600`:
+`{"url":"socks5h://PROXY_HOST:PORT","username":"USER","password":"PASSWORD"}`.
+Команда для заранее скачанного скрипта:
 `sudo sh get-pl.sh --production --proxy-file /root/pl-proxy.json`.
 
 Первый запуск создаёт самоподписанный TLS-сертификат. Доверенный сертификат можно загрузить в настройках PL. При повторном запуске установщик сохраняет существующий сертификат.

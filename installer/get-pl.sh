@@ -295,6 +295,27 @@ def socks_adapter(profile):
         server.server_close()
 
 
+def inline_proxy_profile(url, credentials=None):
+    try:
+        if any(ord(c) <= 32 or ord(c) == 127 for c in url):
+            raise ValueError()
+        parsed = urllib.parse.urlsplit(url)
+        profile = {'url': url}
+        if parsed.username is not None or parsed.password is not None:
+            if credentials is not None or parsed.username is None or parsed.password is None:
+                raise ValueError()
+            profile.update(username=urllib.parse.unquote(parsed.username, errors='strict'),
+                           password=urllib.parse.unquote(parsed.password, errors='strict'))
+            profile['url'] = parsed._replace(netloc=parsed.netloc.rsplit('@', 1)[1]).geturl()
+        elif credentials is not None:
+            user, separator, password = credentials.partition(':')
+            if not separator: raise ValueError()
+            profile.update(username=user, password=password)
+        return profile
+    except (ValueError, TypeError, UnicodeError):
+        raise ValueError('Некорректные параметры прокси. Укажите --proxy URL и один способ авторизации: --proxy-user LOGIN:PASSWORD или userinfo в URL.') from None
+
+
 def write_proxy_profile(path, value):
     with open(path, 'x', opener=lambda name, flags: os.open(name, flags, 0o600)) as stream:
         json.dump(value, stream)
@@ -348,9 +369,12 @@ def main(argv=None):
     parser.add_argument('--bind-address', default='0.0.0.0')
     parser.add_argument('--production', action='store_true', help='Случайный первоначальный пароль для новой установки; существующие credentials сохраняются')
     proxy_arguments = parser.add_mutually_exclusive_group()
-    proxy_arguments.add_argument('--proxy', help='Прокси без credentials: http://host:port или socks5h://host:port (remote DNS); только HTTPS загрузки')
+    proxy_arguments.add_argument('--proxy', help='http://host:port или socks5h://host:port (remote DNS); поддерживается USER:PASSWORD@host')
     proxy_arguments.add_argument('--proxy-file', type=Path, help='Приватный JSON профиль HTTP CONNECT или SOCKS5 прокси, владелец root и права 0600')
+    parser.add_argument('--proxy-user', metavar='LOGIN:PASSWORD', help='Логин и пароль прокси для --proxy, как в curl')
     args = parser.parse_args(argv)
+    if args.proxy_user is not None and (not args.proxy or args.proxy_file):
+        raise ValueError('--proxy-user требует --proxy URL и несовместим с --proxy-file.')
     if os.geteuid() != 0 or platform.system() != 'Linux':
         raise ValueError('Требуется root на Linux')
     arch = {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine())
@@ -361,8 +385,13 @@ def main(argv=None):
         proxy_file = args.proxy_file
         if args.proxy:
             proxy_file = directory / 'download-proxy.json'
-            write_proxy_profile(proxy_file, {'url': args.proxy})
-        proxy = load_download_proxy(proxy_file) if proxy_file else None
+            write_proxy_profile(proxy_file, inline_proxy_profile(args.proxy, args.proxy_user))
+        try:
+            proxy = load_download_proxy(proxy_file) if proxy_file else None
+        except ValueError:
+            if args.proxy:
+                raise ValueError('Проверьте адрес, порт, логин и пароль прокси.') from None
+            raise
         if proxy and urllib.parse.urlsplit(proxy['url']).scheme in ('socks5', 'socks5h'):
             proxy = stack.enter_context(socks_adapter(proxy))
             proxy_file = directory / 'installer-proxy.json'
