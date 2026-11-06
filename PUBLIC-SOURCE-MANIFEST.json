@@ -16855,8 +16855,8 @@
     },
     {
       "path": "docs/releases/0.5.6.json",
-      "sha256": "78c53fc7b4ac748e2bfba91f91bde7dc046795d3e9a7bf5ea434204edefa259d",
-      "size": 4152
+      "sha256": "e7c84414d6e92097df867311cfb415983841c3e5e0433f9a1b17c3cbb25cbb23",
+      "size": 4150
     },
     {
       "path": "installer/LICENSES.txt",
