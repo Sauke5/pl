@@ -16789,6 +16789,11 @@
       "size": 1050
     },
     {
+      "path": "docs/product/netmap-auto-enrollment.md",
+      "sha256": "ded354f7f28dc7da8769e374f8610fd76d0a212d59ebd070f25dea6efb0bd11d",
+      "size": 25776
+    },
+    {
       "path": "docs/releases/0.4.0-rc.1.json",
       "sha256": "94da09b5bfdf2ef0f7fa53ed7689cc2250b8226820ab31e303e5fddbb9d1e613",
       "size": 2340
@@ -17060,8 +17065,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "72be010e7d1d13115546ab9b520efc74e32b37c70fb1c6c5ea6535ff437dd5d1",
-      "size": 39727
+      "sha256": "7a24096c94c0bc06b783e754aa2197eed2e71e3ed44daaefc0c5d1cf11add56a",
+      "size": 39951
     },
     {
       "path": "installer/release-catalog.py",
@@ -17312,6 +17317,11 @@
       "path": "installer/tests/test_netmap_device_gateway.py",
       "sha256": "53eb1e5c8b8bdcf9d07831a8ff5ef6e09fb865abd18b6d6450e6cf3ee985e29f",
       "size": 4182
+    },
+    {
+      "path": "installer/tests/test_netmap_enrollment.py",
+      "sha256": "494034460627aee3652aeac86d129b11ffb8dc699fc0fb063e1fd0b1e9b87c50",
+      "size": 8725
     },
     {
       "path": "installer/tests/test_netmap_gitea_routing.py",

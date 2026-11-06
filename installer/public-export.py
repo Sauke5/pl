@@ -40,7 +40,7 @@ UNIT_TEST_NAMES = {
     "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py", "test_controller_listen_backlog.py",
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
     "test_netmap_controller.py", "test_netmap_access_profiles.py", "test_netmap_device_access.py", "test_netmap_device_gateway.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
-    "test_netmap_instance_descriptor.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",
+    "test_netmap_instance_descriptor.py", "test_netmap_enrollment.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",
     "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_netmap_store.py", "test_network_stack_install.py", "test_package.py",
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
@@ -54,6 +54,7 @@ REPORT_FILES = {
 AUDITOR_EXACT = {"README.md", "FileStructureAuditor.sln", "global.json", "LICENSE", "NOTICE", "Directory.Build.props", "Directory.Build.targets"}
 STANDALONE_EXACT = {"README.md", "pyproject.toml", "Dockerfile", "docker-entrypoint.sh", "alembic.ini"}
 STANDALONE_DOCS = {"docs/production-layout.md"}
+PRODUCT_DOCS = {"docs/product/netmap-auto-enrollment.md"}
 CORE_EXTRAS = {"frontend/playwright.config.ts", "frontend/playwright.webkit.config.ts", "frontend/playwright.components.config.ts", "frontend/vitest.config.ts", "frontend/README.md"}
 CORE_EXTRAS |= {"deploy/doska/prepare-gateway-manifest.py", "docs/ecosystem-ui-workflow.ru.md"}
 PUBLIC_REPORT_ASSETS = {"monitoring/source/nginx/index.html", "monitoring/source/nginx/reports-theme-bridge.js", "monitoring/source/nginx/reports-theme-bridge.css"}
@@ -197,6 +198,9 @@ def select_files(root: Path, package=None) -> dict[str, bytes]:
         path = "installer/tests/" + name
         if (root / path).exists():
             put_file(selected, path, read_regular(root, path))
+    for name in sorted(PRODUCT_DOCS):
+        if (root / name).is_file():
+            put_file(selected, name, read_regular(root, name))
     for name in tracked_files(root, CORE, "apps/file-auditor", "monitoring/source/monitoring-admin", "monitoring/source/websites-admin", "monitoring/source/monitoring-admin-agent", "monitoring/source/scripts", "monitoring/source/nginx", "docs/releases"):
         if supplemental_allowed(name):
             put_file(selected, name, read_regular(root, name))
