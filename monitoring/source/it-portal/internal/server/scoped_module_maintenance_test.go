@@ -3,16 +3,20 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"pl/portal/internal/model"
 	"pl/portal/internal/modules"
+	"pl/portal/internal/store"
 )
 
 func scopedMaintenanceStatus(t *testing.T, folder string, active bool, operation modules.DeliveryOperation) {
@@ -29,6 +33,186 @@ func scopedMaintenanceStatus(t *testing.T, folder string, active bool, operation
 func scopedMaintenanceOperation(kind string) modules.DeliveryOperation {
 	return modules.DeliveryOperation{Kind: "module_upgrade", Scope: "module", ModuleID: kind,
 		OperationID: "727b18f8-99da-410f-b94f-e677f2967731", Version: "0.5.6", Phase: "applying", Error: "private failure must not be rendered"}
+}
+
+func TestScopedModuleManagementRejectsBeforeDesiredStateDraftAndQueueChanges(t *testing.T) {
+	s := apiFixture(t)
+	s.Config.PortableRelease, s.Config.MaintenanceDir = true, t.TempDir()
+	s.Modules = modules.New(s.Store, moduleControllerFunc(func(context.Context, modules.Operation) (modules.Observation, error) {
+		t.Fatal("management admission reached the host controller")
+		return modules.Observation{}, nil
+	}))
+	admin := apiUser(t, s, "scoped-maintainer", true)
+	viewer := apiUser(t, s, "scoped-viewer", false)
+	target := reconcileSeed(t, s, "prometheus", "local", "enabled")
+	neighbour := reconcileSeed(t, s, "alertmanager", "local", "enabled")
+	external := reconcileSeed(t, s, "prometheus", "external", "enabled")
+	if _, err := s.Store.SavePrometheusDraft(context.Background(), target.ID, "scoped-maintainer", model.DefaultPrometheusConfiguration()); err != nil {
+		t.Fatal(err)
+	}
+	scopedMaintenanceStatus(t, s.Config.MaintenanceDir, true, scopedMaintenanceOperation("prometheus"))
+	ctx := context.Background()
+	before, err := store.Get[model.ModuleInstance](ctx, s.Store, "module_instance", target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := s.Store.Jobs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertUnchanged := func(t *testing.T) {
+		t.Helper()
+		after, err := store.Get[model.ModuleInstance](ctx, s.Store, "module_instance", target.ID)
+		if err != nil || !reflect.DeepEqual(before, after) {
+			t.Fatalf("rejected request changed the target module: before=%+v after=%+v err=%v", before, after, err)
+		}
+		afterJobs, err := s.Store.Jobs(ctx)
+		if err != nil || len(afterJobs) != len(jobs) {
+			t.Fatalf("rejected request changed the job queue: before=%d after=%d err=%v", len(jobs), len(afterJobs), err)
+		}
+	}
+	configuration := model.DefaultPrometheusConfiguration()
+	configuration.Revision = 1
+	configuration.Global.ScrapeInterval = "30s"
+	for _, tc := range []struct {
+		name, method, suffix string
+		payload              any
+	}{
+		{"disable", "POST", "/actions", map[string]string{"action": "disable", "idempotency_key": "scoped:blocked-disable"}},
+		{"save-draft", "PUT", "/configuration", map[string]any{"configuration": configuration}},
+		{"apply-configuration", "POST", "/configuration/apply", map[string]any{"revision": 1, "idempotency_key": "scoped:blocked-apply"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := apiCall(s, admin, tc.method, "/api/v1/modules/"+target.ID+tc.suffix, tc.payload, nil)
+			if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), `"error":"module_updating"`) || w.Header().Get("Retry-After") != "2" || w.Header().Get("Cache-Control") != "no-store" {
+				t.Errorf("management request was admitted during update: %d %v %s", w.Code, w.Header(), w.Body.String())
+			}
+			assertUnchanged(t)
+		})
+	}
+	for _, tc := range []struct {
+		name    string
+		who     apiIdentity
+		headers map[string]string
+		status  int
+	}{
+		{"anonymous", apiIdentity{}, nil, 401},
+		{"viewer", viewer, nil, 403},
+		{"invalid-csrf", admin, map[string]string{"X-CSRF-Token": "forged"}, 403},
+		{"machine-auth", admin, map[string]string{"Authorization": "Bearer forbidden"}, 403},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := apiCall(s, tc.who, "POST", "/api/v1/modules/"+target.ID+"/actions", map[string]string{"action": "disable", "idempotency_key": "scoped:unauthorized"}, tc.headers)
+			if w.Code != tc.status || strings.Contains(w.Body.String(), "module_updating") {
+				t.Errorf("maintenance bypassed existing authentication: %d %s", w.Code, w.Body.String())
+			}
+			assertUnchanged(t)
+		})
+	}
+	for _, path := range []string{"/api/v1/modules", "/api/v1/modules/" + target.ID + "/configuration"} {
+		if w := apiCall(s, admin, "GET", path, nil, nil); w.Code != 200 {
+			t.Fatalf("read blocked by scoped update: %d %s", w.Code, w.Body.String())
+		}
+	}
+	for _, instance := range []model.ModuleInstance{neighbour, external} {
+		w := apiCall(s, admin, "POST", "/api/v1/modules/"+instance.ID+"/actions", map[string]string{"action": "disable", "idempotency_key": "scoped:allowed:" + instance.ID}, nil)
+		if w.Code != 202 {
+			t.Fatalf("neighbour/external action blocked: %d %s", w.Code, w.Body.String())
+		}
+		after, err := store.Get[model.ModuleInstance](ctx, s.Store, "module_instance", instance.ID)
+		if err != nil || after.DesiredState != "disabled" {
+			t.Fatalf("allowed action did not change its own desired state: %+v %v", after, err)
+		}
+	}
+	scopedMaintenanceStatus(t, s.Config.MaintenanceDir, false, scopedMaintenanceOperation("prometheus"))
+	if w := apiCall(s, admin, "POST", "/api/v1/modules/"+target.ID+"/actions", map[string]string{"action": "disable", "idempotency_key": "scoped:after-update"}, nil); w.Code != 202 {
+		t.Fatalf("target action did not resume after update: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestScopedModuleManagementRejectsLocalCreateBeforeQueue(t *testing.T) {
+	s := apiFixture(t)
+	s.Config.PortableRelease, s.Config.MaintenanceDir = true, t.TempDir()
+	s.Modules = modules.New(s.Store, moduleControllerFunc(func(context.Context, modules.Operation) (modules.Observation, error) {
+		t.Fatal("module creation reached the host controller")
+		return modules.Observation{}, nil
+	}))
+	admin := apiUser(t, s, "scoped-creator", true)
+	scopedMaintenanceStatus(t, s.Config.MaintenanceDir, true, scopedMaintenanceOperation("prometheus"))
+	input := map[string]string{"module_id": "prometheus", "mode": "local", "name": "Metrics", "idempotency_key": "scoped:blocked-create"}
+	w := apiCall(s, admin, "POST", "/api/v1/modules", input, nil)
+	if w.Code != 503 || !strings.Contains(w.Body.String(), `"error":"module_updating"`) {
+		t.Errorf("local creation was admitted during update: %d %s", w.Code, w.Body.String())
+	}
+	instances, err := store.List[model.ModuleInstance](context.Background(), s.Store, "module_instance")
+	if err != nil || len(instances) != 0 {
+		t.Fatalf("rejected creation persisted an instance: %d %v", len(instances), err)
+	}
+	jobs, err := s.Store.Jobs(context.Background())
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("rejected creation queued a job: %d %v", len(jobs), err)
+	}
+	for _, tc := range []struct{ moduleID, mode, endpoint string }{
+		{"alertmanager", "local", ""}, {"prometheus", "external", "http://192.0.2.1:9090"},
+	} {
+		input = map[string]string{"module_id": tc.moduleID, "mode": tc.mode, "endpoint": tc.endpoint, "name": "Allowed", "idempotency_key": "scoped:create:" + tc.moduleID + ":" + tc.mode}
+		if w := apiCall(s, admin, "POST", "/api/v1/modules", input, nil); w.Code != 202 {
+			t.Fatalf("neighbour/external creation blocked: %d %s", w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestScopedModuleManagementPreservesRemovedInstanceIdempotency(t *testing.T) {
+	s := apiFixture(t)
+	s.Config.PortableRelease, s.Config.MaintenanceDir = true, t.TempDir()
+	s.Modules = modules.New(s.Store, nil)
+	admin := apiUser(t, s, "scoped-remover", true)
+	instance := reconcileSeed(t, s, "prometheus", "local", "enabled")
+	path := "/api/v1/modules/" + instance.ID + "/actions"
+	action := map[string]string{"action": "remove", "confirm_name": instance.Name, "idempotency_key": "scoped:remove:original"}
+	type queuedModule struct {
+		Instance model.ModuleInstance `json:"instance"`
+		Job      model.Job            `json:"job"`
+	}
+	removed := apiDecode[queuedModule](t, apiCall(s, admin, "POST", path, action, nil), 202)
+	removed.Instance.ObservedState = "absent"
+	removed.Job.Status, removed.Job.Result = "succeeded", map[string]any{"instance": removed.Instance}
+	if err := s.Store.Finish(context.Background(), removed.Job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get[model.ModuleInstance](context.Background(), s.Store, "module_instance", instance.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("remove did not replace instance with tombstone: %v", err)
+	}
+	for _, active := range []bool{false, true} {
+		scopedMaintenanceStatus(t, s.Config.MaintenanceDir, active, scopedMaintenanceOperation("doska"))
+		freshKey := "scoped:remove:idle"
+		if active {
+			freshKey = "scoped:remove:neighbour"
+		}
+		for _, key := range []string{"scoped:remove:original", freshKey} {
+			action["idempotency_key"] = key
+			retry := apiDecode[queuedModule](t, apiCall(s, admin, "POST", path, action, nil), 202)
+			if retry.Instance.ID != instance.ID || retry.Instance.ObservedState != "absent" || retry.Job.Status != "succeeded" || key == "scoped:remove:original" && retry.Job.ID != removed.Job.ID {
+				t.Fatalf("tombstone remove retry changed semantics (scoped active=%v): %+v", active, retry)
+			}
+		}
+	}
+}
+
+func TestScopedModuleMaintenanceAnyOperationRequiresKnownLocalModule(t *testing.T) {
+	s := &Server{Config: Config{MaintenanceDir: t.TempDir()}}
+	for _, tc := range []struct {
+		kind string
+		want bool
+	}{
+		{"doska", true}, {"prometheus", true}, {"alertmanager", true},
+		{"unknown", false}, {"mailcow", false}, {"", false},
+	} {
+		scopedMaintenanceStatus(t, s.Config.MaintenanceDir, true, scopedMaintenanceOperation(tc.kind))
+		if got := s.scopedModuleOperation(""); got != tc.want {
+			t.Fatalf("any scoped operation admitted module %q: got %v want %v", tc.kind, got, tc.want)
+		}
+	}
 }
 
 func TestScopedModuleMaintenanceUsesRealGatewayAndPublicProductNames(t *testing.T) {

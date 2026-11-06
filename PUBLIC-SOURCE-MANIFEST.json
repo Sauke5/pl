@@ -20335,8 +20335,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/modules.go",
-      "sha256": "a48856146e58d51094cda585c37fae50478972051325b167ed5a0abe6aa062fb",
-      "size": 13362
+      "sha256": "0b4d1881b36a434d0efd1015e96cc5619e657450e6181b1a839c530fa1010393",
+      "size": 14759
     },
     {
       "path": "monitoring/source/it-portal/internal/server/modules_test.go",
@@ -20515,13 +20515,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/scoped_module_maintenance.go",
-      "sha256": "24a3b13021ecc2edae1d5aa01fb72d8c7e18a4f694e5b2cb071e9239d864d042",
-      "size": 5498
+      "sha256": "7967447a812c690c2cf93cc318b32aae2070d55043cc6dd869534ffebe5cdc6b",
+      "size": 5564
     },
     {
       "path": "monitoring/source/it-portal/internal/server/scoped_module_maintenance_test.go",
-      "sha256": "d30ab3bcadfbe8d86fc6926ad6264e96a97e533d9212da82516cc39446aed442",
-      "size": 14695
+      "sha256": "fae7cd69fc48d775570f42e568a4ab4a8f3baaf5d9249c1c17cd5ac0ded2d72d",
+      "size": 23873
     },
     {
       "path": "monitoring/source/it-portal/internal/server/server.go",

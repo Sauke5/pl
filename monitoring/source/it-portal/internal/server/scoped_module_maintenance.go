@@ -61,7 +61,7 @@ func (s *Server) scopedModuleOperation(kind string) bool {
 	}
 	op := status.Operation
 	id, err := uuid.Parse(op.OperationID)
-	if err != nil || id.String() != op.OperationID || op.Scope != "module" || op.Kind != "module_upgrade" || op.ModuleID != kind {
+	if err != nil || id.String() != op.OperationID || op.Scope != "module" || op.Kind != "module_upgrade" || !model.ModuleModeSupported(op.ModuleID, "local") || kind != "" && op.ModuleID != kind {
 		return false
 	}
 	switch op.Phase {

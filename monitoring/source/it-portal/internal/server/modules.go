@@ -15,7 +15,26 @@ import (
 )
 
 func (s *Server) moduleAuth(next http.HandlerFunc) http.HandlerFunc {
-	protected := s.auth(next, true)
+	protected := s.auth(func(w http.ResponseWriter, r *http.Request) {
+		// Authenticate and validate CSRF before looking up a managed instance.
+		if s.Config.PortableRelease && s.Config.MaintenanceDir != "" && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			rawID := r.PathValue("id")
+			if id, err := uuid.Parse(rawID); err == nil && id.String() == rawID && s.scopedModuleOperation("") {
+				instance, err := store.Get[model.ModuleInstance](r.Context(), s.Store, "module_instance", rawID)
+				if err != nil && !errors.Is(err, store.ErrNotFound) {
+					s.fail(w, err)
+					return
+				}
+				if err == nil && instance.Mode == "local" && s.scopedModuleOperation(instance.ModuleID) {
+					w.Header().Set("Retry-After", "2")
+					w.Header().Set("Cache-Control", "no-store")
+					problem(w, 503, "module_updating", "Модуль обновляется. Повторите действие после завершения обновления.")
+					return
+				}
+			}
+		}
+		next(w, r)
+	}, true)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.Header["Authorization"]; ok {
 			problem(w, 403, "forbidden", "Управление модулями доступно только через сессию администратора")
@@ -98,6 +117,12 @@ func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 			problem(w, 400, "invalid_gateway_key", "Для внешнего NetMap нужен отдельный gateway key из 64 hex символов")
 			return
 		}
+	}
+	if s.Config.PortableRelease && s.Config.MaintenanceDir != "" && input.Mode == "local" && s.scopedModuleOperation(input.ModuleID) {
+		w.Header().Set("Retry-After", "2")
+		w.Header().Set("Cache-Control", "no-store")
+		problem(w, 503, "module_updating", "Модуль обновляется. Повторите действие после завершения обновления.")
+		return
 	}
 	if input.Mode == "local" && (s.Config.OnDemandModules || input.ModuleID == "wayline" || input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack") && s.availableModuleVersions(r.Context())[input.ModuleID] == "" {
 		problem(w, 409, "module_unavailable", "В каталоге поставки нет совместимой версии модуля. Проверьте обновления в настройках PL.")
