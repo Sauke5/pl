@@ -41,7 +41,7 @@ HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3
 MAX_RELEASE_NOTES = 24 * 1024
 RESERVE = 512 * 1024**2
-HOST_FEATURE_API = 2
+HOST_FEATURE_API = 3
 _threads = threading.Lock()
 
 
@@ -858,7 +858,7 @@ class Delivery:
         if 'worker_handoff' in operation:
             handoff = operation['worker_handoff']
             if (not isinstance(handoff, dict) or set(handoff) != {'schema', 'capability', 'from_version', 'from_manifest_sha256', 'core_from_version', 'to_version', 'to_manifest_sha256'}
-                    or handoff.get('schema') != 1 or type(handoff.get('capability')) is not int or handoff.get('capability') not in (1, 2)
+                    or handoff.get('schema') != 1 or type(handoff.get('capability')) is not int or handoff.get('capability') not in (1, 2, 3)
                     or handoff.get('to_version') != operation.get('worker_version')
                     or handoff.get('to_version') != operation.get('version')
                     or handoff.get('to_manifest_sha256') != operation.get('worker_manifest_sha256')
@@ -1325,27 +1325,37 @@ class Delivery:
         self.operation('rolled_back' if restored else 'complete',
                        error='Восстановлены предыдущая версия и данные.' if restored else '')
 
-    def synchronize_modules(self):
+    def synchronize_modules(self, timeout=300):
         state = self.state()
         manifest = read(self.root / 'releases' / state['version'] / 'manifest.json')
         if not manifest.get('features', {}).get('module_upgrades'):
             # Legacy rollback APIs have no signed reconciliation callback.
             # Their existing scheduler resumes after the terminal operation.
             return
-        ids = self.parent.docker('container', 'ls', '--filter', 'label=com.docker.compose.project=' + self.installation,
-                                 '--filter', 'label=com.docker.compose.service=api', '--format', '{{.ID}}').decode().split()
-        if len(ids) != 1:
-            raise ValueError('Owned core API is unavailable for reconciliation')
-        obj = load_json(self.parent.docker('container', 'inspect', ids[0]))[0]
-        labels = obj.get('Config', {}).get('Labels') or {}
-        if (obj.get('Image') != manifest['images']['api']['id'] or not obj.get('State', {}).get('Running')
-                or labels.get('com.docker.compose.project') != self.installation
-                or labels.get('com.docker.compose.service') != 'api'):
-            raise ValueError('Core reconciliation target identity differs')
-        network = obj.get('NetworkSettings', {}).get('Networks', {}).get(self.installation + '_backend', {})
-        address = ipaddress.IPv4Address(network.get('IPAddress', ''))
-        if not address.is_private:
-            raise ValueError('Core reconciliation target is outside its private network')
+        deadline = time.monotonic() + timeout
+        def api_address():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError('Module bindings did not become ready before the reconciliation deadline')
+            ids = self.parent.docker('container', 'ls', '--filter', 'label=com.docker.compose.project=' + self.installation,
+                                     '--filter', 'label=com.docker.compose.service=api', '--format', '{{.ID}}',
+                                     timeout=min(30, remaining)).decode().split()
+            if len(ids) != 1:
+                raise ValueError('Owned core API is unavailable for reconciliation')
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError('Module bindings did not become ready before the reconciliation deadline')
+            obj = load_json(self.parent.docker('container', 'inspect', ids[0], timeout=min(30, remaining)))[0]
+            labels = obj.get('Config', {}).get('Labels') or {}
+            if (obj.get('Image') != manifest['images']['api']['id'] or not obj.get('State', {}).get('Running')
+                    or labels.get('com.docker.compose.project') != self.installation
+                    or labels.get('com.docker.compose.service') != 'api'):
+                raise ValueError('Core reconciliation target identity differs')
+            network = obj.get('NetworkSettings', {}).get('Networks', {}).get(self.installation + '_backend', {})
+            address = ipaddress.IPv4Address(network.get('IPAddress', ''))
+            if not address.is_private:
+                raise ValueError('Core reconciliation target is outside its private network')
+            return str(address)
         key_path = self.root / 'private/module-controller-key'
         info = key_path.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o007:
@@ -1354,22 +1364,68 @@ class Delivery:
         if len(key) != 32:
             raise ValueError('Invalid core reconciliation credential')
         operation = read(self.base / 'operation.json')
-        body = json_bytes({'operation_id': operation['operation_id'], 'request_id': str(uuid.uuid4())})
-        timestamp = str(int(time.time())); path = '/internal/delivery/reconcile'
-        signature = hmac.new(key, b'pl-delivery-reconcile-v1\n' + (timestamp + '\nPOST\n' + path + '\n').encode() + body, hashlib.sha256).hexdigest()
-        connection = http.client.HTTPConnection(str(address), 8080, timeout=70)
-        try:
-            connection.request('POST', path, body, {'Content-Type': 'application/json',
-                'X-PL-Delivery-Timestamp': timestamp, 'X-PL-Delivery-Signature': signature})
-            response = connection.getresponse(); raw = response.read(65537)
-            if response.status != 200 or len(raw) > 65536:
-                raise ValueError('Core did not confirm refreshed module bindings')
-            value = load_json(raw)
-            if (set(value) != {'operation_id', 'ready', 'instances'} or value['operation_id'] != operation['operation_id']
-                    or value['ready'] is not True or type(value['instances']) is not int or not 0 <= value['instances'] <= 1000):
-                raise ValueError('Invalid core module reconciliation result')
-        finally:
-            connection.close()
+        while True:
+            current = read(self.base / 'operation.json')
+            if (current.get('operation_id') != operation['operation_id'] or current.get('phase') != 'reconciling'
+                    or self.state()['version'] != state['version']):
+                raise ValueError('Reconciliation operation identity differs')
+            address = api_address()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError('Module bindings did not become ready before the reconciliation deadline')
+            # Running without a Docker healthcheck does not establish application
+            # readiness. Retry only the finite callback's readiness failures; a
+            # fresh request ID creates a new refresh after a failed startup job.
+            body = json_bytes({'operation_id': operation['operation_id'], 'request_id': str(uuid.uuid4())})
+            connection = http.client.HTTPConnection(address, 8080, timeout=min(70, remaining))
+            timer, timer_started = None, False
+            response = None
+            try:
+                connection.connect()
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ValueError('Module bindings did not become ready before the reconciliation deadline')
+                peer = connection.sock
+                # Socket timeouts alone do not bound a trickling header/body.
+                # Retain this exact socket: getresponse may detach it on close.
+                def expire():
+                    try: peer.shutdown(socket.SHUT_RDWR)
+                    except OSError: pass
+                timer = threading.Timer(remaining, expire); timer.daemon = True
+                timer.start(); timer_started = True
+                timestamp = str(int(time.time())); path = '/internal/delivery/reconcile'
+                signature = hmac.new(key, b'pl-delivery-reconcile-v1\n' + (timestamp + '\nPOST\n' + path + '\n').encode() + body, hashlib.sha256).hexdigest()
+                connection.request('POST', path, body, {'Content-Type': 'application/json',
+                    'X-PL-Delivery-Timestamp': timestamp, 'X-PL-Delivery-Signature': signature})
+                response = connection.getresponse(); raw = response.read(65537)
+                if time.monotonic() >= deadline:
+                    raise ValueError('Module bindings did not become ready before the reconciliation deadline')
+                if len(raw) > 65536:
+                    raise ValueError('Oversized core reconciliation response')
+                value = load_json(raw)
+                if response.status == 200:
+                    if (not isinstance(value, dict) or set(value) != {'operation_id', 'ready', 'instances'} or value['operation_id'] != operation['operation_id']
+                            or value['ready'] is not True or type(value['instances']) is not int or not 0 <= value['instances'] <= 1000):
+                        raise ValueError('Invalid core module reconciliation result')
+                    return
+                if (not isinstance(value, dict) or (response.status, value.get('error')) not in
+                        ((503, 'delivery_reconcile_failed'), (504, 'delivery_reconcile_timeout'))):
+                    raise ValueError('Core did not confirm refreshed module bindings')
+            except (OSError, http.client.HTTPException) as error:
+                if time.monotonic() >= deadline:
+                    raise ValueError('Module bindings did not become ready before the reconciliation deadline') from None
+                if isinstance(error, http.client.HTTPException) and not isinstance(error, (http.client.RemoteDisconnected, http.client.IncompleteRead)):
+                    raise ValueError('Invalid core reconciliation HTTP response') from None
+            finally:
+                if timer_started:
+                    timer.cancel(); timer.join()
+                if response is not None:
+                    response.close()
+                connection.close()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError('Module bindings did not become ready before the reconciliation deadline')
+            time.sleep(min(2, remaining))
 
     def resume_committed(self):
         operation = read(self.base / 'operation.json')

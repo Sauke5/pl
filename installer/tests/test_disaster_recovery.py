@@ -4,9 +4,11 @@ import copy
 import hashlib
 import importlib.util
 import io
+import itertools
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tarfile
@@ -375,6 +377,263 @@ print(value[image['id']]['ref'])
         numeric["HostConfig"]["OomKillDisable"] = 0
         self.assertNotEqual(dr.container_contract(numeric), spec["contract"])
 
+    def mount_contract_fixture(self, count=2):
+        spec, original, created = self.oom_contract_fixture()
+        mounts = [{"Type": "bind", "Source": "/fixture/" + chr(97 + i), "Target": "/run/pl-" + chr(97 + i),
+                   "ReadOnly": True, "BindOptions": {"Propagation": "rprivate"}} for i in reversed(range(count))]
+        original["HostConfig"]["Mounts"] = copy.deepcopy(mounts)
+        created["HostConfig"]["Mounts"] = copy.deepcopy(list(reversed(mounts)))
+        physical = [{"Type": "bind", "Source": v["Source"], "Destination": v["Target"],
+                     "Mode": "", "RW": False, "Propagation": "rprivate"} for v in mounts]
+        original["Mounts"], created["Mounts"] = copy.deepcopy(physical), copy.deepcopy(physical)
+        spec["contract"] = dr.container_contract(original)
+        return spec, original, created
+
+    def test_v2_mount_order_is_canonical_and_never_uses_legacy_permutations(self):
+        recovery = self.recovery(); recovery.meta["contract_version"] = 2
+        spec, original, created = self.mount_contract_fixture()
+        before = copy.deepcopy(created)
+        self.assertEqual(dr.container_contract(created), spec["contract"])
+        with patch("itertools.permutations", side_effect=AssertionError("v2 must not enumerate legacy order")):
+            recovery.remember_container(created, spec)
+        self.assertEqual(created, before)
+        self.assertEqual(original["HostConfig"]["Mounts"][0]["Target"], "/run/pl-b")
+
+    def test_v2_mount_fields_and_duplicate_or_invalid_targets_remain_strict(self):
+        recovery = self.recovery(); recovery.meta["contract_version"] = 2
+        spec, _, created = self.mount_contract_fixture()
+        for field, value in (("Source", "/foreign"), ("Target", "/foreign"), ("ReadOnly", False),
+                             ("BindOptions", {"Propagation": "shared"})):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(created); changed["HostConfig"]["Mounts"][0][field] = value
+                with self.assertRaisesRegex(ValueError, "closed preserved recipe"):
+                    recovery.remember_container(changed, spec)
+        for field, value in (("Source", "/foreign"), ("Destination", "/foreign"), ("RW", True), ("Propagation", "shared")):
+            changed = copy.deepcopy(created); changed["Mounts"][0][field] = value
+            with self.assertRaisesRegex(ValueError, "closed preserved recipe"):
+                recovery.remember_container(changed, spec)
+        for target in (None, "", "relative", "//run/pl-a", "/run/../foreign", "/run/pl-b"):
+            with self.subTest(target=target):
+                changed = copy.deepcopy(created); changed["HostConfig"]["Mounts"][0]["Target"] = target
+                with self.assertRaisesRegex(ValueError, "mount target"):
+                    dr.container_contract(changed)
+        self.assertEqual(recovery.operation["created"]["container"], {})
+
+    def test_legacy_beta_mount_order_accepts_only_the_same_records(self):
+        recovery = self.recovery()
+        spec, _, created = self.mount_contract_fixture()
+        spec["contract"] = "6d96ec8b64d446c82f447ab8f042697a2df8dbd26a98a1ce9b2b02a6a68f79d8"
+        for version, marker in (("0.5.1", None), ("0.5.2", 1)):
+            recovery.meta["version"] = version
+            if marker is None: recovery.meta.pop("contract_version", None)
+            else: recovery.meta["contract_version"] = marker
+            recovery.remember_container(created, spec)
+        for kind, field, value in (("HostConfig", "OomKillDisable", True), ("HostConfig", "OomKillDisable", 0),
+                                   ("declaration", "Source", "/foreign"), ("declaration", "ReadOnly", False),
+                                   ("physical", "RW", True)):
+            changed = copy.deepcopy(created)
+            if kind == "declaration": changed["HostConfig"]["Mounts"][0][field] = value
+            elif kind == "physical": changed["Mounts"][0][field] = value
+            else: changed["HostConfig"][field] = value
+            with self.assertRaisesRegex(ValueError, "closed preserved recipe"):
+                recovery.remember_container(changed, spec)
+
+    def test_legacy_beta_mount_verification_is_bounded_at_six_records(self):
+        recovery = self.recovery()
+        spec, _, created = self.mount_contract_fixture(6)
+        spec["contract"] = "04ad703c7410e4d972bf171c0a1f06cc07b36880217ce86af69b9d9977272af9"
+        original_permutations, seen = itertools.permutations, []
+        def counted(values):
+            for value in original_permutations(values):
+                seen.append(1)
+                yield value
+        with patch("itertools.permutations", side_effect=counted): recovery.remember_container(created, spec)
+        self.assertEqual(len(seen), 720)
+        created["HostConfig"]["Mounts"].append({"Type": "bind", "Source": "/fixture/g", "Target": "/run/pl-g", "ReadOnly": True})
+        with patch("itertools.permutations", side_effect=AssertionError("over-limit order must be refused")):
+            with self.assertRaisesRegex(ValueError, "Legacy.*six"):
+                recovery.remember_container(created, spec)
+        recovery.meta["contract_version"] = 2
+        spec, _, created = self.mount_contract_fixture(7)
+        with patch("itertools.permutations", side_effect=AssertionError("v2 has no legacy permutation path")):
+            recovery.remember_container(created, spec)
+
+    def bind_contract_fixture(self, bind_count=2, mount_count=5):
+        spec, original, created = self.mount_contract_fixture(mount_count)
+        binds = ["pl-fixture-" + str(i) + ":/var/pl-bind-" + str(i) + ":rw" for i in reversed(range(bind_count))]
+        original["HostConfig"]["Binds"] = copy.deepcopy(binds)
+        created["HostConfig"]["Binds"] = copy.deepcopy(list(reversed(binds)))
+        for obj in (original, created):
+            obj["Mounts"] += [{"Type": "volume", "Name": "pl-fixture-" + str(i),
+                "Source": "/var/lib/docker/volumes/pl-fixture-" + str(i) + "/_data",
+                "Destination": "/var/pl-bind-" + str(i), "Driver": "local", "Mode": "rw", "RW": True,
+                "Propagation": ""} for i in range(bind_count)]
+        spec["contract"] = dr.container_contract(original)
+        return spec, original, created
+
+    def test_v2_binds_and_mounts_order_are_canonical_without_legacy_enumeration(self):
+        recovery = self.recovery(); recovery.meta["contract_version"] = 2
+        spec, original, created = self.bind_contract_fixture()
+        source_before, target_before = copy.deepcopy(original), copy.deepcopy(created)
+        self.assertEqual(dr.container_contract(created), spec["contract"])
+        with patch("itertools.permutations", side_effect=AssertionError("v2 must not enumerate")):
+            recovery.remember_container(created, spec)
+        self.assertEqual(original, source_before); self.assertEqual(created, target_before)
+
+    def test_binds_sources_modes_and_destinations_remain_strict(self):
+        spec, original, created = self.bind_contract_fixture()
+        legacy = hashlib.sha256(dr.encoded(dr._container_projection(original, canonical_mount_order=False))).hexdigest()
+        for version, expected in ((1, legacy), (2, spec["contract"])):
+            for value in ("foreign:/var/pl-bind-0:rw", "pl-fixture-0:/var/pl-bind-0:ro",
+                          "pl-fixture-0:/var/pl-foreign:rw", "pl-fixture-0:/var/pl-bind-0:rw,shared"):
+                with self.subTest(version=version, value=value):
+                    changed = copy.deepcopy(created); changed["HostConfig"]["Binds"][0] = value
+                    self.assertFalse(dr.container_contract_matches(changed, expected, {"version": "0.5.1", "contract_version": version}))
+            for value in (True, 0):
+                changed = copy.deepcopy(created); changed["HostConfig"]["OomKillDisable"] = value
+                self.assertFalse(dr.container_contract_matches(changed, expected, {"version": "0.5.1", "contract_version": version}))
+        for binds in ("not-a-list", [None], [""], ["missing-target"], ["source:relative:rw"],
+                      ["source://var/pl-bind-0:rw"], ["source:/var/../foreign:rw"],
+                      ["source:/var/pl-bind-0:rw", "other:/var/pl-bind-0:ro"], ["source:/run/pl-a:ro"]):
+            with self.subTest(binds=binds):
+                changed = copy.deepcopy(created); changed["HostConfig"]["Binds"] = binds
+                with self.assertRaisesRegex(ValueError, "mount target|bind"):
+                    dr.container_contract(changed)
+
+    def test_legacy_binds_and_mounts_permutations_share_one_720_order_budget(self):
+        spec, original, created = self.bind_contract_fixture(3, 5)
+        # Frozen pre-canonical beta digest: reverse-ordered full declarations,
+        # including the original null OOM representation, without dropping fields.
+        expected = "119df6f03c24609e148f27e702929108358ceacb983e4ea5c54c90c11a7404c0"
+        self.assertEqual(hashlib.sha256(dr.encoded(dr._container_projection(original, canonical_mount_order=False))).hexdigest(), expected)
+        real_sha256, seen = hashlib.sha256, []
+        def counted(*args, **kwargs):
+            seen.append(1)
+            return real_sha256(*args, **kwargs)
+        with patch.object(dr.hashlib, "sha256", side_effect=counted):
+            self.assertTrue(dr.container_contract_matches(created, expected, {"version": "0.5.1"}))
+        self.assertLessEqual(len(seen), 1440)
+        self.assertGreater(len(seen), 720)
+        for bind_count, mount_count in ((3, 6), (6, 2), (7, 0)):
+            _, _, changed = self.bind_contract_fixture(bind_count, mount_count)
+            with self.subTest(binds=bind_count, mounts=mount_count):
+                with patch("itertools.permutations", side_effect=AssertionError("budget must be checked before enumeration")):
+                    with self.assertRaisesRegex(ValueError, "Legacy"):
+                        dr.container_contract_matches(changed, expected, {"version": "0.5.2", "contract_version": 1})
+
+    def test_v2_larger_binds_and_mounts_have_no_legacy_budget_or_enumeration(self):
+        spec, original, created = self.bind_contract_fixture(7, 7)
+        with patch("itertools.permutations", side_effect=AssertionError("v2 must not enumerate")):
+            self.assertTrue(dr.container_contract_matches(created, spec["contract"], {"contract_version": 2}))
+
+    def dns_daemon_fixtures(self):
+        # Shapes and nil/empty defaults observed on the eight never-started
+        # native containers before and after a real Docker 29 daemon restart.
+        shapes = (("core-api", 2, 5, True), ("core-db", 1, 0, True), ("core-web", 0, 4, True),
+                  ("doska-api", 0, 6, False), ("doska-database", 0, 2, False),
+                  ("doska-web", 0, 0, False), ("sftpgo", 0, 3, False), ("prometheus", 0, 2, False))
+        for name, binds, mounts, core in shapes:
+            _, source, before = self.bind_contract_fixture(binds, mounts)
+            for obj in (source, before):
+                obj["Name"] = "/fixture-" + name
+                obj["Config"]["Labels"]["fixture.role"] = name
+                obj["HostConfig"].update(Dns=None, DnsOptions=None if core else [], DnsSearch=None if core else [])
+            after = copy.deepcopy(before)
+            after["HostConfig"].update(Dns=[], DnsOptions=[], DnsSearch=[])
+            yield name, source, before, after
+
+    def test_daemon_restart_empty_dns_defaults_match_all_eight_preserved_roles(self):
+        legacy = {
+            'core-api': '14bfdb91eba24d09b3bfb20a19571ea52e6db3d5a4a65b1943bc96a4ed4641c3',
+            'core-db': '90eee9bada50f83ac004cd2baa3cc60732b4a301c6f025ea2fa5fea2d0acb6da',
+            'core-web': '04a29c8459083db055156d3e1566b1ce75958f4c7d721b5eb0baea6518347fa6',
+            'doska-api': '7d1cbd7aebb2cc25efddde558c2b965e1e46253c3e242f6fdc6d0f3a58744995',
+            'doska-database': '8404f33c13477f0cf3e788d907e15d5ad744a0ab4eec5bc05cf29fa21a2177a2',
+            'doska-web': '2fee3289969def804b6bf24ab088e6045c4cdebe610ee56aef66d60c74efb5ed',
+            'sftpgo': 'fbe19245456d2e03df9560021ab336077724b6e370f120443cfb786dbb883753',
+            'prometheus': '4a1132d273da2491fe3d50ff5f705c4b8e0f6fe66d49615d0c059e6f9c36a385',
+        }
+        for name, source, before, after in self.dns_daemon_fixtures():
+            with self.subTest(role=name):
+                original = copy.deepcopy((source, before, after))
+                expected = dr.container_contract(source)
+                self.assertEqual(dr.container_contract(before), expected)
+                self.assertEqual(dr.container_contract(after), expected)
+                with patch("itertools.permutations", side_effect=AssertionError("v2 must not enumerate")), \
+                     patch("itertools.product", side_effect=AssertionError("v2 must not enumerate DNS defaults")):
+                    self.assertTrue(dr.container_contract_matches(after, expected, {"contract_version": 2}))
+                for version in ("0.5.1", "0.5.2"):
+                    self.assertTrue(dr.container_contract_matches(before, legacy[name], {"version": version}))
+                    self.assertTrue(dr.container_contract_matches(after, legacy[name], {"version": version}))
+                self.assertEqual((source, before, after), original)
+
+    def test_dns_nonempty_order_values_wrong_types_and_missing_fields_are_strict(self):
+        _, source, created = self.bind_contract_fixture(0, 0)
+        source["HostConfig"].update(Dns=None, DnsOptions=None, DnsSearch=None)
+        created["HostConfig"].update(Dns=[], DnsOptions=[], DnsSearch=[])
+        expected = dr.container_contract(source)
+        for field, values in (("Dns", ["192.0.2.53", "192.0.2.54"]),
+                              ("DnsOptions", ["ndots:0", "timeout:1"]),
+                              ("DnsSearch", ["one.example.test", "two.example.test"])):
+            for value in (values, False, 0, "", {}, "default"):
+                with self.subTest(field=field, value=value):
+                    changed = copy.deepcopy(created); changed["HostConfig"][field] = value
+                    for metadata in ({"contract_version": 2}, {"version": "0.5.1"}):
+                        self.assertFalse(dr.container_contract_matches(changed, expected, metadata))
+            missing = copy.deepcopy(source); del missing["HostConfig"][field]
+            self.assertNotIn(field, dr._container_projection(missing)["host"])
+            for metadata in ({"contract_version": 2}, {"version": "0.5.1"}):
+                self.assertFalse(dr.container_contract_matches(missing, expected, metadata))
+            custom = copy.deepcopy(source); custom["HostConfig"][field] = values
+            custom_digest = dr.container_contract(custom)
+            self.assertEqual(dr._container_projection(custom)["host"][field], values)
+            for value in (list(reversed(values)), values[:-1], None, []):
+                changed = copy.deepcopy(custom); changed["HostConfig"][field] = value
+                for metadata in ({"contract_version": 2}, {"version": "0.5.2"}):
+                    self.assertFalse(dr.container_contract_matches(changed, custom_digest, metadata))
+
+    def test_legacy_dns_defaults_have_an_explicit_11520_total_digest_budget(self):
+        _, source, created = self.bind_contract_fixture(3, 5)
+        source["HostConfig"].update(Dns=[], DnsOptions=[], DnsSearch=[])
+        created["HostConfig"].update(Dns=None, DnsOptions=None, DnsSearch=None)
+        # Frozen raw beta digest: last mount order, false OOM and all three
+        # empty DNS arrays. Reaching it requires the entire finite search.
+        expected = "a890f5d227e01889d5c83242368025f79a491f466833d00007c1cd31260e734b"
+        real_sha256, seen = hashlib.sha256, []
+        def counted(*args, **kwargs):
+            seen.append(1)
+            return real_sha256(*args, **kwargs)
+        with patch.object(dr.hashlib, "sha256", side_effect=counted):
+            self.assertTrue(dr.container_contract_matches(created, expected, {"version": "0.5.1"}))
+        self.assertEqual(len(seen), 11520)
+        _, _, over = self.bind_contract_fixture(3, 6)
+        over["HostConfig"].update(Dns=None, DnsOptions=None, DnsSearch=None)
+        with patch("itertools.permutations", side_effect=AssertionError("check bound before enumeration")), \
+             patch("itertools.product", side_effect=AssertionError("check bound before DNS enumeration")):
+            with self.assertRaisesRegex(ValueError, "Legacy"):
+                dr.container_contract_matches(over, expected, {"version": "0.5.2"})
+
+    def test_v2_dns_defaults_keep_absent_fields_and_large_recipes_without_enumeration(self):
+        _, source, created = self.bind_contract_fixture(7, 7)
+        source["HostConfig"].update(Dns=None, DnsOptions=None)
+        created["HostConfig"].update(Dns=[], DnsOptions=[])
+        self.assertNotIn("DnsSearch", source["HostConfig"])
+        with patch("itertools.permutations", side_effect=AssertionError("v2 has no permutation path")), \
+             patch("itertools.product", side_effect=AssertionError("v2 has no DNS enumeration path")):
+            self.assertTrue(dr.container_contract_matches(created, dr.container_contract(source), {"contract_version": 2}))
+        self.assertNotIn("DnsSearch", dr._container_projection(created)["host"])
+
+    def test_metadata_contract_version_is_explicit_for_new_and_finite_for_legacy(self):
+        self.build_backup()
+        dr.validate_metadata({**self.meta, "contract_version": 2, "version": "0.5.3"})
+        for marker in (True, False, 0, 3, "2"):
+            with self.assertRaises(ValueError): dr.validate_metadata({**self.meta, "contract_version": marker})
+        for version in ("0.5.0", "0.5.3", "0.5.2-rc.1"):
+            with self.assertRaisesRegex(ValueError, "Legacy"):
+                dr.validate_metadata({**self.meta, "version": version})
+        for version in ("0.5.1", "0.5.2"):
+            dr.validate_metadata({**self.meta, "version": version, "contract_version": 1})
+
     def test_foreign_volume_consumer_is_refused_before_any_import(self):
         recovery = self.recovery()
         foreign = {"Id": "1" * 64, "Name": "/foreign", "Config": {"Labels": {}},
@@ -427,7 +686,13 @@ print(value[image['id']]['ref'])
     def test_forward_resume_preserves_a_password_changed_after_initial_session_revocation(self):
         self.exercise_auth_resume(changed_after_publish=True)
 
-    def exercise_auth_resume(self, *, changed_after_publish):
+    def test_resume_preserves_a_valid_pinned_catalog_without_fresh_install_policy(self):
+        self.exercise_auth_resume(changed_after_publish=True, pinned_channel=True)
+
+    def test_icmp_recovery_uses_the_existing_maintenance_command_runner(self):
+        self.exercise_auth_resume(changed_after_publish=True, pinned_channel=True, icmp_enabled=True)
+
+    def exercise_auth_resume(self, *, changed_after_publish, pinned_channel=False, icmp_enabled=False):
         recovery = self.recovery(); recovery.write(committed=True)
         events, running = [], set()
         for value in self.meta["containers"]:
@@ -450,12 +715,26 @@ print(value[image['id']]['ref'])
             return b"0"
         rt = types.SimpleNamespace(schema=self.meta["schema_contract"], package=self.base, install_id=self.installation,
             m={"features": {}}, state={"config": {}}, validate_runtime=lambda: events.append("schema"), read_auth=lambda: auth,
-            verify_connector_credentials=lambda: events.append("decrypt"), sql=sql)
+            verify_connector_credentials=lambda: events.append("decrypt"), sql=sql, run=Mock(return_value=b""))
         modules = {"maintenance": types.SimpleNamespace(Runtime=lambda root: rt),
                    "bootstrap": types.SimpleNamespace(Runtime=lambda *args: types.SimpleNamespace(), prepare_module_controller=lambda rt: events.append("controller")),
                    "module-controller": types.SimpleNamespace(Controller=lambda *args: object()),
                    "delivery": types.SimpleNamespace(Delivery=lambda *args: types.SimpleNamespace(wait_readiness=lambda: events.append("ready"))),
                    "module-upgrade": types.SimpleNamespace()}
+        if pinned_channel:
+            modules["bootstrap"].prepare_module_controller = Mock(side_effect=ValueError("Delivery configuration differs from the trusted release channel"))
+        if icmp_enabled:
+            rt.m["features"]["icmp_probe"] = True
+            policy = {"mode": "interactive", "cidrs": []}
+            modules["bootstrap"].icmp_policy = Mock(return_value=policy)
+            def prepare(root, package, installation, selected_policy, gid, run):
+                self.assertIs(run, rt.run)
+                self.assertEqual((root, package, installation, selected_policy, gid),
+                                 (self.root, rt.package, self.installation, policy, self.meta["marker"]["gid"]))
+                run(["systemctl", "daemon-reload"], timeout=30)
+                events.append("icmp")
+            modules["bootstrap"].icmp_installer = Mock(return_value=types.SimpleNamespace(prepare=prepare))
+        recovery.activate_controller = Mock(side_effect=lambda: events.append("controller"))
         recovery.wait_private_api = Mock(return_value="172.31.252.2")
         recovery.start_relay = Mock(side_effect=lambda address: events.append("relay"))
         with patch.object(dr, "helper", side_effect=modules.__getitem__): recovery.resume_committed()
@@ -469,11 +748,119 @@ print(value[image['id']]['ref'])
         self.assertNotIn("start-web", events)
         self.assertEqual(recovery.operation["phase"], "runtime_ready")
         self.assertTrue(recovery.operation["sessions_revoked"])
+        if icmp_enabled:
+            rt.run.assert_called_once_with(["systemctl", "daemon-reload"], timeout=30)
+            self.assertLess(events.index("controller"), events.index("icmp"))
+            self.assertLess(events.index("icmp"), events.index("start-api"))
+
+    def controller_activation_fixture(self, *, existing_unit=True):
+        recovery = self.recovery(); recovery.write(committed=True, sessions_revoked=True)
+        for name in ("private", "config", "run", "run/module-controller"):
+            p = self.root / name; p.mkdir(mode=0o750 if name.startswith("run") else 0o700, exist_ok=True)
+        os.chown(self.root / "run/module-controller", -1, self.meta["marker"]["gid"])
+        source = self.payload / "root"; source.mkdir(mode=0o700)
+        data = {"state/controller-active.json": dr.encoded({"schema": 1, "version": self.meta["version"]}),
+                "state/controller-supervisor.json": dr.encoded({"schema": 1, "version": self.meta["supervisor_version"]}),
+                "private/module-images.json": dr.encoded(self.meta["registry"]),
+                "private/module-controller-key": b"k" * 32,
+                "config/delivery.json": dr.encoded({"schema": 1, "catalog_url": "https://github.com/Sauke5/pl/releases/download/v0.5.1/catalog.json"})}
+        for name, body in data.items():
+            for base in (self.root, source):
+                p = base / name; p.parent.mkdir(mode=0o700, parents=True, exist_ok=True); p.write_bytes(body)
+                p.chmod(0o640 if name.endswith("-key") else 0o600)
+                if name.endswith("-key"): os.chown(p, -1, self.meta["marker"]["gid"])
+        units = self.base / "systemd"; units.mkdir(mode=0o755)
+        self.enterContext(patch.object(dr, "SYSTEMD_UNITS", units, create=True))
+        unit = units / (self.installation + "-module-controller.service")
+        if existing_unit: unit.write_bytes(dr.unit_payload(self.root, self.meta["supervisor_version"])); unit.chmod(0o644)
+        properties = {"LoadState": "loaded" if existing_unit else "not-found", "FragmentPath": str(unit) if existing_unit else "",
+                      "DropInPaths": "", "MainPID": "0", "ActiveState": "inactive", "UnitFileState": "disabled" if existing_unit else ""}
+        calls = []
+        def run(args, **kwargs):
+            calls.append(list(args))
+            if args == ["systemctl", "show", "--property=UnitPath", "--value"]: return str(units).encode()
+            if args[:2] == ["systemctl", "show"]:
+                return ("\n".join(key + "=" + value for key, value in properties.items()) + "\n").encode()
+            if args[:3] == ["systemctl", "enable", "--now"]:
+                properties.update(LoadState="loaded", FragmentPath=str(unit), MainPID=str(os.getpid()), ActiveState="active", UnitFileState="enabled")
+            return b""
+        recovery.host.run = Mock(side_effect=run)
+        self.enterContext(patch.object(dr, "validate_package_tree", return_value=({}, {})))
+        return recovery, unit, source, properties, calls, tuple(data)
+
+    def test_controller_activation_preserves_pinned_config_keys_registry_pointers_and_existing_unit(self):
+        recovery, unit, source, properties, calls, names = self.controller_activation_fixture()
+        before = {name: ((self.root / name).read_bytes(), (self.root / name).stat().st_ino) for name in names}
+        inode = unit.stat().st_ino
+        with patch.object(recovery, "controller_socket_ready", return_value=True, create=True): recovery.activate_controller()
+        self.assertEqual(before, {name: ((self.root / name).read_bytes(), (self.root / name).stat().st_ino) for name in names})
+        self.assertEqual(unit.stat().st_ino, inode)
+        self.assertEqual(unit.read_bytes(), dr.unit_payload(self.root, self.meta["supervisor_version"]))
+        self.assertIn(["systemctl", "daemon-reload"], calls)
+        self.assertIn(["systemctl", "enable", "--now", unit.name], calls)
+        self.assertIn(["systemctl", "is-active", "--quiet", unit.name], calls)
+
+    def test_forward_controller_activation_keeps_current_valid_delivery_configuration(self):
+        recovery, unit, source, properties, calls, names = self.controller_activation_fixture()
+        path = self.root / "config/delivery.json"
+        current = dr.encoded({"schema": 1, "catalog_url": "https://github.com/Sauke5/pl/releases/download/v0.5.2/catalog.json"})
+        path.write_bytes(current); inode = path.stat().st_ino
+        self.assertNotEqual(path.read_bytes(), (source / "config/delivery.json").read_bytes())
+        with patch.object(recovery, "controller_socket_ready", return_value=True, create=True): recovery.activate_controller()
+        self.assertEqual(path.read_bytes(), current); self.assertEqual(path.stat().st_ino, inode)
+
+    @unittest.skipUnless(sys.platform == "linux", "Atomic Linux systemd unit publication requires native Linux")
+    def test_new_controller_unit_is_published_atomically_without_replacing_a_foreign_path(self):
+        recovery, unit, source, properties, calls, names = self.controller_activation_fixture(existing_unit=False)
+        with patch.object(recovery, "controller_socket_ready", return_value=True, create=True): recovery.activate_controller()
+        self.assertEqual(unit.read_bytes(), dr.unit_payload(self.root, self.meta["supervisor_version"]))
+        self.assertEqual(unit.stat().st_mode & 0o777, 0o644)
+        before = (unit.read_bytes(), unit.stat().st_ino)
+        with self.assertRaises(FileExistsError): dr.publish_unit(unit, b"foreign replacement")
+        self.assertEqual((unit.read_bytes(), unit.stat().st_ino), before)
+
+    def test_controller_activation_refuses_foreign_unit_mask_dropin_socket_and_archived_input_drift_before_writes(self):
+        recovery, unit, source, properties, calls, names = self.controller_activation_fixture()
+        original_unit = unit.read_bytes()
+        def rejected():
+            calls.clear()
+            with self.assertRaises((OSError, ValueError)): recovery.activate_controller()
+            self.assertFalse(any(args[1] != "show" for args in calls))
+        for key, value in (("LoadState", "masked"), ("FragmentPath", "/foreign/controller.service"), ("DropInPaths", "/foreign/override.conf")):
+            old = properties[key]; properties[key] = value; rejected(); properties[key] = old
+        unit.write_bytes(b"foreign unit"); rejected(); unit.write_bytes(original_unit)
+        unit.chmod(0o640); rejected(); unit.chmod(0o644)
+        dropin = unit.parent / "service.d"; dropin.mkdir(); conf = dropin / "policy.conf"; conf.write_text("[Service]\n")
+        rejected(); conf.unlink(); dropin.rmdir()
+        sock = self.root / "run/module-controller/control.sock"; sock.write_bytes(b"foreign socket path"); rejected(); sock.unlink()
+        for name in names:
+            p = self.root / name; before = p.read_bytes(); p.write_bytes(b"drift"); rejected(); p.write_bytes(before)
+        cfg = self.root / "config/delivery.json"; original = cfg.read_bytes()
+        bad = dr.encoded({"schema": 1, "catalog_url": "https://foreign.example/catalog.json"})
+        cfg.write_bytes(bad); (source / "config/delivery.json").write_bytes(bad); rejected()
+        cfg.write_bytes(original)
+
+    @unittest.skipUnless(sys.platform == "linux" and hasattr(socket, "SO_PEERCRED"), "Linux native UNIX peer identity acceptance")
+    def test_controller_socket_peer_must_be_the_actual_canonical_unit_main_pid(self):
+        recovery, unit, source, properties, calls, names = self.controller_activation_fixture()
+        path = self.root / "run/module-controller/control.sock"
+        program = "import os,socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); os.chown(sys.argv[1],-1,int(sys.argv[2])); os.chmod(sys.argv[1],0o660); s.listen(); print('ready',flush=True);\nwhile True:\n c,_=s.accept(); c.close()"
+        process = subprocess.Popen([sys.executable, "-c", program, str(path), str(self.meta["marker"]["gid"])], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(process.stdout.readline().strip(), "ready")
+            properties.update(MainPID=str(process.pid), ActiveState="active")
+            self.assertTrue(recovery.controller_socket_ready(properties))
+            properties["MainPID"] = str(process.pid + 1)
+            with self.assertRaisesRegex(ValueError, "peer"): recovery.controller_socket_ready(properties)
+        finally:
+            process.terminate(); process.wait(timeout=5); process.stdout.close()
 
     def test_runtime_resume_without_commit_never_calls_the_host(self):
         recovery = self.recovery()
         with self.assertRaisesRegex(ValueError, "commit"): recovery.resume_committed()
+        with self.assertRaisesRegex(ValueError, "commit"): recovery.activate_controller()
         recovery.host.docker.assert_not_called()
+        recovery.host.run.assert_not_called()
 
     def run_state_machine(self, recovery, failure=None):
         events = []
@@ -510,6 +897,37 @@ print(value[image['id']]['ref'])
         self.assertFalse(recovery.operation["committed"])
         self.assertEqual(recovery.status()["phase"], "staging_failed")
         recovery.resume_committed.assert_not_called()
+
+    def test_private_failure_frames_are_bounded_and_public_status_omits_private_details(self):
+        self.build_backup(); recovery = self.recovery(); self.run_state_machine(recovery)
+        namespace = {}
+        exec(compile("def fail(depth):\n local_secret = 'PRIVATE_FAILURE_MESSAGE_AND_LOCAL'\n if depth: return fail(depth - 1)\n raise ValueError(local_secret)\n",
+                     "/PRIVATE_FAILURE_DIRECTORY/finite-fault.py", "exec"), namespace)
+        recovery.construct = lambda: namespace["fail"](20)
+        with self.assertRaises(ValueError): recovery.execute()
+        saved = dr.load_json(recovery.journal.read_bytes())
+        self.assertEqual(saved["failed_step"], "constructing")
+        failure = saved["last_failure"]
+        self.assertEqual(set(failure), {"phase", "type", "frames"})
+        self.assertEqual(failure["type"], "ValueError")
+        self.assertEqual(len(failure["frames"]), 12)
+        for frame in failure["frames"]:
+            self.assertEqual(set(frame), {"file", "line", "function"})
+            self.assertEqual(frame["file"], Path(frame["file"]).name)
+            self.assertGreater(frame["line"], 0)
+        raw = recovery.journal.read_text()
+        self.assertNotIn("PRIVATE_FAILURE_MESSAGE_AND_LOCAL", raw)
+        self.assertNotIn("PRIVATE_FAILURE_DIRECTORY", raw)
+        recovery.validate_journal()
+        status = json.dumps(recovery.status())
+        self.assertNotIn("last_failure", status)
+        self.assertNotIn("frames", status)
+        self.assertNotIn("finite-fault.py", status)
+        invalid = copy.deepcopy(failure); invalid["frames"][0]["file"] = "/PRIVATE_FAILURE_DIRECTORY/finite-fault.py"
+        recovery.write(last_failure=invalid)
+        with self.assertRaisesRegex(ValueError, "private recovery failure frames"): recovery.validate_journal()
+        recovery.operation.pop("last_failure"); recovery.write()
+        recovery.validate_journal()
 
     def test_postcommit_failure_resumes_without_restoring_old_bytes(self):
         self.build_backup(); recovery = self.recovery(); self.run_state_machine(recovery, "first_start")
@@ -631,7 +1049,7 @@ print(value[image['id']]['ref'])
         for value in ("client_body", "proxy", "fastcgi", "uwsgi", "scgi"):
             self.assertIn(value + "_temp_path /tmp/", config)
 
-    def test_owned_directory_relay_records_actual_id_before_start_and_resumes_without_second_create(self):
+    def pending_relay_fixture(self, ipam):
         self.add_module("doska"); recovery = self.recovery(); recovery.write(committed=True, sessions_revoked=True)
         (self.root / "state").mkdir()
         dr.atomic(self.root / "state/installation.json", {"config": {"bind_address": "127.0.0.1", "port": 8452}})
@@ -648,20 +1066,26 @@ print(value[image['id']]['ref'])
             if args[:2] == ("network", "inspect"): return dr.encoded([networks[args[-1]]])
             if args[:2] == ("network", "connect"):
                 obj = containers[args[-1]]
-                obj["NetworkSettings"]["Networks"][networks[args[-2]]["Name"]] = {"NetworkID": args[-2], "Aliases": [], "IPAMConfig": None}
+                obj["NetworkSettings"]["Networks"][networks[args[-2]]["Name"]] = {
+                    "NetworkID": "", "Aliases": [], "IPAMConfig": copy.deepcopy(ipam), "DriverOpts": {}, "Links": None}
                 return b""
             if args[:2] == ("container", "create"):
                 name = args[args.index("--name") + 1]; identity = digest(name)
                 labels = dict(args[i + 1].split("=", 1) for i, value in enumerate(args) if value == "--label")
                 containers[identity] = {"Id": identity, "Name": "/" + name, "Image": args[-1], "Config": {"Labels": labels},
                     "State": {"Status": "created", "Running": False, "StartedAt": "0001-01-01T00:00:00Z"},
-                    "HostConfig": {}, "Mounts": [], "NetworkSettings": {"Networks": {
+                    "HostConfig": {"NetworkMode": self.installation + "_backend", "ReadonlyRootfs": True},
+                    "Mounts": [], "NetworkSettings": {"Networks": {
                         self.installation + "_backend": {"Aliases": [], "IPAMConfig": None}}}}
                 return identity.encode()
             obj = containers[args[-1]]
             if args[:2] == ("container", "start"):
                 persisted = dr.load_json(recovery.journal.read_bytes())
                 self.assertEqual(persisted["relay"]["id"], obj["Id"])
+                self.assertIs(persisted["relay"]["attach_pending"], False)
+                self.assertEqual(persisted["relay"]["contract"], dr.container_contract(obj))
+                for name, endpoint in obj["NetworkSettings"]["Networks"].items():
+                    endpoint["NetworkID"] = recovery.operation["created"]["network"][name]["id"]
                 obj["State"]["Running"] = True; obj["State"]["Status"] = "running"; return b""
             if args[:2] == ("container", "stop"): obj["State"]["Running"] = False; return b""
             if args[:2] == ("container", "rm"): del containers[args[-1]]; return b""
@@ -680,6 +1104,10 @@ print(value[image['id']]['ref'])
         self.assertFalse(any(v[:2] == ("container", "start") for v in calls))
         self.assertTrue(dr.load_json(recovery.journal.read_bytes())["relay"]["attach_pending"])
         recovery.operation = dr.load_json(recovery.journal.read_bytes()); recovery.write = original_write
+        return recovery, containers, networks, calls
+
+    def exercise_owned_directory_relay_replay(self, ipam):
+        recovery, containers, networks, calls = self.pending_relay_fixture(ipam)
         recovery.start_relay("172.31.252.2"); recovery.start_relay("172.31.252.2")
         self.assertEqual(sum(v[:2] == ("container", "create") for v in calls), 1)
         self.assertEqual(sum(v[:2] == ("container", "start") for v in calls), 1)
@@ -688,6 +1116,38 @@ print(value[image['id']]['ref'])
         containers[recovery.operation["relay"]["id"]]["Image"] = "sha256:" + "f" * 64
         with self.assertRaisesRegex(ValueError, "identity"): recovery.remove_relay()
         self.assertFalse(any(v[:2] == ("container", "rm") for v in calls[before:]))
+
+    def test_owned_directory_relay_records_actual_id_before_start_and_resumes_without_second_create(self):
+        self.exercise_owned_directory_relay_replay(None)
+
+    def test_relay_exact_engine_empty_ipam_replays_after_connect_before_checkpoint(self):
+        self.exercise_owned_directory_relay_replay({"IPv4Address": "", "IPv6Address": ""})
+
+    def test_relay_ipam_network_alias_and_base_recipe_drift_remain_strict_and_pending(self):
+        recovery, containers, networks, calls = self.pending_relay_fixture({"IPv4Address": "", "IPv6Address": ""})
+        record = recovery.operation["relay"]; obj = containers[record["id"]]
+        original = copy.deepcopy(obj); ingress = self.installation + "_ingress"
+        endpoint = obj["NetworkSettings"]["Networks"][ingress]
+        invalid = ({"IPv4Address": "192.0.2.1", "IPv6Address": ""}, {"IPv4Address": "", "IPv6Address": "2001:db8::1"},
+                   {"IPv4Address": "", "IPv6Address": "", "LinkLocalIPs": []},
+                   {"IPv4Address": "", "IPv6Address": "", "extra": ""}, {"IPv4Address": ""}, {}, [], "", False, 0,
+                   {"IPv4Address": 0, "IPv6Address": ""}, {"IPv4Address": "", "IPv6Address": None})
+        def refused():
+            before = len(calls); journal = recovery.journal.read_bytes(); checkpoint = copy.deepcopy(record)
+            with self.assertRaises(ValueError): recovery.ensure_relay_ingress(record)
+            self.assertEqual(recovery.journal.read_bytes(), journal); self.assertEqual(record, checkpoint)
+            self.assertTrue(record["attach_pending"])
+            self.assertFalse(any(v[:2] in (("container", "start"), ("container", "create"), ("container", "rm"), ("network", "connect")) for v in calls[before:]))
+        for ipam in invalid:
+            with self.subTest(ipam=ipam):
+                endpoint["IPAMConfig"] = ipam; refused()
+        endpoint["IPAMConfig"] = {"IPv4Address": "", "IPv6Address": ""}
+        for field, value in (("NetworkID", "f" * 64), ("Aliases", ["foreign-alias"])):
+            before = endpoint[field]; endpoint[field] = value; refused(); endpoint[field] = before
+        network = networks[recovery.operation["created"]["network"][ingress]["id"]]
+        labels = network["Labels"]; network["Labels"] = {"foreign": "labels"}; refused(); network["Labels"] = labels
+        obj["HostConfig"]["ReadonlyRootfs"] = False; refused(); obj["HostConfig"] = copy.deepcopy(original["HostConfig"])
+        obj["NetworkSettings"]["Networks"]["foreign-network"] = {}; refused()
 
     def projection_fixture(self, module="doska"):
         instance = str(uuid.uuid4()); integration = str(uuid.uuid4()); committed = 1700000000.0

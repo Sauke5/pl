@@ -256,6 +256,7 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(journal['worker_version'], '0.4.1')
         self.assertEqual(journal['worker_manifest_sha256'], d.digest(self.target / 'manifest.json'))
         self.assertEqual(journal['worker_handoff']['from_version'], '0.4.0')
+        self.assertEqual(journal['worker_handoff']['capability'], 1)
         self.assertEqual(journal['worker_unit'], self.unit)
         self.assertEqual(journal['phase'], 'downloading')
         self.assertNotIn('containers', journal)
@@ -309,6 +310,93 @@ class HandoffTests(unittest.TestCase):
         with patch.object(self.main, 'HOST_FEATURE_API', 2, create=True):
             self.handoff()
         self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
+        self.execve.assert_not_called()
+
+    def test_host_api_two_hands_off_verified_native_resume_and_validates_real_worker_entry(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        state_before = (self.root / 'state/installation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 2, create=True), \
+                self.assertRaisesRegex(SystemExit, 'verified exec'):
+            self.handoff()
+        journal = d.read(self.delivery.base / 'operation.json')
+        self.assertEqual(journal['worker_handoff']['capability'], 3)
+        self.assertEqual(journal['worker_handoff']['from_version'], self.old.name)
+        self.assertEqual(journal['worker_manifest_sha256'], d.digest(self.target / 'manifest.json'))
+        self.assertEqual(journal['worker_version'], self.target.name)
+        self.assertEqual(journal['worker_unit'], self.unit)
+        self.assertEqual(journal['phase'], 'downloading')
+        self.assertNotIn('containers', journal)
+        self.assertNotIn('snapshot', journal)
+        self.assertEqual((self.root / 'state/installation.json').read_bytes(), state_before)
+        self.execve.assert_called_once()
+        self.assertEqual(self.execve.call_args.args[1], ['/usr/bin/python3', str(self.target / 'delivery.py'),
+            'worker', '--root', str(self.root), '--operation-id', self.operation_id])
+        self.assertEqual(self.execve.call_args.args[2]['PL_HOST_SUPERVISOR_PACKAGE'], str(self.initial))
+        validator = d.Delivery(types.SimpleNamespace(root=self.root, installation=self.installation), package=self.target)
+        validator.supervisor = self.initial
+        self.assertEqual(validator.validate_worker_entry(journal), self.target)
+
+    def test_host_api_three_accepts_resume_manifest_without_handoff(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        before = (self.delivery.base / 'operation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 3, create=True), \
+                patch.object(self.bootstrap.platform, 'machine', return_value='x86_64'), \
+                patch.object(self.bootstrap, 'validate_bundled_images'):
+            self.assertEqual(self.bootstrap.manifest(self.target), self.candidate)
+        self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
+        self.execve.assert_not_called()
+
+    def test_resume_manifest_validation_is_pure_outside_verified_worker_entry(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        before = (self.delivery.base / 'operation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 2, create=True), \
+                patch.object(sys, 'argv', ['bootstrap.py', 'status']), \
+                patch.object(self.bootstrap.platform, 'machine', return_value='x86_64'), \
+                patch.object(self.bootstrap, 'validate_bundled_images'):
+            self.assertEqual(self.bootstrap.manifest(self.target), self.candidate)
+        self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
+        self.execve.assert_not_called()
+
+    def test_false_resume_feature_preserves_capability_two_compatibility(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=False)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        before = (self.delivery.base / 'operation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 2, create=True):
+            self.handoff()
+        self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
+        self.execve.assert_not_called()
+
+    def test_resume_manifest_requires_its_existing_finite_worker_features(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True)
+        before = (self.delivery.base / 'operation.json').read_bytes()
+        for missing in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe'):
+            candidate = copy.deepcopy(self.candidate)
+            del candidate['features'][missing]
+            d.atomic(self.target / 'manifest.json', candidate)
+            with self.subTest(missing=missing), \
+                    patch.object(self.bootstrap.platform, 'machine', return_value='x86_64'), \
+                    self.assertRaisesRegex(ValueError, 'Verified native resume requires'):
+                self.bootstrap.manifest(self.target)
+            self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
+            self.execve.assert_not_called()
+
+    def test_capability_three_still_refuses_post_snapshot_foreign_unit_and_tampered_candidate(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        with patch.object(self.main, 'HOST_FEATURE_API', 2, create=True):
+            for change in ({'phase': 'applying'}, {'containers': []}, {'snapshot': 'anything'},
+                           {'worker_unit': 'foreign.service'}, {'artifact': {'sha256': 'c' * 64}}):
+                with self.subTest(change=change):
+                    d.atomic(self.delivery.base / 'operation.json', {**self.journal, **change})
+                    with self.assertRaises(ValueError): self.handoff()
+                    self.execve.assert_not_called()
+            d.atomic(self.delivery.base / 'operation.json', self.journal)
+            (self.target / 'icmp-probe.py').write_bytes(b'tampered candidate')
+            with self.assertRaisesRegex(ValueError, 'integrity'):
+                self.handoff()
         self.execve.assert_not_called()
 
     def test_phase_snapshot_handoff_and_unit_fences_fail_before_exec(self):

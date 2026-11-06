@@ -14,7 +14,9 @@ import http.client
 import hashlib
 import importlib.util
 import ipaddress
+import itertools
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import platform
@@ -24,11 +26,13 @@ import re
 import shutil
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
+import traceback
 import types
 import uuid
 
@@ -60,6 +64,10 @@ VOLUMES = {"prometheus": ("",), "alertmanager": ("",), "wayline": ("",), "grafan
            "bookstack": ("database", "config")}
 NETWORK_MODULES = {"wayline", "forms", "doska", "sftpgo", "netmap", "bookstack"}
 CORE_NETWORKS = ("backend", "ingress", "egress")
+DNS_DEFAULTS = ("Dns", "DnsOptions", "DnsSearch")
+MAX_LEGACY_DIGESTS = 11520  # 720 mount orders × 2 OOM defaults × 8 DNS defaults.
+SYSTEMD_UNITS = Path("/etc/systemd/system")
+CONTROLLER_UNIT_PROPERTIES = ("LoadState", "FragmentPath", "DropInPaths", "MainPID", "ActiveState", "UnitFileState")
 
 
 def helper(name):
@@ -237,7 +245,7 @@ def validate_metadata(meta):
     fields = {"schema", "product", "backup_id", "created_unix", "installation", "root", "origin", "architecture",
               "version", "manifest_sha256", "supervisor_version", "marker", "schema_contract", "live_auth_sha256",
               "images", "image_storage_bytes", "registry", "native", "containers", "volumes", "networks", "files", "controller_active"}
-    if (not isinstance(meta, dict) or set(meta) != fields or meta.get("schema") != 1
+    if (not isinstance(meta, dict) or set(meta) - {"contract_version"} != fields or meta.get("schema") != 1
             or meta.get("product") != "PL-full-disaster-backup" or not IDENTITY.fullmatch(meta.get("installation", ""))
             or meta.get("architecture") not in ("amd64", "arm64") or type(meta.get("created_unix")) is not int
             or not VERSION.fullmatch(meta.get("version", "")) or not VERSION.fullmatch(meta.get("supervisor_version", ""))
@@ -245,6 +253,11 @@ def validate_metadata(meta):
             or type(meta.get("controller_active")) is not bool or type(meta.get("image_storage_bytes")) is not int
             or not 0 < meta["image_storage_bytes"] < 2**55):
         raise ValueError("Unsupported full recovery manifest")
+    contract_version = meta.get("contract_version", 1)
+    if type(contract_version) is not int or contract_version not in (1, 2):
+        raise ValueError("Unsupported full recovery container contract version")
+    if contract_version == 1 and meta["version"] not in ("0.5.1", "0.5.2"):
+        raise ValueError("Legacy recovery contracts are limited to published beta 0.5.1 and 0.5.2")
     if str(uuid.UUID(meta["backup_id"])) != meta["backup_id"]:
         raise ValueError("Invalid recovery backup identity")
     root = Path(meta["root"])
@@ -427,13 +440,49 @@ class Host:
         return value == b"active"
 
 
-def container_contract(obj):
-    """Compare closed recipe output, excluding only daemon-assigned identities."""
+def _container_projection(obj, *, canonical_mount_order=True):
+    """Retain every recipe field while canonicalizing daemon-assigned identities."""
     config, host = copy.deepcopy(obj.get("Config", {})), copy.deepcopy(obj.get("HostConfig", {}))
     # Engine 29 may inspect the same default as false before start and null
     # after start. Keep the archived null representation; true stays distinct.
     if host.get("OomKillDisable") is False:
         host["OomKillDisable"] = None
+    # A daemon restart materializes present null DNS defaults as empty lists.
+    # Keep missing fields distinct and retain every nonempty override verbatim.
+    for key in DNS_DEFAULTS:
+        if key in host and type(host[key]) is list and not host[key]:
+            host[key] = None
+    targets = []
+    def add_target(target):
+        if (not isinstance(target, str) or not target.startswith("/") or target.startswith("//") or "\0" in target
+                or ".." in PurePosixPath(target).parts or str(PurePosixPath(target)) != target):
+            raise ValueError("Invalid container mount target")
+        targets.append(target)
+    declarations = host.get("Mounts")
+    if declarations is not None:
+        if not isinstance(declarations, list):
+            raise ValueError("Invalid container mount targets")
+        for value in declarations:
+            add_target(value.get("Target") if isinstance(value, dict) else None)
+        if canonical_mount_order:
+            host["Mounts"] = sorted(declarations, key=lambda value: (value["Target"], encoded(value)))
+    binds = host.get("Binds")
+    if binds is not None:
+        if not isinstance(binds, list):
+            raise ValueError("Invalid container bind declarations")
+        destinations = {}
+        for value in binds:
+            if not isinstance(value, str) or any(character in value for character in ("\0", "\n", "\r")):
+                raise ValueError("Invalid container bind declaration")
+            fields = value.split(":")
+            if len(fields) not in (2, 3) or not fields[0] or len(fields) == 3 and not fields[2]:
+                raise ValueError("Invalid container bind declaration")
+            add_target(fields[1])
+            destinations[value] = fields[1]
+        if canonical_mount_order:
+            host["Binds"] = sorted(binds, key=lambda value: (destinations[value], value))
+    if len(targets) != len(set(targets)):
+        raise ValueError("Duplicate container mount target")
     if config.get("Hostname") == obj.get("Id", "")[:12]:
         config["Hostname"] = ""
     for key in ("com.docker.compose.version", "com.docker.compose.config-hash", "com.docker.compose.image"):
@@ -460,7 +509,52 @@ def container_contract(obj):
             mount.pop("Source", None)
         mounts.append(mount)
     mounts.sort(key=lambda value: value.get("Destination", ""))
-    return hashlib.sha256(encoded({"config": config, "host": host, "mounts": mounts, "networks": networks})).hexdigest()
+    return {"config": config, "host": host, "mounts": mounts, "networks": networks}
+
+
+def container_contract(obj):
+    """Version 2: mount record order is not a change to a closed recipe."""
+    return hashlib.sha256(encoded(_container_projection(obj))).hexdigest()
+
+
+def container_contract_matches(obj, expected, metadata):
+    version = metadata.get("contract_version", 1)
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Unsupported full recovery container contract version")
+    if version == 2:
+        return container_contract(obj) == expected
+    if metadata.get("version") not in ("0.5.1", "0.5.2"):
+        raise ValueError("Legacy recovery contracts are limited to published beta 0.5.1 and 0.5.2")
+    projection = _container_projection(obj, canonical_mount_order=False)
+    host = projection["host"]
+    mounts, binds = host.get("Mounts"), host.get("Binds")
+    if any(value is not None and len(value) > 6 for value in (mounts, binds)):
+        raise ValueError("Legacy recovery permits at most six mount records")
+    order_count = math.prod(math.factorial(len(value)) for value in (mounts, binds) if value is not None)
+    if order_count > 720:
+        raise ValueError("Legacy recovery permits at most 720 combined mount orders")
+    default_oom = "OomKillDisable" in host and host["OomKillDisable"] is None
+    oom_forms = (None, False) if default_oom else (host.get("OomKillDisable"),)
+    dns_defaults = tuple(key for key in DNS_DEFAULTS if key in host and host[key] is None)
+    if order_count * len(oom_forms) * 2**len(dns_defaults) > MAX_LEGACY_DIGESTS:
+        raise ValueError("Legacy recovery permits at most 11520 complete digest checks")
+    for bind_order in itertools.permutations(binds) if binds is not None else (None,):
+        if bind_order is not None:
+            host["Binds"] = list(bind_order)
+        for mount_order in itertools.permutations(mounts) if mounts is not None else (None,):
+            if mount_order is not None:
+                host["Mounts"] = list(mount_order)
+            # The old beta format hashed raw order. It still must match every
+            # complete record; only the proved OOM and empty DNS defaults vary.
+            for oom in oom_forms:
+                if default_oom:
+                    host["OomKillDisable"] = oom
+                for values in itertools.product((None, []), repeat=len(dns_defaults)):
+                    for key, value in zip(dns_defaults, values):
+                        host[key] = value
+                    if hashlib.sha256(encoded(projection)).hexdigest() == expected:
+                        return True
+    return False
 
 
 def unit_payload(root, supervisor):
@@ -474,12 +568,79 @@ def unit_payload(root, supervisor):
 
 
 def validate_unit(host, root, installation, supervisor):
-    path = Path("/etc/systemd/system") / (installation + "-module-controller.service")
+    path = SYSTEMD_UNITS / (installation + "-module-controller.service")
     info = path.lstat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o644
-            or path.read_bytes() != unit_payload(root, supervisor)
-            or host.run(["systemctl", "show", "--property=DropInPaths", "--value", path.name]).strip()):
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o644 or path.read_bytes() != unit_payload(root, supervisor)):
         raise ValueError("Host controller unit differs from its finite trusted recipe")
+    controller_unit_state(host, path)
+
+
+def controller_unit_state(host, path):
+    raw = host.run(["systemctl", "show", *["--property=" + key for key in CONTROLLER_UNIT_PROPERTIES], path.name])
+    lines = raw.decode().splitlines()
+    if len(lines) != len(CONTROLLER_UNIT_PROPERTIES) or any("=" not in line for line in lines):
+        raise ValueError("Invalid controller unit state")
+    value = dict(line.split("=", 1) for line in lines)
+    if (set(value) != set(CONTROLLER_UNIT_PROPERTIES) or value["LoadState"] not in ("loaded", "not-found")
+            or value["FragmentPath"] not in ("", str(path)) or value["DropInPaths"]
+            or value["UnitFileState"] not in ("", "enabled", "enabled-runtime", "disabled", "static")
+            or value["ActiveState"] not in ("active", "inactive", "failed", "activating")
+            or not re.fullmatch(r"[0-9]{1,10}", value["MainPID"]) or int(value["MainPID"]) >= 2**31):
+        raise ValueError("Foreign, masked or overridden controller unit")
+    return value
+
+
+def publish_unit(path, payload):
+    """Publish complete generated bytes atomically, without replacing a target."""
+    trusted_directory(path.parent)
+    libc = ctypes.CDLL(None, use_errno=True)
+    rename = getattr(libc, "renameat2", None)
+    if rename is None:
+        raise ValueError("Atomic no-replace unit publication requires Linux renameat2")
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    temporary = path.with_name("." + path.name + ".pl-recovery-" + uuid.uuid4().hex)
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    identity = os.fstat(fd)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(payload); stream.flush(); os.fchmod(stream.fileno(), 0o644); os.fsync(stream.fileno())
+        if rename(-100, os.fsencode(temporary), -100, os.fsencode(path), 1) != 0:  # AT_FDCWD / RENAME_NOREPLACE.
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code))
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try: os.fsync(parent)
+        finally: os.close(parent)
+    finally:
+        if temporary.exists():
+            current = temporary.lstat()
+            if current.st_dev == identity.st_dev and current.st_ino == identity.st_ino:
+                temporary.unlink()
+
+
+def controller_records(root, meta):
+    for name in ("state/controller-active.json", "state/controller-supervisor.json", "private/module-images.json"):
+        private_file(root / name, limit=MAX_METADATA)
+    active = load_json((root / "state/controller-active.json").read_bytes())
+    supervisor = load_json((root / "state/controller-supervisor.json").read_bytes())
+    registry = load_json((root / "private/module-images.json").read_bytes())
+    if (active != {"schema": 1, "version": meta["version"]} or supervisor != {"schema": 1, "version": meta["supervisor_version"]}
+            or registry != meta["registry"] or registry.get("installation") != meta["installation"]
+            or registry.get("manifest_sha256") != meta["manifest_sha256"] or registry.get("schema") != 1
+            or set(registry) - {"schema", "installation", "manifest_sha256"} != set(meta["native"])):
+        raise ValueError("Recovery controller or module registry differs")
+    return registry
+
+
+def validate_delivery_configuration(root):
+    path = root / "config/delivery.json"
+    private_file(path, limit=MAX_METADATA)
+    value = load_json(path.read_bytes())
+    if (not isinstance(value, dict) or set(value) != {"schema", "catalog_url"}
+            or type(value["schema"]) is not int or value["schema"] != 1 or not isinstance(value["catalog_url"], str)):
+        raise ValueError("Invalid preserved delivery configuration")
+    helper("delivery").asset_url(value["catalog_url"])
 
 
 def image_set(manifest, registry, upgrade):
@@ -569,14 +730,8 @@ def validate_package_tree(root, meta):
     if (not manifest.get("features", {}).get("on_demand_modules") or set(manifest["images"]) != {"api", "web", "db"}
             or checksum(root / "releases" / meta["version"] / "manifest.json") != meta["manifest_sha256"]):
         raise ValueError("Full recovery currently requires the minimal schema-2 on-demand core")
-    active = load_json((root / "state/controller-active.json").read_bytes())
-    supervisor = load_json((root / "state/controller-supervisor.json").read_bytes())
-    registry = load_json((root / "private/module-images.json").read_bytes())
-    if (active != {"schema": 1, "version": meta["version"]} or supervisor != {"schema": 1, "version": meta["supervisor_version"]}
-            or registry != meta["registry"] or registry.get("installation") != meta["installation"]
-            or registry.get("manifest_sha256") != meta["manifest_sha256"] or registry.get("schema") != 1
-            or set(registry) - {"schema", "installation", "manifest_sha256"} != set(meta["native"])):
-        raise ValueError("Recovery controller or module registry differs")
+    registry = controller_records(root, meta)
+    validate_delivery_configuration(root)
     upgrade = helper("module-upgrade")
     if image_set(manifest, registry, upgrade) != meta["images"]:
         raise ValueError("Recovery images are not the exact registered role set")
@@ -689,7 +844,7 @@ def collect(rt, host, prior=None):
     if {v["name"] for v in networks} != used_networks:
         raise ValueError("Incomplete installation network graph")
     supervisor = load_json((rt.root / "state/controller-supervisor.json").read_bytes())["version"]
-    meta = {"schema": 1, "product": "PL-full-disaster-backup", "backup_id": str(uuid.uuid4()), "created_unix": int(time.time()),
+    meta = {"schema": 1, "contract_version": 2, "product": "PL-full-disaster-backup", "backup_id": str(uuid.uuid4()), "created_unix": int(time.time()),
             "installation": rt.install_id, "root": str(rt.root), "origin": state["config"]["public_url"], "architecture": rt.m["architecture"],
             "version": state["version"], "manifest_sha256": state["manifest_sha256"], "supervisor_version": supervisor,
             "marker": load_json((rt.root / ".pl-installation.json").read_bytes()), "schema_contract": rt.schema,
@@ -992,6 +1147,21 @@ class Recovery:
                 or not isinstance(operation.get("created"), dict)
                 or set(operation["created"]) != {"volume", "network", "container"}):
             raise ValueError("Recovery journal does not belong to this exact backup and target")
+        failure = operation.get("last_failure")
+        if failure is not None:
+            if (not isinstance(failure, dict) or set(failure) != {"phase", "type", "frames"}
+                    or any(not isinstance(failure.get(key), str) or not 0 < len(failure[key]) <= 128
+                           or any(character in failure[key] for character in ("/", "\\", "\0", "\n", "\r"))
+                           for key in ("phase", "type"))
+                    or not isinstance(failure.get("frames"), list) or len(failure["frames"]) > 12):
+                raise ValueError("Invalid private recovery failure frames")
+            for frame in failure["frames"]:
+                if (not isinstance(frame, dict) or set(frame) != {"file", "line", "function"}
+                        or type(frame.get("line")) is not int or not 0 < frame["line"] < 2**31
+                        or any(not isinstance(frame.get(key), str) or not 0 < len(frame[key]) <= 255
+                               or any(character in frame[key] for character in ("/", "\\", "\0", "\n", "\r"))
+                               for key in ("file", "function"))):
+                    raise ValueError("Invalid private recovery failure frames")
         self.operation = operation
 
     def preflight_target(self):
@@ -1240,7 +1410,7 @@ class Recovery:
 
     def remember_container(self, obj, expected):
         if (obj.get("Name") != "/" + expected["name"] or obj.get("Image") != expected["image"]
-                or not never_started(obj) or container_contract(obj) != expected["contract"]):
+                or not never_started(obj) or not container_contract_matches(obj, expected["contract"], self.meta)):
             raise ValueError("Reconstructed container differs from its closed preserved recipe")
         self.remember("container", obj)
 
@@ -1329,7 +1499,7 @@ class Recovery:
         self.preflight_target()
         for spec in self.meta["containers"]:
             obj, = load_json(self.host.docker("container", "inspect", records[spec["name"]]["id"]))
-            if not never_started(obj) or container_contract(obj) != spec["contract"]:
+            if not never_started(obj) or not container_contract_matches(obj, spec["contract"], self.meta):
                 raise ValueError("Recovery container changed or started before durable commit")
         self.install_files(strict_rebindings=True)
         for volume in self.meta["volumes"]:
@@ -1400,9 +1570,12 @@ class Recovery:
             networks = obj.get("NetworkSettings", {}).get("Networks", {})
         endpoint = networks.get(ingress, {})
         aliases = set(endpoint.get("Aliases") or [])
+        ipam = endpoint.get("IPAMConfig")
+        empty_ipam = (ipam is None or type(ipam) is dict and set(ipam) == {"IPv4Address", "IPv6Address"}
+                      and all(type(value) is str and value == "" for value in ipam.values()))
         if (set(networks) != {backend, ingress}
                 or endpoint.get("NetworkID") not in (self.operation["created"]["network"][ingress]["id"], "", None)
-                or endpoint.get("IPAMConfig") is not None
+                or not empty_ipam
                 or aliases - {obj["Id"], obj["Id"][:12], obj["Name"].removeprefix("/")}):
             raise ValueError("Temporary Directory relay ingress attachment differs")
         record["contract"] = container_contract(obj); record["attach_pending"] = False
@@ -1482,6 +1655,93 @@ class Recovery:
         # The actual created ID and full finite recipe are durable before start.
         self.host.docker("container", "start", identity)
 
+    def controller_socket_ready(self, properties):
+        path = self.root / "run/module-controller/control.sock"
+        try: info = path.lstat()
+        except FileNotFoundError: return False
+        if (not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.geteuid() or info.st_gid != self.meta["marker"]["gid"]
+                or stat.S_IMODE(info.st_mode) != 0o660 or info.st_nlink != 1):
+            raise ValueError("Foreign controller socket metadata")
+        pid = int(properties["MainPID"])
+        if properties["ActiveState"] != "active" or pid <= 0:
+            raise ValueError("Controller socket has no canonical active unit peer")
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(1)
+            client.connect(str(path))
+            peer_pid, peer_uid, _ = struct.unpack("3i", client.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        if peer_pid != pid or peer_uid != os.geteuid():
+            raise ValueError("Controller socket peer differs from its canonical unit MainPID")
+        current = path.lstat()
+        if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+            raise ValueError("Controller socket changed during peer verification")
+        return True
+
+    def controller_activation_preflight(self):
+        controller_records(self.root, self.meta)
+        validate_package_tree(self.root, self.meta)
+        runtime = self.root / "run/module-controller"
+        trusted_directory(runtime)
+        if runtime.stat().st_gid != self.meta["marker"]["gid"] or stat.S_IMODE(runtime.stat().st_mode) != 0o750:
+            raise ValueError("Unsafe restored controller runtime directory")
+        preserved = ("state/controller-active.json", "state/controller-supervisor.json", "private/module-images.json",
+                     "private/module-controller-key", "config/delivery.json")
+        for name in preserved:
+            path = self.root / name
+            if name.endswith("-key"):
+                info = path.lstat()
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_gid != self.meta["marker"]["gid"]
+                        or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o640 or info.st_size != 32):
+                    raise ValueError("Unsafe restored controller key")
+            else:
+                private_file(path, limit=MAX_METADATA)
+            if name != "config/delivery.json" and checksum(path) != checksum(self.folder / "root" / name):
+                raise ValueError("Restored controller input differs from its verified archive")
+        validate_delivery_configuration(self.root)
+        trusted_directory(SYSTEMD_UNITS)
+        unit = SYSTEMD_UNITS / (self.meta["installation"] + "-module-controller.service")
+        paths = self.host.run(["systemctl", "show", "--property=UnitPath", "--value"]).decode().split()
+        if not paths or len(paths) > 64 or any(not p.startswith("/") or "\0" in p or len(p) > 4096 for p in paths):
+            raise ValueError("Invalid systemd controller lookup paths")
+        stem = unit.name.removesuffix(".service")
+        dropins = [unit.name + ".d", "service.d"] + ["-".join(stem.split("-")[:i]) + "-.service.d" for i in range(1, len(stem.split("-")))]
+        for base in map(Path, paths):
+            other = base / unit.name
+            if other != unit and (other.exists() or other.is_symlink()):
+                raise ValueError("A foreign controller unit lookup path exists")
+            for name in dropins:
+                path = base / name
+                if path.is_symlink() or path.exists() and (not path.is_dir() or any(path.glob("*.conf"))):
+                    raise ValueError("Controller unit drop-ins are unsupported")
+        properties = controller_unit_state(self.host, unit)
+        if unit.exists() or unit.is_symlink():
+            validate_unit(self.host, self.root, self.meta["installation"], self.meta["supervisor_version"])
+        elif properties["FragmentPath"] or properties["LoadState"] != "not-found" or int(properties["MainPID"]):
+            raise ValueError("An existing controller unit was not proved")
+        sock = runtime / "control.sock"
+        if sock.exists() or sock.is_symlink():
+            self.controller_socket_ready(properties)
+        return unit
+
+    def activate_controller(self):
+        if self.operation["committed"] is not True:
+            raise ValueError("Controller activation requires durable commit")
+        unit = self.controller_activation_preflight()
+        if not unit.exists():
+            publish_unit(unit, unit_payload(self.root, self.meta["supervisor_version"]))
+        self.host.run(["systemctl", "daemon-reload"])
+        validate_unit(self.host, self.root, self.meta["installation"], self.meta["supervisor_version"])
+        self.host.run(["systemctl", "enable", "--now", unit.name])
+        self.host.run(["systemctl", "is-active", "--quiet", unit.name])
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                if self.controller_socket_ready(controller_unit_state(self.host, unit)): return
+            except (OSError, ValueError):
+                pass
+            if time.monotonic() >= deadline:
+                raise ValueError("Restored controller socket did not become ready")
+            time.sleep(0.1)
+
     def resume_committed(self):
         if self.operation["committed"] is not True:
             raise ValueError("Recovery must commit before the first runtime start")
@@ -1517,11 +1777,10 @@ class Recovery:
                 raise ValueError("Archived PL sessions were not revoked")
             self.write(sessions_revoked=True)
         bootstrap = helper("bootstrap")
-        b = bootstrap.Runtime(self.root, rt.package, rt.m); b.install_id = self.meta["installation"]
-        bootstrap.prepare_module_controller(b)
+        self.activate_controller()
         if rt.m.get("features", {}).get("icmp_probe"):
             bootstrap.icmp_installer(rt.package).prepare(self.root, rt.package, rt.install_id,
-                bootstrap.icmp_policy(rt.state["config"]), self.meta["marker"]["gid"], b.run)
+                bootstrap.icmp_policy(rt.state["config"]), self.meta["marker"]["gid"], rt.run)
         web = next(v for v in self.meta["containers"] if v["core"] and v["service"] == "web")
         web_record = records[web["name"]]
         obj, = load_json(self.host.docker("container", "inspect", web_record["id"]))
@@ -1618,6 +1877,7 @@ class Recovery:
                         self.install_files()
                         self.create_resources()
                         self.rebind_network_references()
+                        self.write(phase="constructing")
                         self.construct()
                         self.validate_constructed()
                         flush_filesystems([self.root, docker_root, *[Path(v["path"]) for v in self.operation["created"]["volume"].values()]])
@@ -1627,6 +1887,9 @@ class Recovery:
             except BaseException as error:
                 if admitted and self.operation is not None:
                     self.write(failed_step=self.operation["phase"], error_kind=type(error).__name__,
+                               last_failure={"phase": self.operation["phase"], "type": type(error).__name__,
+                                   "frames": [{"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
+                                              for frame in traceback.extract_tb(error.__traceback__)[-12:]]},
                                phase="recovery_required" if self.operation["committed"] else "staging_failed")
                     if self.operation["committed"]:
                         # Publishing may have started the stateless web before

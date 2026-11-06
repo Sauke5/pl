@@ -33,6 +33,7 @@ STORAGE = {'forms': {'mongo', 'keydb'}, 'doska': {'database'},
            'netmap': {'database', 'cache'}, 'bookstack': {'database'}}
 IMAGE_FIELDS = {'id', 'architecture', 'ref', 'recipe', 'labels'}
 IMAGE_DEFAULTS = ('User', 'Env', 'Entrypoint', 'Cmd', 'WorkingDir', 'ExposedPorts', 'Volumes', 'Healthcheck', 'StopSignal')
+LEGACY_FINGERPRINT_CORES = {'0.5.0-rc.1', '0.5.1', '0.5.2'}
 
 
 class UnsupportedTransition(ValueError):
@@ -208,8 +209,21 @@ def _binding_digest(parent, sources):
     return digest(result)
 
 
-def _fingerprint(obj, kind, *, shape=False):
+def _fingerprint_version(value):
+    version = value.get('fingerprint_version', 1)
+    if type(version) is int and (version == 2 or version == 1 and value.get('core_version') in LEGACY_FINGERPRINT_CORES):
+        return version
+    raise ValueError('Unsupported native module fingerprint version')
+
+
+def _fingerprint(obj, kind, *, shape=False, version=2):
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError('Unsupported native module fingerprint version')
     config = copy.deepcopy(obj.get('Config', {})); host = copy.deepcopy(obj.get('HostConfig', {}))
+    # Docker reports the unset policy as false after create and null after
+    # start. Normalize only that boolean default, never integer zero or true.
+    if version == 2 and host.get('OomKillDisable') is False:
+        host['OomKillDisable'] = None
     if config.get('Hostname') == obj.get('Id', '')[:12]: config['Hostname'] = ''
     if isinstance(config.get('Env'), list): config['Env'].sort()
     if shape:
@@ -225,6 +239,22 @@ def _fingerprint(obj, kind, *, shape=False):
     mounts = sorted(obj.get('Mounts', []), key=lambda m: (m.get('Destination', ''), m.get('Source', '')))
     return digest({'image': '<native-image>' if shape else obj.get('Image'), 'config': config,
                    'host': host, 'mounts': mounts, 'networks': networks})
+
+
+def _fingerprint_matches(value, obj, expected, *, shape=False):
+    version = _fingerprint_version(value); kind = value['module_id']
+    if _fingerprint(obj, kind, shape=shape, version=version) == expected:
+        return True
+    if version == 1:
+        host = obj.get('HostConfig', {})
+        if 'OomKillDisable' in host and (host['OomKillDisable'] is None or host['OomKillDisable'] is False):
+            # Existing beta plans contain running-null spec hashes and may also
+            # contain created-false ledger hashes. Read exactly those two forms
+            # without rewriting their authenticated plan or relaxing any ID.
+            alternate = copy.deepcopy(obj)
+            alternate['HostConfig']['OomKillDisable'] = False if host['OomKillDisable'] is None else None
+            return _fingerprint(alternate, kind, shape=shape, version=1) == expected
+    return False
 
 
 def _owned(parent, kind, instance, obj):
@@ -273,7 +303,7 @@ def plan(parent, kind, old_descriptor, new_descriptor):
         raise ValueError('Installed native descriptor changed before module preflight')
     changed = _transition(parent, kind, old_descriptor, new_descriptor)
     paths = _paths(parent, kind)
-    result = {'schema': 1, 'installation': parent.installation, 'root': str(parent.root), 'module_id': kind,
+    result = {'schema': 1, 'fingerprint_version': 2, 'installation': parent.installation, 'root': str(parent.root), 'module_id': kind,
               'core_version': state.get('version'), 'core_manifest_sha256': registry['manifest_sha256'],
               'other_registry_sha256': digest({k: v for k, v in registry.items() if k != kind}),
               'old_descriptor': copy.deepcopy(old_descriptor), 'new_descriptor': copy.deepcopy(new_descriptor),
@@ -344,6 +374,7 @@ def _entry(value, spec):
 
 
 def _remember(parent, value, spec, obj, direction):
+    _fingerprint_version(value)
     entry = _entry(value, spec)
     record = {'id': obj['Id'], 'direction': direction, 'fingerprint': _fingerprint(obj, value['module_id'])}
     entry['replacements'] = [r for r in entry['replacements'] if r['id'] != obj['Id']] + [record]
@@ -360,12 +391,12 @@ def _classify(parent, value, item, spec, obj):
     if obj.get('State', {}).get('Running'):
         raise ValueError('Native writes were not quiesced before module reconstruction')
     if obj['Id'] == spec['id']:
-        if _fingerprint(obj, value['module_id']) != spec['fingerprint']:
+        if not _fingerprint_matches(value, obj, spec['fingerprint']):
             raise ValueError('Preplanned native container changed')
         return 'old'
     for record in entry['replacements']:
         if record['id'] == obj['Id']:
-            if _fingerprint(obj, value['module_id']) == record['fingerprint']:
+            if _fingerprint_matches(value, obj, record['fingerprint']):
                 return record['direction']
             # A crash can occur after the native, fixed ingress connect and
             # before its final checkpoint. Only the complete target controller
@@ -380,7 +411,7 @@ def _classify(parent, value, item, spec, obj):
         checked = _inspect(c, value['module_id'], item['instance_id'], spec['role'])
         if (checked is not None and checked['Id'] == obj['Id']
                 and obj['Image'] == _roles(value['module_id'], descriptor)[spec['role']]['id']
-                and _fingerprint(obj, value['module_id'], shape=True) == spec['shape']):
+                and _fingerprint_matches(value, obj, spec['shape'], shape=True)):
             return 'adopt-' + direction
     raise ValueError('Unproved container cannot be removed or adopted by module rollback')
 
@@ -421,7 +452,7 @@ def _create(parent, value, item, spec, descriptor, direction):
     obj = _inspect(c, kind, instance, role)
     if (obj is None or obj.get('State', {}).get('Running')
             or obj.get('Name') != '/' + spec['name'] or obj['Image'] != _roles(kind, descriptor)[role]['id']
-            or _fingerprint(obj, kind, shape=True) != spec['shape']):
+            or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
         raise ValueError('Native replacement changed its preserved launch contract')
     _remember(parent, value, spec, obj, direction)
     return obj
@@ -433,6 +464,7 @@ def _execute(parent, value, direction):
             or value.get('module_id') not in ROLES or not isinstance(value.get('instances'), list)
             or not isinstance(value.get('ledger'), dict) or not callable(getattr(parent, 'module_upgrade_checkpoint', None))):
         raise ValueError('Invalid native module reconstruction plan or checkpoint contract')
+    _fingerprint_version(value)
     state, registry = _registry(parent); kind = value['module_id']
     descriptor = value['new_descriptor'] if direction == 'apply' else value['old_descriptor']
     if (state.get('version') != value['core_version'] or registry.get('manifest_sha256') != value['core_manifest_sha256']
@@ -460,7 +492,7 @@ def _execute(parent, value, direction):
         for spec in item['containers']:
             obj = _raw(parent, spec['name']); status = _classify(parent, value, item, spec, obj)
             if (obj is not None and direction == 'apply' and status in ('apply', 'adopt-apply')
-                    and _fingerprint(obj, kind, shape=True) != spec['shape']):
+                    and not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
                 raise ValueError('Existing native replacement changed its preserved launch contract')
             checks.append((item, spec, obj, status))
             if obj is not None: objects.append(obj)
@@ -534,6 +566,7 @@ def verify(parent, value):
     No lifecycle ensure/get method or scheduler/database write is used here.
     """
     with _verification_budget(120):
+        _fingerprint_version(value)
         state, registry = _registry(parent)
         kind = value['module_id']
         if (value.get('schema') != 1 or value.get('installation') != parent.installation
@@ -558,7 +591,7 @@ def verify(parent, value):
                         permitted = {r['id'] for r in records if r['direction'] == 'apply'} if spec['role'] in value['changed_roles'] else {spec['id']}
                         if (obj['Id'] not in permitted or obj['Image'] != _roles(kind, value['new_descriptor'])[spec['role']]['id']
                                 or obj.get('State', {}).get('Running') is not item['running']
-                                or _fingerprint(obj, kind, shape=True) != spec['shape']):
+                                or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
                             raise ValueError('Native images, ownership or original running state were not preserved')
                     if item['running']:
                         if kind in ('prometheus', 'xray', 'alertmanager'):

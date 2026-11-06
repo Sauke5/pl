@@ -92,6 +92,44 @@ trusted release key, finite image/role/volume/network graph и target conflicts.
 Код из непроверенного архива не исполняется. После image load снова сверяются
 content IDs, CPU architecture и provenance.
 
+Новые архивы содержат `contract_version: 2`. В контракте контейнера записи
+`HostConfig.Mounts` упорядочены по Target и полному содержимому записи,
+а `HostConfig.Binds` — по destination и полной строке. Sources, destinations,
+modes, read-only flags и propagation проверяются целиком. Повторяющиеся destinations,
+в том числе между двумя списками, и некорректные absolute targets вызывают отказ.
+Docker default `OomKillDisable=false/null`
+сопоставляется одинаково; значение `true` остаётся отдельным.
+Пустые DNS overrides `HostConfig.Dns`, `DnsOptions` и `DnsSearch` имеют единое
+представление для `null` и пустого списка: Docker может изменить его при рестарте
+daemon. Отсутствующие поля не добавляются; значения и порядок непустых списков,
+а также другие типы значений остаются различимыми.
+
+Для опубликованных beta `0.5.1` и `0.5.2` сохранён ограниченный reader прежнего
+контракта: отсутствие `contract_version` либо значение 1. Он проверяет старый
+digest перестановками тех же полных Mounts records и Binds strings — не более
+шести записей в каждом списке и 720 комбинаций порядка суммарно. Две формы
+OOM default и максимум восемь комбинаций пустых DNS defaults проверяются отдельно:
+общий предел — 11 520 полных digest checks, проверяемый до перебора. Другие версии
+старого формата, превышение лимита
+или несовпадение полей вызывают отказ до запуска writers. Version 2 использует
+канонический digest без перебора. Это версия описания ресурсов в backup.
+
+После commit controller активируется из проверенных существующих releases и
+pointers. Его registry и ключ сохраняются; доставка проверяет текущий
+`delivery.json` по schema, ownership и допустимому catalog URL с прежним trust key.
+Настройки доставки после commit могут отличаться от архивных; их текущие bytes
+и inode сохраняются. Первичная инициализация конфигурации при recovery не вызывается.
+Unit создаётся по конечному шаблону в `/etc/systemd/system` атомарным Linux
+`renameat2(RENAME_NOREPLACE)`. Чужой unit, mask, drop-ins, несовпадающие ownership,
+ключ или socket вызывают отказ до создания unit и запуска controller. Существующий
+канонический unit сохраняется. Готовность socket ограничена 30 секундами; его
+owner, GID, mode и `SO_PEERCRED` PID сверяются с MainPID этого unit.
+
+Для временного Directory relay ingress проверяется отдельно: отсутствие IPAM
+override либо ровно `IPv4Address: ""` и `IPv6Address: ""` допустимы как запрос
+автоматического выделения адресов. Другие поля, типы и непустые адреса вызывают
+отказ. Полный fingerprint контейнера и общий контракт backup при этом сохраняются.
+
 Файлы, owned volumes, три сети core (backend/ingress/egress) и native networks,
 а также containers создаются по конечным recipes, без replay
 произвольных Docker arguments или systemd units. Все containers остаются
@@ -150,6 +188,9 @@ sudo python3 /path/to/trusted-release/disaster-recovery.py resume \
 Private journal: `ROOT/recovery/operation.json`. Передавайте тот же backup UUID
 и SHA. До commit target остаётся закрытым, staged data сохраняются; повтор
 проверяет actual created resource identities и продолжает конечные шаги.
+`last_failure` сохраняет phase, тип ошибки и до 12 source frames: basename файла,
+номер строки и имя функции. Публичный `status` возвращает короткое состояние
+и failed step. Фаза `constructing` относится к созданию контейнеров.
 При неоднозначном crash между Docker create и durable checkpoint объект не
 присваивается по одному имени: инструмент отказывает и оставляет его для проверки.
 Ни foreign objects, ни source backup, ни target данные автоматически не удаляются.

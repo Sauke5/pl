@@ -1,11 +1,16 @@
 """Installed-module updates pin an artifact and preserve the used core/data."""
 import copy
 import hashlib
+import hmac
+import http.client
+import json
 from pathlib import Path
+import socketserver
+import threading
 import types
 import unittest
 import uuid
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import installer.tests.test_delivery as fixtures
 
@@ -182,6 +187,160 @@ class ModuleUpdateDeliveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.delivery.module_upgrade(invalid)
         self.assertEqual(self.delivery._launch.call_count, 1)
+
+
+class ReconcileReadinessTests(unittest.TestCase):
+    def setUp(self):
+        fixtures.DeliveryTests.setUp(self)
+        folder = self.root / 'releases/0.3.0'; folder.mkdir()
+        self.image = 'sha256:' + 'a' * 64
+        d.atomic(folder / 'manifest.json', {'features': {'module_upgrades': True},
+                 'images': {'api': {'id': self.image}}})
+        self.key = b'k' * 32
+        d.atomic(self.root / 'private/module-controller-key', self.key)
+        self.operation = {'operation_id': str(uuid.uuid4()), 'phase': 'reconciling', 'data_committed': True}
+        d.atomic(self.delivery.base / 'operation.json', self.operation)
+        self.api = {'Image': self.image, 'State': {'Running': True},
+                    'Config': {'Labels': {'com.docker.compose.project': self.installation,
+                                          'com.docker.compose.service': 'api'}},
+                    'NetworkSettings': {'Networks': {self.installation + '_backend': {'IPAddress': '172.29.50.3'}}}}
+        self.parent.docker.side_effect = lambda *args, **kwargs: b'a' * 64 if args[1] == 'ls' else d.json_bytes([self.api])
+        self.clock, self.requests, self.connections = 0, [], []
+        self.real_connection = http.client.HTTPConnection
+        self.real_monotonic = d.time.monotonic
+        self.reply = lambda: (200, {'operation_id': self.operation['operation_id'], 'ready': True, 'instances': 2})
+        def connect(address, port, timeout):
+            self.assertEqual((address, port), ('172.29.50.3', 8080))
+            self.assertGreater(timeout, 0)
+            connection = Mock()
+            def request(method, path, body, headers):
+                self.assertEqual((method, path), ('POST', '/internal/delivery/reconcile'))
+                stamp = headers['X-PL-Delivery-Timestamp']
+                signed = b'pl-delivery-reconcile-v1\n' + (stamp + '\nPOST\n' + path + '\n').encode() + body
+                self.assertEqual(headers['X-PL-Delivery-Signature'], hmac.new(self.key, signed, hashlib.sha256).hexdigest())
+                self.requests.append(json.loads(body))
+            connection.request.side_effect = request
+            def response():
+                value = self.reply()
+                if isinstance(value, BaseException):
+                    raise value
+                status, body = value
+                return types.SimpleNamespace(status=status, read=lambda limit: d.json_bytes(body)[:limit], close=lambda: None)
+            connection.getresponse.side_effect = response
+            self.connections.append(connection)
+            return connection
+        def pause(seconds):
+            self.assertGreater(seconds, 0)
+            self.clock += seconds
+        for target, side_effect in (('monotonic', lambda: self.clock), ('sleep', pause)):
+            patched = patch.object(d.time, target, side_effect=side_effect)
+            patched.start(); self.addCleanup(patched.stop)
+        patched = patch.object(d.http.client, 'HTTPConnection', side_effect=connect)
+        patched.start(); self.addCleanup(patched.stop)
+
+    def test_cold_module_readiness_retries_fresh_signed_requests_until_ready(self):
+        self.reply = lambda: ((503, {'error': 'delivery_reconcile_failed', 'message': 'Starting'}) if self.clock < 9
+                              else (200, {'operation_id': self.operation['operation_id'], 'ready': True, 'instances': 2}))
+        self.delivery.synchronize_modules()
+        self.assertGreaterEqual(self.clock, 9)
+        self.assertGreater(len(self.requests), 1)
+        self.assertEqual({r['operation_id'] for r in self.requests}, {self.operation['operation_id']})
+        self.assertEqual(len({r['request_id'] for r in self.requests}), len(self.requests))
+        for connection in self.connections:
+            connection.close.assert_called_once()
+
+    def test_timeout_is_finite_and_retains_committed_journal(self):
+        self.reply = lambda: (503, {'error': 'delivery_reconcile_failed'})
+        with self.assertRaisesRegex(ValueError, 'before|Timed out|timeout'):
+            self.delivery.synchronize_modules(timeout=3)
+        self.assertLessEqual(self.clock, 3)
+        self.assertEqual(d.read(self.delivery.base / 'operation.json'), self.operation)
+
+    def test_auth_inactive_unknown_and_malformed_success_are_not_retried(self):
+        for status, body in ((403, {'error': 'forbidden'}), (409, {'error': 'delivery_not_reconciling'}),
+                             (503, {'error': 'other_error'}), (200, {'ready': True})):
+            with self.subTest(status=status, body=body):
+                before = len(self.requests)
+                self.reply = lambda: (status, body)
+                with self.assertRaises(ValueError):
+                    self.delivery.synchronize_modules()
+                self.assertEqual(len(self.requests), before + 1)
+
+    def test_api_identity_is_checked_again_before_retry(self):
+        def reply():
+            self.api['Image'] = 'sha256:' + 'b' * 64
+            return 503, {'error': 'delivery_reconcile_failed'}
+        self.reply = reply
+        with self.assertRaisesRegex(ValueError, 'identity differs'):
+            self.delivery.synchronize_modules()
+        self.assertEqual(len(self.requests), 1)
+
+    def test_transport_failure_and_callback_timeout_can_recover(self):
+        replies = iter([http.client.RemoteDisconnected('closed'), (504, {'error': 'delivery_reconcile_timeout'}),
+                        (200, {'operation_id': self.operation['operation_id'], 'ready': True, 'instances': 2})])
+        self.reply = lambda: next(replies)
+        self.delivery.synchronize_modules()
+        self.assertEqual(len(self.requests), 3)
+
+    def test_malformed_http_protocol_is_not_a_startup_retry(self):
+        self.reply = lambda: http.client.BadStatusLine('invalid response')
+        with self.assertRaisesRegex(ValueError, 'Invalid core reconciliation HTTP'):
+            self.delivery.synchronize_modules()
+        self.assertEqual(len(self.requests), 1)
+
+    def assert_active_http_deadline(self, slow_headers):
+        owner, stopped = self, threading.Event()
+        class Handler(socketserver.BaseRequestHandler):
+            def handle(self):
+                self.request.settimeout(2)
+                try:
+                    received = b''
+                    while b'\r\n\r\n' not in received:
+                        chunk = self.request.recv(4096)
+                        if not chunk: return
+                        received += chunk
+                    headers, _, body = received.partition(b'\r\n\r\n')
+                    length = next(int(line.partition(b':')[2]) for line in headers.split(b'\r\n')
+                                  if line.lower().startswith(b'content-length:'))
+                    while len(body) < length:
+                        chunk = self.request.recv(4096)
+                        if not chunk: return
+                        body += chunk
+                    document = d.json_bytes({'operation_id': owner.operation['operation_id'], 'ready': True, 'instances': 2})
+                    response = b'HTTP/1.1 200 OK\r\nContent-Length: ' + str(len(document)).encode() + b'\r\nConnection: close\r\n\r\n'
+                    def trickle(value):
+                        for index in range(0, len(value), 4):
+                            if stopped.is_set(): return
+                            self.request.sendall(value[index:index + 4])
+                            if stopped.wait(0.025): return
+                    if slow_headers:
+                        trickle(response)
+                        if not stopped.is_set(): self.request.sendall(document)
+                    else:
+                        self.request.sendall(response)
+                        trickle(document)
+                except OSError:
+                    pass
+        server = socketserver.ThreadingTCPServer(('127.0.0.1', 0), Handler)
+        server.daemon_threads = True
+        thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=0.01), daemon=True)
+        thread.start()
+        try:
+            with patch.object(d.http.client, 'HTTPConnection', side_effect=lambda address, port, timeout:
+                              self.real_connection('127.0.0.1', server.server_address[1], timeout=timeout)), \
+                    patch.object(d.time, 'monotonic', side_effect=self.real_monotonic):
+                started = self.real_monotonic()
+                with self.assertRaisesRegex(ValueError, 'deadline'):
+                    self.delivery.synchronize_modules(timeout=0.12)
+                self.assertLess(self.real_monotonic() - started, 0.5, 'active HTTP IO exceeded its absolute deadline')
+        finally:
+            stopped.set(); server.shutdown(); server.server_close(); thread.join(2)
+
+    def test_absolute_deadline_interrupts_slow_response_body(self):
+        self.assert_active_http_deadline(False)
+
+    def test_absolute_deadline_interrupts_slow_response_headers(self):
+        self.assert_active_http_deadline(True)
 
 
 if __name__ == '__main__':

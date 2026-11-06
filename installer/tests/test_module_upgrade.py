@@ -138,13 +138,16 @@ class NativeRebuildTests(unittest.TestCase):
                 config.update(Image=image, Hostname=identifier[:12], User=args[args.index('--user') + 1])
                 config['Labels'].update(dict(args[i + 1].split('=', 1) for i, value in enumerate(args) if value == '--label'))
                 config['Env'] += [args[i + 1] for i, value in enumerate(args) if value == '--env']
-                mounts = []
+                mounts, host_mounts = [], []
                 for i, value in enumerate(args):
                     if value == '--mount':
                         fields = dict(part.split('=', 1) if '=' in part else (part, True) for part in args[i + 1].split(','))
                         mounts.append({'Type': fields['type'], 'Name': fields['source'] if fields['type'] == 'volume' else '',
                             'Source': '/var/lib/docker/volumes/' + fields['source'] + '/_data' if fields['type'] == 'volume' else fields['source'],
                             'Destination': fields['target'], 'RW': not fields.get('readonly', False)})
+                        host_mount = {'Type': fields['type'], 'Source': fields['source'], 'Target': fields['target']}
+                        if fields.get('readonly'): host_mount['ReadOnly'] = True
+                        host_mounts.append(host_mount)
                 ports = {}
                 for i, value in enumerate(args):
                     if value == '--publish':
@@ -153,6 +156,7 @@ class NativeRebuildTests(unittest.TestCase):
                 self.containers[name] = {'Id': identifier, 'Name': '/' + name, 'Image': image, 'Config': config, 'Mounts': mounts,
                     'State': {'Running': False, 'Status': 'created'},
                     'HostConfig': {'PortBindings': ports, 'ReadonlyRootfs': True, 'CapDrop': ['ALL'], 'NetworkMode': network,
+                        'OomKillDisable': False, 'Mounts': host_mounts,
                         'Memory': 512 * 1024**2, 'NanoCpus': 1_000_000_000, 'PidsLimit': 256, 'Init': True,
                         'Tmpfs': dict(args[i + 1].split(':', 1) for i, value in enumerate(args) if value == '--tmpfs'),
                         'LogConfig': {'Type': 'local', 'Config': {'max-size': '1m', 'max-file': '2'}},
@@ -167,6 +171,10 @@ class NativeRebuildTests(unittest.TestCase):
                 else:
                     obj['State']['Running'] = action == 'start'
                     if action == 'start':
+                        # Native Docker's unset default changes representation
+                        # after start; the launch policy itself is unchanged.
+                        if obj['HostConfig'].get('OomKillDisable') is False:
+                            obj['HostConfig']['OomKillDisable'] = None
                         obj['NetworkSettings']['Ports'] = {port: [{'HostIp': '127.0.0.1', 'HostPort': str(32000 + self.counter)}]
                             for port in obj['HostConfig']['PortBindings']}
                 return b''
@@ -177,7 +185,8 @@ class NativeRebuildTests(unittest.TestCase):
         folder = self.root / 'private/upgrade-backups' / value['snapshot_operation_id']; folder.mkdir(parents=True)
         volumes = sorted({self.installation + '-auth', self.installation + '_db', *self.userdata})
         meta = {'schema': 1, 'installation': self.installation, 'operation_id': value['snapshot_operation_id'],
-            'from_version': '0.4.1', 'volumes': [{'name': name} for name in volumes],
+            'from_version': json.loads((self.root / 'state/installation.json').read_text())['version'],
+            'volumes': [{'name': name} for name in volumes],
             'containers': [{'name': obj['Name'][1:], 'core': 'com.docker.compose.project' in obj['Config']['Labels'],
                            'service': obj['Config']['Labels'].get('com.docker.compose.service', '')} for obj in self.containers.values()]}
         upgrade.files.atomic(folder / 'snapshot.json', meta)
@@ -195,6 +204,26 @@ class NativeRebuildTests(unittest.TestCase):
 
     def native_files(self):
         return {str(p.relative_to(self.root)): p.read_bytes() for p in (self.root / 'modules').rglob('*') if p.is_file()}
+
+    def legacy_prepare(self):
+        state = json.loads((self.root / 'state/installation.json').read_text())
+        state['version'] = '0.5.2'; upgrade.files.atomic(self.root / 'state/installation.json', state)
+        value = self.prepare(); del value['fingerprint_version']
+        for item in value['instances']:
+            for spec in item['containers']:
+                obj = self.containers[spec['name']]
+                spec['fingerprint'] = upgrade._fingerprint(obj, 'doska', version=1)
+                spec['shape'] = upgrade._fingerprint(obj, 'doska', shape=True, version=1)
+        return value
+
+    def legacy_created_records(self, value):
+        for item in value['instances']:
+            for spec in item['containers']:
+                for record in value['ledger'].get(spec['name'], {}).get('replacements', []):
+                    obj = self.containers[spec['name']]
+                    if record['id'] == obj['Id']:
+                        self.assertIs(obj['HostConfig']['OomKillDisable'], False)
+                        record['fingerprint'] = upgrade._fingerprint(obj, 'doska', version=1)
 
     def test_two_instances_replace_only_application_images_preserve_all_data_and_disabled_state(self):
         before_files, data = self.native_files(), copy.deepcopy(self.userdata)
@@ -317,6 +346,108 @@ class NativeRebuildTests(unittest.TestCase):
         self.restore_registry(); upgrade.rollback(self.parent, value); self.calls.clear()
         upgrade.rollback(self.parent, value)
         self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
+
+    def test_new_canonical_ledger_survives_created_false_then_started_null(self):
+        value = self.prepare(); self.assertEqual(value['fingerprint_version'], 2)
+        upgrade.apply(self.parent, value)
+        for role in doska.ROLES:
+            name = self.controller.name(self.instances[0], '-' + role)
+            obj = self.containers[name]
+            before = upgrade._fingerprint(obj, 'doska')
+            self.docker('container', 'start', name)
+            self.assertIsNone(obj['HostConfig']['OomKillDisable'])
+            self.assertEqual(upgrade._fingerprint(obj, 'doska'), before)
+            self.docker('container', 'stop', name)
+        self.calls.clear(); upgrade.apply(self.parent, value)
+        self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
+
+    def test_legacy_running_null_plan_accepts_created_false_and_old_ledger_on_resume(self):
+        value = self.legacy_prepare()
+        upgrade.apply(self.parent, value)
+        self.legacy_created_records(value)
+        # Direct read of old created-false hashes, then read after native start
+        # changes only the OOM representation to null.
+        for item in value['instances']:
+            for spec in item['containers']:
+                obj = self.containers[spec['name']]
+                self.assertEqual(upgrade._classify(self.parent, value, item, spec, obj),
+                                 'apply' if spec['role'] in value['changed_roles'] else 'old')
+        for role in doska.ROLES:
+            name = self.controller.name(self.instances[0], '-' + role)
+            self.docker('container', 'start', name)
+        self.assertTrue(upgrade.verify(self.parent, value)['verified'])
+        for role in doska.ROLES: self.docker('container', 'stop', self.controller.name(self.instances[0], '-' + role))
+        self.calls.clear(); upgrade.apply(self.parent, value)
+        self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
+
+    def test_legacy_rollback_created_false_checkpoint_can_resume_without_adopting_another_id(self):
+        value = self.legacy_prepare(); upgrade.apply(self.parent, value)
+        self.legacy_created_records(value); self.restore_registry()
+        upgrade.rollback(self.parent, value)
+        self.legacy_created_records(value)
+        ids = {name: obj['Id'] for name, obj in self.containers.items()}
+        for role in doska.ROLES:
+            name = self.controller.name(self.instances[0], '-' + role)
+            self.docker('container', 'start', name); self.docker('container', 'stop', name)
+        self.calls.clear(); upgrade.rollback(self.parent, value)
+        self.assertEqual({name: obj['Id'] for name, obj in self.containers.items()}, ids)
+        self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
+
+    def test_only_oom_boolean_default_is_equivalent_in_canonical_and_legacy_readers(self):
+        obj = self.containers[self.controller.name(self.instances[0], '-api')]
+        original = copy.deepcopy(obj); original['HostConfig']['OomKillDisable'] = None
+        current = copy.deepcopy(original); current['HostConfig']['OomKillDisable'] = False
+        legacy = {'module_id': 'doska', 'core_version': '0.5.2'}
+        for shape in (False, True):
+            expected = upgrade._fingerprint(original, 'doska', shape=shape)
+            self.assertEqual(upgrade._fingerprint(current, 'doska', shape=shape), expected)
+            self.assertTrue(upgrade._fingerprint_matches(legacy, current, expected, shape=shape))
+            old_false = upgrade._fingerprint(current, 'doska', shape=shape, version=1)
+            self.assertTrue(upgrade._fingerprint_matches(legacy, original, old_false, shape=shape))
+            for forbidden in (True, 0, 1, ''):
+                drift = copy.deepcopy(original); drift['HostConfig']['OomKillDisable'] = forbidden
+                with self.subTest(shape=shape, drift=repr(forbidden)):
+                    self.assertNotEqual(upgrade._fingerprint(drift, 'doska', shape=shape), expected)
+                    self.assertFalse(upgrade._fingerprint_matches(legacy, drift, old_false, shape=shape))
+            absent = copy.deepcopy(original); del absent['HostConfig']['OomKillDisable']
+            self.assertFalse(upgrade._fingerprint_matches(legacy, absent, expected, shape=shape))
+        self.assertIsNone(original['HostConfig']['OomKillDisable'])
+        self.assertIs(current['HostConfig']['OomKillDisable'], False, 'Fingerprinting must not mutate inspect')
+
+    def test_oom_compatibility_does_not_adopt_ownership_or_launch_contract_drift(self):
+        value = self.legacy_prepare(); upgrade.apply(self.parent, value); self.legacy_created_records(value)
+        item = next(item for item in value['instances'] if item['running'])
+        spec = next(spec for spec in item['containers'] if spec['role'] == 'api')
+        obj = self.containers[spec['name']]; pristine = copy.deepcopy(obj)
+        # Exercise even the existing post-create adoption branch, not just the
+        # direct known-ledger path; shape/ownership must still prove every field.
+        value['ledger'][spec['name']]['intent'] = {'action': 'create', 'direction': 'apply'}
+        for change in ('true', 'zero', 'Source', 'Target', 'ReadOnly', 'mount_order', 'capabilities', 'ownership'):
+            obj.clear(); obj.update(copy.deepcopy(pristine))
+            if change in ('true', 'zero'): obj['HostConfig']['OomKillDisable'] = True if change == 'true' else 0
+            elif change == 'mount_order': obj['HostConfig']['Mounts'].reverse()
+            elif change == 'capabilities': obj['HostConfig']['CapAdd'] = ['SYS_ADMIN']
+            elif change == 'ownership': obj['Config']['Labels']['pl.installation'] = 'pl-000000000000'
+            else:
+                mount = next(m for m in obj['HostConfig']['Mounts'] if change in m)
+                mount[change] = not mount[change] if change == 'ReadOnly' else mount[change] + '-drift'
+            self.calls.clear()
+            with self.subTest(change=change):
+                with self.assertRaises(ValueError): upgrade._classify(self.parent, value, item, spec, obj)
+                self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
+
+    def test_missing_legacy_or_unknown_fingerprint_version_is_rejected_before_writes(self):
+        value = self.prepare()
+        for version in (None, 1, True, False, 0, 3, '2'):
+            invalid = copy.deepcopy(value)
+            if version is None: del invalid['fingerprint_version']
+            else: invalid['fingerprint_version'] = version
+            self.calls.clear()
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, 'fingerprint version'): upgrade.apply(self.parent, invalid)
+                self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
+        for core in ('0.5.0-rc.1', '0.5.1', '0.5.2'):
+            self.assertEqual(upgrade._fingerprint_version({'core_version': core}), 1)
 
     def test_new_artifact_can_keep_all_image_ids_and_update_only_its_descriptor_refs(self):
         self.new = copy.deepcopy(self.old)

@@ -107,8 +107,10 @@ def manifest(package: Path) -> dict:
     if m.get("architecture") != arch:
         raise ValueError("Package CPU architecture does not match this host")
     features = m.get("features", {})
-    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades"} or any(type(v) is not bool for v in features.values()):
+    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
+    if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
+        raise ValueError('Verified native resume requires the finite update and ICMP worker entrypoints')
     if features.get('module_upgrades') and (not features.get('on_demand_modules') or 'module-upgrade.py' not in m.get('files', {})):
         raise ValueError('Installed module upgrades require their finite host helper')
     if features.get("on_demand_modules"):
@@ -169,7 +171,8 @@ def legacy_worker_handoff(package: Path, candidate: dict) -> None:
     """
     main = sys.modules.get('__main__')
     features = candidate.get('features', {})
-    required_capability = 2 if features.get('upgrade_status') or features.get('module_upgrades') else 1
+    required_capability = (3 if features.get('verified_native_resume') else
+                           2 if features.get('upgrade_status') or features.get('module_upgrades') else 1)
     if (__name__ != 'pl_candidate_bootstrap' or not candidate.get('features', {}).get('icmp_probe')
             or getattr(main, 'HOST_FEATURE_API', 0) >= required_capability
             or len(sys.argv) != 6 or sys.argv[1] != 'worker' or sys.argv[2] != '--root' or sys.argv[4] != '--operation-id'):

@@ -16839,6 +16839,11 @@
       "size": 3979
     },
     {
+      "path": "docs/releases/0.5.3.json",
+      "sha256": "937f2318928c0f91c4de7042ce745b187c5cc6a40b4a6b77e289a093c7a92089",
+      "size": 3886
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16870,8 +16875,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "8c5dcdf7f417c51b693d98b8ebe7b9a432cff375928fe1208a84981df4a1f442",
-      "size": 92999
+      "sha256": "4b23d86e0cbe668dcbd582d7dcc0f5f1097cb804deb28214102ef55309072b1e",
+      "size": 93373
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -16885,8 +16890,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "3349567c91780cb11eb53709f90241171f814f03dc3f6214e5210897b15aeaf5",
-      "size": 101102
+      "sha256": "9f2c80cae3c0988feb7354b531ce4fa46b7daef420f3354f7e20197a211b1e15",
+      "size": 104816
     },
     {
       "path": "installer/delivery.ru.md",
@@ -16895,13 +16900,13 @@
     },
     {
       "path": "installer/disaster-recovery.py",
-      "sha256": "3a765df9b0197610b55158447ffc7d743ad4261bda3798f8603b069e6cd921ef",
-      "size": 108928
+      "sha256": "872fabeb21518986931a9aaf5bb3e9ec436bb37b8487add6d78428e62d70c216",
+      "size": 124542
     },
     {
       "path": "installer/disaster-recovery.ru.md",
-      "sha256": "f91b4761c231ad1207a97f0030bf2fe983bec9b52414dc3b729c5b3a59a43d35",
-      "size": 14086
+      "sha256": "549ca2279f9c240d35bccef5134958b5f427bed04675d33940228bbe6deae49f",
+      "size": 18420
     },
     {
       "path": "installer/doska-controller.py",
@@ -16960,8 +16965,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "65b1b95d634cca6aad887529994f41c98248b571c582ed1f5e1dd7441e613d0d",
-      "size": 43078
+      "sha256": "636ef6ccfd310d44608cb24d08a378fadd519bbd80ef89af65e6834c53b180d7",
+      "size": 43379
     },
     {
       "path": "installer/installation-settings.py",
@@ -17000,8 +17005,8 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "931c881bf17b700ee17612fba6826847db338ffd5ded8c68d229d659baa80471",
-      "size": 32686
+      "sha256": "10643c8fd28a7425d33d2b0564af57640cd62b7e49208449fd214ebb03bcd5c2",
+      "size": 34471
     },
     {
       "path": "installer/netmap-controller.py",
@@ -17030,8 +17035,8 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "4cf068941d9a39e48a8e47a6f54025b5658d88be72296c675c9d1e4aa19524db",
-      "size": 36982
+      "sha256": "89fe65ff04b59af598a6618263a8fbd39c7c745ef9a4632d416ecc9ac55e151f",
+      "size": 37014
     },
     {
       "path": "installer/public-export.py",
@@ -17120,8 +17125,8 @@
     },
     {
       "path": "installer/tests/test_disaster_recovery.py",
-      "sha256": "bee76df42915b900fe9f3ecbf3dd223e958eb0eba4dcbafd3099c044e87e3111",
-      "size": 50806
+      "sha256": "1ac6087376ab6ba3f357f3dd529b93443947c1b82b132619d507b5a598572c55",
+      "size": 84067
     },
     {
       "path": "installer/tests/test_doska_controller.py",
@@ -17175,8 +17180,8 @@
     },
     {
       "path": "installer/tests/test_icmp_upgrade.py",
-      "sha256": "e5b002ce53797ac406bd7932b1e688dc2b4b29b211878e514fc2ae5603c58616",
-      "size": 27174
+      "sha256": "97db077ad656f8bf94aa178eeaed6eca69aaa13a27f3ea434cc9ea2b4d9bcfd1",
+      "size": 33299
     },
     {
       "path": "installer/tests/test_install_proxy.py",
@@ -17235,13 +17240,13 @@
     },
     {
       "path": "installer/tests/test_module_update_delivery.py",
-      "sha256": "fd5d892c5ca2ac88ad5b60bcf63c9cc140a6731f22283e65e52c717ad875fcc9",
-      "size": 12157
+      "sha256": "9b92364e8c07c0fab69f8faa763fc429ff85db82d206ac426742531ee51a242e",
+      "size": 21238
     },
     {
       "path": "installer/tests/test_module_upgrade.py",
-      "sha256": "e6b10beadd42c99188ee4db95ce12bf2d3ac9ded1a55196ac5a1bc6447a7b7ba",
-      "size": 27575
+      "sha256": "31613811fd202ad7dc8d5d62128906eb397400901d331c49ab3367af2488c2a6",
+      "size": 36559
     },
     {
       "path": "installer/tests/test_native_initial_login.py",
@@ -17310,8 +17315,8 @@
     },
     {
       "path": "installer/tests/test_package.py",
-      "sha256": "efd5606a31c8059ef9dedf06e375949abd6884cde90f007afeb37b855b1b0692",
-      "size": 7710
+      "sha256": "98ec6e587a70b8c1f817bd2061845e4b04fa8e040fd3187392eca48718885135",
+      "size": 9017
     },
     {
       "path": "installer/tests/test_portable_ui_icmp.py",

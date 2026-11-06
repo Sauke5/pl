@@ -15,6 +15,28 @@ spec.loader.exec_module(package)
 
 
 class PackageTests(unittest.TestCase):
+    def test_verified_native_resume_is_claimed_only_by_on_demand_core(self):
+        spec = importlib.util.spec_from_file_location('pl_resume_build_fixture', BASE / 'tests/test_minimal_package.py')
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        fixture = fixtures.MinimalBuildTests(methodName='runTest')
+        fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        core = fixture.args()
+        fixture.execute(core)
+        manifest, _ = fixture.read_manifest(core.output)
+        self.assertIs(manifest['features'].get('verified_native_resume'), True)
+        bundled = fixture.args(bundled=True)
+        bundled.output = fixture.root / 'legacy-bundled.tar.gz'
+        fixture.execute(bundled)
+        manifest, _ = fixture.read_manifest(bundled.output)
+        self.assertNotIn('verified_native_resume', manifest['features'])
+        for module in ('prometheus', 'xray', 'alertmanager', 'grafana', 'wayline', *package.APPLICATION_ROLES):
+            with self.subTest(module=module):
+                args = fixture.args(module)
+                fixture.execute(args)
+                manifest, _ = fixture.read_manifest(args.output, 'module.json')
+                self.assertNotIn('verified_native_resume', manifest.get('features', {}))
+
     def test_build_rejects_internal_service_from_previous_source_archive(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
