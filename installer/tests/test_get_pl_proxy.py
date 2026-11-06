@@ -274,12 +274,14 @@ class BootstrapProxyTests(unittest.TestCase):
         self.module.PUBLIC_KEY = (self.base / 'signing.pem').read_bytes()
         self.module.CATALOG = self.url.replace('/package', '/catalog')
 
-    def run_bootstrap(self, arguments, *, bad_signature=False, installer_download=None):
+    def run_bootstrap(self, arguments, *, bad_signature=False, installer_download=None, installer_environment=None):
         self.signed_catalog(bad_signature=bad_signature)
         installed = []
         actual_run = subprocess.run
         def installer(command, **kwargs):
             if command[0] != '/bin/sh': return actual_run(command, **kwargs)
+            if installer_environment:
+                installer_environment(kwargs.get('env'))
             profile = Path(command[command.index('--download-proxy-file') + 1])
             self.assertEqual(profile.stat().st_mode & 0o777, 0o600)
             installed.append((command, json.loads(profile.read_text())))
@@ -297,6 +299,15 @@ class BootstrapProxyTests(unittest.TestCase):
             else:
                 self.assertEqual(self.module.main(['--public-url', 'https://pl.example', '--production', *arguments]), 0)
         return installed, output.getvalue()
+
+    def test_signed_installer_uses_c_locale_on_russian_host(self):
+        def inspect_environment(environment):
+            self.assertIsInstance(environment, dict)
+            self.assertEqual(environment.get('LC_ALL'), 'C')
+            self.assertEqual(environment.get('LANG'), 'C')
+            self.assertEqual(environment.get('PL_FIXTURE_VALUE'), 'preserved')
+        with patch.dict(self.module.os.environ, {'LC_ALL': 'ru_RU.UTF-8', 'LANG': 'ru_RU.UTF-8', 'PL_FIXTURE_VALUE': 'preserved'}):
+            self.run_bootstrap(['--proxy-file', str(self.profile_path)], installer_environment=inspect_environment)
 
     def test_signed_catalog_and_whole_artifact_cross_connect_then_private_profile_reaches_installer(self):
         installed, output = self.run_bootstrap(['--proxy-file', str(self.profile_path)])

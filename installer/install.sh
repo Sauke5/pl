@@ -108,7 +108,8 @@ def validate_root_socket_paths(root):
 
 
 def run(args, capture=True):
-    environment = dict(os.environ, DEBIAN_FRONTEND='noninteractive')
+    # apt-cache output is parsed below and must not follow the host language.
+    environment = dict(os.environ, DEBIAN_FRONTEND='noninteractive', LC_ALL='C', LANG='C')
     result = subprocess.run(args, text=True, stdout=subprocess.PIPE if capture else None,
                             stderr=subprocess.PIPE if capture else None, check=False, env=environment,
                             stdin=subprocess.DEVNULL if capture else None)
