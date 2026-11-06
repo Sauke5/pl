@@ -16439,14 +16439,39 @@
       "size": 2842
     },
     {
+      "path": "apps/netmap-stack/inventory-LICENSES.txt",
+      "sha256": "196be1ee1ee2fdd7ef3de3f74714b895a9f12b4c9ce20d00e78cd6ff8b367bc1",
+      "size": 87617
+    },
+    {
+      "path": "apps/netmap-stack/inventory-requirements.txt",
+      "sha256": "c77dd7ffd9570c5cc1928b58136efad78983592ff8aa2bcc06c768135da96493",
+      "size": 6384
+    },
+    {
+      "path": "apps/netmap-stack/inventory_collectors.py",
+      "sha256": "02e40a5bec8b567fe170fb4a2ee7fdf00f035491eeb72ce66b2fce7afb4ea886",
+      "size": 49168
+    },
+    {
+      "path": "apps/netmap-stack/inventory_jobs.py",
+      "sha256": "34f7bac1163d38d6f6794fdc847e7940bd04be11c714dba364bf7133a52fbba5",
+      "size": 17690
+    },
+    {
+      "path": "apps/netmap-stack/inventory_netbox.py",
+      "sha256": "c5c58ffd18c84280147ccc72493f8430ce9f8be30646c92edd85561ac598dfd5",
+      "size": 48476
+    },
+    {
       "path": "apps/netmap-stack/known-hosts-source.rb",
       "sha256": "897b70c8e9e90e9db371171de44c559ca482dddefbefb428253102d2306d58f3",
       "size": 1201
     },
     {
       "path": "apps/netmap-stack/netbox-bootstrap.py",
-      "sha256": "db1d354890e3b78441c9903a5faac41eb6b992a0196c52404a3d30c623fa1a65",
-      "size": 2700
+      "sha256": "a8c0bd246d217c288e49aa3b7144f7415bc531e6872b5548aa1921c935d2fecb",
+      "size": 3584
     },
     {
       "path": "apps/netmap-stack/netbox-extra.py",
@@ -16465,8 +16490,8 @@
     },
     {
       "path": "apps/netmap-stack/service.py",
-      "sha256": "e3ddaafa8dc3bd9d94081ee4826d58b901776b628e1fcbd7891a55a1d1d00b6b",
-      "size": 85458
+      "sha256": "ab0b4a99014081963752655ed14c11e63fe29ef229b9639470587ea9f2c32013",
+      "size": 91696
     },
     {
       "path": "apps/netmap/address_inventory.py",
@@ -16790,8 +16815,8 @@
     },
     {
       "path": "docs/product/netmap-auto-enrollment.md",
-      "sha256": "9a29bd95a2b0e8aae5ddb50669b1b00a99fa2999510a1c3b3fce11d91e2ee2ee",
-      "size": 28610
+      "sha256": "cd0b53d79fd9f129b0d8b4c1a7e0dc5c2fc6902f821e6102da831b23f2edd8cf",
+      "size": 40851
     },
     {
       "path": "docs/releases/0.4.0-rc.1.json",
@@ -16867,6 +16892,11 @@
       "path": "docs/releases/0.5.7.json",
       "sha256": "b0e7a4e740b667fcb868a9bd64d7f7961ff7fa63aafb944614ee2fa9d2c8d29d",
       "size": 2699
+    },
+    {
+      "path": "docs/releases/0.6.0.json",
+      "sha256": "5b0847846673c88d6fe9c944a858c256cab83dc8e795d2fdecf0faf4f6f99c20",
+      "size": 3719
     },
     {
       "path": "installer/LICENSES.txt",
@@ -17060,13 +17090,13 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "89fe65ff04b59af598a6618263a8fbd39c7c745ef9a4632d416ecc9ac55e151f",
-      "size": 37014
+      "sha256": "18ca30b2283e99a896a6d97e80abd4435069545f5d357a02f5b05a6ef4415f2c",
+      "size": 37145
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "7a24096c94c0bc06b783e754aa2197eed2e71e3ed44daaefc0c5d1cf11add56a",
-      "size": 39951
+      "sha256": "ea3e2f16a0c5397a0f948b0b607aba53cadc44b72d52589b4b86d0534985bd26",
+      "size": 40083
     },
     {
       "path": "installer/release-catalog.py",
@@ -17239,6 +17269,26 @@
       "size": 22354
     },
     {
+      "path": "installer/tests/test_inventory_collectors.py",
+      "sha256": "37ad082fcc9456a653f36598813d05a5629e7cf43af35a92e926da2840ed23a6",
+      "size": 21164
+    },
+    {
+      "path": "installer/tests/test_inventory_collectors_transport.py",
+      "sha256": "6f3c42f681a0add3cbfcc231c9ff418ef20a02d4ef6bc6a16eb3458c9fb706c3",
+      "size": 19424
+    },
+    {
+      "path": "installer/tests/test_inventory_jobs.py",
+      "sha256": "ad4d6e569382e2847865154aaf2eeaefafcc4a5744f6e5c3a8d626b3496b5506",
+      "size": 13605
+    },
+    {
+      "path": "installer/tests/test_inventory_netbox.py",
+      "sha256": "1e68f5c9c8cb2369dfa24585a455453b1c1a3cc23c3fe7463db3d4d39acbbb08",
+      "size": 50381
+    },
+    {
       "path": "installer/tests/test_maintenance.py",
       "sha256": "ba5d6767af790a797b72b13a193e9980a3443ebb6e026ccbdd2c0eac05c4f44c",
       "size": 33738
@@ -17300,13 +17350,13 @@
     },
     {
       "path": "installer/tests/test_netmap_collector_idle.py",
-      "sha256": "c1cc1cc5ab611169e134c2e28298661852a991eb1443819d43e1fece604221e0",
+      "sha256": "00d89ccda0e5e3734cb7bfc9f2423e4569884e9afd00586e933d431addbbf70c",
       "size": 13561
     },
     {
       "path": "installer/tests/test_netmap_controller.py",
-      "sha256": "f04a4ea16ab674b5764e5711afa4daf779d883d6e058aa8998531537f4fcd71f",
-      "size": 54610
+      "sha256": "85ef92279daa39a7e7807cff562e90a759648e867ba9a5c4993b3433ac111982",
+      "size": 54698
     },
     {
       "path": "installer/tests/test_netmap_device_access.py",
@@ -17335,12 +17385,12 @@
     },
     {
       "path": "installer/tests/test_netmap_host_discovery.py",
-      "sha256": "19b7cb3d96a7db43a6f306274399f83c47fd1bd803d10e0a49cffc18a3a3efe5",
-      "size": 18117
+      "sha256": "a001322007be4767e872b5e2f00d132bb571bd124aee7c307cb7a4b764ecbbe6",
+      "size": 19348
     },
     {
       "path": "installer/tests/test_netmap_instance_descriptor.py",
-      "sha256": "a73f163c2495ebdb415b32602f5f1af80984b1aadb1189e5a38d9d5e71b286b3",
+      "sha256": "2054ef6911b43abb53f1eb5696494abfcb29d44b7683a9217a368f5dff78ecf0",
       "size": 3679
     },
     {
@@ -17355,8 +17405,8 @@
     },
     {
       "path": "installer/tests/test_netmap_package.py",
-      "sha256": "5d7c258c57731522265d49ebd6753092c0fbd3f8d93585f2bde0fb86dd21df69",
-      "size": 3155
+      "sha256": "3f865d407641db959bc034a1eab9e14c4297fbdf426807733019c26e4edeb352",
+      "size": 3294
     },
     {
       "path": "installer/tests/test_netmap_request_errors.py",
@@ -17665,13 +17715,13 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.Dockerfile",
-      "sha256": "df46f52ba953fadd61707c57317c0a8047c4f2d12421efe0dd2d26da8f5b5d0f",
-      "size": 4185
+      "sha256": "da9e697c622e75580794548e08a7c5dc8eaef24f5b1943421a66cd519cc1aa20",
+      "size": 4387
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.sources.json",
-      "sha256": "0503561a92e7997a0f89fd1bfb3389e6701957ac65dcc5d369d19bca0ae24be8",
-      "size": 4115
+      "sha256": "81a6bbf7dcc0c4fb4c034d9b7e11af13497f9796022a0d9a2d130013f09c6ff7",
+      "size": 4650
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/postgres.Dockerfile",
@@ -18079,9 +18129,14 @@
       "size": 1436
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/NetMapInventory.tsx",
+      "sha256": "1eff05118cc3d0b609ddf586a006da2322d2bd370b0b7bcb928bdef7eb21220e",
+      "size": 67587
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/NetMapModule.tsx",
-      "sha256": "7a3138057d6737ac5a41390c85015a1e67dc90925ef7431c16647f7fd5c59603",
-      "size": 59402
+      "sha256": "b12245ecdfda61b35b4fb30bd83a8398425454057ebfdc0543ab74d256514253",
+      "size": 59700
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Notifications.tsx",
@@ -18739,6 +18794,11 @@
       "size": 12366
     },
     {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/netmap-inventory.spec.ts",
+      "sha256": "a8f707750c2392304da19e3df2b74db54d482ead737b02488c91f0e3d52f9b17",
+      "size": 15555
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/netmap-module.spec.ts",
       "sha256": "b5a91d397e1e29fc388bac5d7a3f827fb45713582b45cea652ab449547610626",
       "size": 33637
@@ -19195,8 +19255,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/netmap.go",
-      "sha256": "1702988e8b7c31ce5587dcf1212f714b3745515a8b2352e0298a6d3b78092e0a",
-      "size": 8132
+      "sha256": "d64f0b21703fd03e261949d3e93a285693a704645e03855e1493cd1d33b10d11",
+      "size": 9667
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/netmap_external.go",
@@ -20380,13 +20440,18 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/netmap_gateway.go",
-      "sha256": "cd9d77d5faa81ab980714e419afd46cee01b5cf0c70c7624ec499e1b5c71022b",
-      "size": 25996
+      "sha256": "d5aede79a1dc535ce34e829a81fd1db5c63bf45248985ebf1fef836e3b0170d2",
+      "size": 26817
     },
     {
       "path": "monitoring/source/it-portal/internal/server/netmap_gateway_test.go",
       "sha256": "bf44346b329880f8a34a5a61e3c354633df5791aae1fcd4508383bcbae7f11bc",
       "size": 27987
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/netmap_inventory_test.go",
+      "sha256": "aa16c758a9de25eb33d5ba0f1509b149608d138845edc7637ceb5615d5714f1b",
+      "size": 2376
     },
     {
       "path": "monitoring/source/it-portal/internal/server/netmap_startup_test.go",

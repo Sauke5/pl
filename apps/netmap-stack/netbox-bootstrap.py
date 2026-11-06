@@ -39,3 +39,15 @@ with transaction.atomic():
         if field.type != 'text':
             raise RuntimeError('Owned NetBox interface field type conflict')
         field.object_types.add(interface_type)
+
+    inventory_types = [ContentType.objects.get(app_label=app, model=model)
+        for app, model in (('dcim', 'device'), ('dcim', 'interface'), ('dcim', 'macaddress'),
+                           ('virtualization', 'virtualmachine'), ('virtualization', 'vminterface'),
+                           ('virtualization', 'virtualdisk'), ('ipam', 'ipaddress'),
+                           ('ipam', 'prefix'), ('ipam', 'vrf'), ('ipam', 'vlan'), ('ipam', 'vlangroup'))]
+    for name, kind in (('pl_inventory_source', 'text'), ('pl_inventory_key', 'text'), ('pl_inventory', 'json')):
+        field, created = CustomField.objects.get_or_create(name=name, defaults={'type': kind, 'label': name})
+        if field.type != kind:
+            raise RuntimeError('Owned NetBox inventory field type conflict')
+        for object_type in inventory_types:
+            field.object_types.add(object_type)

@@ -14,6 +14,7 @@ import { api, queryClient, useAPI } from "./api";
 import { Badge, Empty, ErrorBox, Field, Panel } from "./components/common";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
+import NetMapInventory from "./NetMapInventory";
 import "./netmap-module.css";
 
 type Instance = { id: string; name: string; desired_state: string };
@@ -43,7 +44,11 @@ type Poll = {
 };
 type Items<T> = { items: T[] };
 type Networks = Items<Network> & {
-  capabilities?: { device_access?: number; ordered_snmp_profiles?: number };
+  capabilities?: {
+    device_access?: number;
+    ordered_snmp_profiles?: number;
+    inventory?: number;
+  };
 };
 type Device = {
   id: number;
@@ -1365,6 +1370,13 @@ function NetMapSettings({ instance }: { instance: Instance }) {
               Настройка SSH для отдельных устройств доступна после обновления
               NetMap. <a href="#settings?section=updates">Открыть обновления</a>
             </p>
+          )}
+          {networks.data?.capabilities?.inventory === 1 && (
+            <NetMapInventory
+              base={base}
+              enabled={enabled}
+              networks={networkItems}
+            />
           )}
           <Panel
             title="История проверок"

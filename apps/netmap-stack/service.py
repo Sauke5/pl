@@ -5,6 +5,7 @@ No scheduler or scan runs at startup. Native upstreams are fixed and private.
 """
 from __future__ import annotations
 import base64
+import copy
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -27,6 +28,7 @@ import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 from gateway import GatewayVerifier, GatewayError
+from inventory_jobs import InventoryJobs, InventoryError
 
 
 REQUEST_ERRORS = {
@@ -62,6 +64,7 @@ MAX_BODY = 3 * 1024 * 1024
 MAX_RESPONSE = 32 * 1024 * 1024
 GRAPH_OBSERVATION_LIMIT = 4096
 GRAPH_REPORT_LIMIT = 8192
+NETMAP_VERSION = '1.1.0'
 NATIVE = {'netbox': ('netbox', 8080), 'gitea': ('gitea', 3000), 'oxidized': ('oxidized', 8888)}
 
 def canonical_network(value):
@@ -101,10 +104,20 @@ class NetBox:
     def __init__(self, config):
         self.auth = 'Bearer nbt_' + config['token_key'] + '.' + config['token']
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        self.deadline = None
+
+    def bounded(self, deadline):
+        value = copy.copy(self)
+        value.deadline = deadline
+        return value
 
     def request(self, method, path, body=None, *, version=None, include_version=False):
+        deadline = getattr(self, 'deadline', None)
+        remaining = deadline - time.monotonic() if deadline is not None else 20
+        if remaining <= 0:
+            raise TimeoutError('inventory_timeout')
         parsed = urllib.parse.urlsplit(path)
-        if (not path.startswith(('/dcim/', '/extras/', '/status/')) or parsed.scheme or parsed.netloc
+        if (not path.startswith(('/dcim/', '/extras/', '/status/', '/ipam/', '/virtualization/')) or parsed.scheme or parsed.netloc
                 or parsed.fragment or any(c in path for c in ('\\', '#', '//'))
                 or any(part in ('.', '..') for part in parsed.path.split('/'))):
             raise ValueError('Invalid NetBox API route')
@@ -117,7 +130,7 @@ class NetBox:
             data=None if body is None else json_bytes(body), method=method,
             headers=headers)
         try:
-            with self.opener.open(req, timeout=20) as response:
+            with self.opener.open(req, timeout=min(20, remaining)) as response:
                 data = response.read(MAX_RESPONSE + 1)
                 if len(data) > MAX_RESPONSE:
                     raise ValueError('NetBox response exceeds limit')
@@ -272,6 +285,7 @@ class Application:
         self.mutation_lock = threading.Lock()
         self.bootstrap_lock = threading.Lock()
         self.bootstrap_ready = False
+        self.inventory = InventoryJobs(self)
         # Recover interrupted jobs as failed; never silently resume a network poll.
         with self.store.connect() as db:
             db.execute("UPDATE polls SET state='error',result=? WHERE state='running'", (json.dumps({'error': 'interrupted; explicit retry required'}),))
@@ -361,7 +375,7 @@ class Application:
                 invalid = True
             items.append({**network, 'snmp_profiles': names, 'snmp_profiles_invalid': invalid})
         return {'items': items,
-                'capabilities': {'device_access': 1, 'ordered_snmp_profiles': 1, 'max_snmp_profiles': 4}}
+                'capabilities': {'device_access': 1, 'ordered_snmp_profiles': 1, 'max_snmp_profiles': 4, 'inventory': 1}}
 
     def probe_profiles(self, address, candidates, deadline):
         attempts = []
@@ -692,7 +706,7 @@ class Application:
         origin = self.config.get('platform_origin', self.config.get('origin', ''))
         if not origin or origin != self.config.get('origin'):
             raise ValueError('NetMap public origin is not configured consistently')
-        return {'module': 'netmap', 'protocol': 'pl-gateway-v2', 'version': '1.0.0', 'platform_origin': origin}
+        return {'module': 'netmap', 'protocol': 'pl-gateway-v2', 'version': NETMAP_VERSION, 'platform_origin': origin}
 
     def graph(self, path='/api/topology'):
         now = datetime.now(timezone.utc).isoformat()
@@ -749,6 +763,28 @@ class Application:
                 'config_url': '/netmap/oxidized/node/fetch/device-' + str(device['id']) if fields.get('oxidized_model') else '',
                 'config_history_url': '/netmap/gitea/pl-collector/device-configs/commits/branch/master/device-' + str(device['id']) if fields.get('oxidized_model') else '',
                 'details': {'source': fields.get('pl_source'), 'netbox_id': device['id'], 'support_only': bool(selected and device['id'] not in scope_seed_ids)}})
+        virtual_ports = {}
+        for port in self.netbox.all('/virtualization/interfaces/'):
+            owner = (port.get('virtual_machine') or {}).get('id')
+            virtual_ports.setdefault(owner, []).append({'id': 'vm-interface:' + str(port['id']), 'name': port['name'],
+                'type': 'virtual', 'enabled': port.get('enabled')})
+        for machine in self.netbox.all('/virtualization/virtual-machines/'):
+            fields = machine.get('custom_fields') or {}
+            metadata = fields.get('pl_inventory')
+            observed = metadata.get('observed') if isinstance(metadata, dict) else None
+            observed = observed if isinstance(observed, dict) else {}
+            address = observed.get('collector_ip') or (machine.get('primary_ip4') or machine.get('primary_ip6') or {}).get('address', '').split('/')[0]
+            if selected:
+                try:
+                    if ipaddress.ip_address(address) not in ipaddress.ip_network(selected['cidr']):
+                        continue
+                except ValueError:
+                    continue
+            nodes.append({'id': 'vm:' + str(machine['id']), 'name': machine['name'], 'kind': 'vm',
+                'management_ip': address, 'netbox_url': '/netmap/netbox/virtualization/virtual-machines/' + str(machine['id']) + '/',
+                'ports': virtual_ports.get(machine['id'], []), 'site': machine.get('site'),
+                'config_url': '', 'config_history_url': '',
+                'details': {'source': fields.get('pl_inventory_source'), 'netbox_vm_id': machine['id'], 'support_only': False}})
         networks = {item['id']: item for item in self.store.networks()}
         inventory_by_ip = {}
         for item in nodes:
@@ -803,10 +839,14 @@ class Application:
             if names:
                 node['name'] = max(names)[2]
             source = node['details']['source']
-            matches = sorted(item['details']['netbox_id'] for item in inventory_by_ip.get(node['management_ip'], [])
+            matches = sorted(item['details']['netbox_id'] for item in inventory_by_ip.get(node['management_ip'], []) if 'netbox_id' in item['details']
                 if not str(item['details'].get('source') or '').startswith('network:') or item['details']['source'] == source)
             if matches:
                 node['details']['inventory_matches'] = matches
+                node['details']['identity_unconfirmed'] = True
+            vm_matches = sorted(item['id'] for item in inventory_by_ip.get(node['management_ip'], []) if 'netbox_vm_id' in item['details'])
+            if vm_matches:
+                node['details']['inventory_vm_matches'] = vm_matches
                 node['details']['identity_unconfirmed'] = True
         for cable in cables:
             # Physical authority is explicit NetBox Cable only. Never infer from ARP/FDB.
@@ -1131,7 +1171,7 @@ class Application:
         finally:
             self.poll_lock.release()
 
-    def mutation(self, path, body, claims):
+    def _inventory_preview(self, path, body, claims):
         operation = claims['idempotency_key']
         fingerprint = hashlib.sha256(path.encode() + b'\n' + json_bytes(body)).hexdigest()
         with self.mutation_lock:
@@ -1140,11 +1180,50 @@ class Application:
                 if previous:
                     if previous[0] != fingerprint:
                         raise RequestError('netmap_idempotency_conflict')
-                    return json.loads(previous[1])
+                    result = json.loads(previous[1])
+                    if '_status' in result:
+                        raise InventoryError(result['error'], result['_status'])
+                    return result
+                db.execute('INSERT INTO requests VALUES(?,?,?)', (operation, fingerprint, json.dumps({'error': 'inventory_preview_running', '_status': 409})))
+        try:
+            # Credential preview has no native writes. Only its reservation is
+            # serialized; bounded network IO must not hold the mutation lanes.
+            result = self.inventory.test_profile(path.split('/')[4], body)
+        except InventoryError as exc:
+            with self.store.connect() as db:
+                db.execute('UPDATE requests SET response=? WHERE id=?', (json.dumps({'error': exc.code, '_status': exc.status}), operation))
+            raise
+        except Exception:
+            with self.store.connect() as db:
+                db.execute('UPDATE requests SET response=? WHERE id=?', (json.dumps({'error': 'inventory_collection_failed', '_status': 502}), operation))
+            raise InventoryError('inventory_collection_failed', 502) from None
+        with self.store.connect() as db:
+            db.execute('UPDATE requests SET response=? WHERE id=?', (json.dumps(result), operation))
+        return result
+
+    def mutation(self, path, body, claims, method='POST'):
+        if method == 'POST' and re.fullmatch(r'/api/inventory/profiles/[a-f0-9-]{36}/test', path):
+            return self._inventory_preview(path, body, claims)
+        operation = claims['idempotency_key']
+        fingerprint = hashlib.sha256((method + ' ' + path).encode() + b'\n' + json_bytes(body)).hexdigest() if method != 'POST' else hashlib.sha256(path.encode() + b'\n' + json_bytes(body)).hexdigest()
+        with self.mutation_lock:
+            with self.store.connect() as db:
+                previous = db.execute('SELECT digest,response FROM requests WHERE id=?', (operation,)).fetchone()
+                if previous:
+                    if previous[0] != fingerprint:
+                        raise RequestError('netmap_idempotency_conflict')
+                    cached = json.loads(previous[1])
+                    if path.startswith('/api/inventory/') and cached.get('error') == 'operation interrupted; inspect before explicit retry':
+                        raise InventoryError('inventory_interrupted', 503)
+                    return cached
                 # Reserve BEFORE side effects. Interrupted operations remain explicit errors;
                 # automatic replay must never launch a second scan.
                 db.execute('INSERT INTO requests VALUES(?,?,?)', (operation, fingerprint, json.dumps({'error': 'operation interrupted; inspect before explicit retry'})))
-            if path == '/api/networks':
+            if path.startswith('/api/inventory/'):
+                result = self.inventory.mutation(path, body, operation, claims['sub'], method=method)
+            elif method != 'POST':
+                raise ValueError('Unsupported NetMap mutation')
+            elif path == '/api/networks':
                 if set(body) not in ({'cidr', 'name', 'profile'}, {'cidr', 'name', 'profile', 'snmp_profiles'}) or not isinstance(body['name'], str) or not 1 <= len(body['name']) <= 128 or not isinstance(body['profile'], str) or not re.fullmatch(r'[a-z0-9_-]{0,64}', body['profile']):
                     raise RequestError('netmap_invalid_network')
                 snmp_profiles = body.get('snmp_profiles')
@@ -1205,6 +1284,8 @@ class Application:
                 with self.store.connect() as db:
                     if db.execute("SELECT 1 FROM polls WHERE network=? AND state='running'", (path.split('/')[3],)).fetchone():
                         raise RequestError('netmap_poll_running')
+                    if hasattr(self, 'inventory') and any(t.get('network_id') == path.split('/')[3] for t in self.inventory.targets()['items']):
+                        raise InventoryError('inventory_network_in_use', 409)
                     db.execute('DELETE FROM networks WHERE id=?', (path.split('/')[3],))
                     db.execute('DELETE FROM network_snmp_profiles WHERE network=?', (path.split('/')[3],))
                 # Inventory and Gitea history survive network removal.
@@ -1248,7 +1329,7 @@ def make_handler(application, map_handler):
                     try:
                         application.bootstrap()
                         collector = application.collector_status()
-                        return self.json(200, {'status': 'ready', 'version': '1.0.0', 'collector': collector})
+                        return self.json(200, {'status': 'ready', 'version': NETMAP_VERSION, 'collector': collector})
                     except Exception:
                         return self.json(503, {'status': 'initializing'})
                 if self.path in ('/internal/oxidized/nodes', '/internal/oxidized/trust', '/internal/bootstrap') and self.command == 'GET':
@@ -1263,7 +1344,7 @@ def make_handler(application, map_handler):
                 path = parsed.path.removeprefix('/netmap')
                 native = next((name for name in NATIVE if path.startswith('/' + name + '/')), None)
                 write = self.command not in ('GET', 'HEAD')
-                scope = 'netmap:admin' if native or write or path.startswith(('/api/networks', '/api/profiles', '/api/polls', '/api/devices')) else 'netmap:read'
+                scope = 'netmap:admin' if native or write or path.startswith(('/api/networks', '/api/profiles', '/api/polls', '/api/devices', '/api/inventory/')) else 'netmap:read'
                 asgi = {'method': self.command, 'raw_path': parsed.path.encode('ascii'), 'query_string': parsed.query.encode('ascii'),
                     'headers': [(k.lower().encode(), v.encode('latin1')) for k, v in self.headers.raw_items()]}
                 claims = application.verifier.verify(asgi, body, required_scope=scope)
@@ -1273,16 +1354,25 @@ def make_handler(application, map_handler):
                     if self.command not in ('GET', 'HEAD') or body or parsed.query:
                         raise ValueError('Unsupported NetMap descriptor request')
                     return self.json(200, application.descriptor())
-                if self.command == 'POST':
-                    if path.startswith('/api/devices') and parsed.query:
+                if self.command == 'POST' or self.command == 'DELETE' and path.startswith('/api/inventory/'):
+                    if path.startswith(('/api/devices', '/api/inventory/')) and parsed.query:
                         raise ValueError('Invalid device mutation query')
                     if self.headers.get_content_type() != 'application/json':
                         raise ValueError('JSON body required')
-                    return self.json(200, application.mutation(path, json.loads(body), claims))
+                    return self.json(200, application.mutation(path, json.loads(body), claims, method=self.command))
                 if self.command not in ('GET', 'HEAD') or body:
                     raise ValueError('Unsupported NetMap method')
                 if path == '/api/networks':
                     return self.json(200, application.networks_view())
+                if path.startswith('/api/inventory/'):
+                    if parsed.query:
+                        raise ValueError('Invalid inventory query')
+                    view = {'/api/inventory/profiles': application.inventory.profiles,
+                            '/api/inventory/targets': application.inventory.targets,
+                            '/api/inventory/jobs': application.inventory.jobs}.get(path)
+                    if not view:
+                        raise ValueError('Unsupported inventory route')
+                    return self.json(200, view())
                 if path == '/api/devices':
                     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
                     if (set(query) != {'network'} or len(query['network']) != 1
@@ -1318,6 +1408,8 @@ def make_handler(application, map_handler):
             except GatewayError as exc:
                 self.json(exc.status, {'error': exc.code})
             except RequestError as exc:
+                self.json(exc.status, {'error': exc.code})
+            except InventoryError as exc:
                 self.json(exc.status, {'error': exc.code})
             except (ValueError, KeyError, TypeError, json.JSONDecodeError, sqlite3.IntegrityError):
                 self.json(400, {'error': 'invalid NetMap request'})
@@ -1401,6 +1493,7 @@ def make_handler(application, map_handler):
 
 def main():
     application = Application()
+    application.inventory.start_scheduler()
     import sys
     sys.path.insert(0, '/opt/netmap')
     spec = importlib.util.spec_from_file_location('pl_existing_netmap', '/opt/netmap/app.py')

@@ -33,6 +33,7 @@ INSTALLER_FILES = {
     "netmap-standalone.py", "netmap-standalone-package.py", "netmap-standalone/nginx.conf.example",
 }
 UNIT_TEST_NAMES = {
+    "test_inventory_jobs.py", "test_inventory_collectors.py", "test_inventory_collectors_transport.py", "test_inventory_netbox.py",
     "test_alertmanager_controller.py", "test_alertmanager_package.py", "test_application_package.py", "test_application_transport.py",
     "test_bookstack_controller.py", "test_bookstack_package.py", "test_bootstrap.py", "test_connector_credentials.py",
     "test_delivery.py", "test_delivery_concurrency.py", "test_delivery_proxy.py", "test_child_read_isolation.py", "test_doska_controller.py", "test_doska_stream_cancellation.py", "test_forms_controller.py", "test_grafana_build.py", "test_grafana_controller.py",

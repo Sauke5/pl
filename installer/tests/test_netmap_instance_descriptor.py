@@ -44,7 +44,7 @@ class NetMapDescriptor(unittest.TestCase):
         response = self.request()
         self.assertEqual(response.status, 200)
         self.assertEqual(json.loads(response.wfile.getvalue()), {
-            'module': 'netmap', 'protocol': 'pl-gateway-v2', 'version': '1.0.0', 'platform_origin': 'https://pl.example'})
+            'module': 'netmap', 'protocol': 'pl-gateway-v2', 'version': '1.1.0', 'platform_origin': 'https://pl.example'})
         for dependency in (self.app.netbox, self.app.store, self.app.bootstrap, self.app.start_poll, self.app.mutation):
             self.assertEqual(dependency.mock_calls, [])
         head = self.request(method='HEAD')

@@ -55,6 +55,22 @@ class HostDiscovery(unittest.TestCase):
             observed = self.app.probe_host('192.0.2.1', time.monotonic() + 30)
         self.assertEqual(observed['methods'], ['icmp'])
 
+    def test_collected_vm_is_visible_in_scope_without_invented_host_or_cable(self):
+        network = self.add_network()
+        machines = [{'id': 1, 'name': 'Observed VM', 'custom_fields': {'pl_inventory_source': 'inventory:test',
+            'pl_inventory': {'observed': {'collector_ip': '192.0.2.1'}}}},
+            {'id': 2, 'name': 'Other scope', 'custom_fields': {}, 'primary_ip4': {'address': '198.51.100.2/24'}}]
+        ports = [{'id': 9, 'name': 'ens18', 'virtual_machine': {'id': 1}, 'enabled': True}]
+        self.app.netbox.all.side_effect = lambda path: machines if path == '/virtualization/virtual-machines/' else ports if path == '/virtualization/interfaces/' else []
+        graph = self.app.graph('/api/sites/network-' + network)
+        self.assertEqual([n['id'] for n in graph['nodes']], ['vm:1'])
+        self.assertEqual(graph['nodes'][0]['kind'], 'vm')
+        self.assertEqual(graph['nodes'][0]['ports'][0]['name'], 'ens18')
+        self.assertIn('/virtualization/virtual-machines/1/', graph['nodes'][0]['netbox_url'])
+        self.assertEqual(graph['edges'], [])
+        self.assertEqual({n['id'] for n in self.app.graph()['nodes']}, {'vm:1', 'vm:2'})
+        self.app.netbox.request.assert_not_called()
+
     def test_missing_ping_is_visible_while_tcp_still_runs(self):
         with patch.object(service.subprocess, 'run', side_effect=FileNotFoundError), \
              patch.object(service.socket, 'create_connection', side_effect=socket.timeout) as connect:

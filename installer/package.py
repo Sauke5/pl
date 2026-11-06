@@ -58,7 +58,8 @@ FORMS_REQUIRED = {"apps/forms/" + name for name in ("app.py", "gateway.py", "eng
 DOSKA_REQUIRED = {"apps/doska/" + name for name in ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "vite.config.ts", "LICENSE", "apps/api/package.json", "apps/api/src/index.ts", "apps/web/package.json", "apps/web/index.html", "deploy/nginx.conf", "deploy/generate-manifest.mjs", "deploy/gateway-manifest.json")}
 NETMAP_STACK_REQUIRED = {"apps/netmap-stack/" + name for name in (
     "cache-start.sh", "gateway.py", "gitea-start.sh", "known-hosts-source.rb", "netbox-bootstrap.py",
-    "netbox-extra.py", "netbox-start.sh", "oxidized-start.rb", "service.py")}
+    "netbox-extra.py", "netbox-start.sh", "oxidized-start.rb", "service.py", "inventory_collectors.py",
+    "inventory_netbox.py", "inventory_jobs.py", "inventory-requirements.txt", "inventory-LICENSES.txt")}
 APPLICATION_REQUIRED = {"forms": FORMS_REQUIRED, "doska": DOSKA_REQUIRED, "sftpgo": set(),
                         "bookstack": {"apps/wiki/bootstrap-admin.php"},
                         "netmap": NETMAP_STACK_REQUIRED | {"apps/netmap/app.py", "apps/netmap/web/index.html", "apps/netmap/web/app.js", "apps/netmap/web/office-view.js", "apps/netmap/web/style.css", "apps/netmap/web/theme-init.js"}}

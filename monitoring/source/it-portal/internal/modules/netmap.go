@@ -35,8 +35,12 @@ func NetMapRequestErrorCode(status int, body []byte) string {
 	switch status {
 	case http.StatusBadRequest:
 		fallback = "netmap_invalid_request"
+	case http.StatusNotFound, http.StatusUnprocessableEntity:
+		fallback = "netmap_invalid_request"
 	case http.StatusConflict:
 		fallback = "netmap_conflict"
+	case http.StatusServiceUnavailable:
+		fallback = "netmap_request_failed"
 	case http.StatusBadGateway:
 		return "netmap_request_failed"
 	default:
@@ -70,6 +74,20 @@ func NetMapRequestErrorCode(status int, body []byte) string {
 		"netmap_invalid_snmp_profiles": http.StatusBadRequest,
 		"netmap_device_missing":        http.StatusBadRequest, "netmap_invalid_binding": http.StatusBadRequest,
 		"netmap_device_changed": http.StatusConflict, "netmap_collector_not_ready": http.StatusConflict,
+		"inventory_invalid_address": 400, "inventory_invalid_id": 400, "inventory_invalid_name": 400,
+		"inventory_invalid_profile": 400, "inventory_profile_kind_changed": 400, "inventory_profile_limit": 400,
+		"inventory_invalid_target": 400, "inventory_profile_mismatch": 400, "inventory_network_mismatch": 400,
+		"inventory_invalid_interval": 400, "inventory_target_limit": 400, "inventory_invalid_route": 400,
+		"inventory_profile_busy": 409, "inventory_target_busy": 409, "inventory_profile_in_use": 409,
+		"inventory_address_exists": 409, "inventory_busy": 409, "inventory_network_in_use": 409, "inventory_preview_running": 409,
+		"inventory_profile_missing": 404, "inventory_target_missing": 404, "inventory_interrupted": 503,
+	}
+	// Collector codes are also used while validating a saved profile (400) or
+	// testing a real connection (422). No arbitrary exception text is accepted.
+	if status == http.StatusBadRequest || status == http.StatusUnprocessableEntity {
+		for _, name := range []string{"inventory_profile_invalid", "inventory_target_invalid", "inventory_driver_unsupported", "inventory_dependency_missing", "inventory_timeout", "inventory_output_limit", "inventory_auth_failed", "inventory_host_key_failed", "inventory_tls_failed", "inventory_connection_failed", "inventory_command_failed", "inventory_output_invalid"} {
+			allowed[name] = status
+		}
 	}
 	if allowed[code] == status {
 		return code

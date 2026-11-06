@@ -55,6 +55,7 @@ class NetworkContracts(unittest.TestCase):
         app.netbox = Mock()
         app.netbox.all.side_effect = lambda path: {
             '/dcim/devices/': devices, '/dcim/interfaces/': ports, '/dcim/cables/': [cable],
+            '/virtualization/interfaces/': [], '/virtualization/virtual-machines/': [],
         }[path]
         scopes = app.configuration()['scopes']
         self.assertEqual([scope['id'] for scope in scopes], ['network', 'network-' + network['id']])

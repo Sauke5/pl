@@ -17,7 +17,8 @@ class NetMapPackageTests(unittest.TestCase):
     def test_runtime_scripts_are_exactly_allowlisted(self):
         expected = {'apps/netmap-stack/' + name for name in (
             'cache-start.sh', 'gateway.py', 'gitea-start.sh', 'known-hosts-source.rb', 'netbox-bootstrap.py',
-            'netbox-extra.py', 'netbox-start.sh', 'oxidized-start.rb', 'service.py')}
+            'netbox-extra.py', 'netbox-start.sh', 'oxidized-start.rb', 'service.py',
+            'inventory_collectors.py', 'inventory_jobs.py', 'inventory_netbox.py', 'inventory-requirements.txt', 'inventory-LICENSES.txt')}
         self.assertEqual(package.NETMAP_STACK_REQUIRED, expected)
         for name in expected:
             self.assertTrue(package.application_source_allowed('netmap', name), name)

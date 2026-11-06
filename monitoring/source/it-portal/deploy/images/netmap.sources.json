@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "source": {
     "kind": "local-committed-snapshot",
     "paths": [
       "apps/netmap",
       "apps/netmap-stack"
     ],
-    "identity": "Selected existing NetMap UI plus isolated runtime glue. CI binds the selected committed blobs; no inventory snapshots, installation private config or source Git history enter the image."
+    "identity": "Selected NetMap UI, finite SSH/WinRM inventory collectors and native NetBox API writer. Selected source and dependency hashes identify the build; installation credentials and observations stay outside the artifact."
   },
   "recipe": "monitoring/source/it-portal/deploy/images/netmap.Dockerfile",
   "context": ".",
@@ -59,13 +59,30 @@
       "adapter",
       "oxidized"
     ],
-    "start_scans": false
+    "start_scans": false,
+    "inventory": {
+      "methods": [
+        "network_ssh",
+        "linux_ssh",
+        "windows_winrm_cim"
+      ],
+      "drivers": [
+        "huawei_vrp",
+        "cisco_ios",
+        "junos"
+      ],
+      "schedule": "explicit-per-target",
+      "job_budget_seconds": 180,
+      "workers": 2,
+      "queued_limit": 16,
+      "snapshot_bytes": 1048576
+    }
   },
-  "verification": "Source review only on Mac. CI must build every target and exercise native login/subpaths, authenticated NetBox v2 schema/token, explicit fixture CIDR polling, collection and Gitea commit, map Cable rendering, persistence, owned removal and absence of LAN listeners.",
+  "verification": "Targeted source/transport/ownership tests plus native NetBox and existing-installation acceptance. Evidence belongs to the specific artifact and host; build alone is not runtime readiness.",
   "images": {
     "netmap-database": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "database",
         "pl.module.config.version": "1",
@@ -75,7 +92,7 @@
     },
     "netmap-cache": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "cache",
         "pl.module.config.version": "1",
@@ -85,7 +102,7 @@
     },
     "netmap-netbox": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "netbox",
         "pl.module.config.version": "1",
@@ -95,7 +112,7 @@
     },
     "netmap-netbox-worker": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "netbox-worker",
         "pl.module.config.version": "1",
@@ -105,7 +122,7 @@
     },
     "netmap-gitea": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "gitea",
         "pl.module.config.version": "1",
@@ -115,7 +132,7 @@
     },
     "netmap-adapter": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "adapter",
         "pl.module.config.version": "1",
@@ -124,7 +141,7 @@
     },
     "netmap-oxidized": {
       "labels": {
-        "org.opencontainers.image.version": "1.0.0",
+        "org.opencontainers.image.version": "1.1.0",
         "pl.module.id": "netmap",
         "pl.module.role": "oxidized",
         "pl.module.config.version": "1",
@@ -132,5 +149,10 @@
         "pl.upstream.version": "0.37.0"
       }
     }
+  },
+  "dependencies": {
+    "python_requirements": "apps/netmap-stack/inventory-requirements.txt",
+    "notices": "apps/netmap-stack/inventory-LICENSES.txt",
+    "resolver": "pip --require-hashes --only-binary=:all:"
   }
 }
