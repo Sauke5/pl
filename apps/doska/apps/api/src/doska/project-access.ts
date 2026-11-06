@@ -16,35 +16,43 @@ const departmentIdColumn = sql.raw('"project"."department_id"');
 const ownerIdColumn = sql.raw('"project"."owner_user_id"');
 const visibilityColumn = sql.raw('"project"."visibility"');
 
-function freshDepartment(departmentId: SQLWrapper, now: Date) {
+// Pool waits must precede the default access clock. All SQL predicates in the
+// statement share PostgreSQL's timestamp, in UTC like the projection columns.
+function accessTime(now?: Date) {
+  return now === undefined
+    ? sql`(statement_timestamp() AT TIME ZONE 'utc')`
+    : sql`${now.toISOString()}`;
+}
+
+function freshDepartment(departmentId: SQLWrapper, at: SQLWrapper) {
   return sql<boolean>`EXISTS (
     SELECT 1 FROM platform_department AS doska_department
     WHERE doska_department.id = ${departmentId}
       AND doska_department.active = true
-      AND doska_department.observed_at <= ${now.toISOString()}
-      AND doska_department.valid_until > ${now.toISOString()}
+      AND doska_department.observed_at <= ${at}
+      AND doska_department.valid_until > ${at}
   )`;
 }
 
-function freshIdentity(userId: string, now: Date) {
+function freshIdentity(userId: string, at: SQLWrapper) {
   return sql<boolean>`EXISTS (
     SELECT 1 FROM platform_user_identity AS doska_identity
     WHERE doska_identity.user_id = ${userId}
       AND doska_identity.active = true
-      AND doska_identity.observed_at <= ${now.toISOString()}
-      AND doska_identity.valid_until > ${now.toISOString()}
+      AND doska_identity.observed_at <= ${at}
+      AND doska_identity.valid_until > ${at}
       AND EXISTS (
         SELECT 1 FROM platform_directory_state AS doska_stream
         WHERE doska_stream.id = 'directory'
-          AND doska_stream.observed_at <= ${now.toISOString()}
-          AND doska_stream.valid_until > ${now.toISOString()}
+          AND doska_stream.observed_at <= ${at}
+          AND doska_stream.valid_until > ${at}
       )
   )`;
 }
 
-function headsProjectDepartment(userId: string, now: Date) {
+function headsProjectDepartment(userId: string, at: SQLWrapper) {
   return sql<boolean>`(
-    ${freshDepartment(departmentIdColumn, now)} AND EXISTS (
+    ${freshDepartment(departmentIdColumn, at)} AND EXISTS (
       SELECT 1 FROM platform_department_head AS doska_head
       INNER JOIN platform_user_identity AS doska_head_identity
         ON doska_head_identity.user_id = doska_head.user_id
@@ -67,9 +75,10 @@ function resolvedProject() {
 }
 
 /** Embed in the project query WHERE, before counts, limits or offsets. */
-export function visibleProjectCondition(userId: string, now = new Date()) {
+export function visibleProjectCondition(userId: string, now?: Date) {
+  const at = accessTime(now);
   return sql<boolean>`(
-    ${resolvedProject()} AND ${freshIdentity(userId, now)} AND (
+    ${resolvedProject()} AND ${freshIdentity(userId, at)} AND (
       ${ownerIdColumn} = ${userId}
       OR EXISTS (
         SELECT 1 FROM project_member AS doska_member
@@ -79,7 +88,7 @@ export function visibleProjectCondition(userId: string, now = new Date()) {
       )
       OR (
         ${visibilityColumn} = 'department'
-        AND ${freshDepartment(departmentIdColumn, now)}
+        AND ${freshDepartment(departmentIdColumn, at)}
         AND EXISTS (
           SELECT 1 FROM platform_user_identity AS doska_primary
           WHERE doska_primary.user_id = ${userId}
@@ -91,10 +100,11 @@ export function visibleProjectCondition(userId: string, now = new Date()) {
 }
 
 /** Owners and current department heads only; content readers do not qualify. */
-export function managedProjectCondition(userId: string, now = new Date()) {
+export function managedProjectCondition(userId: string, now?: Date) {
+  const at = accessTime(now);
   return sql<boolean>`(
-    ${resolvedProject()} AND ${freshIdentity(userId, now)} AND (
-      ${ownerIdColumn} = ${userId} OR ${headsProjectDepartment(userId, now)}
+    ${resolvedProject()} AND ${freshIdentity(userId, at)} AND (
+      ${ownerIdColumn} = ${userId} OR ${headsProjectDepartment(userId, at)}
     )
   )`;
 }
@@ -105,7 +115,8 @@ export async function getProjectCapabilities(
   projectId: string,
   options: { now?: Date; database?: AccessDatabase } = {},
 ): Promise<ProjectCapabilities> {
-  const { now = new Date(), database = db } = options;
+  const { now, database = db } = options;
+  const at = accessTime(now);
   const [project] = await database
     .select({
       ownerUserId: projectTable.ownerUserId,
@@ -114,21 +125,21 @@ export async function getProjectCapabilities(
       primaryDepartmentId: sql<string | null>`(
       SELECT identity.primary_department_id FROM platform_user_identity AS identity
       WHERE identity.user_id = ${userId}
-        AND ${freshDepartment(departmentIdColumn, now)}
+        AND ${freshDepartment(departmentIdColumn, at)}
     )`,
       membership: sql<"participant" | "observer" | null>`(
       SELECT member.role FROM project_member AS member
       WHERE member.project_id = ${projectIdColumn} AND member.user_id = ${userId}
     )`,
-      head: headsProjectDepartment(userId, now),
+      head: headsProjectDepartment(userId, at),
     })
     .from(projectTable)
     .where(
       and(
         eq(projectTable.id, projectId),
         resolvedProject(),
-        freshIdentity(userId, now),
-        sql`(${visibleProjectCondition(userId, now)} OR ${headsProjectDepartment(userId, now)})`,
+        freshIdentity(userId, at),
+        sql`(${visibleProjectCondition(userId, now)} OR ${headsProjectDepartment(userId, at)})`,
       ),
     )
     .limit(1);
@@ -165,7 +176,7 @@ export async function listVisibleProjectIds(
     offset?: number;
   } = {},
 ): Promise<string[]> {
-  const { now = new Date(), database = db, limit = 100, offset = 0 } = options;
+  const { now, database = db, limit = 100, offset = 0 } = options;
   if (
     !Number.isInteger(limit) ||
     limit < 1 ||

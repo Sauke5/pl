@@ -332,6 +332,49 @@ print(value[image['id']]['ref'])
         persisted = dr.load_json(recovery.journal.read_bytes())
         self.assertEqual(persisted["created"]["container"][spec["name"]]["id"], obj["Id"])
 
+    def oom_contract_fixture(self):
+        spec = self.meta["containers"][0]
+        original = {"Id": "1" * 64, "Name": "/" + spec["name"], "Image": spec["image"],
+            "State": {"Status": "exited", "Running": False, "StartedAt": "2026-11-05T23:00:00Z"},
+            "Config": {"Hostname": "1" * 12, "Image": spec["image"], "Env": ["TEST=fixture"],
+                       "Labels": {"com.docker.compose.project": self.installation, "com.docker.compose.service": "db"}},
+            "HostConfig": {"OomKillDisable": None, "Memory": 64 * 1024**2, "ReadonlyRootfs": True, "CapDrop": ["ALL"]},
+            "NetworkSettings": {"Networks": {}}, "Mounts": []}
+        spec["contract"] = dr.container_contract(original)
+        created = copy.deepcopy(original)
+        created.update(Id="2" * 64, State={"Status": "created", "Running": False, "StartedAt": "0001-01-01T00:00:00Z"})
+        created["Config"]["Hostname"] = "2" * 12
+        created["HostConfig"]["OomKillDisable"] = False
+        return spec, original, created
+
+    def test_native_default_oom_null_source_accepts_false_created_container(self):
+        recovery = self.recovery()
+        spec, original, created = self.oom_contract_fixture()
+        source_before, target_before = copy.deepcopy(original), copy.deepcopy(created)
+        self.assertEqual(spec["contract"], "4a45166e5fb88763b00bdd2d47638e4924499b6364e35e177815263f6592cbd1")
+        self.assertEqual(dr.container_contract(created), spec["contract"])
+        recovery.remember_container(created, spec)
+        persisted = dr.load_json(recovery.journal.read_bytes())
+        self.assertEqual(persisted["created"]["container"][spec["name"]]["id"], created["Id"])
+        self.assertEqual(original, source_before)
+        self.assertEqual(created, target_before)
+
+    def test_oom_default_equivalence_keeps_true_and_other_contract_drift_strict(self):
+        recovery = self.recovery()
+        spec, _, created = self.oom_contract_fixture()
+        for field, value in (("OomKillDisable", True), ("Memory", 128 * 1024**2),
+                             ("ReadonlyRootfs", False), ("CapDrop", [])):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(created)
+                changed["HostConfig"][field] = value
+                with self.assertRaisesRegex(ValueError, "closed preserved recipe"):
+                    recovery.remember_container(changed, spec)
+        self.assertEqual(recovery.operation["created"]["container"], {})
+
+        numeric = copy.deepcopy(created)
+        numeric["HostConfig"]["OomKillDisable"] = 0
+        self.assertNotEqual(dr.container_contract(numeric), spec["contract"])
+
     def test_foreign_volume_consumer_is_refused_before_any_import(self):
         recovery = self.recovery()
         foreign = {"Id": "1" * 64, "Name": "/foreign", "Config": {"Labels": {}},

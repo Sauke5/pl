@@ -620,6 +620,8 @@ class UpgradeTransactionTests(unittest.TestCase):
         self.parent.docker.assert_not_called()
         self.assertEqual(self.restarted[0], self.containers)
         self.assertEqual(d.load_json((self.volume_roots[0] / 'database').read_bytes()), self.original)
+        self.assertEqual(d.read(self.delivery.base / 'operation.json')['error'],
+                         'Обновление не завершено. Предыдущая версия и данные сохранены.')
 
     def test_icmp_upgrade_patches_only_its_recipe_and_restores_external_state_before_old_tree(self):
         state = self.delivery.state()

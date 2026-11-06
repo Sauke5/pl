@@ -1548,7 +1548,7 @@ class Delivery:
         self.readiness()
         if not (path / 'snapshot.json').exists():
             self.activate_host(operation['from_version'])
-        self.operation('rolled_back', error='Обновление не завершено. Восстановлены предыдущая версия и полный снимок данных.')
+        self.operation('rolled_back', error='Обновление не завершено. Предыдущая версия и данные сохранены.')
 
 
 def canonical_id(value):

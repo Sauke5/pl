@@ -1694,9 +1694,14 @@
       "size": 2011
     },
     {
+      "path": "apps/doska/apps/api/src/doska/project-access.pg.test.ts",
+      "sha256": "7ba5189198b4fe85487282a8075529580c82a943e8da18ebdbf137d1addda555",
+      "size": 11429
+    },
+    {
       "path": "apps/doska/apps/api/src/doska/project-access.ts",
-      "sha256": "6f4c6c64050aa5d745face54cb1c548b4c9bdda5e101d47862fb7a045e1b5e5b",
-      "size": 6647
+      "sha256": "4966f590ce4df82956e79f6c8489d665420563d0c45c0656bd71913d3ed475d1",
+      "size": 6924
     },
     {
       "path": "apps/doska/apps/api/src/doska/project-policy.test.ts",
@@ -16830,8 +16835,8 @@
     },
     {
       "path": "docs/releases/0.5.2.json",
-      "sha256": "8d1f22498256f48441759ce3e4643015978a4c2fdf0fc64ea6d0496a7a25411f",
-      "size": 3917
+      "sha256": "5db670df511ba19c0785042f5028b306b36011dbe12e6278cd87d3a5bbbc3a4b",
+      "size": 3979
     },
     {
       "path": "installer/LICENSES.txt",
@@ -16880,8 +16885,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "238f6378734aaf604e8f77f53f1dd7e1e9cdcba1f40b8e31a9aa5ef3a536f20c",
-      "size": 101136
+      "sha256": "3349567c91780cb11eb53709f90241171f814f03dc3f6214e5210897b15aeaf5",
+      "size": 101102
     },
     {
       "path": "installer/delivery.ru.md",
@@ -16890,8 +16895,8 @@
     },
     {
       "path": "installer/disaster-recovery.py",
-      "sha256": "b22d452aa5cf43a9b32faaf4547cfa34de61f386b9ccaef5b87a706cc4d841da",
-      "size": 108691
+      "sha256": "3a765df9b0197610b55158447ffc7d743ad4261bda3798f8603b069e6cd921ef",
+      "size": 108928
     },
     {
       "path": "installer/disaster-recovery.ru.md",
@@ -17100,8 +17105,8 @@
     },
     {
       "path": "installer/tests/test_delivery.py",
-      "sha256": "a239930bc88138b2a1dd914eb84e3af72cf93332a471ef93a4cd5290f52b281c",
-      "size": 44012
+      "sha256": "a662f17f325bf110ef688cff8ccf9cb96011135ed666e58a3d39f3a57d4dcb1d",
+      "size": 44237
     },
     {
       "path": "installer/tests/test_delivery_concurrency.py",
@@ -17115,8 +17120,8 @@
     },
     {
       "path": "installer/tests/test_disaster_recovery.py",
-      "sha256": "4203f4cad72f7db0aed37b8602cc2c021e2ca085125360d876e2e3a4313faf81",
-      "size": 48143
+      "sha256": "bee76df42915b900fe9f3ecbf3dd223e958eb0eba4dcbafd3099c044e87e3111",
+      "size": 50806
     },
     {
       "path": "installer/tests/test_doska_controller.py",

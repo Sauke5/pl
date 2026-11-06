@@ -430,6 +430,10 @@ class Host:
 def container_contract(obj):
     """Compare closed recipe output, excluding only daemon-assigned identities."""
     config, host = copy.deepcopy(obj.get("Config", {})), copy.deepcopy(obj.get("HostConfig", {}))
+    # Engine 29 may inspect the same default as false before start and null
+    # after start. Keep the archived null representation; true stays distinct.
+    if host.get("OomKillDisable") is False:
+        host["OomKillDisable"] = None
     if config.get("Hostname") == obj.get("Id", "")[:12]:
         config["Hostname"] = ""
     for key in ("com.docker.compose.version", "com.docker.compose.config-hash", "com.docker.compose.image"):
