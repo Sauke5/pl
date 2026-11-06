@@ -16904,6 +16904,11 @@
       "size": 3453
     },
     {
+      "path": "docs/releases/0.6.2.json",
+      "sha256": "739717322c14dc50129d409504c36c7c894b4b1da30c5ee5629e9ac621746669",
+      "size": 3918
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -18235,8 +18240,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Settings.tsx",
-      "sha256": "c7bbf67a7474781bba27aaeee00420d90beee9e45e59f63549bd2c1697f5575e",
-      "size": 20245
+      "sha256": "0ce663448615042411ca7a2472c1d50b48644ebdfb016121085abfed582b2c0d",
+      "size": 21093
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Systems.tsx",

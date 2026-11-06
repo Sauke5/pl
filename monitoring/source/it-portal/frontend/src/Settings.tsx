@@ -144,20 +144,20 @@ export default function Settings() {
     };
   }, [requestNavigation]);
   useLayoutEffect(() => {
+    const element = workspace.current;
+    const main = element?.closest("main");
+    if (!element || !main) return;
+    const footer = main.parentElement?.querySelector(".app-footer");
+    let frame: number | undefined;
     function measure() {
-      const element = workspace.current;
-      if (!element) return;
-      const main = element.closest("main"),
-        footer = main?.parentElement?.querySelector(".app-footer");
-      const bottom = main
-        ? parseFloat(getComputedStyle(main).paddingBottom)
-        : 30;
+      frame = undefined;
+      const bottom = parseFloat(getComputedStyle(main!).paddingBottom) || 0;
       setHeight(
         Math.max(
           430,
           Math.floor(
             window.innerHeight -
-              element.getBoundingClientRect().top -
+              (element!.getBoundingClientRect().top + window.scrollY) -
               bottom -
               (footer?.getBoundingClientRect().height || 0) -
               1,
@@ -165,13 +165,34 @@ export default function Settings() {
         ),
       );
     }
+    function scheduleMeasure() {
+      if (frame === undefined) frame = requestAnimationFrame(measure);
+    }
+    const observer = new ResizeObserver(scheduleMeasure);
+    function observeLayout() {
+      observer.disconnect();
+      observer.observe(main!);
+      if (footer) observer.observe(footer);
+      // Banners can move Settings without changing the flex main's size.
+      for (const parent of [main!, main!.parentElement]) {
+        if (!parent) continue;
+        const stop = parent === main ? element : main;
+        for (const sibling of parent.children) {
+          if (sibling === stop) break;
+          observer.observe(sibling);
+        }
+      }
+      scheduleMeasure();
+    }
+    const changes = new MutationObserver(observeLayout);
+    changes.observe(main, { childList: true });
     measure();
-    window.addEventListener("resize", measure);
-    const observer = new ResizeObserver(measure);
-    const main = workspace.current?.closest("main");
-    if (main) observer.observe(main);
+    observeLayout();
+    window.addEventListener("resize", scheduleMeasure);
     return () => {
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", scheduleMeasure);
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      changes.disconnect();
       observer.disconnect();
     };
   }, []);
