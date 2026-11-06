@@ -16875,8 +16875,8 @@
     },
     {
       "path": "installer/README.ru.md",
-      "sha256": "21787dd248fb4fe78384701236007c38250ed4eae04a4a1736b65ea41b4aa36c",
-      "size": 11606
+      "sha256": "8363e7e51e5779247112731dcbf4a7d31654fd8bc6820d2e8dced04cf9ac8b53",
+      "size": 13186
     },
     {
       "path": "installer/alertmanager-controller.py",
@@ -16935,8 +16935,8 @@
     },
     {
       "path": "installer/get-pl.sh",
-      "sha256": "c4af4df38167bc121cf7fa0a7f5081d4548aff0e070ab30495c144e345c0240b",
-      "size": 8637
+      "sha256": "81fd9e6aba996a2aa6a668064b2d5188916ff7219f586893c608af26c36217d3",
+      "size": 22444
     },
     {
       "path": "installer/grafana-build.py",
@@ -17167,6 +17167,11 @@
       "path": "installer/tests/test_get_pl.py",
       "sha256": "e1b08607ae92f8df1c3335812e9d95cb22db72141bae0d79742f60287dae00f7",
       "size": 5070
+    },
+    {
+      "path": "installer/tests/test_get_pl_proxy.py",
+      "sha256": "bafafa2fac5d3d8e649056283bdf4d19d24cbebd737414dba7d2ed30fb689db7",
+      "size": 20333
     },
     {
       "path": "installer/tests/test_grafana_build.py",

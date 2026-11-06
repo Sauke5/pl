@@ -17,6 +17,30 @@ curl -fsSLo get-pl.sh https://raw.githubusercontent.com/Sauke5/pl/main/installer
 sudo sh get-pl.sh --production --public-url https://pl.example.test
 ```
 
+Если GitHub доступен через прокси, передайте его и `curl`, и установщику.
+Для HTTP CONNECT:
+
+```sh
+curl -fsSL --proxy http://PROXY_HOST:PORT https://raw.githubusercontent.com/Sauke5/pl/main/installer/get-pl.sh | sudo sh -s -- --production --proxy http://PROXY_HOST:PORT
+```
+
+Для SOCKS5 с разрешением имён на прокси:
+
+```sh
+curl -fsSL --proxy socks5h://PROXY_HOST:PORT https://raw.githubusercontent.com/Sauke5/pl/main/installer/get-pl.sh | sudo sh -s -- --production --proxy socks5h://PROXY_HOST:PORT
+```
+
+Подойдёт соответствующий вход Xray или внешний прокси. `127.0.0.1` означает
+сервер, на котором выполняется установка. Bootstrap использует прокси для
+каталога, пакета PL и ключа Docker; системный apt сохраняет свой сетевой маршрут.
+Проверка HTTPS-сертификатов сохраняется. Прокси будущих обновлений и загрузок
+модулей настраивается отдельно в интерфейсе PL.
+
+Для прокси с авторизацией сохраните приватный JSON-профиль владельца root с
+правами `0600`: `{"url":"socks5h://PROXY_HOST:PORT","username":"USER","password":"PASSWORD"}`.
+Скачанный скрипт запускается командой
+`sudo sh get-pl.sh --production --proxy-file /root/pl-proxy.json`.
+
 Первый запуск создаёт самоподписанный TLS-сертификат. Доверенный сертификат можно загрузить в настройках PL. При повторном запуске установщик сохраняет существующий сертификат.
 
 С `--production` новая установка создаёт администратора `admin` со случайным
