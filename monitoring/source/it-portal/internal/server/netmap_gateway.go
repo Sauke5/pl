@@ -27,6 +27,9 @@ var netmapSlots = make(chan struct{}, 2)
 var netmapWaiting = make(chan struct{}, 16)
 var netmapScopeID = regexp.MustCompile(`^(network|network-[a-f0-9]{16})$`)
 var netmapPollRoute = regexp.MustCompile(`^/netmap/api/networks/[a-f0-9]{16}/(poll|remove|observations)$`)
+var netmapDeviceRoute = regexp.MustCompile(`^/netmap/api/devices/[1-9][0-9]{0,14}$`)
+var netmapDeviceWriteRoute = regexp.MustCompile(`^/netmap/api/devices/[1-9][0-9]{0,14}/(ssh-binding|collect)$`)
+var netmapNetworkID = regexp.MustCompile(`^[a-f0-9]{16}$`)
 
 type netmapRoute struct{ scope, media, native string }
 type netmapBackend interface {
@@ -90,6 +93,13 @@ func netmapMatchRoute(r *http.Request) (netmapRoute, bool) {
 			}
 			return netmapRoute{"netmap:read", media, ""}, true
 		}
+		if r.URL.Path == "/netmap/api/devices" {
+			values := query["network"]
+			if len(query) != 1 || len(values) != 1 || !netmapNetworkID.MatchString(values[0]) {
+				return netmapRoute{}, false
+			}
+			return netmapRoute{"netmap:admin", "application/json", ""}, true
+		}
 		if len(query) != 0 {
 			return netmapRoute{}, false
 		}
@@ -99,11 +109,14 @@ func netmapMatchRoute(r *http.Request) (netmapRoute, bool) {
 		case "/netmap/api/instance", "/netmap/api/topology", "/netmap/api/health", "/netmap/api/wan", "/netmap/api/wan/health", "/netmap/api/sites/health":
 			return netmapRoute{"netmap:read", "application/json", ""}, true
 		}
+		if netmapDeviceRoute.MatchString(r.URL.Path) {
+			return netmapRoute{"netmap:admin", "application/json", ""}, true
+		}
 		if tail, ok := strings.CutPrefix(r.URL.Path, "/netmap/api/sites/"); ok && netmapScopeID.MatchString(tail) {
 			return netmapRoute{"netmap:read", "application/json", ""}, true
 		}
 	}
-	if r.Method == "POST" && len(query) == 0 && (r.URL.Path == "/netmap/api/networks" || r.URL.Path == "/netmap/api/profiles" || netmapPollRoute.MatchString(r.URL.Path)) {
+	if r.Method == "POST" && len(query) == 0 && (r.URL.Path == "/netmap/api/networks" || r.URL.Path == "/netmap/api/profiles" || netmapPollRoute.MatchString(r.URL.Path) || netmapDeviceWriteRoute.MatchString(r.URL.Path)) {
 		return netmapRoute{"netmap:admin", "application/json", ""}, true
 	}
 	return netmapRoute{}, false
@@ -521,6 +534,16 @@ func netmapRequestErrorMessage(code string) string {
 		return "Проверьте название сети, CIDR и выбранный профиль. Нужен точный CIDR не более чем на 4096 адресов."
 	case "netmap_invalid_profile":
 		return "Проверьте поля профиля доступа."
+	case "netmap_invalid_snmp_profiles":
+		return "Выберите до четырёх разных профилей с настроенным SNMP community и задайте порядок проверки."
+	case "netmap_device_missing":
+		return "Устройство не найдено в выбранной сети. Обновите список устройств."
+	case "netmap_invalid_binding":
+		return "Проверьте SSH-профиль, модель и подтверждённый host key для адреса устройства."
+	case "netmap_device_changed":
+		return "Настройки устройства изменились в NetBox. Обновите данные и проверьте доступ перед сохранением."
+	case "netmap_collector_not_ready":
+		return "Oxidized ещё не загрузил устройство с выбранным доступом. Обновите состояние перед запуском сбора."
 	case "netmap_invalid_observations":
 		return "Проверьте источник и записи наблюдений: адреса должны принадлежать выбранной сети, время и MAC должны быть корректными."
 	case "netmap_invalid_ssh_trust":

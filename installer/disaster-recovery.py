@@ -773,6 +773,79 @@ def validate_package_tree(root, meta):
     return state, manifest
 
 
+def validate_lifecycle_history(rt, parent, native, rows):
+    """Read old failed attempts without rewriting history or replaying actions."""
+    pending = {}
+    directories = [(None, rt.root / "modules/operations")]
+    directories += [(kind, rt.root / "modules" / kind / "operations") for kind in sorted(MODULES)]
+    for kind, directory in directories:
+        if not directory.is_dir():
+            continue
+        for journal in sorted(directory.glob("*.json")):
+            value = load_json(journal.read_bytes())
+            if isinstance(value, dict) and value.get("phase") in ("complete", "failed"):
+                continue
+            # The Prometheus controller uses a different journal/request codec.
+            # Only the common native two-field operation record is recognized.
+            trusted_directory(directory)
+            private_file(journal, limit=4096)
+            operation = journal.stem
+            if (kind not in MODULES - {"prometheus"} or str(uuid.UUID(operation)) != operation
+                    or operation in pending or len(pending) >= MAX_RESOURCES or not isinstance(value, dict)
+                    or set(value) != {"phase", "fingerprint"} or value["phase"] != "running"
+                    or not isinstance(value["fingerprint"], str) or not HEX.fullmatch(value["fingerprint"])):
+                raise ValueError("A native lifecycle journal requires reconciliation before full backup")
+            pending[operation] = (kind, value["fingerprint"])
+    if not pending:
+        return
+    if int(rt.sql("SELECT count(*) FROM jobs WHERE status IN ('queued','running');").strip()):
+        raise ValueError("Installation jobs are active; failed history cannot be admitted")
+    # UUIDs were validated above. One bounded read joins exact operation IDs;
+    # neither the PostgreSQL job nor its private controller journal is changed.
+    ids = ",".join("'" + value + "'" for value in sorted(pending))
+    jobs = load_json(rt.sql("SELECT COALESCE(json_agg(json_build_object('id',id,'kind',kind,'status',status,"
+        "'target',target,'body',body)), '[]'::json) FROM public.jobs WHERE id IN (" + ids + ");"))
+    if not isinstance(jobs, list) or len(jobs) != len(pending):
+        raise ValueError("Failed native history has no unique terminal job")
+    current = {value["id"]: value for value in rows}
+    actual = {(kind, item["instance_id"]): item["running"]
+              for kind, plan in native.items() for item in plan["instances"]}
+    seen, healthy = set(), set()
+    for job in jobs:
+        if (not isinstance(job, dict) or set(job) != {"id", "kind", "status", "target", "body"}
+                or not isinstance(job["id"], str) or job["id"] not in pending or job["id"] in seen
+                or job["kind"] != "module" or job["status"] != "failed" or not isinstance(job["body"], dict)):
+            raise ValueError("Failed native history has an ambiguous or nonterminal job")
+        operation = job["id"]
+        kind, fingerprint = pending[operation]
+        body = job["body"]
+        params = body.get("parameters")
+        if (body.get("id") != operation or body.get("kind") != "module" or body.get("status") != "failed"
+                or not isinstance(params, dict) or set(params) - {"instance_id", "action", "recovered"}
+                or not {"instance_id", "action"} <= set(params)
+                or "recovered" in params and type(params["recovered"]) is not bool):
+            raise ValueError("Failed native history does not match its stored job body")
+        instance, action = params["instance_id"], params["action"]
+        if (not isinstance(instance, str) or str(uuid.UUID(instance)) != instance or job["target"] != instance
+                or not isinstance(action, str) or not (action == "refresh" or kind == "grafana" and action == "install")
+                or (kind, instance) not in actual or current.get(instance, {}).get("module_id") != kind
+                or current[instance].get("observed_state") != ("running" if actual[(kind, instance)] else "disabled")):
+            raise ValueError("Failed native history is outside the reconciled current graph")
+        request = {"operation_id": operation, "instance_id": instance, "module_id": kind, "action": action}
+        if action == "install":
+            if not actual[(kind, instance)]:
+                raise ValueError("A failed Grafana install requires a healthy current instance")
+            request["public_url"] = rt.state["config"]["public_url"]
+            if instance not in healthy:
+                observation = parent.grafana().observe(instance)
+                if observation.get("state") != "running" or observation.get("error") != "":
+                    raise ValueError("A failed Grafana install requires fresh native readiness")
+                healthy.add(instance)
+        if hashlib.sha256(encoded(request) + b"\n").hexdigest() != fingerprint:
+            raise ValueError("Failed native history differs from its exact stock request")
+        seen.add(operation)
+
+
 def collect(rt, host, prior=None):
     bootstrap, delivery_module, upgrade = helper("bootstrap"), helper("delivery"), helper("module-upgrade")
     parent = helper("module-controller").Controller(rt.root, rt.install_id)
@@ -784,18 +857,13 @@ def collect(rt, host, prior=None):
         "state_sha256": item["state_sha256"], "containers": [{"name": v["name"], "role": v["role"]} for v in item["containers"]]}
         for item in plan["instances"]]} for kind, plan in plans.items()}
     rows = load_json(rt.sql("SELECT COALESCE(json_agg(json_build_object('id',id,'module_id',body->>'module_id',"
-                            "'desired_state',body->>'desired_state')), '[]'::json) FROM public.documents "
+                            "'desired_state',body->>'desired_state','observed_state',body->>'observed_state')), '[]'::json) FROM public.documents "
                             "WHERE kind='module_instance' AND body->>'mode'='local';"))
     expected_records = {(item["instance_id"], kind, "enabled" if item["running"] else "disabled")
                         for kind, plan in native.items() for item in plan["instances"]}
     if {(v["id"], v["module_id"], v["desired_state"]) for v in rows} != expected_records or len(rows) != len(expected_records):
         raise ValueError("PL local records and native runtime state are not reconciled")
-    for directory in [rt.root / "modules/operations", *[rt.root / "modules" / kind / "operations" for kind in MODULES]]:
-        if directory.is_dir():
-            for journal in directory.glob("*.json"):
-                value = load_json(journal.read_bytes())
-                if value.get("phase") not in ("complete", "failed"):
-                    raise ValueError("A native lifecycle journal requires reconciliation before full backup")
+    validate_lifecycle_history(rt, parent, native, rows)
     objects = upgrade._inventory(parent)
     known_native = {v["id"]: (kind, item["instance_id"], v["role"]) for kind, plan in plans.items()
                     for item in plan["instances"] for v in item["containers"]}

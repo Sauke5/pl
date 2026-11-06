@@ -6,7 +6,7 @@ No scheduler or scan runs at startup. Native upstreams are fixed and private.
 from __future__ import annotations
 import base64
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import http.client
@@ -43,6 +43,11 @@ REQUEST_ERRORS = {
     'netmap_poll_running': 409,
     'netmap_idempotency_conflict': 409,
     'netmap_invalid_observations': 400,
+    'netmap_invalid_snmp_profiles': 400,
+    'netmap_device_missing': 400,
+    'netmap_invalid_binding': 400,
+    'netmap_device_changed': 409,
+    'netmap_collector_not_ready': 409,
 }
 
 
@@ -75,6 +80,18 @@ def json_bytes(value):
     return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()
 
 
+def valid_netbox_version(value):
+    return isinstance(value, str) and re.fullmatch(r'W/"[0-9TZ:.+\-]{20,80}"', value) is not None
+
+
+def native_model_matches(actual, expected):
+    # Oxidized0.37 HTTP source applies these default aliases, then serializes the Ruby class name.
+    if (not isinstance(actual, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', actual)
+            or not isinstance(expected, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,63}', expected)):
+        return False
+    return actual.lower() == {'cisco': 'ios', 'juniper': 'junos'}.get(expected, expected)
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -85,23 +102,40 @@ class NetBox:
         self.auth = 'Bearer nbt_' + config['token_key'] + '.' + config['token']
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 
-    def request(self, method, path, body=None):
+    def request(self, method, path, body=None, *, version=None, include_version=False):
         parsed = urllib.parse.urlsplit(path)
         if (not path.startswith(('/dcim/', '/extras/', '/status/')) or parsed.scheme or parsed.netloc
                 or parsed.fragment or any(c in path for c in ('\\', '#', '//'))
                 or any(part in ('.', '..') for part in parsed.path.split('/'))):
             raise ValueError('Invalid NetBox API route')
+        headers = {'Authorization': self.auth, 'Content-Type': 'application/json', 'Accept': 'application/json'}
+        if version is not None:
+            if method != 'PATCH' or not valid_netbox_version(version):
+                raise RequestError('netmap_invalid_binding')
+            headers['If-Match'] = version
         req = urllib.request.Request('http://netbox:8080/netmap/netbox/api' + path,
             data=None if body is None else json_bytes(body), method=method,
-            headers={'Authorization': self.auth, 'Content-Type': 'application/json', 'Accept': 'application/json'})
+            headers=headers)
         try:
             with self.opener.open(req, timeout=20) as response:
                 data = response.read(MAX_RESPONSE + 1)
                 if len(data) > MAX_RESPONSE:
                     raise ValueError('NetBox response exceeds limit')
-                return json.loads(data) if data else None
+                value = json.loads(data) if data else None
+                if include_version:
+                    tag = response.headers.get('ETag')
+                    if not valid_netbox_version(tag):
+                        raise ValueError('Native conditional writes are unavailable')
+                    return value, tag
+                return value
         except urllib.error.HTTPError as exc:
-            raise RuntimeError('NetBox request rejected: ' + str(exc.code)) from None
+            with exc:
+                code = exc.code
+            if code == 412:
+                raise RequestError('netmap_device_changed') from None
+            if code == 404 and include_version:
+                raise RequestError('netmap_device_missing') from None
+            raise RuntimeError('NetBox request rejected: ' + str(code)) from None
 
     def all(self, path, **query):
         results = []
@@ -138,6 +172,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS polls(id TEXT PRIMARY KEY,network TEXT NOT NULL,state TEXT NOT NULL,result TEXT NOT NULL,actor TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,digest TEXT NOT NULL,response TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS network_snmp_profiles(network TEXT PRIMARY KEY,profiles TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS device_access_state(device INTEGER PRIMARY KEY,payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS host_observations(network TEXT NOT NULL,ip TEXT NOT NULL,last_seen TEXT NOT NULL,methods TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(network,ip));
                 CREATE TABLE IF NOT EXISTS host_reports(network TEXT NOT NULL,source TEXT NOT NULL,ip TEXT NOT NULL,hostname TEXT NOT NULL,mac TEXT NOT NULL,methods TEXT NOT NULL,observed_at TEXT NOT NULL,expires_at TEXT NOT NULL,PRIMARY KEY(network,source,ip));''')
         os.chmod(path, 0o600)
@@ -155,6 +191,21 @@ class Store:
         with self.connect() as db:
             row = db.execute('SELECT payload FROM profiles WHERE id=?', (name,)).fetchone()
             return json.loads(row[0]) if row else None
+
+    def snmp_profiles(self, network):
+        with self.connect() as db:
+            row = db.execute('SELECT profiles FROM network_snmp_profiles WHERE network=?', (network,)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def device_access(self, device):
+        with self.connect() as db:
+            row = db.execute('SELECT payload FROM device_access_state WHERE device=?', (device,)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def set_device_access(self, device, value):
+        with self.connect() as db:
+            db.execute('INSERT INTO device_access_state VALUES(?,?) ON CONFLICT(device) DO UPDATE SET payload=excluded.payload',
+                       (device, json.dumps(value)))
 
     def observations(self, network=None, limit=None):
         with self.connect() as db:
@@ -271,7 +322,8 @@ class Application:
         for node in self.netbox.all('/dcim/devices/', tag='network-config-backup'):
             fields = node.get('custom_fields') or {}
             profile = self.store.profile(fields.get('collector_profile', ''))
-            address, model = fields.get('collector_ip'), fields.get('oxidized_model')
+            address = fields.get('collector_ip')
+            model = fields.get('oxidized_model') or (profile or {}).get('oxidized_model')
             if not address or not model or not profile or not profile.get('username') or not profile.get('password'):
                 continue
             ipaddress.ip_address(address)
@@ -280,6 +332,274 @@ class Application:
             result.append({'name': 'device-' + str(node['id']), 'ip': address, 'model': model,
                            'username': profile['username'], 'password': profile['password']})
         return result
+
+    def snmp_candidates(self, network):
+        names = self.store.snmp_profiles(network['id'])
+        if names is None:
+            legacy = self.store.profile(network['profile']) if network['profile'] else None
+            return [(network['profile'], legacy)] if legacy and legacy.get('snmp_community') else []
+        if (not isinstance(names, list) or len(names) > 4
+                or any(not isinstance(name, str) or not re.fullmatch(r'[a-z0-9_-]{1,64}', name) for name in names)
+                or len(set(names)) != len(names)):
+            raise RequestError('netmap_invalid_snmp_profiles')
+        candidates = [(name, self.store.profile(name)) for name in names]
+        if any(not profile or not profile.get('snmp_community') for name, profile in candidates):
+            raise RequestError('netmap_invalid_snmp_profiles')
+        return candidates
+
+    def networks_view(self):
+        items = []
+        for network in self.store.networks():
+            try:
+                names = [name for name, profile in self.snmp_candidates(network)]
+                invalid = False
+            except RequestError:
+                names = self.store.snmp_profiles(network['id'])
+                if (not isinstance(names, list) or len(names) > 4
+                        or any(not isinstance(name, str) or not re.fullmatch(r'[a-z0-9_-]{1,64}', name) for name in names)):
+                    names = []
+                invalid = True
+            items.append({**network, 'snmp_profiles': names, 'snmp_profiles_invalid': invalid})
+        return {'items': items,
+                'capabilities': {'device_access': 1, 'ordered_snmp_profiles': 1, 'max_snmp_profiles': 4}}
+
+    def probe_profiles(self, address, candidates, deadline):
+        attempts = []
+        for name, profile in candidates:
+            if time.monotonic() >= deadline:
+                break
+            started = time.monotonic()
+            observed = self.probe(address, profile, deadline)
+            attempts.append({'profile_id': name, 'outcome': 'responded' if observed else 'unconfirmed',
+                             'elapsed_ms': max(0, round((time.monotonic() - started) * 1000)),
+                             'checked_at': datetime.now(timezone.utc).isoformat()})
+            if observed:
+                return observed, attempts
+        return None, attempts
+
+    def owned_device(self, device):
+        if type(device) is not int or not 1 <= device < 10**15:
+            raise RequestError('netmap_device_missing')
+        record, version = self.netbox.request('GET', '/dcim/devices/' + str(device) + '/', include_version=True)
+        fields = record.get('custom_fields') or {}
+        source = fields.get('pl_source', '')
+        network = next((item for item in self.store.networks() if source == 'network:' + item['id']), None)
+        try:
+            address = ipaddress.ip_address(fields.get('collector_ip', ''))
+        except ValueError:
+            raise RequestError('netmap_device_missing') from None
+        if not network or address not in ipaddress.ip_network(network['cidr']) or str(address) != fields['collector_ip']:
+            raise RequestError('netmap_device_missing')
+        return record, network, version
+
+    def device_binding(self, record):
+        fields = record.get('custom_fields') or {}
+        profile_id = fields.get('collector_profile') or ''
+        profile = self.store.profile(profile_id) if profile_id else None
+        override = fields.get('oxidized_model') or ''
+        model = override or (profile or {}).get('oxidized_model', '')
+        address = fields.get('collector_ip', '')
+        host_key = bool(profile and any(line.split() and address in line.split()[0].split(',')
+                        for line in profile.get('ssh_known_hosts', '').splitlines()))
+        ready = bool(profile and profile.get('username') and profile.get('password') and host_key
+                     and isinstance(model, str) and re.fullmatch(r'[a-z][a-z0-9_]{0,63}', model))
+        private = {'ip': address, 'profile_id': profile_id, 'model': model,
+                   **{key: (profile or {}).get(key, '') for key in ('username', 'password', 'ssh_known_hosts')}}
+        fingerprint = hashlib.sha256(json_bytes(private)).hexdigest()
+        return {'profile_id': profile_id, 'model_override': override, 'effective_model': model,
+                'host_key_set': host_key, 'ssh_ready': ready}, fingerprint
+
+    def native_device_request(self, device, action, revision=None):
+        if type(device) is not int or not 1 <= device < 10**15:
+            raise RequestError('netmap_device_missing')
+        name = 'device-' + str(device)
+        paths = {'queue': '/netmap/oxidized/node/next/' + name + '.json',
+                 'versions': '/netmap/oxidized/node/version.json?node_full=' + name}
+        if action == 'configuration':
+            if not isinstance(revision, str) or not re.fullmatch(r'[a-f0-9]{40}', revision):
+                raise ValueError('Invalid native revision')
+            path = '/netmap/oxidized/node/version/view.text?' + urllib.parse.urlencode(
+                {'node': name, 'group': '', 'oid': revision, 'epoch': '0', 'num': '1'})
+        elif action in paths:
+            path = paths[action]
+        else:
+            raise ValueError('Invalid native collection action')
+        connection = http.client.HTTPConnection('oxidized', 8888, timeout=5)
+        try:
+            connection.request('GET', path)
+            response = connection.getresponse()
+            body = response.read(2 * 1024 * 1024 + 1)
+            if response.status != 200 or len(body) > 2 * 1024 * 1024:
+                raise ValueError('Native collection response unconfirmed')
+            return body
+        finally:
+            connection.close()
+
+    def native_device_records(self):
+        value = json.loads(self._collector_get('/netmap/oxidized/nodes.json'))
+        if not isinstance(value, list) or len(value) > 16384:
+            raise ValueError('Invalid collector inventory')
+        result = {}
+        for item in value:
+            if not isinstance(item, dict) or not isinstance(item.get('name'), str) or item['name'] in result:
+                raise ValueError('Invalid collector identity')
+            result[item['name']] = item
+        return result
+
+    @staticmethod
+    def native_time(value):
+        if not isinstance(value, str) or len(value) > 80:
+            return None
+        try:
+            date = datetime.fromisoformat(value)
+            if date.tzinfo is None:
+                return None
+            return date.astimezone(timezone.utc)
+        except ValueError:
+            return None
+
+    def device_view(self, record, native):
+        binding, fingerprint = self.device_binding(record)
+        fields = record.get('custom_fields') or {}
+        observed = native.get('device-' + str(record['id']))
+        loaded = bool(observed and observed.get('ip') == fields.get('collector_ip')
+                      and native_model_matches(observed.get('model'), binding['effective_model']))
+        last = (observed or {}).get('last') or {}
+        started, ended = self.native_time(last.get('start')), self.native_time(last.get('end'))
+        return {'id': record['id'], 'name': record['name'], 'collector_ip': fields.get('collector_ip', ''),
+                'binding': binding, 'source_loaded': loaded,
+                'last_attempt': {'status': 'success' if last.get('status') == 'success' else 'failed' if last.get('status') in ('fail', 'no_connection') else 'unknown',
+                                 'started_at': started.isoformat() if started else None,
+                                 'finished_at': ended.isoformat() if ended else None}}
+
+    def devices(self, network_id):
+        network = next((item for item in self.store.networks() if item['id'] == network_id), None)
+        if not network:
+            raise RequestError('netmap_network_missing')
+        records = self.netbox.all('/dcim/devices/', cf_pl_source='network:' + network_id)
+        if len(records) > 4096:
+            raise ValueError('Device list exceeds the finite bound')
+        try:
+            native = self.native_device_records()
+            collector_available = True
+        except (OSError, ValueError, http.client.HTTPException):
+            native, collector_available = {}, False
+        views = []
+        addresses = set()
+        for record in records:
+            fields = record.get('custom_fields') or {}
+            try:
+                address = ipaddress.ip_address(fields.get('collector_ip', ''))
+            except ValueError:
+                raise ValueError('Invalid source-scoped device') from None
+            if (fields.get('pl_source') != 'network:' + network_id
+                    or address not in ipaddress.ip_network(network['cidr']) or str(address) != fields['collector_ip']
+                    or str(address) in addresses):
+                raise ValueError('Ambiguous source-scoped device')
+            addresses.add(str(address))
+            views.append(self.device_view(record, native))
+        return {'items': sorted(views, key=lambda item: (ipaddress.ip_address(item['collector_ip']).version,
+                int(ipaddress.ip_address(item['collector_ip'])))), 'collector_available': collector_available}
+
+    def device_details(self, device):
+        record, network, version = self.owned_device(device)
+        try:
+            native = self.native_device_records()
+        except (OSError, ValueError, http.client.HTTPException):
+            native = {}
+        view = self.device_view(record, native)
+        binding, fingerprint = self.device_binding(record)
+        state = self.store.device_access(device) or {}
+        collection = {'state': 'not_configured' if not binding['ssh_ready'] else 'unconfirmed', 'saved_configuration': None}
+        observed = native.get('device-' + str(device)) or {}
+        last = observed.get('last') or {}
+        started = self.native_time(last.get('start'))
+        ended = self.native_time(last.get('end'))
+        watermark = self.native_time(state.get('confirmed_source_at'))
+        current = state.get('binding_hash') == fingerprint and bool(state.get('source_loaded')) and view['source_loaded']
+        fresh = bool(current and started and ended and watermark
+                     and watermark <= started <= ended <= datetime.now(timezone.utc) + timedelta(seconds=5))
+        if fresh and last.get('status') in ('fail', 'no_connection'):
+            collection['state'] = 'failed'
+        elif state.get('queue_outcome') == 'queued' and not fresh and current:
+            collection['state'] = 'queued'
+        if view['source_loaded']:
+            try:
+                versions = json.loads(self.native_device_request(device, 'versions'))
+                if isinstance(versions, list) and versions and isinstance(versions[0], dict):
+                    revision = versions[0].get('oid')
+                    content = self.native_device_request(device, 'configuration', revision)
+                    if content.strip() and content not in (b'version not found', b'node not found'):
+                        collection['saved_configuration'] = {'revision': revision, 'bytes': len(content),
+                            'sha256': hashlib.sha256(content).hexdigest(),
+                            'committed_at': versions[0].get('date') if isinstance(versions[0].get('date'), str) else None}
+                        if fresh and last.get('status') == 'success':
+                            collection['state'] = 'collected'
+            except (OSError, ValueError, http.client.HTTPException):
+                pass
+        return {'device': view, 'network_id': network['id'], 'version': version, 'collection': collection}
+
+    def save_device_binding(self, device, body):
+        if (not isinstance(body, dict) or set(body) != {'network_id', 'profile_id', 'model', 'collector_ip', 'version'}
+                or not isinstance(body['profile_id'], str) or not re.fullmatch(r'[a-z0-9_-]{0,64}', body['profile_id'])
+                or not isinstance(body['model'], str) or body['model'] and not re.fullmatch(r'[a-z][a-z0-9_]{0,63}', body['model'])
+                or not valid_netbox_version(body['version'])):
+            raise RequestError('netmap_invalid_binding')
+        record, network, version = self.owned_device(device)
+        fields = record.get('custom_fields') or {}
+        if body['network_id'] != network['id'] or body['collector_ip'] != fields.get('collector_ip'):
+            raise RequestError('netmap_invalid_binding')
+        if body['version'] != version:
+            raise RequestError('netmap_device_changed')
+        candidate = {**record, 'custom_fields': {**fields, 'collector_profile': body['profile_id'], 'oxidized_model': body['model']}}
+        binding, fingerprint = self.device_binding(candidate)
+        if body['profile_id'] and not binding['ssh_ready'] or not body['profile_id'] and body['model']:
+            raise RequestError('netmap_invalid_binding')
+        tags = self.netbox.all('/extras/tags/', slug='network-config-backup')
+        if len(tags) != 1:
+            raise ValueError('Native collector tag unavailable')
+        patch = {'custom_fields': {'collector_profile': body['profile_id'], 'oxidized_model': body['model']},
+                 'add_tags' if body['profile_id'] else 'remove_tags': [tags[0]['id']]}
+        updated, new_version = self.netbox.request('PATCH', '/dcim/devices/' + str(device) + '/', patch,
+                                                   version=version, include_version=True)
+        if self.device_binding(updated)[1] != fingerprint:
+            raise ValueError('Native binding readback differs')
+        loaded = False
+        try:
+            self.reload_collector(time.monotonic() + 20)
+            loaded = True
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
+        self.store.set_device_access(device, {'binding_hash': fingerprint, 'source_loaded': loaded,
+            'confirmed_source_at': datetime.now(timezone.utc).isoformat(), 'queue_outcome': None})
+        return {'saved': True, 'version': new_version, 'source_loaded': loaded, 'collection_confirmed': False}
+
+    def collect_device(self, device, body, operation, actor):
+        if not isinstance(body, dict) or set(body) != {'version'} or not valid_netbox_version(body['version']):
+            raise RequestError('netmap_invalid_binding')
+        record, network, version = self.owned_device(device)
+        binding, fingerprint = self.device_binding(record)
+        if body['version'] != version:
+            raise RequestError('netmap_device_changed')
+        if not binding['ssh_ready']:
+            raise RequestError('netmap_invalid_binding')
+        if 'device-' + str(device) not in self._collector_expected():
+            raise RequestError('netmap_collector_not_ready')
+        try:
+            self.reload_collector(time.monotonic() + 20)
+        except (OSError, ValueError, http.client.HTTPException):
+            raise RequestError('netmap_collector_not_ready') from None
+        state = {'binding_hash': fingerprint, 'source_loaded': True,
+                 'confirmed_source_at': datetime.now(timezone.utc).isoformat(), 'request_id': operation, 'actor': actor,
+                 'queue_outcome': 'unconfirmed'}
+        self.store.set_device_access(device, state)
+        try:
+            if json.loads(self.native_device_request(device, 'queue')) == ['ok']:
+                state['queue_outcome'] = 'queued'
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
+        self.store.set_device_access(device, state)
+        return {'state': state['queue_outcome'], 'device_id': device, 'request_id': operation}
 
     def _collector_expected(self):
         # Source/API errors propagate: they cannot become a healthy empty source.
@@ -511,6 +831,11 @@ class Application:
         community = profile.get('snmp_community')
         if not community:
             raise ValueError('SNMP profile required')
+        def timeout():
+            remaining = 5 if deadline is None else min(5, deadline - time.monotonic())
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired('bounded SNMP probe', 0)
+            return remaining
         with tempfile.TemporaryDirectory(prefix='pl-snmp-') as directory:
             config = Path(directory, 'snmp.conf')
             config.write_text('defVersion 2c\ndefCommunity ' + community + '\n')
@@ -519,7 +844,7 @@ class Application:
             target = 'udp6:[' + address + ']' if ipaddress.ip_address(address).version == 6 else address
             try:
                 result = subprocess.run(['snmpget', '-On', '-Oqv', '-t', '1', '-r', '1', target, '1.3.6.1.2.1.1.5.0', '1.3.6.1.2.1.1.1.0'],
-                    env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, check=False)
+                    env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=timeout(), check=False)
             except subprocess.TimeoutExpired:
                 return None
             if result.returncode:
@@ -538,7 +863,7 @@ class Application:
                     break
                 try:
                     walk = subprocess.run(['snmpwalk', '-On', '-OQ', '-Oe', '-t', '1', '-r', '1', target, oid],
-                        env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, check=False)
+                        env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=timeout(), check=False)
                 except subprocess.TimeoutExpired:
                     table_errors += 1
                     continue
@@ -639,23 +964,15 @@ class Application:
             raise ValueError('Ambiguous source-scoped inventory')
         fields = {'pl_source': source, 'collector_ip': observed['ip'], 'pl_observed_name': observed['name'], 'pl_observed_description': observed['description']}
         if managed:
-            current = managed[0]
-            merged = {**(current.get('custom_fields') or {}), **fields}
-            profile = self.store.profile(network['profile']) or {}
-            patch = {'custom_fields': merged}
-            if profile.get('oxidized_model') and profile.get('username') and profile.get('password'):
-                # A later profile completion must enroll existing discovered nodes.
-                # Explicit native collector overrides remain authoritative.
-                if not merged.get('collector_profile'):
-                    merged['collector_profile'] = network['profile']
-                if not merged.get('oxidized_model'):
-                    merged['oxidized_model'] = profile['oxidized_model']
-                if merged['collector_profile'] == network['profile']:
-                    tags = current.get('tags') or []
-                    if not any(tag.get('slug') == 'network-config-backup' for tag in tags):
-                        backup_tag = self.netbox.all('/extras/tags/', slug='network-config-backup')[0]
-                        patch['tags'] = [tag['id'] for tag in tags] + [backup_tag['id']]
-            self.netbox.request('PATCH', '/dcim/devices/' + str(current['id']) + '/', patch)
+            current, version = self.netbox.request('GET', '/dcim/devices/' + str(managed[0]['id']) + '/', include_version=True)
+            current_fields = current.get('custom_fields') or {}
+            if current_fields.get('pl_source') != source or current_fields.get('collector_ip') != observed['ip']:
+                raise ValueError('Source-scoped inventory changed')
+            # Discovery updates observations only. Existing SSH binding/default
+            # choices, model overrides, tags and unrelated native fields stay owned by the user.
+            patch = {'custom_fields': {'pl_observed_name': observed['name'],
+                                      'pl_observed_description': observed['description']}}
+            self.netbox.request('PATCH', '/dcim/devices/' + str(current['id']) + '/', patch, version=version)
             return current['id']
         site = self.netbox.get_or_create('/dcim/sites/', {'slug': 'pl-network-' + network['id']}, {'name': network['name'], 'slug': 'pl-network-' + network['id'], 'status': 'active'})
         manufacturer = self.netbox.get_or_create('/dcim/manufacturers/', {'slug': 'pl-discovered'}, {'name': 'Discovered', 'slug': 'pl-discovered'})
@@ -669,7 +986,7 @@ class Application:
         profile = self.store.profile(network['profile']) or {}
         tags = [tag['id']]
         if profile.get('oxidized_model') and profile.get('username') and profile.get('password'):
-            fields.update(collector_profile=network['profile'], oxidized_model=profile['oxidized_model'])
+            fields.update(collector_profile=network['profile'], oxidized_model='')
             tags += [self.netbox.all('/extras/tags/', slug='network-config-backup')[0]['id']]
         node = self.netbox.request('POST', '/dcim/devices/', {'name': name, 'site': site['id'], 'role': role['id'], 'device_type': dtype['id'], 'status': 'active', 'tags': tags, 'custom_fields': fields})
         return node['id']
@@ -729,6 +1046,11 @@ class Application:
             self.poll_lock.release()
             raise RequestError('netmap_profile_missing')
         try:
+            self.snmp_candidates(network)
+        except Exception:
+            self.poll_lock.release()
+            raise
+        try:
             with self.store.connect() as db:
                 db.execute('INSERT INTO polls(id,network,state,result,actor) VALUES(?,?,?,?,?)', (operation, network_id, 'running', '{}', actor))
         except Exception:
@@ -757,9 +1079,7 @@ class Application:
             if network is None:
                 raise ValueError('Unknown network')
             cidr = canonical_network(network['cidr'])
-            profile = self.store.profile(network['profile']) if network['profile'] else {}
-            if profile is None:
-                raise ValueError('Configure a profile before polling')
+            candidates = self.snmp_candidates(network)
             if not admitted:
                 with self.store.connect() as db:
                     db.execute('INSERT INTO polls(id,network,state,result,actor) VALUES(?,?,?,?,?)', (operation, network_id, 'running', '{}', actor))
@@ -767,15 +1087,17 @@ class Application:
             counters = {'targets_total': sum(1 for _ in ipaddress.ip_network(cidr).hosts()), 'responders': 0, 'unresponsive': 0,
                         'interfaces_created': 0, 'interfaces_updated': 0, 'manual_conflicts': 0, 'errors': 0}
             deadline = time.monotonic() + 600
-            host_observations, warnings = [], set()
+            host_observations, warnings, snmp_attempts = [], set(), []
             def inspect(address):
                 address = str(address)
-                observed = self.probe(address, profile, deadline) if profile.get('snmp_community') else None
+                observed, attempts = self.probe_profiles(address, candidates, deadline)
                 # Do not assign an SNMP/SSH profile to an address that only
                 # answered ping or TCP, and do not duplicate an SNMP device.
-                return observed, None if observed else self.probe_host(address, deadline)
+                return address, observed, None if observed else self.probe_host(address, deadline), attempts
             with ThreadPoolExecutor(max_workers=8) as pool:
-                for observed, host in pool.map(inspect, ipaddress.ip_network(cidr).hosts()):
+                for address, observed, host, attempts in pool.map(inspect, ipaddress.ip_network(cidr).hosts()):
+                    if attempts:
+                        snmp_attempts.append({'ip': address, 'attempts': attempts})
                     if time.monotonic() > deadline:
                         raise ValueError('Explicit network poll exceeded ten minutes')
                     if observed:
@@ -798,7 +1120,7 @@ class Application:
             self.store.record_observations(network_id, host_observations, datetime.now(timezone.utc).isoformat())
             collector = self.reload_collector(deadline)
             result = {**counters, 'devices': len(found), 'device_ids': found, 'observed_hosts': len(host_observations),
-                      'warnings': sorted(warnings), 'collector': collector}
+                      'warnings': sorted(warnings), 'collector': collector, 'snmp_attempts': snmp_attempts}
             with self.store.connect() as db:
                 db.execute('UPDATE polls SET state=?,result=? WHERE id=?', ('error' if counters['errors'] else 'complete', json.dumps(result), operation))
             return result
@@ -823,14 +1145,24 @@ class Application:
                 # automatic replay must never launch a second scan.
                 db.execute('INSERT INTO requests VALUES(?,?,?)', (operation, fingerprint, json.dumps({'error': 'operation interrupted; inspect before explicit retry'})))
             if path == '/api/networks':
-                if set(body) != {'cidr', 'name', 'profile'} or not isinstance(body['name'], str) or not 1 <= len(body['name']) <= 128 or not isinstance(body['profile'], str) or not re.fullmatch(r'[a-z0-9_-]{0,64}', body['profile']):
+                if set(body) not in ({'cidr', 'name', 'profile'}, {'cidr', 'name', 'profile', 'snmp_profiles'}) or not isinstance(body['name'], str) or not 1 <= len(body['name']) <= 128 or not isinstance(body['profile'], str) or not re.fullmatch(r'[a-z0-9_-]{0,64}', body['profile']):
                     raise RequestError('netmap_invalid_network')
+                snmp_profiles = body.get('snmp_profiles')
+                if 'snmp_profiles' in body:
+                    if (not isinstance(snmp_profiles, list) or len(snmp_profiles) > 4
+                            or any(not isinstance(name, str) or not re.fullmatch(r'[a-z0-9_-]{1,64}', name) for name in snmp_profiles)
+                            or len(set(snmp_profiles)) != len(snmp_profiles)
+                            or any(not (self.store.profile(name) or {}).get('snmp_community') for name in snmp_profiles)):
+                        raise RequestError('netmap_invalid_snmp_profiles')
                 cidr = canonical_network(body['cidr'])
                 network_id = hashlib.sha256(cidr.encode()).hexdigest()[:16]
                 with self.store.connect() as db:
                     if not db.execute('SELECT 1 FROM networks WHERE id=?', (network_id,)).fetchone() and db.execute('SELECT COUNT(*) FROM networks').fetchone()[0] >= 128:
                         raise RequestError('netmap_network_limit')
                     db.execute('INSERT INTO networks VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,profile=excluded.profile', (network_id, cidr, body['name'], body['profile']))
+                    if 'snmp_profiles' in body:
+                        db.execute('INSERT INTO network_snmp_profiles VALUES(?,?) ON CONFLICT(network) DO UPDATE SET profiles=excluded.profiles',
+                                   (network_id, json.dumps(snmp_profiles)))
                 result = {'id': network_id, 'cidr': cidr}
             elif path == '/api/profiles':
                 if set(body) - {'id', 'snmp_community', 'username', 'password', 'oxidized_model', 'ssh_known_hosts'} or not re.fullmatch(r'[a-z0-9_-]{1,64}', body.get('id', '')) or any(not isinstance(v, str) or len(v) > (65536 if key == 'ssh_known_hosts' else 1024) or any(ord(c) < 32 and not (key == 'ssh_known_hosts' and c == '\n') for c in v) for key, v in body.items()):
@@ -857,6 +1189,14 @@ class Application:
                         raise RequestError('netmap_profile_limit')
                     db.execute('INSERT INTO profiles VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (body['id'], json.dumps(body)))
                 result = {'id': body['id']}
+            elif match := re.fullmatch(r'/api/devices/([1-9][0-9]{0,14})/(ssh-binding|collect)', path):
+                if not self.poll_lock.acquire(blocking=False):
+                    raise RequestError('netmap_poll_running')
+                try:
+                    device = int(match[1])
+                    result = self.save_device_binding(device, body) if match[2] == 'ssh-binding' else self.collect_device(device, body, operation, claims['sub'])
+                finally:
+                    self.poll_lock.release()
             elif re.fullmatch(r'/api/networks/[a-f0-9]{16}/poll', path) and body == {}:
                 result = self.start_poll(path.split('/')[3], operation, claims['sub'])
             elif re.fullmatch(r'/api/networks/[a-f0-9]{16}/observations', path):
@@ -866,6 +1206,7 @@ class Application:
                     if db.execute("SELECT 1 FROM polls WHERE network=? AND state='running'", (path.split('/')[3],)).fetchone():
                         raise RequestError('netmap_poll_running')
                     db.execute('DELETE FROM networks WHERE id=?', (path.split('/')[3],))
+                    db.execute('DELETE FROM network_snmp_profiles WHERE network=?', (path.split('/')[3],))
                 # Inventory and Gitea history survive network removal.
                 result = {'removed': True}
             else:
@@ -922,7 +1263,7 @@ def make_handler(application, map_handler):
                 path = parsed.path.removeprefix('/netmap')
                 native = next((name for name in NATIVE if path.startswith('/' + name + '/')), None)
                 write = self.command not in ('GET', 'HEAD')
-                scope = 'netmap:admin' if native or write or path.startswith(('/api/networks', '/api/profiles', '/api/polls')) else 'netmap:read'
+                scope = 'netmap:admin' if native or write or path.startswith(('/api/networks', '/api/profiles', '/api/polls', '/api/devices')) else 'netmap:read'
                 asgi = {'method': self.command, 'raw_path': parsed.path.encode('ascii'), 'query_string': parsed.query.encode('ascii'),
                     'headers': [(k.lower().encode(), v.encode('latin1')) for k, v in self.headers.raw_items()]}
                 claims = application.verifier.verify(asgi, body, required_scope=scope)
@@ -933,13 +1274,25 @@ def make_handler(application, map_handler):
                         raise ValueError('Unsupported NetMap descriptor request')
                     return self.json(200, application.descriptor())
                 if self.command == 'POST':
+                    if path.startswith('/api/devices') and parsed.query:
+                        raise ValueError('Invalid device mutation query')
                     if self.headers.get_content_type() != 'application/json':
                         raise ValueError('JSON body required')
                     return self.json(200, application.mutation(path, json.loads(body), claims))
                 if self.command not in ('GET', 'HEAD') or body:
                     raise ValueError('Unsupported NetMap method')
                 if path == '/api/networks':
-                    return self.json(200, {'items': application.store.networks()})
+                    return self.json(200, application.networks_view())
+                if path == '/api/devices':
+                    query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+                    if (set(query) != {'network'} or len(query['network']) != 1
+                            or not re.fullmatch(r'[a-f0-9]{16}', query['network'][0])):
+                        raise ValueError('Invalid device network query')
+                    return self.json(200, application.devices(query['network'][0]))
+                if match := re.fullmatch(r'/api/devices/([1-9][0-9]{0,14})', path):
+                    if parsed.query:
+                        raise ValueError('Invalid device detail query')
+                    return self.json(200, application.device_details(int(match[1])))
                 if path == '/api/profiles':
                     with application.store.connect() as db:
                         profiles = []

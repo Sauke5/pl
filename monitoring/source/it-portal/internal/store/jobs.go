@@ -179,6 +179,9 @@ func (s *Store) claim(ctx context.Context, predicate string) (model.Job, error) 
 	return j, tx.Commit(ctx)
 }
 func (s *Store) Finish(ctx context.Context, j model.Job) error {
+	if j.Status != "succeeded" && j.Status != "failed" && j.Status != "unknown" {
+		return ErrInvalid
+	}
 	now := time.Now().UTC()
 	j.FinishedAt = &now
 	tx, e := s.Pool.Begin(ctx)
@@ -192,6 +195,39 @@ func (s *Store) Finish(ctx context.Context, j model.Job) error {
 		if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(7398218)"); e != nil {
 			return e
 		}
+	}
+	// A commit acknowledgement can be lost. Serialize with the first completion
+	// and acknowledge its exact result without repeating any transactional effects.
+	// Job() adds these two display fields at read time; they are not job identity.
+	parameters := make(map[string]any, len(j.Parameters))
+	for key, value := range j.Parameters {
+		if key != "module_id" && key != "module_name" {
+			parameters[key] = value
+		}
+	}
+	var previousBody []byte
+	var status string
+	var sameResult, sameParameters bool
+	e = tx.QueryRow(ctx, `SELECT status,body,
+(body->'result') IS NOT DISTINCT FROM $2::jsonb,
+(COALESCE(NULLIF(body->'parameters','null'::jsonb),'{}'::jsonb)-'module_id'-'module_name')=$3::jsonb
+FROM jobs WHERE id=$1 FOR UPDATE`, j.ID, encode(j.Result), encode(parameters)).Scan(&status, &previousBody, &sameResult, &sameParameters)
+	if e != nil {
+		return translate(e)
+	}
+	previous, e := Decode[model.Job](previousBody)
+	if e != nil {
+		return e
+	}
+	if previous.Kind != j.Kind || previous.ResourceID != j.ResourceID || previous.IntegrationID != j.IntegrationID ||
+		previous.Actor != j.Actor || previous.IdempotencyKey != j.IdempotencyKey || previous.Confirmed != j.Confirmed || !sameParameters {
+		return ErrConflict
+	}
+	if status != "queued" && status != "running" {
+		if status == j.Status && previous.Error == j.Error && sameResult {
+			return nil
+		}
+		return ErrConflict
 	}
 	if _, e = tx.Exec(ctx, "UPDATE jobs SET status=$2,finished_at=$3,body=$4 WHERE id=$1", j.ID, j.Status, now, encode(j)); e != nil {
 		return e

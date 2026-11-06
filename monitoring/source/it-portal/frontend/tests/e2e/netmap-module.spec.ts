@@ -4,7 +4,13 @@ const instanceID = "a2222222-2222-4222-8222-222222222222";
 const networkID = "0123456789abcdef";
 const base = `/modules/${instanceID}/netmap`;
 type Write = { path: string; body: Record<string, unknown> };
-type Network = { id: string; name: string; cidr: string; profile: string };
+type Network = {
+  id: string;
+  name: string;
+  cidr: string;
+  profile: string;
+  snmp_profiles?: string[];
+};
 type Poll = {
   id: string;
   network: string;
@@ -24,6 +30,8 @@ async function fixture(
     missingSNMP?: boolean;
     alternateProfile?: boolean;
     failImport?: boolean;
+    deviceAccess?: boolean;
+    staleBinding?: boolean;
   } = {},
 ) {
   const writes: Write[] = [];
@@ -50,6 +58,22 @@ async function fixture(
   ];
   if (options.alternateProfile)
     profiles.push({ ...profiles[0], id: "office", snmp_community_set: true });
+  const devices = [1, 2].map((id) => ({
+    id,
+    name: id === 1 ? "Router" : "Switch",
+    collector_ip: "192.0.2." + id,
+    source_loaded: true,
+    binding: {
+      profile_id: id === 1 ? "lab" : "office",
+      model_override: id === 1 ? "ios" : "procurve",
+      effective_model: id === 1 ? "ios" : "procurve",
+      host_key_set: true,
+      ssh_ready: true,
+    },
+    last_attempt: { status: "success" },
+  }));
+  let deviceVersion = 'W/"2026-11-06T00:00:00+00:00"';
+  let collection = "unconfirmed";
   const polls: Poll[] = options.unknownPoll
     ? [{ id: "unknown-job", network: networkID, state: "unrecognized" }]
     : [];
@@ -61,6 +85,35 @@ async function fixture(
       expect(request.headers()["idempotency-key"]).toBeTruthy();
       const body = request.postDataJSON() as Record<string, unknown>;
       writes.push({ path, body });
+      const deviceWrite = path.match(
+        /\/devices\/(1|2)\/(ssh-binding|collect)$/,
+      );
+      if (deviceWrite) {
+        if (options.staleBinding || body.version !== deviceVersion)
+          return route.fulfill({
+            status: 409,
+            json: {
+              error: "netmap_device_changed",
+              message: "Устройство изменено. Обновите данные.",
+            },
+          });
+        if (deviceWrite[2] === "collect") {
+          collection = "queued";
+          return route.fulfill({ json: { state: "queued" } });
+        }
+        const device = devices[Number(deviceWrite[1]) - 1];
+        device.binding.profile_id = String(body.profile_id);
+        device.binding.model_override = String(body.model);
+        device.binding.effective_model = String(body.model || "ios");
+        deviceVersion = 'W/"2026-11-06T00:00:01+00:00"';
+        return route.fulfill({
+          json: {
+            saved: true,
+            source_loaded: true,
+            collection_confirmed: false,
+          },
+        });
+      }
       if (path === base + "/profiles") {
         const current = profiles.find((profile) => profile.id === body.id);
         const safe = {
@@ -93,6 +146,9 @@ async function fixture(
           name: String(body.name),
           cidr: String(body.cidr),
           profile: String(body.profile),
+          ...(body.snmp_profiles === undefined
+            ? {}
+            : { snmp_profiles: body.snmp_profiles as string[] }),
         };
         const existing = networks.find((network) => network.id === networkID);
         if (existing) Object.assign(existing, value);
@@ -138,7 +194,35 @@ async function fixture(
     }
     reads.push(path);
     if (path === base + "/networks")
-      return route.fulfill({ json: { items: networks } });
+      return route.fulfill({
+        json: {
+          items: networks,
+          ...(options.deviceAccess
+            ? { capabilities: { device_access: 1, ordered_snmp_profiles: 1 } }
+            : {}),
+        },
+      });
+    if (path === base + "/devices")
+      return route.fulfill({
+        json: { items: devices, collector_available: true },
+      });
+    const deviceRead = path.match(/\/devices\/(1|2)$/);
+    if (deviceRead)
+      return route.fulfill({
+        json: {
+          device: devices[Number(deviceRead[1]) - 1],
+          version: deviceVersion,
+          network_id: networkID,
+          collection: {
+            state: collection,
+            saved_configuration: {
+              revision: "a".repeat(40),
+              bytes: 103,
+              sha256: "b".repeat(64),
+            },
+          },
+        },
+      });
     if (path === base + "/profiles")
       return route.fulfill({ json: { items: profiles } });
     if (path === base + "/polls")
@@ -182,6 +266,9 @@ async function fixture(
   return {
     writes,
     reads,
+    completeCollection() {
+      collection = "collected";
+    },
     completePoll(overrides: Record<string, unknown> = {}) {
       polls[0] = {
         id: "poll-1",
@@ -755,5 +842,153 @@ test("a rejected observation import keeps its file and source for correction", a
   );
   await expect(source).toHaveValue("router");
   await expect(input).toHaveValue(/observations.json$/);
+  expect(state.writes).toHaveLength(1);
+});
+
+test("ordered SNMP is independent of new-device SSH defaults and keeps an explicit empty list", async ({
+  page,
+}) => {
+  const state = await fixture(page, {
+    existing: true,
+    alternateProfile: true,
+    deviceAccess: true,
+  });
+  await open(page);
+  await page
+    .getByRole("combobox", { name: "Добавить SNMP-профиль", exact: true })
+    .selectOption("office");
+  await page
+    .getByRole("combobox", { name: "Добавить SNMP-профиль", exact: true })
+    .selectOption("lab");
+  await page.getByRole("button", { name: "Поднять lab", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Сохранить SNMP-профили", exact: true })
+    .click();
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(state.writes[0]).toEqual({
+    path: base + "/networks",
+    body: {
+      cidr: "192.0.2.0/30",
+      name: "Лаборатория",
+      profile: "lab",
+      snmp_profiles: ["lab", "office"],
+    },
+  });
+  await page
+    .getByRole("button", { name: "Убрать SNMP-профиль lab", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Убрать SNMP-профиль office", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Сохранить SNMP-профили", exact: true })
+    .click();
+  await expect.poll(() => state.writes.length).toBe(2);
+  expect(state.writes[1].body.snmp_profiles).toEqual([]);
+  expect(
+    state.writes.every((write) => write.path === base + "/networks"),
+  ).toBeTruthy();
+});
+
+test("device SSH binding is selected-only and an old Git result never claims fresh collection", async ({
+  page,
+}) => {
+  const state = await fixture(page, {
+    existing: true,
+    alternateProfile: true,
+    deviceAccess: true,
+  });
+  await open(page);
+  await page
+    .getByRole("button", { name: "Router · 192.0.2.1", exact: true })
+    .click();
+  await expect(
+    page.getByText("Сбор с текущими настройками не подтверждён", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Конфигурация получена", { exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "SSH-профиль устройства", exact: true })
+    .selectOption("office");
+  await page.getByRole("textbox", { name: /^Модель устройства/ }).fill("junos");
+  await expect(
+    page.getByRole("button", { name: "Получить конфигурацию", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Сохранить SSH-привязку", exact: true })
+    .click();
+  await expect(
+    page.getByText("SSH-привязка сохранена.", { exact: false }),
+  ).toBeVisible();
+  expect(state.writes[0]).toEqual({
+    path: base + "/devices/1/ssh-binding",
+    body: {
+      network_id: networkID,
+      profile_id: "office",
+      model: "junos",
+      collector_ip: "192.0.2.1",
+      version: 'W/"2026-11-06T00:00:00+00:00"',
+    },
+  });
+  await expect(
+    page.getByRole("button", { name: "Получить конфигурацию", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Получить конфигурацию", exact: true })
+    .click();
+  await expect(
+    page.getByText("Ожидает результата сбора", { exact: true }),
+  ).toBeVisible();
+  expect(state.writes[1]).toEqual({
+    path: base + "/devices/1/collect",
+    body: { version: 'W/"2026-11-06T00:00:01+00:00"' },
+  });
+  await expect(
+    page.getByText("Конфигурация получена", { exact: true }),
+  ).toHaveCount(0);
+  state.completeCollection();
+  await expect(
+    page.getByText("Конфигурация получена", { exact: true }),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(2);
+  await page
+    .getByRole("button", { name: "Switch · 192.0.2.2", exact: true })
+    .click();
+  await expect(
+    page.getByRole("combobox", { name: "SSH-профиль устройства", exact: true }),
+  ).toHaveValue("office");
+  await expect(
+    page.getByRole("textbox", { name: /^Модель устройства/ }),
+  ).toHaveValue("procurve");
+});
+
+test("stale native version preserves device draft and never retries a binding write", async ({
+  page,
+}) => {
+  const state = await fixture(page, {
+    existing: true,
+    alternateProfile: true,
+    deviceAccess: true,
+    staleBinding: true,
+  });
+  await open(page);
+  await page
+    .getByRole("button", { name: "Router · 192.0.2.1", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "SSH-профиль устройства", exact: true })
+    .selectOption("office");
+  await page
+    .getByRole("button", { name: "Сохранить SSH-привязку", exact: true })
+    .click();
+  await expect(
+    page.getByText("Устройство изменено. Обновите данные.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "SSH-профиль устройства", exact: true }),
+  ).toHaveValue("office");
   expect(state.writes).toHaveLength(1);
 });

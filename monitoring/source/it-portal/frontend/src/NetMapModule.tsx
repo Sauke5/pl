@@ -17,7 +17,14 @@ import { Dialog } from "./components/ui/dialog";
 import "./netmap-module.css";
 
 type Instance = { id: string; name: string; desired_state: string };
-type Network = { id: string; cidr: string; name: string; profile: string };
+type Network = {
+  id: string;
+  cidr: string;
+  name: string;
+  profile: string;
+  snmp_profiles?: string[];
+  snmp_profiles_invalid?: boolean;
+};
 type Profile = {
   id: string;
   username?: string;
@@ -35,6 +42,439 @@ type Poll = {
   result?: Record<string, unknown>;
 };
 type Items<T> = { items: T[] };
+type Networks = Items<Network> & {
+  capabilities?: { device_access?: number; ordered_snmp_profiles?: number };
+};
+type Device = {
+  id: number;
+  name: string;
+  collector_ip: string;
+  source_loaded: boolean;
+  binding: {
+    profile_id: string;
+    model_override: string;
+    effective_model: string;
+    host_key_set: boolean;
+    ssh_ready: boolean;
+  };
+  last_attempt: { status: string; started_at?: string; finished_at?: string };
+};
+type DeviceDetails = {
+  device: Device;
+  version: string;
+  network_id: string;
+  collection: {
+    state: string;
+    saved_configuration?: {
+      revision: string;
+      bytes: number;
+      sha256: string;
+      committed_at?: string;
+    } | null;
+  };
+};
+const collectionLabels: Record<string, string> = {
+  not_configured: "SSH не настроен",
+  unconfirmed: "Сбор с текущими настройками не подтверждён",
+  queued: "Ожидает результата сбора",
+  failed: "Последняя попытка сбора завершилась ошибкой",
+  collected: "Конфигурация получена",
+};
+
+function SNMPOrder({
+  value,
+  profiles,
+  disabled,
+  onChange,
+}: {
+  value: string[];
+  profiles: Profile[];
+  disabled: boolean;
+  onChange: (value: string[]) => void;
+}) {
+  return (
+    <div className="netmap-snmp-order">
+      <p className="module-hint">
+        До четырёх SNMP-профилей по порядку. После первого ответа остальные не
+        проверяются. Общее время проверки сети — до 10 минут.
+      </p>
+      <ol>
+        {value.map((id, index) => (
+          <li key={id}>
+            <span>{id}</span>
+            <Button
+              size="sm"
+              disabled={disabled || index === 0}
+              aria-label={`Поднять ${id}`}
+              onClick={() => {
+                const next = [...value];
+                [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                onChange(next);
+              }}
+            >
+              Выше
+            </Button>
+            <Button
+              size="sm"
+              disabled={disabled || index === value.length - 1}
+              aria-label={`Опустить ${id}`}
+              onClick={() => {
+                const next = [...value];
+                [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                onChange(next);
+              }}
+            >
+              Ниже
+            </Button>
+            <Button
+              size="sm"
+              disabled={disabled}
+              aria-label={`Убрать SNMP-профиль ${id}`}
+              onClick={() => onChange(value.filter((item) => item !== id))}
+            >
+              Убрать
+            </Button>
+          </li>
+        ))}
+      </ol>
+      {!value.length && <p>SNMP выключен. Используются ICMP и TCP.</p>}
+      <Field label="Добавить SNMP-профиль">
+        <select
+          value=""
+          disabled={disabled || value.length >= 4}
+          onChange={(event) => {
+            if (event.target.value) onChange([...value, event.target.value]);
+          }}
+        >
+          <option value="">Выберите профиль</option>
+          {profiles
+            .filter(
+              (profile) =>
+                profile.snmp_community_set && !value.includes(profile.id),
+            )
+            .map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.id}
+              </option>
+            ))}
+        </select>
+      </Field>
+    </div>
+  );
+}
+
+function DeviceAccess({
+  base,
+  network,
+  profiles,
+  disabled,
+  setBusy,
+}: {
+  base: string;
+  network: Network;
+  profiles: Profile[];
+  disabled: boolean;
+  setBusy: (value: string) => void;
+}) {
+  const devices = useAPI<Items<Device> & { collector_available: boolean }>(
+    base + "/devices?network=" + network.id,
+  );
+  const [selected, setSelected] = useState<number>();
+  const detail = useAPI<DeviceDetails>(
+    base + "/devices/" + selected,
+    selected !== undefined,
+  );
+  const [draft, setDraft] = useState<{
+    id: number;
+    version: string;
+    profile: string;
+    model: string;
+  }>();
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState<unknown>();
+  const [waitingUntil, setWaitingUntil] = useState(0);
+  const pending = useRef(false);
+  function adopt(value: DeviceDetails) {
+    setDraft({
+      id: value.device.id,
+      version: value.version,
+      profile: value.device.binding.profile_id,
+      model: value.device.binding.model_override,
+    });
+  }
+  async function refreshDevice() {
+    const value = await detail.refetch();
+    if (value.data && !value.error) adopt(value.data);
+    await devices.refetch();
+  }
+  useEffect(() => {
+    if (!waitingUntil || !selected) return;
+    const timer = window.setInterval(() => {
+      if (Date.now() >= waitingUntil) {
+        setWaitingUntil(0);
+        return;
+      }
+      void detail.refetch();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [waitingUntil, selected, detail.refetch]);
+  useEffect(() => {
+    if (["collected", "failed"].includes(detail.data?.collection.state || ""))
+      setWaitingUntil(0);
+  }, [detail.data]);
+  // Background reads never replace a draft or its optimistic-concurrency token.
+  useEffect(() => {
+    const value = detail.data;
+    if (value && value.device.id === selected && !draft)
+      setDraft({
+        id: value.device.id,
+        version: value.version,
+        profile: value.device.binding.profile_id,
+        model: value.device.binding.model_override,
+      });
+  }, [detail.data, selected, draft]);
+  async function action(kind: "ssh-binding" | "collect") {
+    if (!detail.data || !draft || disabled || pending.current) return;
+    pending.current = true;
+    setBusy("device-" + kind);
+    setError(undefined);
+    setNotice("");
+    try {
+      const body =
+        kind === "collect"
+          ? { version: draft.version }
+          : {
+              network_id: network.id,
+              collector_ip: detail.data.device.collector_ip,
+              profile_id: draft.profile,
+              model: draft.model,
+              version: draft.version,
+            };
+      const result = await api<{
+        saved?: boolean;
+        source_loaded?: boolean;
+        state?: string;
+      }>(base + "/devices/" + draft.id + "/" + kind, "POST", body, {
+        "Idempotency-Key": crypto.randomUUID(),
+      });
+      if (kind === "ssh-binding") {
+        if (result.saved !== true)
+          throw new Error(
+            "Сохранение привязки не подтверждено. Обновите данные устройства.",
+          );
+        setNotice(
+          result.source_loaded
+            ? "SSH-привязка сохранена. Получение конфигурации проверяется отдельно."
+            : "Привязка сохранена, но Oxidized не подтвердил загрузку. Обновите данные перед сбором.",
+        );
+      } else {
+        if (!["queued", "unconfirmed"].includes(result.state || ""))
+          throw new Error(
+            "Результат запуска неизвестен. Обновите данные перед новой попыткой.",
+          );
+        setNotice(
+          result.state === "queued"
+            ? "Устройство поставлено в очередь. Ожидаем результат сбора."
+            : "Запуск не подтверждён. Проверьте результат перед новой попыткой.",
+        );
+        setWaitingUntil(Date.now() + 120000);
+      }
+      if (kind === "ssh-binding") await refreshDevice();
+      else await Promise.all([detail.refetch(), devices.refetch()]);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      pending.current = false;
+      setBusy("");
+    }
+  }
+  const selectedProfile = profiles.find(
+    (profile) => profile.id === draft?.profile,
+  );
+  const dirty =
+    !!draft &&
+    !!detail.data &&
+    (draft.profile !== detail.data.device.binding.profile_id ||
+      draft.model !== detail.data.device.binding.model_override);
+  const collection = detail.data?.collection;
+  return (
+    <Panel title="SSH и конфигурации устройств" className="netmap-devices">
+      <p className="module-hint">
+        Профиль и модель задаются каждому устройству. Смена профиля сети не
+        меняет существующие привязки.
+      </p>
+      <ActionFeedback notice={notice} error={error} noticeKind="info" />
+      {devices.error && (
+        <ErrorBox error={devices.error} retry={() => void devices.refetch()} />
+      )}
+      {devices.data?.collector_available === false && (
+        <p role="status">Oxidized недоступен. Состояние сбора неизвестно.</p>
+      )}
+      {!devices.data && !devices.error && (
+        <p role="status">Загружаем устройства…</p>
+      )}
+      {devices.data?.items?.length === 0 && (
+        <p>
+          Устройств пока нет. Запустите проверку сети, чтобы добавить их в
+          NetBox.
+        </p>
+      )}
+      {!!devices.data?.items?.length && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Устройство</th>
+                <th>SSH-профиль / модель</th>
+                <th>Oxidized</th>
+              </tr>
+            </thead>
+            <tbody>
+              {devices.data.items.map((device) => (
+                <tr key={device.id}>
+                  <td>
+                    <Button
+                      disabled={disabled}
+                      onClick={() => {
+                        setSelected(device.id);
+                        setDraft(undefined);
+                        setError(undefined);
+                        setNotice("");
+                        setWaitingUntil(0);
+                      }}
+                    >
+                      {device.name} · {device.collector_ip}
+                    </Button>
+                  </td>
+                  <td>
+                    {device.binding.profile_id || "Не назначен"} /{" "}
+                    {device.binding.effective_model || "—"}
+                  </td>
+                  <td>
+                    {device.source_loaded
+                      ? "Устройство загружено"
+                      : "Загрузка не подтверждена"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected !== undefined && (
+        <div className="netmap-device-editor">
+          {detail.error && (
+            <ErrorBox
+              error={detail.error}
+              retry={() => void detail.refetch()}
+            />
+          )}
+          {detail.data?.device.id === selected && draft && (
+            <>
+              <h3>
+                {detail.data.device.name} · {detail.data.device.collector_ip}
+              </h3>
+              <div className="form-grid">
+                <Field label="SSH-профиль устройства">
+                  <select
+                    value={draft.profile}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        profile: event.target.value,
+                        model: event.target.value ? draft.model : "",
+                      })
+                    }
+                  >
+                    <option value="">Не собирать конфигурацию</option>
+                    {profiles.map((profile) => (
+                      <option value={profile.id} key={profile.id}>
+                        {profile.id}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field
+                  label="Модель устройства"
+                  hint={`Пустое поле — модель из профиля${selectedProfile?.oxidized_model ? ": " + selectedProfile.oxidized_model : ""}.`}
+                >
+                  <input
+                    value={draft.model}
+                    disabled={disabled || !draft.profile}
+                    maxLength={64}
+                    pattern="[a-z][a-z0-9_]{0,63}"
+                    placeholder="Из профиля"
+                    onChange={(event) =>
+                      setDraft({ ...draft, model: event.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+              {draft.profile &&
+                (!selectedProfile?.username ||
+                  !selectedProfile.password_set ||
+                  !selectedProfile.ssh_known_hosts_set) && (
+                  <p>
+                    Для SSH нужны логин, пароль и проверенный host key в
+                    профиле.
+                  </p>
+                )}
+              <div className="actions">
+                <Button
+                  disabled={disabled || !dirty}
+                  onClick={() => void action("ssh-binding")}
+                >
+                  Сохранить SSH-привязку
+                </Button>
+                <Button
+                  disabled={
+                    disabled ||
+                    dirty ||
+                    !detail.data.device.binding.ssh_ready ||
+                    !!waitingUntil
+                  }
+                  onClick={() => void action("collect")}
+                >
+                  Получить конфигурацию
+                </Button>
+                <Button
+                  disabled={disabled}
+                  onClick={() => void refreshDevice()}
+                >
+                  Обновить устройство
+                </Button>
+              </div>
+              <p role="status">
+                {collectionLabels[collection?.state || ""] ||
+                  "Состояние сбора неизвестно"}
+              </p>
+              {collection?.saved_configuration && (
+                <dl className="netmap-config-summary">
+                  <dt>Сохранённая ревизия</dt>
+                  <dd>
+                    <code>{collection.saved_configuration.revision}</code>
+                  </dd>
+                  <dt>Размер</dt>
+                  <dd>{collection.saved_configuration.bytes} байт</dd>
+                  <dt>SHA-256</dt>
+                  <dd>
+                    <code>{collection.saved_configuration.sha256}</code>
+                  </dd>
+                  <dt>Время ревизии</dt>
+                  <dd>
+                    {collection.saved_configuration.committed_at ||
+                      "Неизвестно"}
+                  </dd>
+                </dl>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
 const running = (state: string) =>
   ["queued", "pending", "running"].includes(state);
 const pollLabels: Record<string, string> = {
@@ -95,6 +535,39 @@ function PollErrors({ poll }: { poll: Poll }) {
         </ul>
       )}
     </>
+  );
+}
+
+function PollSNMP({ poll }: { poll: Poll }) {
+  const records = pollResult(poll).snmp_attempts;
+  if (!Array.isArray(records) || records.length === 0) return null;
+  return (
+    <details>
+      <summary>SNMP: какие профили ответили</summary>
+      <ul>
+        {records.slice(0, 100).map((record, index) => {
+          if (
+            !record ||
+            typeof record.ip !== "string" ||
+            !Array.isArray(record.attempts)
+          )
+            return null;
+          return (
+            <li key={index}>
+              {record.ip}:{" "}
+              {record.attempts
+                .slice(0, 4)
+                .map(
+                  (attempt: { profile_id?: string; outcome?: string }) =>
+                    `${attempt.profile_id || "Неизвестный профиль"} — ${attempt.outcome === "responded" ? "ответ получен" : "ответ не подтверждён"}`,
+                )
+                .join("; ")}
+            </li>
+          );
+        })}
+      </ul>
+      {records.length > 100 && <p>Показаны первые 100 адресов.</p>}
+    </details>
   );
 }
 
@@ -222,7 +695,9 @@ export default function NetMapModule({ instance }: { instance: Instance }) {
 function NetMapSettings({ instance }: { instance: Instance }) {
   const enabled = instance.desired_state === "enabled";
   const base = `/modules/${instance.id}/netmap`;
-  const networks = useAPI<Items<Network>>(base + "/networks", enabled);
+  const networks = useAPI<Networks>(base + "/networks", enabled);
+  const deviceAccess = networks.data?.capabilities?.device_access === 1;
+  const orderedSNMP = networks.data?.capabilities?.ordered_snmp_profiles === 1;
   const profiles = useAPI<Items<Profile>>(base + "/profiles", enabled);
   const polls = useAPI<Items<Poll>>(base + "/polls", enabled);
   const networkItems = Array.isArray(networks.data?.items)
@@ -240,6 +715,7 @@ function NetMapSettings({ instance }: { instance: Instance }) {
   const [cidr, setCidr] = useState("");
   const [networkProfile, setNetworkProfile] = useState("");
   const [networkAccess, setNetworkAccess] = useState<string>();
+  const [snmpDraft, setSnmpDraft] = useState<string[]>();
   const [profileID, setProfileID] = useState("");
   const [community, setCommunity] = useState("");
   const [username, setUsername] = useState("");
@@ -256,7 +732,9 @@ function NetMapSettings({ instance }: { instance: Instance }) {
   const currentAccess = profileItems.find(
     (item) => item.id === selected?.profile,
   );
-  const needsSNMP = !currentAccess?.snmp_community_set;
+  const needsSNMP = orderedSNMP
+    ? !selected?.snmp_profiles?.length
+    : !currentAccess?.snmp_community_set;
   const profileInput = useRef<HTMLInputElement>(null);
   const selectedPolls = selected
     ? pollItems.filter((poll) => poll.network === selected.id)
@@ -269,11 +747,16 @@ function NetMapSettings({ instance }: { instance: Instance }) {
   }, [enabled, activePoll, polls.refetch]);
 
   async function reload() {
-    await Promise.all(
-      ["networks", "profiles", "polls"].map((path) =>
+    await Promise.all([
+      ...["networks", "profiles", "polls"].map((path) =>
         queryClient.invalidateQueries({ queryKey: [base + "/" + path] }),
       ),
-    );
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith(base + "/devices"),
+      }),
+    ]);
   }
 
   async function mutate<T>(
@@ -408,6 +891,7 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                       onChange={(event) => {
                         setSelectedID(event.target.value);
                         setNetworkAccess(undefined);
+                        setSnmpDraft(undefined);
                       }}
                     >
                       {networkItems.map((network) => (
@@ -421,7 +905,11 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                     <>
                       <div className="netmap-network-profile">
                         <label>
-                          <span>Профиль</span>
+                          <span>
+                            {deviceAccess
+                              ? "SSH-профиль новых устройств"
+                              : "Профиль"}
+                          </span>
                           <select
                             aria-label="Профиль выбранной сети"
                             disabled={!!busy || activePoll || !!profiles.error}
@@ -454,6 +942,12 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                                     cidr: selected.cidr,
                                     name: selected.name,
                                     profile: networkAccess,
+                                    ...(orderedSNMP
+                                      ? {
+                                          snmp_profiles:
+                                            selected.snmp_profiles ?? [],
+                                        }
+                                      : {}),
                                   },
                                   "Профиль сети обновлён.",
                                   () => setNetworkAccess(undefined),
@@ -464,6 +958,52 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                             </Button>
                           )}
                       </div>
+                      {deviceAccess && (
+                        <p className="module-hint">
+                          Этот профиль назначается новым устройствам. Привязки
+                          уже добавленных устройств сохраняются.
+                        </p>
+                      )}
+                      {orderedSNMP && (
+                        <>
+                          <h3>SNMP-профили сети</h3>
+                          {selected.snmp_profiles_invalid && (
+                            <p role="alert">
+                              Список SNMP-профилей требует исправления: профиль
+                              удалён или в нём не задан SNMP community.
+                            </p>
+                          )}
+                          <SNMPOrder
+                            value={snmpDraft ?? selected.snmp_profiles ?? []}
+                            profiles={profileItems}
+                            disabled={!!busy || activePoll || !!profiles.error}
+                            onChange={setSnmpDraft}
+                          />
+                          {snmpDraft !== undefined && (
+                            <Button
+                              disabled={
+                                !!busy || activePoll || !!profiles.error
+                              }
+                              onClick={() =>
+                                void mutate(
+                                  "snmp-order",
+                                  "/networks",
+                                  {
+                                    cidr: selected.cidr,
+                                    name: selected.name,
+                                    profile: selected.profile,
+                                    snmp_profiles: snmpDraft,
+                                  },
+                                  "Порядок SNMP-профилей сохранён.",
+                                  () => setSnmpDraft(undefined),
+                                )
+                              }
+                            >
+                              Сохранить SNMP-профили
+                            </Button>
+                          )}
+                        </>
+                      )}
                       <div className="actions netmap-network-actions">
                         <Button
                           variant="default"
@@ -581,6 +1121,7 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                         cidr: cidr.trim(),
                         name: name.trim(),
                         profile: networkProfile,
+                        ...(orderedSNMP ? { snmp_profiles: [] } : {}),
                       },
                       "Сеть сохранена.",
                       (value) => {
@@ -612,7 +1153,18 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                         onChange={(event) => setCidr(event.target.value)}
                       />
                     </Field>
-                    <Field label="Профиль доступа">
+                    <Field
+                      label={
+                        deviceAccess
+                          ? "SSH-профиль новых устройств"
+                          : "Профиль доступа"
+                      }
+                      hint={
+                        orderedSNMP
+                          ? "После добавления сети задайте порядок SNMP-профилей отдельно."
+                          : undefined
+                      }
+                    >
                       <select
                         value={networkProfile}
                         onChange={(event) =>
@@ -796,6 +1348,24 @@ function NetMapSettings({ instance }: { instance: Instance }) {
               </form>
             </Panel>
           </div>
+          {selected && deviceAccess && (
+            <DeviceAccess
+              key={selected.id}
+              base={base}
+              network={selected}
+              profiles={profileItems}
+              disabled={
+                !!busy || activePoll || !!networks.error || !!profiles.error
+              }
+              setBusy={setBusy}
+            />
+          )}
+          {selected && !deviceAccess && (
+            <p className="module-hint">
+              Настройка SSH для отдельных устройств доступна после обновления
+              NetMap. <a href="#settings?section=updates">Открыть обновления</a>
+            </p>
+          )}
           <Panel
             title="История проверок"
             className="netmap-history"
@@ -888,6 +1458,13 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                             <tr className="netmap-poll-errors">
                               <td colSpan={resultColumns.length + 2}>
                                 <PollErrors poll={poll} />
+                              </td>
+                            </tr>
+                          )}
+                          {Array.isArray(pollResult(poll).snmp_attempts) && (
+                            <tr>
+                              <td colSpan={resultColumns.length + 2}>
+                                <PollSNMP poll={poll} />
                               </td>
                             </tr>
                           )}

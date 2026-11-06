@@ -102,6 +102,67 @@ func TestNetmapFiniteRoutesAndSignedURI(t *testing.T) {
 	}
 }
 
+func TestNetmapDeviceRoutesKeepFiniteIDsQueriesAndAdminScopes(t *testing.T) {
+	for _, item := range [][2]string{
+		{"GET", "/netmap/api/devices?network=0123456789abcdef"},
+		{"HEAD", "/netmap/api/devices/42"},
+		{"POST", "/netmap/api/devices/42/ssh-binding"},
+		{"POST", "/netmap/api/devices/42/collect"},
+	} {
+		route, ok := netmapMatchRoute(httptest.NewRequest(item[0], "https://portal.example.test"+item[1], nil))
+		if !ok || route.scope != "netmap:admin" || route.media != "application/json" {
+			t.Fatal("finite device route rejected or scope weakened", item, route)
+		}
+	}
+	for _, item := range [][2]string{
+		{"GET", "/netmap/api/devices"}, {"GET", "/netmap/api/devices?network=0123456789abcdef&network=0123456789abcdef"},
+		{"GET", "/netmap/api/devices?network=0123456789abcdef&url=http://foreign"},
+		{"GET", "/netmap/api/devices?network=not-a-network"},
+		{"GET", "/netmap/api/devices/0"}, {"GET", "/netmap/api/devices/01"},
+		{"GET", "/netmap/api/devices/1000000000000000"},
+		{"GET", "/netmap/api/devices/42?network=0123456789abcdef"},
+		{"GET", "/netmap/api/devices/42/collect"}, {"PUT", "/netmap/api/devices/42/ssh-binding"},
+		{"POST", "/netmap/api/devices/42/collect?force=true"},
+	} {
+		if _, ok := netmapMatchRoute(httptest.NewRequest(item[0], "https://portal.example.test"+item[1], nil)); ok {
+			t.Fatal("non-contract device route admitted", item)
+		}
+	}
+}
+
+func TestNetmapDeviceWriteAuthenticatesExactVersionBodyAndRejectsViewerAndCSRF(t *testing.T) {
+	body := `{"version":"W/\"2026-11-06T00:00:00+00:00\""}`
+	calls := 0
+	g := netmapFixture(t, func(r *http.Request, raw []byte) *http.Response {
+		calls++
+		if r.Method != "POST" || r.URL.Path != "/netmap/api/devices/42/collect" || string(raw) != body {
+			t.Fatal("device collection target/version/body changed")
+		}
+		return netmapResponse("application/json", `{"state":"queued","device_id":42}`)
+	})
+	headers := http.Header{"Origin": {g.server.Config.PublicURL}, "Content-Type": {"application/json"}, "X-Csrf-Token": {netmapSession().CSRF}, "Idempotency-Key": {netmapGatewayID}}
+	path := "/api/v1/modules/" + netmapGatewayID + "/netmap/devices/42/collect"
+	if w := netmapCall(g, "POST", path, body, headers, true); w.Code != 200 {
+		t.Fatal("authenticated collection rejected", w.Code)
+	}
+	invalid := headers.Clone()
+	invalid.Set("X-Csrf-Token", "forged")
+	if w := netmapCall(g, "POST", path, body, invalid, true); w.Code != 403 {
+		t.Fatal("forged CSRF admitted", w.Code)
+	}
+	g.session = func(*http.Request) (session, error) {
+		value := netmapSession()
+		value.User.Admin = false
+		return value, nil
+	}
+	if w := netmapCall(g, "POST", path, body, headers, true); w.Code != 403 {
+		t.Fatal("viewer collection admitted", w.Code)
+	}
+	if calls != 1 {
+		t.Fatal("rejected request reached adapter", calls)
+	}
+}
+
 func TestNetmapExpiredSessionRedirectsOnlyKnownDocuments(t *testing.T) {
 	g := netmapFixture(t, func(*http.Request, []byte) *http.Response {
 		t.Fatal("anonymous request reached adapter")
@@ -165,6 +226,9 @@ func TestNetmapManagementValidationReturnsFiniteRussianProblems(t *testing.T) {
 		{"legacy", `{"error":"invalid NetMap request"}`, "netmap_invalid_request", "Проверьте настройки", 400},
 		{"private", `{"error":"private-password","detail":"private-host"}`, "netmap_invalid_request", "Проверьте настройки", 400},
 		{"busy", `{"error":"netmap_poll_running"}`, "netmap_poll_running", "Дождитесь", 409},
+		{"device-stale", `{"error":"netmap_device_changed"}`, "netmap_device_changed", "изменились в NetBox", 409},
+		{"snmp-order", `{"error":"netmap_invalid_snmp_profiles"}`, "netmap_invalid_snmp_profiles", "до четырёх", 400},
+		{"collector-pending", `{"error":"netmap_collector_not_ready"}`, "netmap_collector_not_ready", "ещё не загрузил", 409},
 		{"unknown-conflict", `{"error":"private-password"}`, "netmap_conflict", "конфликтует", 409},
 		{"failure", `{"error":"private-password"}`, "netmap_request_failed", "не подтверждён", 502},
 	} {

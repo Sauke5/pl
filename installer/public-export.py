@@ -39,13 +39,13 @@ UNIT_TEST_NAMES = {
     "test_grafana_package.py", "test_host_status.py", "test_icmp_install.py", "test_icmp_probe.py", "test_icmp_upgrade.py", "test_install_proxy.py",
     "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py", "test_controller_listen_backlog.py",
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
-    "test_netmap_controller.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
+    "test_netmap_controller.py", "test_netmap_access_profiles.py", "test_netmap_device_access.py", "test_netmap_device_gateway.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
     "test_netmap_instance_descriptor.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",
     "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_netmap_store.py", "test_network_stack_install.py", "test_package.py",
     "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
     "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_installation_settings.py", "test_module_origin.py",
-    "test_maintenance_concurrency.py", "test_managed_compose.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py",
+    "test_maintenance_concurrency.py", "test_managed_compose.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py", "test_disaster_recovery_history.py",
 }
 REPORT_FILES = {
     "monitoring_daily_summary.py", "monitoring_weekly_report.py", "monitoring_report_api.py", "manage_reports.py",

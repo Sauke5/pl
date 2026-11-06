@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -269,6 +270,7 @@ func (w *Worker) pollAcquired(parent context.Context, i model.Integration) error
 	return e
 }
 func (w *Worker) execute(ctx context.Context, j model.Job) {
+	parent := ctx
 	timeout := 60 * time.Second
 	if j.Kind == "module" {
 		timeout = w.moduleJobTimeout(ctx, j)
@@ -369,10 +371,62 @@ func (w *Worker) execute(ctx context.Context, j model.Job) {
 			}
 		}
 	}
-	finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer finishCancel()
-	if e := w.Store.Finish(finishCtx, j); e != nil {
-		slog.Error("job_finish_failed", "job_id", j.ID)
-	}
+	_ = w.finishJob(parent, j)
 	w.Notify("all")
+}
+
+// Retry only this already-computed result. A provider/controller must never be
+// executed again because its terminal transaction lost a connection or timed out.
+func (w *Worker) finishJob(parent context.Context, j model.Job) error {
+	delay := 2 * time.Second
+	for attempt := 1; ; attempt++ {
+		if attempt > 1 && parent.Err() != nil {
+			return parent.Err()
+		}
+		// Preserve the first shutdown flush even if service cancellation arrived
+		// during execution. Later attempts stop with the service, not the job timeout.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		stop := func() bool { return false }
+		if attempt > 1 {
+			stop = context.AfterFunc(parent, cancel)
+		}
+		err := w.Store.Finish(ctx, j)
+		stop()
+		cancel()
+		if err == nil {
+			return nil
+		}
+		retry := parent.Err() == nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, store.ErrConflict) && !errors.Is(err, store.ErrInvalid)
+		state, errorType := finishErrorInfo(err)
+		slog.Error("job_finish_failed", "job_id", j.ID, "attempt", attempt, "sqlstate", state, "error_type", errorType, "retry", retry)
+		if !retry {
+			return err
+		}
+		wait := time.NewTimer(delay)
+		select {
+		case <-parent.Done():
+			wait.Stop()
+			return parent.Err()
+		case <-wait.C:
+		}
+		delay = min(2*delay, 30*time.Second)
+	}
+}
+
+func finishErrorInfo(err error) (string, string) {
+	state := ""
+	var sqlError interface{ SQLState() string }
+	if errors.As(err, &sqlError) {
+		code := sqlError.SQLState()
+		if len(code) == 5 {
+			valid := true
+			for _, c := range code {
+				valid = valid && (c >= 'A' && c <= 'Z' || c >= '0' && c <= '9')
+			}
+			if valid {
+				state = code
+			}
+		}
+	}
+	return state, fmt.Sprintf("%T", err)
 }

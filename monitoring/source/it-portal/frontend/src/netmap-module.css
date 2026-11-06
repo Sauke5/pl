@@ -192,3 +192,47 @@
     grid-template-columns: 1fr;
   }
 }
+
+.netmap-snmp-order {
+  margin: 12px 0;
+}
+.netmap-snmp-order ol {
+  padding-left: 24px;
+}
+.netmap-snmp-order li {
+  margin: 8px 0;
+}
+.netmap-snmp-order li > span {
+  display: inline-block;
+  min-width: 100px;
+  overflow-wrap: anywhere;
+}
+.netmap-snmp-order li > button {
+  margin: 0 4px;
+}
+.netmap-devices {
+  margin-bottom: 20px;
+}
+.netmap-device-editor {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.netmap-config-summary {
+  display: grid;
+  grid-template-columns: minmax(100px, auto) minmax(0, 1fr);
+  gap: 8px 20px;
+  font-size: 13px;
+}
+.netmap-config-summary dt {
+  color: var(--muted);
+}
+.netmap-config-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 650px) {
+  .netmap-config-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

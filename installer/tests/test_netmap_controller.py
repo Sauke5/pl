@@ -697,33 +697,52 @@ class InventoryContracts(unittest.TestCase):
 
     def test_discovery_preserves_manual_fields_and_never_creates_cables(self):
         calls = []
-        current = {'id': 17, 'name': 'Manual name', 'custom_fields': {'collector_profile': 'manual-profile', 'manual_key': 'keep'}}
-        self.app.netbox = types.SimpleNamespace(all=lambda *args, **kwargs: [current], request=lambda *args: calls.append(args))
+        current = {'id': 17, 'name': 'Manual name', 'custom_fields': {'collector_profile': 'manual-profile',
+            'manual_key': 'keep', 'pl_source': 'network:source1', 'collector_ip': '192.0.2.1'}}
+        version = 'W/"2026-11-06T00:00:00+00:00"'
+        def request(method, path, body=None, **kwargs):
+            if method == 'GET':
+                self.assertTrue(kwargs['include_version'])
+                return current, version
+            self.assertEqual(kwargs, {'version': version})
+            calls.append((method, path, body))
+            current['custom_fields'].update(body['custom_fields'])
+        self.app.netbox = types.SimpleNamespace(all=lambda *args, **kwargs: [current], request=request)
         self.app.enroll({'id': 'source1', 'name': 'Fixture', 'profile': 'new'}, {'ip': '192.0.2.1', 'name': 'Observed name', 'description': 'Observed description'})
         self.assertEqual(calls[0][:2], ('PATCH', '/dcim/devices/17/'))
         self.assertEqual(set(calls[0][2]), {'custom_fields'})
-        self.assertEqual(calls[0][2]['custom_fields']['manual_key'], 'keep')
-        self.assertEqual(calls[0][2]['custom_fields']['collector_profile'], 'manual-profile')
+        self.assertEqual(set(calls[0][2]['custom_fields']), {'pl_observed_name', 'pl_observed_description'})
+        self.assertEqual(current['custom_fields']['manual_key'], 'keep')
+        self.assertEqual(current['custom_fields']['collector_profile'], 'manual-profile')
         self.assertFalse(any('cables' in call[1] for call in calls))
 
-    def test_existing_discovery_enrolls_after_profile_credentials_are_completed(self):
+    def test_existing_device_requires_explicit_binding_after_default_profile_completion(self):
         self.app.mutation('/api/profiles', {'id': 'test', 'snmp_community': 'fixture', 'username': 'collector', 'password': 'fixture', 'oxidized_model': 'ios'}, {'idempotency_key': 'profile', 'sub': 'admin'})
         calls = []
-        current = {'id': 17, 'name': 'Manual name', 'tags': [{'id': 8, 'slug': 'manual'}], 'custom_fields': {'manual_key': 'keep'}}
-        self.app.netbox = types.SimpleNamespace(all=lambda path, **kwargs: [current] if path == '/dcim/devices/' else [{'id': 9, 'slug': 'network-config-backup'}], request=lambda *args: calls.append(args))
+        current = {'id': 17, 'name': 'Manual name', 'tags': [{'id': 8, 'slug': 'manual'}],
+                   'custom_fields': {'manual_key': 'keep', 'pl_source': 'network:source1', 'collector_ip': '192.0.2.1'}}
+        def request(method, path, body=None, **kwargs):
+            if method == 'GET':
+                return current, 'W/"2026-11-06T00:00:00+00:00"'
+            calls.append((method, path, body))
+            current['custom_fields'].update(body['custom_fields'])
+        self.app.netbox = types.SimpleNamespace(all=lambda path, **kwargs: [current] if path == '/dcim/devices/' else [{'id': 9, 'slug': 'network-config-backup'}], request=request)
         network = {'id': 'source1', 'name': 'Fixture', 'profile': 'test'}
         observed = {'ip': '192.0.2.1', 'name': 'Observed', 'description': 'Fixture'}
         self.app.enroll(network, observed)
         payload = calls[0][2]
-        self.assertEqual(payload['custom_fields']['collector_profile'], 'test')
-        self.assertEqual(payload['custom_fields']['oxidized_model'], 'ios')
-        self.assertEqual(payload['custom_fields']['manual_key'], 'keep')
-        self.assertEqual(payload['tags'], [8, 9])
+        self.assertNotIn('collector_profile', payload['custom_fields'])
+        self.assertNotIn('oxidized_model', payload['custom_fields'])
+        self.assertEqual(current['custom_fields']['manual_key'], 'keep')
+        self.assertNotIn('tags', payload)
+        self.assertEqual(current['tags'], [{'id': 8, 'slug': 'manual'}])
         current['custom_fields'].update(collector_profile='manual-profile', oxidized_model='vrp')
         calls.clear()
         self.app.enroll(network, observed)
-        self.assertEqual(calls[0][2]['custom_fields']['collector_profile'], 'manual-profile')
-        self.assertEqual(calls[0][2]['custom_fields']['oxidized_model'], 'vrp')
+        self.assertNotIn('collector_profile', calls[0][2]['custom_fields'])
+        self.assertNotIn('oxidized_model', calls[0][2]['custom_fields'])
+        self.assertEqual(current['custom_fields']['collector_profile'], 'manual-profile')
+        self.assertEqual(current['custom_fields']['oxidized_model'], 'vrp')
         self.assertNotIn('tags', calls[0][2])
 
     def test_new_inventory_uses_observed_name_without_adopting_name_collisions(self):

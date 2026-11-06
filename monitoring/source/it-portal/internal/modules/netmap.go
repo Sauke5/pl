@@ -67,6 +67,9 @@ func NetMapRequestErrorCode(status int, body []byte) string {
 		"netmap_invalid_model":        http.StatusBadRequest, "netmap_invalid_snmp_community": http.StatusBadRequest,
 		"netmap_network_limit": http.StatusBadRequest, "netmap_profile_limit": http.StatusBadRequest,
 		"netmap_poll_running": http.StatusConflict, "netmap_idempotency_conflict": http.StatusConflict,
+		"netmap_invalid_snmp_profiles": http.StatusBadRequest,
+		"netmap_device_missing":        http.StatusBadRequest, "netmap_invalid_binding": http.StatusBadRequest,
+		"netmap_device_changed": http.StatusConflict, "netmap_collector_not_ready": http.StatusConflict,
 	}
 	if allowed[code] == status {
 		return code
