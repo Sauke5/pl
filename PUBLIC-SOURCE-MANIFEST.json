@@ -16940,8 +16940,8 @@
     },
     {
       "path": "installer/get-pl.sh",
-      "sha256": "ffe7f3134dccc8549d49a8af9b577dc0cafa3064cb35f9e713f7b73871b1c2b9",
-      "size": 24218
+      "sha256": "7b8b92102301dc7c1dd42f6ac68ab7abbce51d554fb2a8bc54233c9ca60d1db9",
+      "size": 24334
     },
     {
       "path": "installer/grafana-build.py",
@@ -16985,8 +16985,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "3d9f81881284c2828c4feff95d1541df8e60cfdce3c51e195b7ba94492452a33",
-      "size": 43516
+      "sha256": "676e92c72feb1a0ec0f8631bc1666276b82447e6c578f5210ae34bc23ef6b128",
+      "size": 43616
     },
     {
       "path": "installer/installation-settings.py",
@@ -17175,8 +17175,8 @@
     },
     {
       "path": "installer/tests/test_get_pl_proxy.py",
-      "sha256": "c9e25915f810bf9406a9b527c8b3eb4cb2a5abf75413a3d9af2949df79afd215",
-      "size": 23747
+      "sha256": "adf31fa88e31327e3852460557f6ea324d992f3d9f0783a7d82888c26f10c7a5",
+      "size": 24484
     },
     {
       "path": "installer/tests/test_grafana_build.py",
@@ -17220,8 +17220,8 @@
     },
     {
       "path": "installer/tests/test_install_sh.py",
-      "sha256": "539485b1f38b853207eff89241ececb958fab3450cf38ebf138023b710c1106e",
-      "size": 24259
+      "sha256": "98f57d1abbe634429fc7a607eec03f81b7c920cbf5a828c5738573088c48cc94",
+      "size": 24845
     },
     {
       "path": "installer/tests/test_installation_settings.py",

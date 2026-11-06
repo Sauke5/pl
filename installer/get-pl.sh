@@ -447,7 +447,8 @@ def main(argv=None):
             command += ['--production']
         if proxy_file:
             command += ['--download-proxy-file', str(proxy_file)]
-        subprocess.run(command, check=True)
+        # Existing signed installers parse apt-cache output in English.
+        subprocess.run(command, check=True, env=dict(os.environ, LC_ALL='C', LANG='C'))
         if proxy:
             print('Для будущих загрузок GitHub сохраните прокси в настройках доставки PL. Bootstrap профиль не сохраняется.')
         print('PL: ' + public_url + '\nФайл первоначального пароля: '

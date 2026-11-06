@@ -323,6 +323,14 @@ class InstallerTests(unittest.TestCase):
         with patch.object(self.module, 'run', return_value='  Candidate: 5:29.8.2-1~ubuntu.26.04~resolute'):
             self.assertEqual(self.module.pin_packages(['docker-ce']), ['docker-ce=5:29.8.2-1~ubuntu.26.04~resolute'])
 
+    def test_package_pin_works_with_russian_host_locale(self):
+        def apt_policy(command, **kwargs):
+            label = 'Candidate' if kwargs['env'].get('LC_ALL') == 'C' else 'Кандидат'
+            return subprocess.CompletedProcess(command, 0, f'  {label}: 3.a2.ds2-10.1build1\n', '')
+        with patch.dict(self.module.os.environ, {'LANG': 'ru_RU.UTF-8', 'LC_ALL': 'ru_RU.UTF-8'}), \
+                patch.object(self.module.subprocess, 'run', side_effect=apt_policy):
+            self.assertEqual(self.module.pin_packages(['hping3']), ['hping3=3.a2.ds2-10.1build1'])
+
     def test_service_account_conflict_does_not_touch_directory(self):
         with patch.object(self.module.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=999)), \
                 patch.object(self.module, 'run') as run:
