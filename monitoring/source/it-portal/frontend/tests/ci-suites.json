@@ -296,27 +296,6 @@
       "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
     },
     {
-      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-administration.spec.ts",
-      "kind": "fixture",
-      "suite": "frontend-fixtures",
-      "capability": "core",
-      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-auto-seen.spec.ts",
-      "kind": "fixture",
-      "suite": "frontend-fixtures",
-      "capability": "core",
-      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-delete.spec.ts",
-      "kind": "fixture",
-      "suite": "frontend-fixtures",
-      "capability": "core",
-      "reason": "Committed route fixtures intercept application APIs (directly or settingsWorkspace/relationsExchange helpers); UI contract acceptance only, native connector and persistence acceptance remain separate"
-    },
-    {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/sftpgo-module.spec.ts",
       "kind": "fixture",
       "suite": "frontend-fixtures",

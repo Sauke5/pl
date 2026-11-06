@@ -108,7 +108,7 @@ test("interrupted upgrade recovers only its recorded operation", async ({
   const state = await fixture(page, {
     operation: { operation_id, version: "0.3.1", phase: "recovery_required" },
   });
-  await page.goto("/#settings?section=operations");
+  await page.goto("/#settings?section=updates");
   await expect(
     page.getByText("Требуется восстановление установки", { exact: true }),
   ).toBeVisible();
@@ -216,7 +216,7 @@ test("release notes for another version are not offered for this update", async 
       sections: [],
     },
   });
-  await page.goto("/#settings?section=operations");
+  await page.goto("/#settings?section=updates");
   await expect(page.getByText("Другая версия", { exact: true })).toHaveCount(0);
   await expect(
     page.getByText("Подробное описание этого релиза ещё не опубликовано.", {

@@ -380,7 +380,10 @@ class NetMapController:
                 # first start materializes endpoints. Never admit a wrong ID,
                 # allocated address or this pending form on a running/stopped
                 # container. Full runtime identity is checked after start.
-                pending = (never_started and connection.get('IPAMConfig') in (None, {})
+                ipam = connection.get('IPAMConfig')
+                unallocated_ipam = ipam is None or (type(ipam) is dict and ipam in
+                    ({}, {'IPv4Address': '', 'IPv6Address': ''}))
+                pending = (never_started and unallocated_ipam
                            and all(connection.get(key) in (None, '') for key in
                                    ('NetworkID', 'EndpointID', 'IPAddress', 'GlobalIPv6Address', 'Gateway', 'IPv6Gateway')))
                 if alias not in (connection.get('Aliases') or []) or (connection.get('NetworkID') != expected_id and not pending):

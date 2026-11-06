@@ -1,4 +1,5 @@
-import { RuntimeSettings } from "./RuntimeSettings";
+import { RuntimeSettings, SessionSettings } from "./RuntimeSettings";
+import { UpdateSettings } from "./UpdateSettings";
 import { InstallationSettings } from "./InstallationSettings";
 import { DeliveryProxySettings } from "./DeliveryProxySettings";
 import { ADSettings } from "./ADSettings";
@@ -10,6 +11,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  Fragment,
 } from "react";
 import {
   ArrowRight,
@@ -22,9 +24,10 @@ import {
   Server,
   Shield,
   Users,
+  RefreshCw,
   X,
 } from "lucide-react";
-import { date, useAPI } from "./api";
+import { useAPI } from "./api";
 import type {
   Dictionaries,
   Integration,
@@ -33,7 +36,7 @@ import type {
 } from "./types";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
-import { Badge, Empty, ErrorBox, JSONView } from "./components/common";
+import { Empty, ErrorBox, JSONView } from "./components/common";
 import { useHelpTopic } from "./Help";
 import { DraftContext, type DraftController } from "./settings/Draft";
 import {
@@ -42,11 +45,11 @@ import {
   PublicationSettings,
 } from "./settings/Groups";
 import { Integrations } from "./settings/Integrations";
-import { SFTP_EXCHANGE_ID } from "./ConnectionDetails";
 import { registerSettingsGuard } from "./settings/navigation";
 import {
   displayValue,
   fieldLabels,
+  fieldKeywords,
   integrationFields,
   kindLabels,
   searchEntries,
@@ -57,6 +60,7 @@ import {
   type SettingsLocation,
 } from "./settings/model";
 import "./settings/settings.css";
+import { SettingsOverview } from "./settings/Overview";
 
 const sectionIcons = {
   overview: LayoutDashboard,
@@ -66,6 +70,8 @@ const sectionIcons = {
   general: Clock,
   system: Server,
   operations: Server,
+  security: Shield,
+  updates: RefreshCw,
   installation: Server,
   delivery: Network,
   users: Users,
@@ -227,9 +233,7 @@ export default function Settings() {
         (entry.section !== "ad" || session.data?.user?.admin) &&
         (entry.section !== "users" ||
           session.data?.local_users_enabled ||
-          session.data?.local_password_change_enabled) &&
-        (entry.integration !== SFTP_EXCHANGE_ID ||
-          session.data?.features?.sftp_exchange),
+          session.data?.local_password_change_enabled),
     ),
     ...(integrations.data || []).flatMap((item) => [
       {
@@ -248,7 +252,7 @@ export default function Settings() {
         field,
         title: fieldLabels[field] || field,
         description: "Интеграции · " + item.name,
-        keywords: item.kind,
+        keywords: item.kind + " " + (fieldKeywords[field] || ""),
       })),
     ]),
   ];
@@ -267,6 +271,13 @@ export default function Settings() {
       )
     : [];
   const results = matches.slice(0, 24);
+  const visibleSections = sections.filter(
+    (section) =>
+      (section.id !== "ad" || session.data?.user?.admin) &&
+      (section.id !== "users" ||
+        session.data?.local_users_enabled ||
+        session.data?.local_password_change_enabled),
+  );
   return (
     <DraftContext.Provider value={registerDraft}>
       <div
@@ -278,7 +289,7 @@ export default function Settings() {
         <div className="page-title">
           <div>
             <h1>Настройки</h1>
-            <p>Конфигурация Платформы и подключений</p>
+            <p>Данные, доступ пользователей и обслуживание PL</p>
           </div>
         </div>
         <div className="settings-layout">
@@ -332,20 +343,17 @@ export default function Settings() {
               </div>
             ) : (
               <nav aria-label="Разделы настроек">
-                {sections
-                  .filter(
-                    (section) =>
-                      (section.id !== "ad" || session.data?.user?.admin) &&
-                      (section.id !== "users" ||
-                        session.data?.local_users_enabled ||
-                        session.data?.local_password_change_enabled),
-                  )
-                  .map((section) => {
-                    const Icon = sectionIcons[section.id];
-                    return (
+                {visibleSections.map((section, index) => {
+                  const Icon = sectionIcons[section.id];
+                  return (
+                    <Fragment key={section.id}>
+                      {section.group &&
+                        section.group !== visibleSections[index - 1]?.group && (
+                          <p className="settings-nav-group">{section.group}</p>
+                        )}
                       <button
                         type="button"
-                        key={section.id}
+                        title={section.description}
                         aria-current={
                           place.section === section.id ? "page" : undefined
                         }
@@ -358,8 +366,9 @@ export default function Settings() {
                         <span>{section.label}</span>
                         <ArrowRight size={14} />
                       </button>
-                    );
-                  })}
+                    </Fragment>
+                  );
+                })}
               </nav>
             )}
           </aside>
@@ -372,7 +381,8 @@ export default function Settings() {
             data-settings-content
           >
             {place.section === "overview" ? (
-              <Overview
+              <SettingsOverview
+                session={session.data}
                 integrations={integrations.data}
                 integrationsError={integrations.error}
                 onNavigate={navigate}
@@ -390,6 +400,10 @@ export default function Settings() {
               />
             ) : place.section === "operations" ? (
               <RuntimeSettings />
+            ) : place.section === "security" ? (
+              <SessionSettings />
+            ) : place.section === "updates" ? (
+              <UpdateSettings />
             ) : place.section === "installation" ? (
               <InstallationSettings />
             ) : place.section === "delivery" ? (
@@ -477,232 +491,16 @@ function EditableGroup({
     </>
   );
 }
-function Overview({
-  integrations,
-  integrationsError,
-  onNavigate,
-}: {
-  integrations?: Integration[];
-  integrationsError?: unknown;
-  onNavigate: (place: SettingsLocation) => void;
-}) {
-  const settings = useAPI<PortalSettings>("/settings");
-  const session = useAPI<Session>("/session");
-  return (
-    <section className="settings-overview" aria-label="Обзор настроек">
-      <header className="settings-section-heading">
-        <LayoutDashboard size={22} />
-        <div>
-          <h2>Обзор</h2>
-          <p>Текущая конфигурация Платформы</p>
-        </div>
-      </header>
-      <section className="settings-overview-block">
-        <div className="settings-heading">
-          <h3>
-            <PlugZap size={18} />
-            Подключения
-          </h3>
-          <Button
-            size="sm"
-            onClick={() => onNavigate({ section: "integrations" })}
-          >
-            Все подключения
-            <ArrowRight size={15} />
-          </Button>
-        </div>
-        {integrations && !integrationsError && (
-          <p className="settings-overview-summary">
-            Всего: {integrations.length}
-            {" · Подключены: " +
-              integrations.filter(
-                (item) => item.enabled && item.status === "connected",
-              ).length}
-            {" · С ошибкой: " +
-              integrations.filter((item) => item.enabled && !!item.error)
-                .length}
-            {" · Выключены: " +
-              integrations.filter((item) => !item.enabled).length}
-          </p>
-        )}
-        {integrationsError ? (
-          <ErrorBox error={integrationsError} />
-        ) : !integrations ? (
-          <p role="status">Загрузка подключений…</p>
-        ) : integrations.length ? (
-          <div className="settings-overview-connections">
-            {[...integrations]
-              .sort(
-                (a, b) =>
-                  Number(!!b.error && b.enabled) -
-                  Number(!!a.error && a.enabled),
-              )
-              .slice(0, 3)
-              .map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className="settings-overview-connection"
-                  onClick={() =>
-                    onNavigate({
-                      section: "integrations",
-                      integration: item.id,
-                    })
-                  }
-                >
-                  <div>
-                    <strong>{item.name}</strong>
-                    <small>{kindLabels[item.kind] || item.kind}</small>
-                  </div>
-                  <Badge
-                    value={item.enabled ? item.status || "unknown" : "disabled"}
-                  />
-                  <span className="settings-overview-attempt">
-                    {item.enabled && item.error ? (
-                      <span className="settings-inline-error">
-                        {item.error}
-                      </span>
-                    ) : (
-                      <>
-                        Последний успех
-                        <br />
-                        {date(item.last_success)}
-                      </>
-                    )}
-                  </span>
-                  <ArrowRight size={16} />
-                </button>
-              ))}
-          </div>
-        ) : (
-          <Empty
-            title="Нет подключённых источников"
-            action={
-              <Button
-                onClick={() =>
-                  onNavigate({ section: "integrations", integration: "new" })
-                }
-              >
-                Добавить подключение
-              </Button>
-            }
-          />
-        )}
-        {integrations && integrations.length > 3 && (
-          <p className="settings-overview-summary">
-            Показано 3 из {integrations.length}. Все источники — в разделе
-            «Интеграции».
-          </p>
-        )}
-      </section>
-      {session.data?.features?.sftp_exchange && (
-        <section className="settings-overview-block">
-          <button
-            type="button"
-            className="settings-overview-connection"
-            onClick={() =>
-              onNavigate({
-                section: "integrations",
-                integration: SFTP_EXCHANGE_ID,
-              })
-            }
-          >
-            <div>
-              <strong>Приём выгрузок 1С</strong>
-              <small>SFTP · архивы филиалов</small>
-            </div>
-            <ArrowRight size={16} />
-          </button>
-        </section>
-      )}
-      {settings.error ? (
-        <ErrorBox
-          error={settings.error}
-          retry={() => void settings.refetch()}
-        />
-      ) : settings.isPending ? (
-        <p role="status">Загрузка общих параметров…</p>
-      ) : (
-        <div className="settings-overview-bottom">
-          <section className="settings-overview-block">
-            <div className="settings-heading">
-              <h3>
-                <Shield size={18} />
-                Публикация
-              </h3>
-              <Button
-                size="sm"
-                onClick={() => onNavigate({ section: "publication" })}
-              >
-                Открыть
-                <ArrowRight size={15} />
-              </Button>
-            </div>
-            <dl className="settings-facts">
-              <div>
-                <dt>Board</dt>
-                <dd>{settings.data.board_enabled ? "Включён" : "Выключен"}</dd>
-              </div>
-              <div>
-                <dt>Доступ</dt>
-                <dd>
-                  {!settings.data.board_enabled
-                    ? "Публикация выключена"
-                    : settings.data.board_anonymous
-                      ? "Без входа"
-                      : "После входа"}
-                </dd>
-              </div>
-              <div>
-                <dt>Ресурсы</dt>
-                <dd>{settings.data.board_resource_ids.length}</dd>
-              </div>
-              <div>
-                <dt>Заголовок</dt>
-                <dd>{settings.data.board_title || "—"}</dd>
-              </div>
-            </dl>
-          </section>
-          <section className="settings-overview-block">
-            <div className="settings-heading">
-              <h3>
-                <Clock size={18} />
-                Общие параметры
-              </h3>
-              <Button
-                size="sm"
-                onClick={() => onNavigate({ section: "general" })}
-              >
-                Открыть
-                <ArrowRight size={15} />
-              </Button>
-            </div>
-            <dl className="settings-facts">
-              <div>
-                <dt>Часовой пояс</dt>
-                <dd>{settings.data.timezone}</dd>
-              </div>
-              <div>
-                <dt>Порог устаревания</dt>
-                <dd>{settings.data.stale_after_seconds} с</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
-      )}
-    </section>
-  );
-}
 function SystemSettings() {
   const runtime = useAPI<Record<string, unknown>>("/runtime");
   const session = useAPI<Session>("/session");
   return (
-    <section className="settings-group" aria-label="Система">
+    <section className="settings-group" aria-label="Серверная конфигурация">
       <header className="settings-section-heading">
         <Server size={22} />
         <div>
-          <h2>Система</h2>
-          <p>Действующая конфигурация сервера</p>
+          <h2>Серверная конфигурация</h2>
+          <p>Технические параметры действующей установки PL</p>
         </div>
         <span className="settings-readonly">Только чтение</span>
       </header>

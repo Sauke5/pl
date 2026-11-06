@@ -54,10 +54,10 @@ test("deployment settings protect drafts, confirm restart and persist server pol
   await expect(page.getByLabel(/^Адрес PL/)).toHaveValue(
     "https://pl.example.test",
   );
-  await page.getByLabel(/^Разрешённые порты интеграций/).fill("80, 443, 9090");
+  await page.getByLabel(/^Порты подключаемых сервисов/).fill("80, 443, 9090");
   await page
     .getByRole("navigation", { name: "Разделы настроек" })
-    .getByRole("button", { name: "Общие параметры", exact: true })
+    .getByRole("button", { name: "Время и данные", exact: true })
     .click();
   await expect(
     page.getByRole("dialog", { name: "Есть несохранённые изменения" }),
@@ -96,7 +96,7 @@ test("deployment settings protect drafts, confirm restart and persist server pol
   };
   await page.reload();
   await expect(page.getByRole("status")).toContainText("Параметры применены");
-  await expect(page.getByLabel(/^Разрешённые порты интеграций/)).toHaveValue(
+  await expect(page.getByLabel(/^Порты подключаемых сервисов/)).toHaveValue(
     "80, 443, 9090",
   );
   await expect(

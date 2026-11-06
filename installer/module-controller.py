@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 import base64
 import fcntl
 import hashlib
@@ -1154,7 +1154,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.connection.settimeout(10)
 
     def log_message(self, *args):
-        pass  # No request bodies, credentials, endpoints or server internals in stdout.
+        pass  # Ordinary request bodies, credentials and endpoints are never logged.
+
+    def report_failure(self, error):
+        # Keep enough context to diagnose a failed transport without recording
+        # exception messages, request data, headers, absolute paths or locals.
+        if getattr(self, '_response_started', False) and isinstance(error, (BrokenPipeError, ConnectionResetError)):
+            return
+        try:
+            sources = {'module-controller.py', 'delivery.py', 'module-network.py',
+                       *[kind + '-controller.py' for kind in ('doska', 'sftpgo', 'wayline', 'forms',
+                           'grafana', 'netmap', 'bookstack', 'xray', 'alertmanager')]}
+            frames, frame, examined = [], error.__traceback__, 0
+            while frame is not None and examined < 64:
+                examined += 1
+                code = frame.tb_frame.f_code
+                name = Path(code.co_filename).name
+                if name in sources:
+                    frames.append({'file': name, 'line': frame.tb_lineno, 'function': code.co_name[:80]})
+                frame = frame.tb_next
+            known = {'ValueError', 'OSError', 'KeyError', 'TypeError', 'TimeoutError', 'BrokenPipeError',
+                     'ConnectionResetError', 'BlockingIOError', 'PermissionError', 'FileNotFoundError'}
+            routes = {'/v1/doska/transport', '/v1/sftpgo/stream', '/v1/read', '/v1/operations',
+                      '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request'}
+            record = {'event': 'controller_failure', 'time_ns': time.time_ns(),
+                      'rpc': self.path if self.path in routes else 'other',
+                      'error_type': type(error).__name__ if type(error).__name__ in known else 'ControllerError',
+                      'response_started': bool(getattr(self, '_response_started', False)), 'frames': frames[-6:]}
+            if type(getattr(error, 'errno', None)) is int and 0 <= error.errno < 4096:
+                record['errno'] = error.errno
+            os.write(2, (json.dumps(record, separators=(',', ':')) + '\n').encode())
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass  # Diagnostics must not replace the original HTTP result.
 
     def do_GET(self):
         self.handle_request()
@@ -1167,7 +1198,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # native streams may outlive the request that stops the core API. They
         # are rejected while an upgrade is active and closed by quiescence.
         if (self.path.startswith(('/v1/delivery/', '/v1/installation/')) or self.path == '/v1/operations'
-                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream')):
+                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream')
+                or self.command == 'POST' and self.path in (
+                    '/v1/read', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request')):
             self._handle_request()
             return
         try:
@@ -1205,6 +1238,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if len(raw) != length or not authenticated(self.server.key, self.headers, self.command, self.path, raw):
                 self.reply(403, {'error': 'Controller authentication refused'})
                 return
+            if self.command == 'POST' and self.path in (
+                    '/v1/read', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request'):
+                self.handle_poll_request(json.loads(raw))
+                return
             if self.command == 'POST' and self.path in ('/v1/delivery/proxy/status', '/v1/delivery/proxy/configure', '/v1/delivery/proxy/test'):
                 result = getattr(self.server.controller.delivery().github_proxy(), self.path.rsplit('/', 1)[1])(json.loads(raw))
             elif self.command == 'POST' and self.path in ('/v1/delivery/status', '/v1/delivery/check', '/v1/delivery/upgrade', '/v1/delivery/recover', '/v1/delivery/module-upgrade'):
@@ -1233,18 +1270,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 result = self.server.controller.execute(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/grafana/request':
                 result = self.server.controller.grafana().request(json.loads(raw))
-            elif self.command == 'POST' and self.path == '/v1/wayline/request':
-                result = self.server.controller.wayline().request(json.loads(raw))
             elif self.command == 'POST' and self.path in ('/v1/xray/prepare', '/v1/xray/validate', '/v1/xray/status'):
                 action = self.path.rsplit('/', 1)[1]
                 result = getattr(self.server.controller.xray(), action)(json.loads(raw))
-            elif self.command == 'POST' and self.path in ('/v1/alertmanager/prepare', '/v1/alertmanager/validate', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/alertmanager/preview', '/v1/alertmanager/test-notification'):
+            elif self.command == 'POST' and self.path in ('/v1/alertmanager/prepare', '/v1/alertmanager/validate', '/v1/alertmanager/preview', '/v1/alertmanager/test-notification'):
                 action = self.path.rsplit('/', 1)[1].replace('-', '_')
                 result = getattr(self.server.controller.alertmanager(), action)(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/configuration/validate':
                 result = self.server.controller.validate_configuration(json.loads(raw))
-            elif self.command == 'POST' and self.path == '/v1/read':
-                result = self.server.controller.read(json.loads(raw))
             elif self.command == 'GET' and self.path.startswith('/v1/instances/') and not raw:
                 result = self.server.controller.get(self.path[len('/v1/instances/'):])
             else:
@@ -1257,6 +1290,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             self.reply(409, {'error': str(error)})
         except (ValueError, OSError, KeyError, TypeError) as error:
+            self.report_failure(error)
             if self._response_started:
                 self.close_connection = True
                 return
@@ -1285,6 +1319,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     'xray_port_in_use', 'xray_bind_unavailable'}:
                 result['code'] = code
             self.reply(400, result)
+
+    def handle_poll_request(self, payload):
+        # These routes are authenticated above. Prometheus/Alertmanager expose
+        # finite readers; Wayline also carries writes, so admit only its three
+        # exact collector reads while committed modules are being reconciled.
+        read_only = self.path != '/v1/wayline/request' or (
+            isinstance(payload, dict)
+            and set(payload) == {'instance_id', 'method', 'path', 'query', 'content_type', 'body'}
+            and payload['method'] == 'GET' and payload['content_type'] == '' and payload['body'] == ''
+            and ((payload['path'] == '/api/v1/targets' and payload['query'] == '')
+                 or (payload['path'] == '/api/v1/checks/latest' and payload['query'] in ('kind=path', 'kind=iperf'))))
+        controller = self.server.controller
+        with ExitStack() as admission:
+            if getattr(controller, 'on_demand', False) is True:
+                try:
+                    admission.enter_context(controller.delivery_guard(allow_refresh=read_only))
+                except ValueError:
+                    self.reply(503, {'error': 'Installation update is active; retry after recovery'})
+                    return
+            if self.path == '/v1/read':
+                result = controller.read(payload)
+            elif self.path == '/v1/wayline/request':
+                result = controller.wayline().request(payload)
+            else:
+                result = getattr(controller.alertmanager(), self.path.rsplit('/', 1)[1])(payload)
+            self.reply(200, result)
 
     def handle_doska_transport(self):
         return self.handle_application_stream('doska', 26 * 1024 * 1024)

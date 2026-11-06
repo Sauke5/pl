@@ -53,12 +53,12 @@ export function GeneralSettings({ value }: { value: Settings }) {
   });
   useDraftRegistration(state);
   return (
-    <section className="settings-group" aria-label="Общие параметры">
+    <section className="settings-group" aria-label="Время и данные">
       <header className="settings-section-heading">
         <Clock size={22} />
         <div>
-          <h2>Общие параметры</h2>
-          <p>Время и актуальность данных Платформы</p>
+          <h2>Время и данные</h2>
+          <p>Как показывать время и определять актуальность показателей</p>
         </div>
       </header>
       <form
@@ -101,9 +101,9 @@ export function GeneralSettings({ value }: { value: Settings }) {
           </FormField>
           <FormField
             name="stale_after_seconds"
-            label="Порог устаревания, с"
+            label="Данные устаревают через, с"
             errors={state.errors}
-            hint="После этого срока данные мониторинга отмечаются устаревшими. От 30 секунд до суток."
+            hint="Если за это время не было успешного сбора, PL пометит показатели как устаревшие. Например, 180 секунд — 3 минуты. Допустимо от 30 секунд до суток."
           >
             <input
               {...inputProps("stale_after_seconds", state.errors)}
@@ -224,12 +224,14 @@ export function PublicationSettings({ value }: { value: Settings }) {
     });
   }
   return (
-    <section className="settings-group" aria-label="Публикация">
+    <section className="settings-group" aria-label="Страница для пользователей">
       <header className="settings-section-heading">
         <Shield size={22} />
         <div>
-          <h2>Публикация</h2>
-          <p>Ресурсы и доступ к Board</p>
+          <h2>Страница для пользователей</h2>
+          <p>
+            Выберите сервисы для общей страницы Board и настройте доступ к ней
+          </p>
         </div>
       </header>
       <form

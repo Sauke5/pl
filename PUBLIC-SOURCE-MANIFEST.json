@@ -16844,6 +16844,11 @@
       "size": 3886
     },
     {
+      "path": "docs/releases/0.5.4.json",
+      "sha256": "bca715531ec7e65463e7e98ce0e4d2b5bee887dbf8fb039a576d696b44923288",
+      "size": 3140
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16910,8 +16915,8 @@
     },
     {
       "path": "installer/doska-controller.py",
-      "sha256": "543cae6140bf2c004a6df53db712eec6a1a7584d3b744d6af07ab0f7e24fbbd4",
-      "size": 45444
+      "sha256": "12be1041351d033c1fe2201ca25d0d8ffc3bbdf36e9d9ab99c624865b3d8b8fd",
+      "size": 45770
     },
     {
       "path": "installer/forms-controller.py",
@@ -16990,8 +16995,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "ddb161c56d35f28b6987a35653882c667c5f5884c827313b26846734b42312d9",
-      "size": 78061
+      "sha256": "bd67bd2ac9bfd9dc14c88d3a9af17ae83162bdc2ebecebd3bacd2f1e6af89baf",
+      "size": 81923
     },
     {
       "path": "installer/module-network.py",
@@ -17010,8 +17015,8 @@
     },
     {
       "path": "installer/netmap-controller.py",
-      "sha256": "d0958b1b1f866bf74eb4ea104a4e911f670aa1b0ad963839437db260afb98716",
-      "size": 47858
+      "sha256": "59de642000bc9018c59a84f71792ae07941b89ee5cfc32d0758cfc7017d71e68",
+      "size": 48033
     },
     {
       "path": "installer/netmap-standalone-package.py",
@@ -17130,8 +17135,8 @@
     },
     {
       "path": "installer/tests/test_doska_controller.py",
-      "sha256": "aeb2e8ce924338ad86742b7269e3d96145e56277cfe5b2580477ee16ca2e5403",
-      "size": 16103
+      "sha256": "ba05e9586ddc2f21788d49d31de588d7d49b1bcb1d650114cea320baa5c4192e",
+      "size": 18124
     },
     {
       "path": "installer/tests/test_doska_stream_cancellation.py",
@@ -17165,8 +17170,8 @@
     },
     {
       "path": "installer/tests/test_host_status.py",
-      "sha256": "8df93b725004f8c88551aa42b0060debffbc58344008c51d4e2bfc4399725590",
-      "size": 2059
+      "sha256": "c3e49c3c6d2811071d891fc2aa16b4d0492230aa778c4165a4f6a8751343878f",
+      "size": 10419
     },
     {
       "path": "installer/tests/test_icmp_install.py",
@@ -17260,8 +17265,8 @@
     },
     {
       "path": "installer/tests/test_netmap_controller.py",
-      "sha256": "1b18695ca6be4a66ada4b345923311e2a6c371bdca0ecb6cd1bb711804a92e4b",
-      "size": 49431
+      "sha256": "aa005943416a566d1d821b064eff0f8f7255451e71ce66d3edcc7fcb017fa7fd",
+      "size": 53531
     },
     {
       "path": "installer/tests/test_netmap_gitea_routing.py",
@@ -17855,8 +17860,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ADSettings.tsx",
-      "sha256": "77d91707b4133ae08a25babdaced785bf3194b15efe3ce894d396058cb2e69d5",
-      "size": 10954
+      "sha256": "c195ebfda459e276360232fc695af6e5a04ff2671e7b4c828a711fcdc9f4ad6a",
+      "size": 11447
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ActionNotifications.tsx",
@@ -17865,13 +17870,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AlertmanagerModule.tsx",
-      "sha256": "3864b1cd54a52efa0a546c0e95818703c16b30eb59ebc25e4dedc76aa7204b04",
-      "size": 63987
+      "sha256": "81079ce3b78ecc18b2b07acccd4d5ceeffd613bb36072d7643b50db8d2569b7a",
+      "size": 74511
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/App.tsx",
-      "sha256": "179f027b58dd4257ec6310e797ce659db665b806493923dc63d2a79cd8dd81a7",
-      "size": 49766
+      "sha256": "bfd7605c2436e93787663889aa133013c790cf478e05a691c017e424bc8ceb17",
+      "size": 48242
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AuthScenes.tsx",
@@ -17895,8 +17900,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ConnectionDetails.tsx",
-      "sha256": "1be86158c23db11f3bf5b74f558360a02b1b81a18b8ba5cab99f3efd2b35706a",
-      "size": 15821
+      "sha256": "74244cdd97cee38d5777482b663f5df0a730ff7b257d56a9083dcebe766a7a99",
+      "size": 10083
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/DashboardLayout.tsx",
@@ -17905,8 +17910,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/DeliveryProxySettings.tsx",
-      "sha256": "81b00c97152a20da848f7d905d05ff2ad98c9e4355fc3409df5a2872f862e6da",
-      "size": 21703
+      "sha256": "35d67831067fcb93c8000dead073357b735d4a35ed10bf9f2c41f62c1519de89",
+      "size": 21810
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/DoskaResourceTasks.tsx",
@@ -17945,8 +17950,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/InstallationSettings.tsx",
-      "sha256": "dcb56b9af5eaa24f15066af88366377fc299a16d776b0a475b5e5da927390c55",
-      "size": 19789
+      "sha256": "8d9ab786eadd4ee45b2a80a70e9eb9824df73d21eae90e4d4e9bafd34d351923",
+      "size": 20072
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/InstallationTransition.tsx",
@@ -18080,13 +18085,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/RuntimeSettings.tsx",
-      "sha256": "adf1688af3806551245c9a62304cf018e2d1f1cdb84017251ebe0ae849106d2a",
-      "size": 13068
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/src/SFTPAdministration.tsx",
-      "sha256": "1d0bd83aed50eb1bf92ae070b21f99835daed8d3c78b811c297bcd6e43aba7f7",
-      "size": 6404
+      "sha256": "b83e632b140da5890157adbbd6ab77cb142a814b0ba70fbe1ee0f479dc6d0c1e",
+      "size": 13488
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/SFTPGo.tsx",
@@ -18104,19 +18104,14 @@
       "size": 4800
     },
     {
-      "path": "monitoring/source/it-portal/frontend/src/SFTPServer.tsx",
-      "sha256": "5390ed9e4c771c82c40cf83844b38781cc467cbe234f17403291a797f97800c6",
-      "size": 57726
-    },
-    {
       "path": "monitoring/source/it-portal/frontend/src/ServerClock.tsx",
       "sha256": "9504d3811ae920cf1201cf2c74f8d4fb8a33694a1189d0495d37ea5a1abeb3bd",
       "size": 2665
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Settings.tsx",
-      "sha256": "f9043525e080eab933d0ddc9d592a3261732119adf5276b51e7aace2ba463744",
-      "size": 27044
+      "sha256": "c7bbf67a7474781bba27aaeee00420d90beee9e45e59f63549bd2c1697f5575e",
+      "size": 20245
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Systems.tsx",
@@ -18135,8 +18130,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpdateSettings.tsx",
-      "sha256": "fca49d2f1446ce68d14e0676260a0a9ff90465f83f087e52a5e28b18036b75ce",
-      "size": 23350
+      "sha256": "0936ed11b745de9c8835b83ebc5400a7cb4b765cb8e1ea177f4a7409f84194c4",
+      "size": 23344
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpgradeExperience.tsx",
@@ -18190,8 +18185,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/alertmanager-module.css",
-      "sha256": "5795a7af738c7d0c7351a10051a1d366fee8d046cc4dac495e6132300051f612",
-      "size": 6074
+      "sha256": "5fd265e9f03a9ae321568fc34fdb942790c1d4b776f559b583b689482ef7bc31",
+      "size": 8733
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/alertmanager.css",
@@ -18435,8 +18430,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/Groups.tsx",
-      "sha256": "cf00cb09c2831b17f5b8a22c9a08ea4e0f4a53c364f578dc24f4dc8b1cffd55b",
-      "size": 17865
+      "sha256": "eb5b1eacad22d1dc4aa389f11073fa3a6ae5b24939a6caa0d589a8ade792eb19",
+      "size": 18177
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/History.tsx",
@@ -18445,13 +18440,18 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/Integrations.tsx",
-      "sha256": "e105eec307bff0b5aea07e2b1b049cc4ee804d746a3fa3f8c1bf545fef7be3a2",
-      "size": 38241
+      "sha256": "becc8685e1056ee4c90b49ee9e9f8669491f28b5957d9ab18c35fad8e48425e3",
+      "size": 37647
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/settings/Overview.tsx",
+      "sha256": "67bf911a6d737814e8cfc821e375e9f2f4a7a00207bd29e15bdd8e018b279ec0",
+      "size": 12221
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/model.ts",
-      "sha256": "6a394af1f0b53065b229111c6535bbc9724aeb5f1b0ef038a726bfcb087fb502",
-      "size": 19477
+      "sha256": "7e9ee2f479c34b9b30c1310e5c1c90df989370ba8d51c369c064245852c65be0",
+      "size": 22156
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/navigation.ts",
@@ -18460,23 +18460,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/settings.css",
-      "sha256": "d6680e99fa6af886b9ccb784190685412f2a03265ee58105571baaf944341bd5",
-      "size": 17140
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/src/sftp-administration.css",
-      "sha256": "5c7fb326eacfa404a5e247f8b3f7e82fc67f9b12a5a8ec0dfbe697f52dad1d4d",
-      "size": 1675
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/src/sftp-server.css",
-      "sha256": "e4b6994eb2ca0c67d1f3a59e8a49c951cbd478087995322823cb3f245ed32f6b",
-      "size": 9770
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/src/sftpData.ts",
-      "sha256": "cd15d39e9a61efba900c6c67343680e0feaabac081795c8fea54daec1190bff4",
-      "size": 12876
+      "sha256": "477bf5b8dcaccfa933e95531571c6cc048273a4bc684e477ad1300123c9226f3",
+      "size": 18955
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/sftpgo.css",
@@ -18490,8 +18475,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/types.ts",
-      "sha256": "71375d441ef9d0889de3edb5637f3cc7d3929fc5e41e8f8b6e8280eb7983cf6d",
-      "size": 6947
+      "sha256": "4d5717abe3a24d258c948aa9471bfd9465938b20376f8cfa973b693f55d7f571",
+      "size": 6918
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/upgrade-experience.css",
@@ -18525,18 +18510,18 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/ci-suites.json",
-      "sha256": "16f0aad14eee48c11d747b16a83e6916bb420bbbf36b8d8402c39100fe2c8c0f",
-      "size": 17589
+      "sha256": "dd5ef9fcdb1b0e9827fabee6a3f044f202cd15dddb839ff950b825a515074a21",
+      "size": 16366
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/ad-settings.spec.ts",
-      "sha256": "66613ea5c8e0805eac0a415d960a612424d3618f8cf09e9f86c04c170fd98ee3",
-      "size": 7093
+      "sha256": "a6dad820cdd6831e1516868f20483e2a539b12d7cb584f98efaefed6ddf402af",
+      "size": 7146
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/alertmanager-configuration.spec.ts",
-      "sha256": "0759a855007414891f73eea03e6561e0115e1ba61ec1f1666fafbe6265faa42c",
-      "size": 33024
+      "sha256": "7d15b0a59a39fc9f053a907c4d2ea7cf6604c14e370ac62fb69e137d8b74962e",
+      "size": 42723
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/auth-pages.spec.ts",
@@ -18585,8 +18570,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/delivery.spec.ts",
-      "sha256": "cf97fc8b3dc5ad8fcb9ce7521c3c12a7096572094b0e5add3c85982010f5da89",
-      "size": 8049
+      "sha256": "bf08522172ec8b54366a50c5e30cf45dfbc13117490b0dfa2d13d66182bf19d6",
+      "size": 8043
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/directory-return.spec.ts",
@@ -18650,8 +18635,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/installation.spec.ts",
-      "sha256": "2e17a56d6284541a9b3b8d33539708b7f36c595953082ce17cf6931ee9b5dfcf",
-      "size": 10258
+      "sha256": "b1907290251e23106eb42b069ffbb968327dbdcbdcafbcaaa4925b1503791f83",
+      "size": 10251
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/iperf.spec.ts",
@@ -18695,13 +18680,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/night-theme.spec.ts",
-      "sha256": "f5ae029b77d47b671a439bbe6be8f0aa084426c060dcdea97a8706e32fc19554",
-      "size": 11921
+      "sha256": "7796b03fc32b49c5a9b7161fa145e37e5e25b5d386b8400333c7c25bb988e27b",
+      "size": 11368
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/pl-merge.spec.ts",
-      "sha256": "7026a89e53b7ad3b902155c87f5d58f061c0aa4607e670f2140585f642f7e3eb",
-      "size": 4939
+      "sha256": "92f0f19d56231d60eb05e84674f62fef4307f4a9eeeac731f0188ba328ab18f2",
+      "size": 4480
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/portal.spec.ts",
@@ -18745,8 +18730,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/runtime-settings.spec.ts",
-      "sha256": "1a0bf284208c211c3b38f52724f53960a1fed63e83e7fa41b7ef065665cda38a",
-      "size": 5400
+      "sha256": "6463eced4fbcc69ed3e5ebc84d670ca73b5cf3df1912c7e8f40943b16417ce3b",
+      "size": 5623
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/scaffold-ui.spec.ts",
@@ -18755,13 +18740,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-connections.spec.ts",
-      "sha256": "f1941fd95fdd159f6a4e2553550fb46a6ff6b8962975180b13080e3ea56ba4cd",
-      "size": 14235
+      "sha256": "a8d9bcda1c26b669f8bd0a433ffc3474d620e5a2a6ac7207462ede28b2b54be1",
+      "size": 10545
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-live.spec.ts",
-      "sha256": "efe0b77b45caa87ae552b8bc0402c213154d50c7c4333ed98215f99687f72f2e",
-      "size": 6181
+      "sha256": "9e6d0839833966c4396c2404f4e002d99e6b63a10fa917a5b55169aaba2fff3c",
+      "size": 6202
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-refresh.spec.ts",
@@ -18770,23 +18755,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/settings-workspace.spec.ts",
-      "sha256": "579aace747c30bf32ad9631e0cb91f1f61985e6c6ee8f12bb8c817960b2713ba",
-      "size": 18456
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-administration.spec.ts",
-      "sha256": "108ca76c555adee8ce1755254c55d9d8b47a2106abe423566003dc1a70ff703b",
-      "size": 11081
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-auto-seen.spec.ts",
-      "sha256": "fa9697ece168d5d5ccdaa61e8c93cf962e8f9fe7636a877d44a44b61f0920be1",
-      "size": 8785
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/tests/e2e/sftp-delete.spec.ts",
-      "sha256": "96b5149e41f189ca474363136fe4a509b6f79bbcd5ea9b22699614d51a527427",
-      "size": 13166
+      "sha256": "d7b7603d91e9919ad68bb02f6549fcc25cbd91acf430b612759bde005a4fc7aa",
+      "size": 20137
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/sftpgo-module.spec.ts",
@@ -18810,8 +18780,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/upgrade-experience.spec.ts",
-      "sha256": "426af797f097e08d35b3e23cb74e9190ad7a727197d956b6a73a021c493815c9",
-      "size": 38003
+      "sha256": "c7996c598f38daca5d36991fbd88d3d41773917024ee09ff403bbd3497fa1605",
+      "size": 38005
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/xray-configuration.spec.ts",
@@ -18820,13 +18790,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/fixtures/relationsExchange.ts",
-      "sha256": "6262f9f8fa829243279dbbb8ec2bd45f642758bfdcaf39abe30310e448530c50",
-      "size": 6635
+      "sha256": "702a9fefc9f0e8c6814835bbb4b83f9d94f1c1d91d444f3113769ba2aea1e15b",
+      "size": 5645
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/fixtures/settingsWorkspace.ts",
-      "sha256": "3170150340b23209b58dfc867024e9117df63d96cdc9a509fb3e05643dabc4fc",
-      "size": 11344
+      "sha256": "0fc645424df30aa383899e516a49ad7db4ff60013a8429c488b9774aec569db7",
+      "size": 12232
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/fixtures/systemIcons.ts",
@@ -18857,11 +18827,6 @@
       "path": "monitoring/source/it-portal/frontend/tests/unit/resourceIcons.test.ts",
       "sha256": "e5b7040b397d3af2839f1bcc9fd4ff23c8f85d15998aa413a8307be326dc2e4d",
       "size": 6177
-    },
-    {
-      "path": "monitoring/source/it-portal/frontend/tests/unit/sftpData.test.ts",
-      "sha256": "298275b91e67c2eab92458b71eae69605a7d89fb6561bb4393c60b288f34f708",
-      "size": 8685
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/unit/theme-runtime.test.cjs",
@@ -19007,11 +18972,6 @@
       "path": "monitoring/source/it-portal/internal/model/sftp.go",
       "sha256": "272fac2e873f8b91349f777a177b85fe827cba07c30eefb76648e01bc0635b55",
       "size": 3380
-    },
-    {
-      "path": "monitoring/source/it-portal/internal/model/sftp_exchange.go",
-      "sha256": "e339816bd5167868ab8fff7d5810a798f9d9132ea4f617499f63c9bf5fa2089d",
-      "size": 868
     },
     {
       "path": "monitoring/source/it-portal/internal/model/systems.go",
@@ -19405,8 +19365,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/mailcow_test.go",
-      "sha256": "d6070c38d62f93ca624d4bcee5c480f810d1c7f1d0125280262c70976dfb8ee2",
-      "size": 23085
+      "sha256": "4b07fe49e4578cdbe9ae464d0ee89190efe2d5f0be5de4a24b05f4b8b24b822c",
+      "size": 23131
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/managed_grafana_test.go",
@@ -20250,8 +20210,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/managed_applications.go",
-      "sha256": "85d1ebfc490c5197259f6e9d2f721fb20286fc6b16865aca47c636b80413c08f",
-      "size": 7889
+      "sha256": "50cd1e63a77444f708740562293b5125b3d0a47b3339c067459841030b03a560",
+      "size": 7860
     },
     {
       "path": "monitoring/source/it-portal/internal/server/managed_applications_test.go",
@@ -20500,8 +20460,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/server.go",
-      "sha256": "9241df5e6575f605335fada89e329442790e23618282cb58cb7ae058b02a75e4",
-      "size": 27641
+      "sha256": "af72f34c6350da47ccac786c78b41c2c96eda9a719761d19c3074946256e9cc9",
+      "size": 27572
     },
     {
       "path": "monitoring/source/it-portal/internal/server/service_card_eligibility.go",
@@ -20602,16 +20562,6 @@
       "path": "monitoring/source/it-portal/internal/server/sftp_delete_test.go",
       "sha256": "21859faa987c5a908e631f2a31b3a8e314f597a5435659fa1f9f7d1a6897f33f",
       "size": 9814
-    },
-    {
-      "path": "monitoring/source/it-portal/internal/server/sftp_exchange.go",
-      "sha256": "c013b1f8481e4679b7eb9e76e7064a0490d1dd63ec413efacee9953cd0c07d7d",
-      "size": 1100
-    },
-    {
-      "path": "monitoring/source/it-portal/internal/server/sftp_exchange_test.go",
-      "sha256": "27bee8c246a4ccd74571d2740d4c0481ef11c2cffa32afa76375aaa18b0095d9",
-      "size": 2800
     },
     {
       "path": "monitoring/source/it-portal/internal/server/sftp_provider.go",
@@ -21057,16 +21007,6 @@
       "path": "monitoring/source/it-portal/internal/store/sftp_delete_test.go",
       "sha256": "37aefc21b697c1446c802ac47e29a319d7ae428ffdba4151fc4d3272a6ac01ee",
       "size": 4294
-    },
-    {
-      "path": "monitoring/source/it-portal/internal/store/sftp_exchange.go",
-      "sha256": "30b6758cbc5f9ef902c4538d3934264969b2372f5e0530e67a0a2a3bbec73143",
-      "size": 2391
-    },
-    {
-      "path": "monitoring/source/it-portal/internal/store/sftp_exchange_test.go",
-      "sha256": "07c4fb40afd7708f576c5382b179a554443aa72c65f7663fc392882243f29dc5",
-      "size": 3916
     },
     {
       "path": "monitoring/source/it-portal/internal/store/sftp_path.go",

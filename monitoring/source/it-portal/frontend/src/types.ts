@@ -120,7 +120,6 @@ export type Session = {
   features?: {
     doska?: boolean;
     sftp?: boolean;
-    sftp_exchange?: boolean;
     forms?: boolean;
   };
   local_password_min_length?: number;

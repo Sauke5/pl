@@ -62,8 +62,12 @@ test("PL operations draft remains protected when navigating to modules", async (
 }) => {
   await fixture(page);
   await page.goto("/#settings");
-  await page.getByRole("button", { name: "Эксплуатация", exact: true }).click();
-  const lifetime = page.getByRole("spinbutton", { name: /^Срок новой сессии/ });
+  await page
+    .getByRole("button", { name: "Пароли и сессии", exact: true })
+    .click();
+  const lifetime = page.getByRole("spinbutton", {
+    name: /^Повторный вход через/,
+  });
   await lifetime.fill("15");
   await page
     .getByRole("link", { name: "Установленные модули", exact: true })
@@ -83,24 +87,6 @@ test("PL operations draft remains protected when navigating to modules", async (
   ).toBeVisible();
 });
 
-test("unconfigured SFTP does not make requests to the optional service", async ({
-  page,
-}) => {
-  const requests = await fixture(page);
-  await page.goto("/sftp-server");
-  await expect(
-    page.getByText("Файловый сервис не подключён", { exact: true }),
-  ).toBeVisible();
-  expect(
-    requests.filter(
-      (path) =>
-        path.startsWith("/sftp-server") ||
-        path.startsWith("/sftpgo") ||
-        /^\/modules\/[^/]+\/sftpgo(?:\/|$)/.test(path),
-    ),
-  ).toEqual([]);
-});
-
 test("optional local admin password change and local users remain available in settings", async ({
   page,
 }) => {
@@ -110,7 +96,9 @@ test("optional local admin password change and local users remain available in s
     if (request.method() === "POST") writes.push(request.url());
   });
   await page.goto("/#settings");
-  await page.getByRole("button", { name: "Пользователи", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Локальные пользователи", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Локальные пользователи", exact: true }),
   ).toBeVisible();

@@ -1,8 +1,5 @@
 import type { Page } from "@playwright/test";
-import type {
-  ConfigurationHistory,
-  SFTPExchangeState,
-} from "../../src/ConnectionDetails";
+import type { ConfigurationHistory } from "../../src/ConnectionDetails";
 import type { Integration, Resource } from "../../src/types";
 import { settingsWorkspaceFixture } from "./settingsWorkspace";
 
@@ -71,41 +68,6 @@ export async function relationsExchangeFixture(
     created_at: now,
     updated_at: now,
   }));
-  const exchange: SFTPExchangeState = {
-    observed_at: now,
-    provider: {
-      configured: true,
-      status: "healthy",
-      last_attempt_at: now,
-      last_success_at: now,
-      quarantined_receipts: 0,
-    },
-    branches: [
-      {
-        id: "branch-moscow",
-        branch: "msk",
-        label: "Москва",
-        folder: "branches/msk",
-        received_count: 3,
-        last_received: {
-          id: "latest-receipt",
-          filename: "latest-branch-export-20261026.zip",
-          size_bytes: 512000,
-          received_at: now,
-          sender: "branch.sender",
-          availability: "deleted",
-        },
-      },
-      {
-        id: "branch-lab",
-        branch: "lab",
-        label: "Тестовый филиал",
-        folder: "branches/lab",
-        received_count: 0,
-        last_received: null,
-      },
-    ],
-  };
   const configuration: ConfigurationHistory = {
     integration_id: oxidizedID,
     observed_at: now,
@@ -145,7 +107,6 @@ export async function relationsExchangeFixture(
     base,
     oxidized,
     resources,
-    exchange,
     configuration,
     requests,
   };
@@ -164,8 +125,6 @@ export async function relationsExchangeFixture(
     if (path === "/resources") return route.fulfill({ json: resources });
     if (/^\/resources\/[^/]+\/inventory$/.test(path))
       return route.fulfill({ json: { sources: [] } });
-    if (path === "/sftp-exchange")
-      return route.fulfill({ json: state.exchange });
     const integrationHistory =
       /^\/integrations\/([^/]+)\/configuration-history$/.exec(path);
     if (integrationHistory)

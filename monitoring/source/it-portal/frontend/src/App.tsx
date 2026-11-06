@@ -43,8 +43,6 @@ import { WorkspaceLegacyRoute } from "./WorkspaceLegacyRoute";
 import { catalogResourceId } from "./doskaCatalog";
 import { lazy, Suspense } from "react";
 const SFTPGoPage = lazy(() => import("./SFTPGoPage"));
-const SFTPServer = lazy(() => import("./SFTPServer"));
-const SFTPAdministration = lazy(() => import("./SFTPAdministration"));
 const Monitoring = lazy(() => import("./Monitoring"));
 const FilesModule = lazy(() => import("./FilesModule"));
 const Notifications = lazy(() => import("./Notifications"));
@@ -138,13 +136,6 @@ const icons = {
 function route() {
   if (location.pathname === "/sftpgo" || location.pathname === "/sftpgo/")
     return "sftpgo";
-  if (location.pathname === "/sftp-adm" || location.pathname === "/sftp-adm/")
-    return "sftp-adm";
-  if (
-    location.pathname === "/sftp-server" ||
-    location.pathname === "/sftp-server/"
-  )
-    return "sftp-server";
   if (location.pathname === "/proxy-4.14") return "proxy";
   const [page, query] = location.hash.replace("#", "").split("?");
   if (
@@ -156,8 +147,6 @@ function route() {
 }
 const knownPages = new Set([
   "sftpgo",
-  "sftp-adm",
-  "sftp-server",
   "proxy",
   "home",
   "catalog",
@@ -181,10 +170,6 @@ function isMissingLocation(page = route()) {
       location.pathname !== "/reports/" &&
       location.pathname !== "/sftpgo" &&
       location.pathname !== "/sftpgo/" &&
-      location.pathname !== "/sftp-server" &&
-      location.pathname !== "/sftp-server/" &&
-      location.pathname !== "/sftp-adm" &&
-      location.pathname !== "/sftp-adm/" &&
       location.pathname !== "/proxy-4.14") ||
     !knownPages.has(page)
   );
@@ -214,6 +199,14 @@ export default function App() {
   );
 }
 function PortalApp() {
+  useEffect(() => {
+    if (
+      ["/sftp-server", "/sftp-server/", "/sftp-adm", "/sftp-adm/"].includes(
+        location.pathname,
+      )
+    )
+      location.replace("/#files");
+  }, []);
   const session = useAPI<Session>("/session");
   useEffect(() => {
     if (session.error) requestUpgradeStatus();
@@ -509,8 +502,6 @@ function PortalApp() {
                 onClick={() => {
                   if (
                     location.pathname === "/proxy-4.14" ||
-                    route() === "sftp-server" ||
-                    route() === "sftp-adm" ||
                     route() === "sftpgo"
                   ) {
                     try {
@@ -560,35 +551,6 @@ function PortalApp() {
           fallback={<div role="status">Загрузка файлового сервера…</div>}
         >
           <SFTPGoPage admin={s.user?.admin === true} />
-        </Suspense>
-      ) : (route() === "sftp-adm" || route() === "sftp-server") &&
-        !s.features?.sftp ? (
-        <div className="auth-state">
-          <Empty
-            title="Файловый сервис не подключён"
-            detail="Администратор может установить SFTPGo из каталога модулей Платформы."
-            action={<a href="/">На главную</a>}
-          />
-        </div>
-      ) : route() === "sftp-adm" ? (
-        <Suspense
-          fallback={
-            <div className="auth-state" role="status">
-              Загрузка файлового сервера…
-            </div>
-          }
-        >
-          <SFTPAdministration session={s} />
-        </Suspense>
-      ) : route() === "sftp-server" ? (
-        <Suspense
-          fallback={
-            <div className="auth-state" role="status">
-              Загрузка файлового сервиса…
-            </div>
-          }
-        >
-          <SFTPServer session={s} />
         </Suspense>
       ) : s.user?.admin ? (
         <Admin session={s} />

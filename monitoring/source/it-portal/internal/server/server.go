@@ -158,9 +158,6 @@ func (s *Server) Handler() http.Handler {
 	s.RegisterInstallationRoutes(m)
 	s.RegisterSettingsProbe(m)
 	s.RegisterConfigurationHistoryRoutes(m)
-	if !s.Config.PortableRelease {
-		s.RegisterSFTPExchangeRoutes(m)
-	}
 	s.registerWorkspaceRoutes(m)
 	if s.Providers != nil {
 		h := s.WaylineProxy(s.Config.WaylineIntegrationID, s.Providers.WaylineProxyTransport)

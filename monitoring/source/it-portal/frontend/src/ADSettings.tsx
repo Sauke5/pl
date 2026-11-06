@@ -120,7 +120,7 @@ export function ADSettings() {
   }
   useDraftRegistration({ dirty, busy, save: () => apply(true), discard });
   return (
-    <Panel title="Active Directory" icon={<KeyRound size={20} />}>
+    <Panel title="Вход через домен" icon={<KeyRound size={20} />}>
       <p className="muted">
         Вход с учётными записями домена. Участники выбранной группы получают
         права администратора PL; остальные пользователи домена — доступ к
@@ -165,7 +165,7 @@ export function ADSettings() {
               </Field>
               <Field
                 label="Домен входа"
-                hint="Суффикс UPN, например example.test."
+                hint="Часть доменного логина после @. Для ivan@example.test укажите example.test."
               >
                 <input
                   required
@@ -179,8 +179,8 @@ export function ADSettings() {
                 />
               </Field>
               <Field
-                label="Base DN"
-                hint="Корень поиска пользователей в каталоге."
+                label="Где искать пользователей (Base DN)"
+                hint="Раздел Active Directory, в котором PL ищет пользователей. Для домена example.test обычно DC=example,DC=test."
               >
                 <input
                   required
@@ -192,8 +192,8 @@ export function ADSettings() {
                 />
               </Field>
               <Field
-                label="DN группы администраторов"
-                hint="Вложенные группы учитываются."
+                label="Группа администраторов PL (DN)"
+                hint="Участники этой доменной группы смогут менять настройки PL. Укажите полный distinguishedName группы; вложенные группы тоже учитываются."
               >
                 <input
                   required
@@ -208,7 +208,7 @@ export function ADSettings() {
               </Field>
               <Field
                 label="Учётная запись чтения"
-                hint="UPN или полный DN. Нужна для проверки актуальных прав пользователей."
+                hint="Доменная учётная запись, которой PL читает пользователей и группы. Например, pl-reader@example.test. Достаточно прав на чтение каталога."
               >
                 <input
                   required

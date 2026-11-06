@@ -50,7 +50,14 @@ type Configuration = {
 };
 async function fixture(
   page: Page,
-  options: { forbidden?: boolean; conflict?: boolean; failed?: boolean } = {},
+  options: {
+    forbidden?: boolean;
+    conflict?: boolean;
+    failed?: boolean;
+    applied?: boolean;
+    unapplied?: boolean;
+    unconfirmed?: boolean;
+  } = {},
 ) {
   let draft: Configuration = {
     revision: 0,
@@ -64,7 +71,35 @@ async function fixture(
     receivers: [],
   };
   let applied: Configuration | null = null;
+  if (options.applied) {
+    draft = {
+      ...draft,
+      revision: 4,
+      ref: "77777777-7777-4777-8777-000000000004",
+      route: { ...draft.route, receiver: "ops-main" },
+      receivers: [
+        {
+          name: "ops-main",
+          kind: "telegram",
+          token_set: true,
+          endpoint_set: true,
+          chat_id: -100123456,
+          proxy: { mode: "direct", url: "", username: "", no_proxy: [] },
+        },
+      ],
+    };
+    applied = structuredClone(draft);
+    if (options.unapplied) {
+      draft = {
+        ...draft,
+        revision: 5,
+        ref: "77777777-7777-4777-8777-000000000005",
+        route: { ...draft.route, repeat_interval: "6h" },
+      };
+    }
+  }
   let retried = false;
+  let submitted: Configuration | null = null;
   const writes: { path: string; data: Record<string, unknown> }[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -148,10 +183,21 @@ async function fixture(
         return route.fulfill({ json: { valid: true } });
       else if (path.endsWith("/apply") || path.endsWith("/retry")) {
         if (path.endsWith("/retry")) retried = true;
-        if (!options.failed || retried) applied = structuredClone(draft);
+        else submitted = structuredClone(draft);
+        if ((!options.failed || retried) && !options.unconfirmed)
+          applied = structuredClone(submitted);
         return route.fulfill({
           status: 202,
-          json: { job: { id: "am-job", status: "queued" } },
+          json: {
+            job: {
+              id: "am-job",
+              status: "queued",
+              parameters: {
+                configuration_ref: submitted?.ref,
+                configuration_revision: submitted?.revision,
+              },
+            },
+          },
         });
       }
     }
@@ -195,6 +241,10 @@ async function fixture(
       },
       "/jobs/am-job": {
         id: "am-job",
+        parameters: {
+          configuration_ref: submitted?.ref,
+          configuration_revision: submitted?.revision,
+        },
         status: options.failed && !retried ? "failed" : "succeeded",
         error: options.failed && !retried ? "Применение не подтверждено" : "",
         finished_at: "2026-10-18T12:00:00Z",
@@ -234,10 +284,189 @@ async function apply(page: Page) {
     .getByRole("button", { name: "Применить конфигурацию", exact: true })
     .click();
 }
+test("Alertmanager applied summary keeps a newer saved draft separate", async ({
+  page,
+}) => {
+  const writes = await fixture(page, { applied: true, unapplied: true });
+  await expect(
+    page.getByRole("heading", {
+      name: "Действующая конфигурация",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Применена версия 4", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Есть неприменённые изменения", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Повтор уведомления", { exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Продолжить редактирование", exact: true })
+    .click();
+  await expect(
+    page.getByText("Черновик · версия 5", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Повтор уведомления", { exact: true }),
+  ).toHaveValue("6h");
+  expect(writes).toHaveLength(0);
+});
+
+test("Alertmanager appends a receiver and returns to confirmed applied summary", async ({
+  page,
+}) => {
+  const writes = await fixture(page, { applied: true });
+  await expect(
+    page.getByRole("heading", {
+      name: "Действующая конфигурация",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Добавить получателя", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Название получателя 1", { exact: true }),
+  ).toHaveValue("ops-main");
+  await page
+    .getByLabel("Endpoint получателя 2", { exact: true })
+    .fill("https://notify.example/hooks/second");
+  await save(page, 5);
+  await expect(
+    page.getByText("Есть неприменённые изменения", { exact: true }),
+  ).toBeVisible();
+  const sent = writes.find((write) => write.path === base)?.data
+    .configuration as Configuration;
+  expect(sent.receivers).toHaveLength(2);
+  expect(sent.receivers[0]).toMatchObject({
+    name: "ops-main",
+    kind: "telegram",
+    chat_id: -100123456,
+  });
+  expect(sent.receivers[0].token).toBeUndefined();
+  expect(sent.receivers[0].endpoint).toBeUndefined();
+  await apply(page);
+  await expect(
+    page.getByRole("heading", {
+      name: "Действующая конфигурация",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Применена версия 5", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Endpoint получателя 2", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Есть неприменённые изменения", { exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: "Действующая конфигурация",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const receivers = page.getByRole("region", {
+    name: "Действующие получатели",
+    exact: true,
+  });
+  await expect(receivers.getByText("ops-main", { exact: true })).toBeVisible();
+  await expect(
+    receivers.getByText("receiver_1", { exact: true }),
+  ).toBeVisible();
+});
+
+test("Alertmanager succeeded job does not hide an unconfirmed draft", async ({
+  page,
+}) => {
+  await fixture(page, { applied: true, unconfirmed: true });
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await save(page, 5);
+  await apply(page);
+  await expect(
+    page.getByText("Подтверждаем применение конфигурации…", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Повтор уведомления", { exact: true }),
+  ).toHaveValue("6h");
+  await expect(
+    page.getByRole("heading", {
+      name: "Действующая конфигурация",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+});
+
+test("Alertmanager summary preserves unsaved fields and the leave guard", async ({
+  page,
+}) => {
+  const writes = await fixture(page, { applied: true });
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await page
+    .getByRole("button", { name: "К действующей конфигурации", exact: true })
+    .click();
+  await expect(
+    page.getByText("Есть несохранённые изменения", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "К модулям", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Уйти без сохранения?" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Остаться", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Продолжить редактирование", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Повтор уведомления", { exact: true }),
+  ).toHaveValue("6h");
+  expect(writes).toHaveLength(0);
+});
+
+test("Alertmanager failed apply retains the editor and prior applied summary", async ({
+  page,
+}) => {
+  await fixture(page, { applied: true, failed: true });
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await save(page, 5);
+  await apply(page);
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "Применение не подтверждено" })
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Повтор уведомления", { exact: true }),
+  ).toHaveValue("6h");
+  await page
+    .getByRole("button", { name: "К действующей конфигурации", exact: true })
+    .click();
+  await expect(
+    page.getByText("Применена версия 4", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Есть неприменённые изменения", { exact: true }),
+  ).toBeVisible();
+});
+
 for (const theme of ["dark", "light"]) {
   test(`Alertmanager proxy, write-only fields and frozen apply (${theme})`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     const writes = await fixture(page);
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;
@@ -282,6 +511,40 @@ for (const theme of ["dark", "light"]) {
     ).toHaveValue("");
     await apply(page);
     await expect(page.getByText(/Применена версия 1/)).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Действующая конфигурация",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const closeNotices = page.getByRole("button", {
+      name: "Закрыть уведомление",
+      exact: true,
+    });
+    while (await closeNotices.count()) await closeNotices.first().click();
+    await page.keyboard.press("Escape");
+    await page.screenshot({
+      path: testInfo.outputPath(`applied-summary-${theme}.png`),
+      fullPage: true,
+    });
+    if (theme === "dark") {
+      await page.setViewportSize({ width: 2560, height: 1080 });
+      await page.keyboard.press("Escape");
+      const card = await page.locator(".am-config-card").boundingBox();
+      const main = await page.getByRole("main").boundingBox();
+      expect(card!.x).toBeGreaterThanOrEqual(main!.x);
+      expect(card!.x + card!.width).toBeLessThanOrEqual(2560);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath("applied-summary-wide.png"),
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 1920, height: 1080 });
+    }
     const put = writes.find((write) => write.path === base)!;
     expect(put.data.configuration).toMatchObject({
       receivers: [
@@ -306,6 +569,9 @@ for (const theme of ["dark", "light"]) {
     expect(
       writes.find((write) => write.path.endsWith("/validate"))?.data,
     ).toEqual({ configuration_ref: "77777777-7777-4777-8777-000000000001" });
+    await page
+      .getByRole("button", { name: "Редактировать", exact: true })
+      .click();
     await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
     await save(page, 2);
     const second = writes.filter((write) => write.path === base)[1].data
@@ -335,7 +601,7 @@ test("installed Alertmanager opens from Notifications sidebar and survives reloa
   page,
 }) => {
   await fixture(page);
-  await page.getByRole("button", { name: "Уведомления", exact: true }).click();
+  await page.getByRole("link", { name: "Уведомления", exact: true }).click();
   await expect(page).toHaveURL(/#notifications$/);
   await expect(
     page.getByRole("heading", {
@@ -703,6 +969,9 @@ for (const tlsMode of ["starttls", "implicit"]) {
     await apply(page);
     // A benign edit retains the private password without putting it back in the request.
     await page
+      .getByRole("button", { name: "Редактировать", exact: true })
+      .click();
+    await page
       .getByLabel("Получатели SMTP 1", { exact: true })
       .fill("ops@example.invalid");
     await save(page, 2);
@@ -754,6 +1023,9 @@ test("Alertmanager Teams Workflows v2 endpoint is write-only and configuration a
     page.getByLabel("Endpoint получателя 1", { exact: true }),
   ).toHaveValue("");
   await apply(page);
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
   await expect(
     page.getByLabel("Endpoint получателя 1", { exact: true }),
   ).toBeEnabled();
@@ -799,6 +1071,9 @@ test("Alertmanager PagerDuty Events v2 routing key is write-only and bound to en
     page.getByLabel("Routing key PagerDuty 1", { exact: true }),
   ).toHaveValue("");
   await apply(page);
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
   await expect(
     page.getByLabel("Endpoint получателя 1", { exact: true }),
   ).toBeEnabled();
@@ -897,6 +1172,9 @@ test("Alertmanager email message persists and control sends bind to the applied 
     show_labels: true,
   });
   await apply(page);
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
   const fire = page.getByRole("button", {
     name: "Отправить контрольную тревогу",
     exact: true,
@@ -904,6 +1182,12 @@ test("Alertmanager email message persists and control sends bind to the applied 
   await expect(fire).toBeVisible();
   await expect(fire).toBeEnabled();
   await fire.click();
+  await page
+    .getByRole("button", { name: "К действующей конфигурации", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Редактировать", exact: true })
+    .click();
   const resolve = page.getByRole("button", {
     name: "Отправить восстановление",
     exact: true,

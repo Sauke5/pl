@@ -190,7 +190,10 @@ export async function settingsWorkspaceFixture(
       return route.fulfill({
         json: {
           authenticated: true,
-          features: { sftp_exchange: true },
+          features: {},
+          ad_login_enabled: true,
+          local_login_enabled: true,
+          local_users_enabled: true,
           user: {
             id: "settings-admin",
             name: "Администратор Платформы",
@@ -338,6 +341,36 @@ export async function settingsWorkspaceFixture(
           check: {},
         },
       ],
+      "/delivery": {
+        current_version: "0.5.4",
+        latest_version: "0.5.4",
+        update_available: false,
+        checked_at: timestamp,
+        core_api: 1,
+        modules: [],
+      },
+      "/modules": {
+        items: [
+          {
+            id: "overview-prometheus",
+            module_id: "prometheus",
+            name: "Prometheus",
+            mode: "local",
+            desired_state: "enabled",
+            observed_state: "running",
+            last_success: timestamp,
+          },
+          {
+            id: "overview-wayline",
+            module_id: "wayline",
+            name: "Wayline",
+            mode: "local",
+            desired_state: "disabled",
+            observed_state: "disabled",
+            last_success: timestamp,
+          },
+        ],
+      },
       "/runtime": {
         demo: false,
         oidc_configured: false,

@@ -14,9 +14,42 @@ async function openGroup(page: Page, group: string) {
 }
 
 async function openIntegration(page: Page) {
-  await openGroup(page, "Интеграции");
+  await openGroup(page, "Подключения");
   await page.getByRole("button", { name: /Основной Prometheus/ }).click();
 }
+
+test("settings groups separate access, maintenance and data; search focuses a session field", async ({
+  page,
+}) => {
+  const state = await settingsWorkspaceFixture(page);
+  await page.goto("/#settings");
+  const nav = navigation(page);
+  for (const name of [
+    "Каталог и данные",
+    "Пользователи и доступ",
+    "Обслуживание",
+  ])
+    await expect(nav.getByText(name, { exact: true })).toBeVisible();
+  await openGroup(page, "Пароли и сессии");
+  await expect(page.getByLabel("Повторный вход через, мин")).toBeVisible();
+  await expect(page.getByLabel("Минимальная длина пароля")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Обновить состояние", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("searchbox", { name: "Поиск по настройкам" })
+    .fill("Срок действия входа");
+  await page.getByRole("button", { name: /Срок действия входа/ }).click();
+  await expect(page).toHaveURL(
+    /section=security.*field=session_lifetime_minutes/,
+  );
+  await expect(
+    page.locator('[data-settings-field="session_lifetime_minutes"]'),
+  ).toBeFocused();
+  expect(
+    state.requests.filter((request) => request.method === "PUT"),
+  ).toHaveLength(0);
+});
 
 test("overview and search open the relevant setting without changing it", async ({
   page,
@@ -93,22 +126,22 @@ test("dirty navigation can stay, discard, or save the current group", async ({
 }) => {
   const state = await settingsWorkspaceFixture(page);
   await page.goto("/#settings");
-  await openGroup(page, "Общие параметры");
-  await page.getByLabel(/Порог устаревания/).fill("240");
+  await openGroup(page, "Время и данные");
+  await page.getByLabel(/Данные устаревают через/).fill("240");
   await openGroup(page, "Справочники");
   const prompt = page.getByRole("dialog");
   await expect(prompt).toContainText(/несохранён|Несохранён/);
   await prompt.getByRole("button", { name: /Остаться/ }).click();
-  await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("240");
+  await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("240");
   await openGroup(page, "Справочники");
   await prompt.getByRole("button", { name: /Отбросить/ }).click();
   await expect(
     page.getByRole("heading", { name: "Справочники", exact: true }),
   ).toBeVisible();
   expect(state.settings.stale_after_seconds).toBe(180);
-  await openGroup(page, "Общие параметры");
-  await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("180");
-  await page.getByLabel(/Порог устаревания/).fill("300");
+  await openGroup(page, "Время и данные");
+  await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("180");
+  await page.getByLabel(/Данные устаревают через/).fill("300");
   await openGroup(page, "Справочники");
   await prompt.getByRole("button", { name: /Сохранить/ }).click();
   await expect(
@@ -122,8 +155,8 @@ test("failed saves preserve the draft and cancel restores the saved values", asy
 }) => {
   const state = await settingsWorkspaceFixture(page);
   await page.goto("/#settings");
-  await openGroup(page, "Общие параметры");
-  await page.getByLabel(/Порог устаревания/).fill("240");
+  await openGroup(page, "Время и данные");
+  await page.getByLabel(/Данные устаревают через/).fill("240");
   for (const status of [400, 500]) {
     state.failNext(
       "/settings-workspace/general",
@@ -134,13 +167,13 @@ test("failed saves preserve the draft and cancel restores the saved values", asy
     await expect(page.getByRole("alert")).toContainText(
       `Не удалось сохранить параметры (${status})`,
     );
-    await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("240");
+    await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("240");
     expect(state.settings.stale_after_seconds).toBe(180);
   }
   await page
     .getByRole("button", { name: "Отменить изменения", exact: true })
     .click();
-  await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("180");
+  await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("180");
 });
 
 test("revision conflict keeps local edits and shows the current values for comparison", async ({
@@ -148,8 +181,8 @@ test("revision conflict keeps local edits and shows the current values for compa
 }) => {
   const state = await settingsWorkspaceFixture(page);
   await page.goto("/#settings");
-  await openGroup(page, "Общие параметры");
-  await page.getByLabel(/Порог устаревания/).fill("240");
+  await openGroup(page, "Время и данные");
+  await page.getByLabel(/Данные устаревают через/).fill("240");
   state.changeGeneral({ stale_after_seconds: 360 });
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(
@@ -157,7 +190,7 @@ test("revision conflict keeps local edits and shows the current values for compa
       /Запись изменилась|Настройки изменены другим администратором/,
     ),
   ).toBeVisible();
-  await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("240");
+  await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("240");
   await expect(page.getByText("360", { exact: true })).toBeVisible();
   expect(state.settings.stale_after_seconds).toBe(360);
   const comparison = page.getByRole("region", { name: "Конфликт изменений" });
@@ -192,7 +225,7 @@ test("history shows actor and before/after values without a rollback action", as
     changes: [],
   });
   await page.goto("/#settings");
-  await openGroup(page, "Общие параметры");
+  await openGroup(page, "Время и данные");
   await page.getByRole("button", { name: "История", exact: true }).click();
   await expect(
     page.getByText("Алексей Администратор", { exact: true }),
@@ -216,14 +249,14 @@ test("publication access expansion is confirmed and general save preserves publi
 }) => {
   const state = await settingsWorkspaceFixture(page);
   await page.goto("/#settings");
-  await openGroup(page, "Общие параметры");
+  await openGroup(page, "Время и данные");
   const publication = {
     board_enabled: state.settings.board_enabled,
     board_anonymous: state.settings.board_anonymous,
     board_title: state.settings.board_title,
     board_resource_ids: [...state.settings.board_resource_ids],
   };
-  await page.getByLabel(/Порог устаревания/).fill("240");
+  await page.getByLabel(/Данные устаревают через/).fill("240");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page.getByText("Сохранено", { exact: true })).toBeVisible();
   expect(state.settings).toMatchObject(publication);
@@ -234,7 +267,7 @@ test("publication access expansion is confirmed and general save preserves publi
   )!.body!;
   expect(payload).not.toHaveProperty("board_enabled");
   expect(payload).not.toHaveProperty("board_anonymous");
-  await openGroup(page, "Публикация");
+  await openGroup(page, "Страница для пользователей");
   await page.getByRole("checkbox", { name: /анонимный доступ/ }).check();
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   const confirmation = page.getByRole("dialog");
@@ -255,9 +288,9 @@ test("invalid integration field is identified without posting the draft", async 
   await page.goto("/#settings");
   await openIntegration(page);
   await page.getByRole("button", { name: "Изменить", exact: true }).click();
-  await page.getByLabel(/Параллелизм/).fill("5");
+  await page.getByLabel(/Одновременные запросы/).fill("5");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-  await expect(page.getByLabel(/Параллелизм/)).toHaveAttribute(
+  await expect(page.getByLabel(/Одновременные запросы/)).toHaveAttribute(
     "aria-invalid",
     "true",
   );
@@ -271,7 +304,7 @@ test("new integration selects the returned ID even when another source has the s
 }) => {
   const state = await settingsWorkspaceFixture(page);
   await page.goto("/#settings");
-  await openGroup(page, "Интеграции");
+  await openGroup(page, "Подключения");
   await page
     .getByRole("button", { name: "Добавить подключение", exact: true })
     .click();
@@ -279,7 +312,7 @@ test("new integration selects the returned ID even when another source has the s
     .getByLabel("Название", { exact: true })
     .fill("Основной Prometheus");
   await page
-    .getByLabel("Базовый URL", { exact: true })
+    .getByLabel("Адрес сервиса", { exact: true })
     .fill("https://metrics.example.test");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page).toHaveURL(/integration=integration-new/);
@@ -307,7 +340,7 @@ test("search opens and highlights a connection parameter without entering edit m
     .getByRole("searchbox", { name: "Поиск по настройкам" })
     .fill("Таймаут Основной Prometheus");
   await page
-    .getByRole("button", { name: /Таймаут.*Основной Prometheus/ })
+    .getByRole("button", { name: /Ожидание ответа.*Основной Prometheus/ })
     .click();
   await expect(page).toHaveURL(/integration=prometheus-main/);
   const field = page.locator('[data-settings-field="timeout_seconds"]');
@@ -325,8 +358,8 @@ test("main shell navigation can stay, discard, or save the dirty settings draft"
 }) => {
   const state = await settingsWorkspaceFixture(page);
   await page.goto("/#settings");
-  await openGroup(page, "Общие параметры");
-  await page.getByLabel(/Порог устаревания/).fill("240");
+  await openGroup(page, "Время и данные");
+  await page.getByLabel(/Данные устаревают через/).fill("240");
   const home = page
     .getByRole("navigation", { name: "Основная навигация" })
     .getByRole("link", { name: "Главная", exact: true });
@@ -336,7 +369,7 @@ test("main shell navigation can stay, discard, or save the dirty settings draft"
     .getByRole("button", { name: "Остаться", exact: true })
     .click();
   await expect(page).toHaveURL(/#settings/);
-  await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("240");
+  await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("240");
   await home.click();
   await page
     .getByRole("dialog")
@@ -349,8 +382,8 @@ test("main shell navigation can stay, discard, or save the dirty settings draft"
     state.requests.filter((request) => request.method === "PUT"),
   ).toHaveLength(0);
   await page.getByRole("link", { name: "Настройки", exact: true }).click();
-  await openGroup(page, "Общие параметры");
-  await page.getByLabel(/Порог устаревания/).fill("300");
+  await openGroup(page, "Время и данные");
+  await page.getByLabel(/Данные устаревают через/).fill("300");
   await home.click();
   await page
     .getByRole("dialog")
@@ -367,8 +400,11 @@ test("main shell navigation can stay, discard, or save the dirty settings draft"
   ).toHaveLength(1);
 });
 
-for (const viewport of [{ width: 1920, height: 1080 }]) {
-  for (const theme of ["dark", "light"]) {
+for (const viewport of [
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1080 },
+]) {
+  for (const theme of ["dark", "light", "night"]) {
     test(`desktop ${viewport.width} ${theme}: list scroll and selection survive editing`, async ({
       page,
       browserName,
@@ -384,17 +420,20 @@ for (const viewport of [{ width: 1920, height: 1080 }]) {
         page.getByRole("heading", { name: "Обзор", exact: true }),
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Публикация", exact: true }),
+        page.getByRole("heading", {
+          name: "Версия и обновления",
+          exact: true,
+        }),
       ).toBeInViewport();
       await expect(
-        page.getByRole("heading", { name: "Общие параметры", exact: true }),
+        page.getByRole("heading", { name: "Вход и пользователи", exact: true }),
       ).toBeInViewport();
       const evidence = process.env.SETTINGS_UI_EVIDENCE;
       if (evidence)
         await page.screenshot({
           path: `${evidence}/${browserName}-${viewport.width}-${theme}-overview.png`,
         });
-      await openGroup(page, "Интеграции");
+      await openGroup(page, "Подключения");
       const source = page.getByRole("button", {
         name: /Источник 30 · длинное название площадки/,
       });

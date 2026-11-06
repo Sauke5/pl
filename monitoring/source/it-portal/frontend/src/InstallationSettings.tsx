@@ -232,10 +232,10 @@ export function InstallationSettings() {
   const target = nextURL(status.data?.operation?.next_url);
   return (
     <div className="runtime-settings">
-      <Panel title="Адрес, TLS и сеть PL" icon={<Network size={20} />}>
+      <Panel title="Адрес и сеть" icon={<Network size={20} />}>
         <p className="muted">
-          Параметры сохраняются на сервере. Применение адреса, сертификата или
-          сетевой политики кратковременно перезапускает API и web PL.
+          Адрес открытия PL, сертификат HTTPS и сети подключаемых сервисов. При
+          применении PL кратковременно перезапустится.
         </p>
         {status.error && <ErrorBox error={status.error} />}
         {status.data?.operation?.kind === "configuration" && (
@@ -286,8 +286,8 @@ export function InstallationSettings() {
                   />
                 </Field>
                 <Field
-                  label="Адрес интерфейса сервера"
-                  hint="0.0.0.0 — все IPv4-интерфейсы; либо адрес интерфейса этого сервера."
+                  label="На каком адресе принимать подключения"
+                  hint="Укажите IP-адрес этого сервера. Значение 0.0.0.0 разрешает подключаться через все его IPv4-интерфейсы."
                 >
                   <input
                     required
@@ -299,8 +299,8 @@ export function InstallationSettings() {
                   />
                 </Field>
                 <Field
-                  label="Разрешённые сети интеграций"
-                  hint="CIDR по одному на строке, не более 64. Пример: 10.20.0.0/16."
+                  label="Сети подключаемых сервисов"
+                  hint="PL сможет обращаться к сервисам в этих сетях. Укажите до 64 сетей, каждую с новой строки. Например, 192.168.2.0/24 — адреса сети 192.168.2.x."
                 >
                   <textarea
                     rows={5}
@@ -312,8 +312,8 @@ export function InstallationSettings() {
                   />
                 </Field>
                 <Field
-                  label="Разрешённые порты интеграций"
-                  hint="До 64 TCP-портов, разделённых запятой. Например: 80, 443, 9090."
+                  label="Порты подключаемых сервисов"
+                  hint="TCP-порты, к которым PL сможет подключаться в указанных сетях. До 64 значений через запятую, например: 80, 443, 9090."
                 >
                   <input
                     value={draft.ports}

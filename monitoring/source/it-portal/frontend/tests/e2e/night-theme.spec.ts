@@ -27,7 +27,6 @@ const selectors = [
   ".button",
   ".dialog-content",
   ".pl-ui-theme-menu",
-  ".sftp-shell",
   ".auth-scene",
 ];
 test.use({ reducedMotion: "reduce" });
@@ -43,27 +42,6 @@ async function fixture(page: Page, theme: string) {
     return route.continue();
   });
   const state = await settingsWorkspaceFixture(page);
-  await page.route("**/api/v1/sftp-adm", (route) =>
-    route.fulfill({
-      json: {
-        configured: true,
-        can_admin: true,
-        can_access_files: true,
-        native_username: "fixture-only",
-      },
-    }),
-  );
-  await page.route("**/api/v1/sftp-server", (route) =>
-    route.fulfill({
-      json: {
-        can_manage: true,
-        collections: [],
-        versions: [],
-        accounts: [],
-        audit: [],
-      },
-    }),
-  );
   await page.route("**/api/v1/session", (route) => {
     if (new URL(page.url()).pathname !== "/401") return route.fallback();
     return route.fulfill({
@@ -284,8 +262,6 @@ for (const [width, height] of [
       ["/#catalog", ".resource-list"],
       ["/#events", ".events-workspace"],
       ["/#tools", ".workspace-drawer"],
-      ["/sftp-server", ".sftp-shell"],
-      ["/sftp-adm", ".sftp-adm-entry"],
       ["/proxy-4.14", ".proxy-modes"],
       ["/401", ".auth-scene"],
       ["/403", ".shell-error-scene"],

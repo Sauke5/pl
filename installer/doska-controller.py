@@ -447,11 +447,13 @@ class DoskaController:
             with self._route_lock:
                 route = self._routes.get(instance)
                 if route is None or time.monotonic() - route[0] >= ROUTE_MAX_AGE:
-                    self.ready(instance)
-                    route = self._routes[instance]
+                    _, route = self._ready_route(instance)
         return route[1][role], route[2][role]
 
     def ready(self, instance):
+        return self._ready_route(instance)[0]
+
+    def _ready_route(self, instance):
         with self._route_lock:
             try:
                 objects = {role: self.inspect(instance, role) for role in ROLES}
@@ -466,8 +468,12 @@ class DoskaController:
                 verified = {role: {'Id': obj.get('Id'), 'Image': obj.get('Image'),
                     'NetworkSettings': {'Ports': obj.get('NetworkSettings', {}).get('Ports', {})}}
                     for role, obj in objects.items() if role in ('api', 'web')}
-                self._routes[instance] = (time.monotonic(), verified, origins)
-                return objects['web']
+                # A concurrent stream can invalidate the cache as soon as this
+                # verification finishes. Return this request's verified route
+                # directly rather than looking it up again in the shared cache.
+                route = (time.monotonic(), verified, origins)
+                self._routes[instance] = route
+                return objects['web'], route
             except Exception:
                 self._routes.pop(instance, None)
                 raise

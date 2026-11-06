@@ -116,6 +116,46 @@ class TransportTests(unittest.TestCase):
         self.assertNotIn(INSTANCE, controller._routes)
         connection.close.assert_called_once()
 
+    def test_stream_invalidation_during_verification_keeps_current_route(self):
+        for expired in (False, True):
+            with self.subTest(expired=expired):
+                controller = self.controller()
+                controller.http = Mock(return_value=(200, 'application/json', b'{}'))
+                published, invalidated = threading.Event(), threading.Event()
+
+                class InvalidatedRouteCache(dict):
+                    def __setitem__(self, key, value):
+                        super().__setitem__(key, value)
+                        published.set()
+                        if not invalidated.wait(2):
+                            raise AssertionError('Concurrent stream did not invalidate its route')
+
+                old = controller._routes[INSTANCE]
+                controller._routes = InvalidatedRouteCache(
+                    {INSTANCE: (time.monotonic() - doska.ROUTE_MAX_AGE, old[1], old[2])}
+                    if expired else {})
+
+                def stream_finished():
+                    if published.wait(2):
+                        controller._routes.pop(INSTANCE, None)
+                        invalidated.set()
+
+                thread = threading.Thread(target=stream_finished, daemon=True)
+                thread.start()
+                try:
+                    self.assertEqual(controller.route(INSTANCE, 'api')[1], 'http://127.0.0.1:33201')
+                finally:
+                    thread.join(2)
+                self.assertFalse(thread.is_alive())
+                self.assertTrue(invalidated.is_set())
+                self.assertNotIn(INSTANCE, controller._routes)
+                # Invalidation still applies to later requests: they perform
+                # fresh ownership and application checks, never reuse a fallback.
+                controller._routes = {}
+                controller.route(INSTANCE, 'api')
+                self.assertEqual(controller.inspect.call_count, 2 * len(doska.ROLES))
+                self.assertEqual(controller.http.call_count, 4)
+
     def test_lifecycle_revokes_route_before_disable_and_failed_refresh(self):
         import tempfile
         import json

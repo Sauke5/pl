@@ -81,7 +81,9 @@ test("Operations saves independent settings and preserves unrelated board values
     return route.fulfill({ json: responses[path] ?? [] });
   });
   await page.goto("/#settings");
-  await page.getByRole("button", { name: "Эксплуатация", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Состояние сервера", exact: true })
+    .click();
   await expect(page.getByText("pl-lab-fixture", { exact: true })).toBeVisible();
   await expect(
     page.getByText("4.0 ГиБ / 8.0 ГиБ", { exact: true }),
@@ -97,14 +99,22 @@ test("Operations saves independent settings and preserves unrelated board values
     .click();
   await expect(page.getByText("go-fixture", { exact: false })).toBeVisible();
   await expect(page.getByText("100.0 МБ", { exact: true })).toBeVisible();
-  await page.getByRole("spinbutton", { name: /^Срок новой сессии/ }).fill("15");
+  await expect(page.getByRole("spinbutton")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Пароли и сессии", exact: true })
+    .click();
+  await page
+    .getByRole("spinbutton", { name: /^Повторный вход через/ })
+    .fill("15");
   await page
     .getByRole("spinbutton", { name: /^Минимальная длина пароля/ })
     .fill("8");
   await expect(
-    page.getByRole("spinbutton", { name: /^Порог устаревания/ }),
+    page.getByRole("spinbutton", { name: /^Данные устаревают через/ }),
   ).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: /^Часовой пояс/ })).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: /^Часовой пояс/ }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Сохранить настройки", exact: true })
     .click();

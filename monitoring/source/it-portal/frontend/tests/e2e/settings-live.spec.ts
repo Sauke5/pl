@@ -42,7 +42,7 @@ test("settings persist through the real API and show their detailed history", as
   ).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Разделы настроек" });
   await navigation
-    .getByRole("button", { name: "Интеграции", exact: true })
+    .getByRole("button", { name: "Подключения", exact: true })
     .click();
   await page
     .getByRole("region", { name: "Подключения", exact: true })
@@ -96,10 +96,10 @@ test("settings persist through the real API and show their detailed history", as
   ).toBeVisible();
 
   await navigation
-    .getByRole("button", { name: "Общие параметры", exact: true })
+    .getByRole("button", { name: "Время и данные", exact: true })
     .click();
   const newThreshold = initial.stale_after_seconds === 300 ? 360 : 300;
-  await page.getByLabel(/Порог устаревания/).fill(String(newThreshold));
+  await page.getByLabel(/Данные устаревают через/).fill(String(newThreshold));
   const generalResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith("/settings-workspace/general") &&
@@ -125,7 +125,7 @@ test("settings persist through the real API and show their detailed history", as
     .getByRole("row")
     .filter({
       has: page.getByRole("rowheader", {
-        name: "Порог устаревания, с",
+        name: "Данные устаревают через, с",
         exact: true,
       }),
     });

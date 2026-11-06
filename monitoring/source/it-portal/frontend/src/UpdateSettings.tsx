@@ -161,7 +161,7 @@ export function ReleaseBanner({ enabled }: { enabled: boolean }) {
         <Button
           onClick={() =>
             withSettingsNavigation(() => {
-              location.hash = "settings?section=operations";
+              location.hash = "settings?section=updates";
             })
           }
         >
@@ -198,7 +198,7 @@ export function UpdateNotification({ enabled }: { enabled: boolean }) {
       title={`Доступна PL ${status.data.latest_version}`}
       onClick={() =>
         withSettingsNavigation(() => {
-          location.hash = "settings?section=operations";
+          location.hash = "settings?section=updates";
         })
       }
     >

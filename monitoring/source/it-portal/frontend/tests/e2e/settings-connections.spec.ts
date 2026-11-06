@@ -7,12 +7,6 @@ import {
 } from "../fixtures/relationsExchange";
 
 // Adapter UI acceptance only. These fixtures make no calls to live sources.
-async function openExchange(page: Page) {
-  await page.goto(
-    "/#settings?section=integrations&integration=builtin%3Asftp-exchange",
-  );
-  return page.getByRole("region", { name: "Приём выгрузок 1С", exact: true });
-}
 async function openOxidized(page: Page) {
   await page.goto(`/#settings?section=integrations&integration=${oxidizedID}`);
   return page.getByRole("region", {
@@ -23,79 +17,6 @@ async function openOxidized(page: Page) {
 function integrationList(page: Page) {
   return page.getByRole("region", { name: "Подключения", exact: true });
 }
-
-test("SFTP summary keeps the latest deleted receipt and distinguishes a branch with no receipt", async ({
-  page,
-}) => {
-  const state = await relationsExchangeFixture(page);
-  const summary = await openExchange(page);
-  const received = summary.getByRole("row", { name: /Москва/ });
-  await expect(received).toContainText("latest-branch-export-20261026.zip");
-  await expect(received).toContainText("branch.sender");
-  await expect(received).toContainText("Удалён");
-  await expect(received).toContainText("Принято: 3");
-  const empty = summary.getByRole("row", { name: /Тестовый филиал/ });
-  await expect(empty).toContainText("Архив не зарегистрирован");
-  await expect(empty).toContainText("Принято: 0");
-  await expect(
-    summary.getByRole("link", { name: "Открыть SFTP", exact: true }),
-  ).toHaveAttribute("href", "/sftp-server/");
-  await expect(
-    summary.getByRole("button", { name: /Изменить|Сохранить|Импорт|Удалить/ }),
-  ).toHaveCount(0);
-  expect(state.requests.filter((entry) => entry.method !== "GET")).toHaveLength(
-    0,
-  );
-});
-
-test("SFTP provider failure retains the receipt and refresh only rereads the summary", async ({
-  page,
-}) => {
-  const state = await relationsExchangeFixture(page);
-  state.exchange.provider.status = "stale";
-  state.exchange.provider.error = "Нет свежих сведений от SFTP";
-  const summary = await openExchange(page);
-  await expect(
-    summary.getByText("Нет свежих данных", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    summary.getByText("Нет свежих сведений от SFTP", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByRole("row", { name: /Москва/ })).toContainText(
-    "latest-branch-export-20261026.zip",
-  );
-  const readsBeforeRefresh = state.requests.filter(
-    (entry) => entry.path === "/sftp-exchange",
-  ).length;
-  await summary.getByRole("button", { name: "Обновить", exact: true }).click();
-  await expect
-    .poll(
-      () =>
-        state.requests.filter((entry) => entry.path === "/sftp-exchange")
-          .length,
-    )
-    .toBe(readsBeforeRefresh + 1);
-  expect(state.requests.filter((entry) => entry.method !== "GET")).toHaveLength(
-    0,
-  );
-});
-
-test("unconfigured SFTP and an empty branch list have an explicit empty state", async ({
-  page,
-}) => {
-  const state = await relationsExchangeFixture(page);
-  state.exchange.provider.configured = false;
-  state.exchange.provider.status = "disabled";
-  state.exchange.branches = [];
-  const summary = await openExchange(page);
-  await expect(summary.getByText("Не настроен", { exact: true })).toBeVisible();
-  await expect(
-    summary.getByText("Нет папок филиалов", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    summary.getByText("Приём доступен", { exact: true }),
-  ).toHaveCount(0);
-});
 
 test("Oxidized metadata separates collection time from configuration change and exposes exact history links", async ({
   page,
@@ -204,7 +125,7 @@ test("a new Oxidized integration and manual resource binding are saved explicitl
     .getByLabel("Тип источника", { exact: true })
     .selectOption("oxidized");
   await page
-    .getByLabel("Базовый URL", { exact: true })
+    .getByLabel("Адрес сервиса", { exact: true })
     .fill("https://secondary-oxidized.example.test");
   await page
     .getByLabel("Репозиторий Gitea", { exact: true })
@@ -242,7 +163,7 @@ test("a new Oxidized integration and manual resource binding are saved explicitl
   });
 });
 
-test("switching from an edited Oxidized binding to SFTP preserves selection until the draft is discarded", async ({
+test("switching from an edited Oxidized binding to another connection preserves selection until the draft is discarded", async ({
   page,
 }) => {
   const state = await relationsExchangeFixture(page);
@@ -252,10 +173,10 @@ test("switching from an edited Oxidized binding to SFTP preserves selection unti
   await page
     .getByLabel("Ресурс для lab/switch-one", { exact: true })
     .selectOption(resourceTwoID);
-  const exchange = integrationList(page).getByRole("button", {
-    name: /Приём выгрузок 1С/,
+  const otherConnection = integrationList(page).getByRole("button", {
+    name: /Основной Prometheus/,
   });
-  await exchange.click();
+  await otherConnection.click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Остаться", exact: true })
@@ -268,13 +189,13 @@ test("switching from an edited Oxidized binding to SFTP preserves selection unti
       name: /История конфигураций сети/,
     }),
   ).toHaveAttribute("aria-pressed", "true");
-  await exchange.click();
+  await otherConnection.click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Отбросить", exact: true })
     .click();
   await expect(
-    page.getByRole("region", { name: "Приём выгрузок 1С", exact: true }),
+    page.getByRole("heading", { name: "Основной Prometheus", exact: true }),
   ).toBeVisible();
   expect(
     state.base.integrations.find((item) => item.id === oxidizedID)?.config
@@ -335,17 +256,6 @@ for (const viewport of [{ width: 1920, height: 1080 }]) {
       await expect
         .poll(() => list.evaluate((element) => element.scrollTop))
         .toBe(scroll);
-      await list.getByRole("button", { name: /Приём выгрузок 1С/ }).click();
-      await expect(
-        page.getByRole("region", { name: "Приём выгрузок 1С", exact: true }),
-      ).toBeVisible();
-      await expect(page.getByRole("row", { name: /Москва/ })).toContainText(
-        "latest-branch-export-20261026.zip",
-      );
-      if (evidence)
-        await page.screenshot({
-          path: `${evidence}/${browserName}-${viewport.width}-${theme}-sftp-exchange.png`,
-        });
       const geometry = await page.evaluate(() => ({
         width: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,

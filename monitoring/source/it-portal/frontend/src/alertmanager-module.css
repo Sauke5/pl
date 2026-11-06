@@ -17,6 +17,115 @@
 .am-notification-layout .am-config-description {
   margin: 0 0 1.25rem;
 }
+.am-notification-layout .am-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.am-notification-layout .am-editor-heading .am-config-description {
+  margin: 0;
+}
+.am-notification-layout .am-applied-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(15rem, 1fr);
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+.am-notification-layout .am-applied-summary section {
+  min-width: 0;
+}
+.am-notification-layout .am-applied-summary h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.am-notification-layout .am-summary-receivers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.am-notification-layout .am-summary-receivers li {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.am-notification-layout .am-summary-receivers li:first-child {
+  padding-top: 0;
+}
+.am-notification-layout .am-summary-receivers li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.am-notification-layout .am-summary-receiver-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.am-notification-layout .am-summary-receiver-heading span,
+.am-notification-layout .am-summary-receivers small {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.am-notification-layout .am-summary-receivers small {
+  display: block;
+  margin-top: 0.35rem;
+}
+.am-notification-layout .am-summary-receivers p {
+  margin: 0.5rem 0;
+}
+.am-notification-layout .am-summary-routing {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+}
+.am-notification-layout .am-summary-routing dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.am-notification-layout .am-summary-routing dd {
+  margin: 0.3rem 0 0;
+  overflow-wrap: anywhere;
+}
+.am-notification-layout .am-summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.am-notification-layout .am-pending-draft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+}
+.am-notification-layout .am-pending-draft p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+@media (max-width: 700px) {
+  .am-notification-layout .am-applied-summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+  .am-notification-layout .am-summary-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .am-notification-layout .am-draft-version {
   display: inline-flex;
   align-items: center;

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Database, FolderClock, RefreshCw, X } from "lucide-react";
+import { Database, FolderClock, X } from "lucide-react";
 import { date, useAPI } from "./api";
-import type { Integration, Resource, Session } from "./types";
+import type { Integration, Resource } from "./types";
 import { Badge, Empty, ErrorBox, ExternalLink } from "./components/common";
 import { Button } from "./components/ui/button";
 import "./connection-details.css";
 
-export const SFTP_EXCHANGE_ID = "builtin:sftp-exchange";
 export type ConfigurationNode = {
   key: string;
   name: string;
@@ -28,171 +27,12 @@ export type ConfigurationHistory = {
   stale: boolean;
   nodes: ConfigurationNode[];
 };
-export type SFTPExchangeState = {
-  observed_at: string;
-  provider: {
-    configured: boolean;
-    status: string;
-    last_attempt_at?: string;
-    last_success_at?: string;
-    error?: string;
-    quarantined_receipts: number;
-  };
-  branches: {
-    id: string;
-    branch: string;
-    label: string;
-    folder: string;
-    received_count: number;
-    last_received: null | {
-      id: string;
-      filename: string;
-      size_bytes: number;
-      received_at: string;
-      sender: string;
-      availability: string;
-    };
-  }[];
-};
-const providerLabels: Record<string, string> = {
-  healthy: "Приём доступен",
-  stale: "Нет свежих данных",
-  error: "Ошибка подключения",
-  disabled: "Не настроен",
-};
-const availabilityLabels: Record<string, string> = {
-  available: "Доступен",
-  deleted: "Удалён",
-  pending: "Удаляется",
-  uncertain: "Доступность уточняется",
-};
 const collectionLabels: Record<string, string> = {
   success: "Собрана",
   failed: "Ошибка сбора",
   never: "Ещё не собиралась",
   unknown: "Нет данных о сборе",
 };
-export function SFTPExchangeSummary() {
-  const query = useAPI<SFTPExchangeState>("/sftp-exchange");
-  return (
-    <section className="connection-detail" aria-label="Приём выгрузок 1С">
-      <div className="settings-heading">
-        <div>
-          <span className="settings-eyebrow">SFTP</span>
-          <h2>Приём выгрузок 1С</h2>
-        </div>
-        <a className="connection-inline-link" href="/sftp-server/">
-          Открыть SFTP
-        </a>
-      </div>
-      {query.error ? (
-        <ErrorBox error={query.error} retry={() => void query.refetch()} />
-      ) : query.isPending ? (
-        <p role="status">Загрузка сведений о приёме…</p>
-      ) : (
-        <>
-          <div className="connection-detail-status">
-            <Badge
-              value={
-                query.data.provider.status === "healthy"
-                  ? "ok"
-                  : query.data.provider.status
-              }
-            >
-              {providerLabels[query.data.provider.status] ||
-                "Состояние неизвестно"}
-            </Badge>
-            <span className="muted">
-              Проверено: {date(query.data.provider.last_success_at)}
-            </span>
-            <Button
-              size="sm"
-              disabled={query.isFetching}
-              onClick={() => void query.refetch()}
-            >
-              <RefreshCw size={14} />
-              Обновить
-            </Button>
-          </div>
-          {query.data.provider.error && (
-            <p className="settings-field-error" role="status">
-              {query.data.provider.error}
-            </p>
-          )}
-          {query.data.provider.quarantined_receipts > 0 && (
-            <p className="settings-field-error">
-              Отклонённые загрузки: {query.data.provider.quarantined_receipts}
-            </p>
-          )}
-          {query.data.branches.length ? (
-            <div className="connection-table-scroll">
-              <table className="connection-table">
-                <thead>
-                  <tr>
-                    <th>Филиал</th>
-                    <th>Последний принятый архив</th>
-                    <th>Отправитель</th>
-                    <th>Доступность</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {query.data.branches.map((branch) => (
-                    <tr key={branch.id}>
-                      <th scope="row">
-                        <strong>{branch.label || branch.branch}</strong>
-                        {branch.label !== branch.branch && (
-                          <small>{branch.branch}</small>
-                        )}
-                        <small>Принято: {branch.received_count}</small>
-                      </th>
-                      <td>
-                        {branch.last_received ? (
-                          <>
-                            <strong>{branch.last_received.filename}</strong>
-                            <small>
-                              {date(branch.last_received.received_at)}
-                            </small>
-                            <small>
-                              {new Intl.NumberFormat("ru").format(
-                                branch.last_received.size_bytes,
-                              )}{" "}
-                              байт
-                            </small>
-                          </>
-                        ) : (
-                          <span className="muted">
-                            Архив не зарегистрирован
-                          </span>
-                        )}
-                      </td>
-                      <td>{branch.last_received?.sender || "—"}</td>
-                      <td>
-                        {branch.last_received
-                          ? availabilityLabels[
-                              branch.last_received.availability
-                            ] || "Доступность уточняется"
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Empty
-              title="Нет папок филиалов"
-              detail="Добавьте папки в разделе SFTP."
-            />
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-export function SystemExchangeSummary() {
-  const session = useAPI<Session>("/session");
-  return session.data?.user?.admin ? <SFTPExchangeSummary /> : null;
-}
 function ConfigurationRows({ value }: { value: ConfigurationHistory }) {
   return (
     <div className="connection-history-block">

@@ -242,7 +242,9 @@ class StackLifecycle(unittest.TestCase):
                 return args[-1].encode()
             if action == 'connect':
                 name = args[-1]
-                self.containers[name]['NetworkSettings']['Networks'][args[-2]] = {'NetworkID': '', 'EndpointID': '', 'Aliases': [args[3]], 'IPAddress': ''}
+                self.containers[name]['NetworkSettings']['Networks'][args[-2]] = {
+                    'NetworkID': '', 'EndpointID': '', 'Aliases': [args[3]], 'IPAddress': '',
+                    'IPAMConfig': {'IPv4Address': '', 'IPv6Address': ''}, 'DriverOpts': {}}
                 return b''
             if action == 'rm':
                 del self.resources[kind][args[-1]]
@@ -402,9 +404,25 @@ class StackLifecycle(unittest.TestCase):
         original = copy.deepcopy(self.containers[name])
         self.assertEqual(self.controller.inspect(self.instance, 'adapter')['State']['Status'], 'created')
         for target in original['NetworkSettings']['Networks']:
+            for ipam in (None, {}, {'IPv4Address': '', 'IPv6Address': ''}):
+                with self.subTest(target=target, unallocated_ipam=ipam):
+                    self.containers[name] = copy.deepcopy(original)
+                    self.containers[name]['NetworkSettings']['Networks'][target]['IPAMConfig'] = ipam
+                    self.assertEqual(self.controller.inspect(self.instance, 'adapter')['State']['Status'], 'created')
             for field, value in (('NetworkID', 'a' * 64), ('IPAddress', '192.0.2.99'), ('EndpointID', 'a' * 64),
-                                 ('IPAMConfig', {'IPv4Address': '192.0.2.99'}), ('Aliases', ['foreign'])):
-                with self.subTest(target=target, field=field):
+                                 ('Gateway', '192.0.2.1'), ('IPv6Gateway', '2001:db8::1'),
+                                 ('GlobalIPv6Address', '2001:db8::99'),
+                                 ('IPAMConfig', {'IPv4Address': '192.0.2.99'}),
+                                 ('IPAMConfig', {'IPv4Address': '192.0.2.99', 'IPv6Address': ''}),
+                                 ('IPAMConfig', {'IPv4Address': '', 'IPv6Address': '2001:db8::99'}),
+                                 ('IPAMConfig', {'IPv4Address': '', 'IPv6Address': '', 'LinkLocalIPs': []}),
+                                 ('IPAMConfig', {'IPv4Address': ''}),
+                                 ('IPAMConfig', {'IPv4Address': '', 'IPv6Address': None}),
+                                 ('IPAMConfig', {'IPv4Address': False, 'IPv6Address': ''}),
+                                 ('IPAMConfig', {'IPv4Address': '', 'IPv6Address': 0}),
+                                 ('IPAMConfig', []), ('IPAMConfig', ''), ('IPAMConfig', False),
+                                 ('Aliases', ['foreign'])):
+                with self.subTest(target=target, field=field, value=value):
                     self.containers[name] = copy.deepcopy(original)
                     self.containers[name]['NetworkSettings']['Networks'][target][field] = value
                     with self.assertRaises(ValueError):
@@ -424,6 +442,46 @@ class StackLifecycle(unittest.TestCase):
                 self.containers[name]['NetworkSettings']['Networks'][target]['NetworkID'] = value
                 with self.assertRaises(ValueError):
                     self.controller.inspect(self.instance, 'adapter')
+
+    def test_pending_adapter_continuation_preserves_owned_graph_and_secrets(self):
+        operation = str(uuid.uuid4())
+        interrupted = False
+
+        def interrupt_after_attach(*args, **kwargs):
+            nonlocal interrupted
+            result = self.docker(*args, **kwargs)
+            if args[:2] == ('network', 'connect') and not interrupted:
+                interrupted = True
+                raise OSError('Interrupted after adapter network attachment')
+            return result
+
+        self.controller.docker = interrupt_after_attach
+        self.assertEqual(self.execute('install', operation)['state'], 'error')
+        self.assertTrue(interrupted)
+        adapter_name = self.controller.name(self.instance, '-adapter')
+        adapter = self.containers[adapter_name]
+        self.assertEqual(adapter['State']['Status'], 'created')
+        self.assertEqual(adapter['State']['StartedAt'], '0001-01-01T00:00:00Z')
+        self.assertEqual(adapter['NetworkSettings']['Networks'][self.installation + '_ingress']['IPAMConfig'],
+                         {'IPv4Address': '', 'IPv6Address': ''})
+        existing = {name: obj['Id'] for name, obj in self.containers.items()}
+        base = self.controller.paths(self.instance)
+        files = {path: (path.stat().st_ino, path.read_bytes()) for path in base.rglob('*') if path.is_file()}
+        journal_path = self.controller.operations / (operation + '.json')
+        fingerprint = json.loads(journal_path.read_bytes())['fingerprint']
+        self.controller.docker = self.docker
+        self.calls.clear()
+        with patch.object(nm.secrets, 'choice', side_effect=AssertionError('unexpected password rotation')), \
+                patch.object(nm.secrets, 'token_hex', side_effect=AssertionError('unexpected secret rotation')):
+            self.assertEqual(self.execute('install', operation)['state'], 'running')
+        self.assertEqual({name: self.containers[name]['Id'] for name in existing}, existing)
+        self.assertEqual(sum(call[:2] == ('container', 'create') for call in self.calls), 1)
+        self.assertEqual(sum(call[:2] == ('container', 'start') for call in self.calls), 2)
+        self.assertEqual({path: (path.stat().st_ino, path.read_bytes()) for path in files}, files)
+        self.assertEqual(json.loads(journal_path.read_bytes()), {'fingerprint': fingerprint, 'phase': 'complete'})
+        self.calls.clear()
+        self.assertEqual(self.execute('install', operation)['state'], 'running')
+        self.assertFalse(any(call[:2] in (('container', 'create'), ('container', 'start')) for call in self.calls))
 
     def test_upstream_gitea_volumes_are_explicit_without_weakening_mount_guard(self):
         result = self.controller.execute({'operation_id': str(uuid.uuid4()), 'instance_id': self.instance, 'module_id': 'netmap', 'action': 'install'})

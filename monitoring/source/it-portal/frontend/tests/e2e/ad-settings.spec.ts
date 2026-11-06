@@ -63,13 +63,13 @@ test("AD draft checks and persists credentials without exposing saved password",
   });
   await page.goto("/#settings?section=ad");
   await expect(
-    page.getByRole("heading", { name: "Active Directory", exact: true }),
+    page.getByRole("heading", { name: "Вход через домен", exact: true }),
   ).toBeVisible();
   await page.getByLabel(/^Сервер AD/).fill("ldaps://dc.example.test:636");
   await page.getByLabel(/^Домен входа/).fill("example.test");
-  await page.getByLabel(/^Base DN/).fill("DC=example,DC=test");
+  await page.getByLabel(/^Где искать пользователей/).fill("DC=example,DC=test");
   await page
-    .getByLabel(/^DN группы администраторов/)
+    .getByLabel(/^Группа администраторов PL/)
     .fill("CN=PL Admins,DC=example,DC=test");
   await page.getByLabel(/^Учётная запись чтения/).fill("reader@example.test");
   await page

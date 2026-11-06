@@ -272,10 +272,11 @@ export function DeliveryProxySettings() {
   const selected =
     draft && JSON.stringify([draft.instance_id, draft.inbound_tag]);
   return (
-    <Panel title="Доступ к GitHub" icon={<Network size={20} />}>
+    <Panel title="Прокси для загрузок" icon={<Network size={20} />}>
       <p className="muted">
-        Выберите, как PL получает каталог релизов, обновления и модули.
-        Изменения применяются к следующим загрузкам без перезапуска платформы.
+        Если GitHub недоступен с сервера PL, выберите внешний прокси или
+        установленный Xray. Через него PL будет проверять обновления и загружать
+        модули. Настройка действует со следующей загрузки.
       </p>
       {status.error && (
         <ErrorBox error={status.error} retry={() => void reload()} />
@@ -466,7 +467,7 @@ export function DeliveryProxySettings() {
                     variant="ghost"
                     onClick={() =>
                       withSettingsNavigation(() => {
-                          location.hash = "module-catalog";
+                        location.hash = "module-catalog";
                       })
                     }
                   >

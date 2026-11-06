@@ -440,9 +440,9 @@ test("release CTA preserves the settings leave guard and the current draft", asy
   await page.goto("/#settings?section=general");
   await page
     .getByRole("navigation", { name: "Разделы настроек" })
-    .getByRole("button", { name: "Общие параметры", exact: true })
+    .getByRole("button", { name: "Время и данные", exact: true })
     .click();
-  await page.getByLabel(/Порог устаревания/).fill("240");
+  await page.getByLabel(/Данные устаревают через/).fill("240");
   await page
     .getByRole("region", { name: "Доступна PL 0.4.5" })
     .getByRole("button", { name: "Посмотреть обновление" })
@@ -450,7 +450,7 @@ test("release CTA preserves the settings leave guard and the current draft", asy
   const prompt = page.getByRole("dialog");
   await expect(prompt).toContainText(/несохранён|Несохранён/);
   await prompt.getByRole("button", { name: /Остаться/ }).click();
-  await expect(page.getByLabel(/Порог устаревания/)).toHaveValue("240");
+  await expect(page.getByLabel(/Данные устаревают через/)).toHaveValue("240");
   expect(state.writes).toHaveLength(0);
 });
 test("configuration operations and invalid public error payload never replace the app", async ({
@@ -546,10 +546,10 @@ test("lost acceptance and failed API reconciliation immediately consult public s
 }) => {
   const state = await fixture(page);
   state.loseAcceptanceAndDelivery();
-  await page.goto("/#settings?section=operations");
+  await page.goto("/#settings?section=updates");
   await page
     .getByRole("navigation", { name: "Разделы настроек" })
-    .getByRole("button", { name: "Эксплуатация", exact: true })
+    .getByRole("button", { name: "Обновления", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Обновить до 0.4.5", exact: true })
@@ -578,10 +578,10 @@ const doskaUpdate = {
   artifact_sha256: moduleSHA,
 };
 async function moduleSettings(page: Page) {
-  await page.goto("/#settings?section=operations");
+  await page.goto("/#settings?section=updates");
   await page
     .getByRole("navigation", { name: "Разделы настроек" })
-    .getByRole("button", { name: "Эксплуатация", exact: true })
+    .getByRole("button", { name: "Обновления", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Обновления модулей", exact: true }),
@@ -713,7 +713,7 @@ test("viewer never receives a module upgrade control or delivery query", async (
 }) => {
   const state = await fixture(page, false);
   state.setModules([doskaUpdate]);
-  await page.goto("/#settings?section=operations");
+  await page.goto("/#settings?section=updates");
   await expect(
     page.getByRole("heading", { name: "Куда перейдём?", exact: true }),
   ).toBeVisible();

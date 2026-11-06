@@ -218,7 +218,7 @@ func (s *Server) moduleDirectory(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) applicationFeatures(ctx context.Context) (map[string]bool, error) {
 	legacySFTP := !s.Config.PortableRelease && s.Config.SFTP != nil
-	features := map[string]bool{"forms": s.Config.Forms != nil, "doska": s.Config.Doska != nil, "sftp": legacySFTP, "sftp_exchange": legacySFTP}
+	features := map[string]bool{"forms": s.Config.Forms != nil, "doska": s.Config.Doska != nil, "sftp": legacySFTP}
 	if s.Modules == nil {
 		return features, nil
 	}

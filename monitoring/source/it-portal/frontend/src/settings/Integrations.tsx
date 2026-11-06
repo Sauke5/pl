@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { api, date, queryClient, useAPI } from "../api";
-import type { Integration, Job, Session } from "../types";
+import type { Integration, Job } from "../types";
 import {
   Badge,
   Empty,
@@ -25,8 +25,6 @@ import { PrometheusOptions } from "../PrometheusOptions";
 import {
   IntegrationConfigurationHistory,
   OxidizedBindings,
-  SFTP_EXCHANGE_ID,
-  SFTPExchangeSummary,
 } from "../ConnectionDetails";
 import { useHelpTopic } from "../Help";
 import {
@@ -66,7 +64,6 @@ export function Integrations({
   onSaved: (id: string) => void;
 }) {
   const integrations = useAPI<Integration[]>("/integrations");
-  const session = useAPI<Session>("/session");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [editing, setEditing] = useState(false);
@@ -172,16 +169,12 @@ export function Integrations({
     }) || [];
   const running =
     refreshing || (!!job && ["queued", "running"].includes(job.status));
-  const builtinVisible =
-    session.data?.features?.sftp_exchange === true &&
-    filter === "all" &&
-    "приём выгрузок 1с sftp".includes(query.trim().toLocaleLowerCase("ru"));
   return (
-    <section className="settings-integrations" aria-label="Интеграции">
+    <section className="settings-integrations" aria-label="Настройки подключений">
       <header className="settings-section-heading">
         <PlugZap size={22} />
         <div>
-          <h2>Интеграции</h2>
+          <h2>Подключения</h2>
           <p>Источники данных и состояние подключений</p>
         </div>
         <Button variant="default" onClick={() => onSelect("new")}>
@@ -210,10 +203,7 @@ export function Integrations({
               <option value="disabled">Выключены</option>
             </select>
             <span className="muted">
-              Подключений:{" "}
-              {integrations.data
-                ? visible.length + Number(builtinVisible)
-                : "—"}
+              Подключений: {integrations.data ? visible.length : "—"}
             </span>
           </div>
           <div
@@ -221,26 +211,6 @@ export function Integrations({
             role="region"
             aria-label="Подключения"
           >
-            {builtinVisible && (
-              <button
-                type="button"
-                className={
-                  "settings-connection" +
-                  (selected === SFTP_EXCHANGE_ID ? " is-selected" : "")
-                }
-                aria-pressed={selected === SFTP_EXCHANGE_ID}
-                onClick={() => onSelect(SFTP_EXCHANGE_ID)}
-              >
-                <div className="settings-connection-title">
-                  <strong>Приём выгрузок 1С</strong>
-                  <ChevronRight size={15} />
-                </div>
-                <div className="settings-connection-meta">
-                  <span>SFTP</span>
-                  <span className="muted">Папки филиалов</span>
-                </div>
-              </button>
-            )}
             {integrations.error ? (
               <ErrorBox
                 error={integrations.error}
@@ -278,7 +248,7 @@ export function Integrations({
                   )}
                 </button>
               ))
-            ) : !builtinVisible ? (
+            ) : (
               <Empty
                 title={
                   query || filter !== "all"
@@ -291,7 +261,7 @@ export function Integrations({
                     : "Добавьте первый источник данных."
                 }
               />
-            ) : null}
+            )}
           </div>
         </section>
         <section
@@ -300,15 +270,7 @@ export function Integrations({
           aria-label="Подключение"
           data-settings-inspector
         >
-          {selected === SFTP_EXCHANGE_ID ? (
-            <div className="settings-inspector-body">
-              {session.data?.features?.sftp_exchange ? (
-                <SFTPExchangeSummary />
-              ) : (
-                <Empty title="Приём SFTP не подключён" />
-              )}
-            </div>
-          ) : selected === "new" ? (
+          {selected === "new" ? (
             <IntegrationEditor
               key="new"
               onSaved={(record) => {
@@ -377,7 +339,7 @@ export function Integrations({
                   )}
                   <dl className="settings-facts">
                     <div data-settings-field="url" tabIndex={-1}>
-                      <dt>Базовый URL</dt>
+                      <dt>Адрес сервиса</dt>
                       <dd>{current.url || "Серверный исполнитель"}</dd>
                     </div>
                     <div>
@@ -389,15 +351,15 @@ export function Integrations({
                       <dd>{date(current.last_attempt)}</dd>
                     </div>
                     <div data-settings-field="poll_seconds" tabIndex={-1}>
-                      <dt>Интервал опроса</dt>
+                      <dt>Обновление данных</dt>
                       <dd>{current.poll_seconds} с</dd>
                     </div>
                     <div data-settings-field="timeout_seconds" tabIndex={-1}>
-                      <dt>Таймаут</dt>
+                      <dt>Ожидание ответа</dt>
                       <dd>{current.timeout_seconds} с</dd>
                     </div>
                     <div data-settings-field="concurrency" tabIndex={-1}>
-                      <dt>Параллелизм</dt>
+                      <dt>Одновременные запросы</dt>
                       <dd>{current.concurrency}</dd>
                     </div>
                   </dl>
@@ -705,12 +667,12 @@ function IntegrationEditor({
             </div>
             <FormField
               name="url"
-              label="Базовый URL"
+              label="Адрес сервиса"
               errors={state.errors}
               hint={
                 draft.kind === "fileauditor"
                   ? "Адрес signed gateway v2 с префиксом /audit или /audit-arch."
-                  : undefined
+                  : "Адрес сервиса, из которого PL получает данные. Например, https://metrics.example.ru."
               }
             >
               <input
@@ -723,12 +685,12 @@ function IntegrationEditor({
             </FormField>
             <FormField
               name="secret_ref"
-              label="Ссылка на учётные данные"
+              label="Сохранённые учётные данные"
               errors={state.errors}
               hint={
                 draft.kind === "fileauditor"
                   ? "Ссылка на файл ключа signed gateway v2, согласованный при подключении."
-                  : "env:PORTAL_SECRET_* или file:имя"
+                  : "Ссылка на секрет, настроенный на сервере PL: env:PORTAL_SECRET_* или file:имя. Оставьте пустым, если сервис доступен без учётных данных."
               }
             >
               <input
@@ -747,6 +709,13 @@ function IntegrationEditor({
                   name={key}
                   label={fieldLabels[key]}
                   errors={state.errors}
+                  hint={
+                    key === "poll_seconds"
+                      ? "Как часто PL получает свежие данные из этого сервиса."
+                      : key === "timeout_seconds"
+                        ? "Сколько секунд ждать ответ перед сообщением об ошибке сбора."
+                        : "Сколько запросов PL может выполнять к сервису одновременно: от 1 до 4."
+                  }
                 >
                   <input
                     {...inputProps(key, state.errors)}

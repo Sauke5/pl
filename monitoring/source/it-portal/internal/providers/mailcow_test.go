@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -494,9 +495,9 @@ func TestMailcowPreflightUsesSevenReadsAndOneBudget(t *testing.T) {
 	t.Run("one total timeout", func(t *testing.T) {
 		i := mailcowTestIntegration(t)
 		i.TimeoutSeconds = 1
-		calls := 0
+		var calls atomic.Int32
 		r := registry(t, func(w http.ResponseWriter, req *http.Request) {
-			calls++
+			calls.Add(1)
 			select {
 			case <-time.After(300 * time.Millisecond):
 			case <-req.Context().Done():
@@ -506,8 +507,8 @@ func TestMailcowPreflightUsesSevenReadsAndOneBudget(t *testing.T) {
 		})
 		started := time.Now()
 		err := r.MailcowProbe(context.Background(), i, "")
-		if MailcowErrorCode(err) != "timeout" || calls >= 7 || time.Since(started) > 2*time.Second {
-			t.Fatal("preflight did not retain a single finite budget", err, calls, time.Since(started))
+		if MailcowErrorCode(err) != "timeout" || calls.Load() >= 7 || time.Since(started) > 2*time.Second {
+			t.Fatal("preflight did not retain a single finite budget", err, calls.Load(), time.Since(started))
 		}
 	})
 	t.Run("policy before transient credential", func(t *testing.T) {

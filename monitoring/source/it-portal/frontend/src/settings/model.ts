@@ -8,6 +8,8 @@ export type SettingsSection =
   | "general"
   | "system"
   | "operations"
+  | "security"
+  | "updates"
   | "installation"
   | "delivery"
   | "users"
@@ -16,6 +18,7 @@ export const sections: {
   id: SettingsSection;
   label: string;
   description: string;
+  group?: string;
 }[] = [
   {
     id: "overview",
@@ -23,54 +26,76 @@ export const sections: {
     description: "Текущая конфигурация Платформы",
   },
   {
+    id: "general",
+    label: "Время и данные",
+    description: "Часовой пояс и срок актуальности показателей",
+    group: "Каталог и данные",
+  },
+  {
     id: "integrations",
-    label: "Интеграции",
-    description: "Источники данных и параметры подключений",
+    label: "Подключения",
+    description: "Источники данных, доступ к ним и частота обновления",
+    group: "Каталог и данные",
   },
   {
     id: "dictionaries",
     label: "Справочники",
     description: "Значения для карточек и фильтров каталога",
+    group: "Каталог и данные",
   },
   {
     id: "publication",
-    label: "Публикация",
-    description: "Доступ и ресурсы Board",
-  },
-  {
-    id: "general",
-    label: "Общие параметры",
-    description: "Время и актуальность данных",
-  },
-  {
-    id: "operations",
-    label: "Эксплуатация",
-    description: "Параметры доступа и состояние хоста",
-  },
-  {
-    id: "installation",
-    label: "Развёртывание",
-    description: "Адрес PL, TLS и сетевая политика",
-  },
-  {
-    id: "delivery",
-    label: "Доступ к GitHub",
-    description: "Прокси для обновлений и загрузки модулей",
+    label: "Страница для пользователей",
+    description: "Какие сервисы показывать пользователям и кому они доступны",
+    group: "Каталог и данные",
   },
   {
     id: "users",
-    label: "Пользователи",
-    description: "Локальные учётные записи и роли",
+    label: "Локальные пользователи",
+    description: "Учётные записи в PL и их роли",
+    group: "Пользователи и доступ",
   },
   {
     id: "ad",
-    label: "Active Directory",
-    description: "Вход через домен и права пользователей",
+    label: "Вход через домен",
+    description: "Подключение Active Directory и права доменных пользователей",
+    group: "Пользователи и доступ",
+  },
+  {
+    id: "security",
+    label: "Пароли и сессии",
+    description: "Длина локальных паролей и срок действия входа",
+    group: "Пользователи и доступ",
+  },
+  {
+    id: "updates",
+    label: "Обновления",
+    description: "Версия PL, изменения в релизе и установка обновлений",
+    group: "Обслуживание",
+  },
+  {
+    id: "delivery",
+    label: "Прокси для загрузок",
+    description: "Доступ к GitHub для обновлений и установки модулей",
+    group: "Обслуживание",
+  },
+  {
+    id: "operations",
+    label: "Состояние сервера",
+    description: "Память, диск, нагрузка и диагностика PL",
+    group: "Обслуживание",
+  },
+  {
+    id: "installation",
+    label: "Адрес и сеть",
+    description: "Адрес PL, HTTPS-сертификат и доступные для проверок сети",
+    group: "Обслуживание",
   },
   {
     id: "system",
-    label: "Система",
-    description: "Действующая серверная конфигурация",
+    label: "Серверная конфигурация",
+    description: "Технические параметры действующей установки",
+    group: "Обслуживание",
   },
 ];
 export type SettingsLocation = {
@@ -100,51 +125,71 @@ export type SearchEntry = SettingsLocation & {
   description: string;
   keywords?: string;
 };
+export const fieldKeywords: Record<string, string> = {
+  url: "URL ссылка адрес endpoint",
+  poll_seconds: "опрос период частота интервал обновление",
+  timeout_seconds: "таймаут timeout ожидание ответа",
+  concurrency: "параллелизм параллельно запросы",
+  secret_ref: "секрет пароль ключ token credentials",
+};
 export const searchEntries: SearchEntry[] = [
   {
     section: "delivery",
-    title: "Доступ к GitHub",
+    title: "Прокси для загрузок",
     description: "Прокси, Xray и проверка загрузки обновлений",
     keywords:
       "HTTP CONNECT SOCKS5 прокси proxy github модули релиз обновления CA",
   },
   {
     section: "installation",
-    title: "Развёртывание PL",
+    title: "Адрес и сеть",
     description: "Адрес, интерфейс, TLS-сертификат и сети интеграций",
     keywords: "домен URL HTTPS сертификат CA сеть CIDR порты",
   },
   {
     section: "ad",
-    title: "Active Directory",
+    title: "Вход через домен · Active Directory",
     description: "Сервер, домен, группа администраторов и проверка подключения",
     keywords: "AD LDAP LDAPS StartTLS TLS сертификат авторизация вход домен",
   },
   {
     section: "operations",
-    title: "Эксплуатация",
-    description: "Срок сессии, длина пароля, ресурсы хоста",
-    keywords: "CPU RAM диск сервер доступ пароль",
+    title: "Состояние сервера",
+    description: "Память, диск, нагрузка и время работы сервера PL",
+    keywords: "CPU RAM диск сервер хост диагностика эксплуатация",
+  },
+  {
+    section: "security",
+    field: "session_lifetime_minutes",
+    title: "Срок действия входа",
+    description: "Пароли и сессии · когда потребуется войти снова",
+    keywords: "безопасность доступ срок сессия минуты пароль",
+  },
+  {
+    section: "security",
+    field: "local_password_min_length",
+    title: "Минимальная длина пароля",
+    description: "Пароли и сессии · требования к локальным учётным записям",
+    keywords: "безопасность символы длина пароль локальный",
+  },
+  {
+    section: "updates",
+    title: "Обновления PL",
+    description: "Текущая версия, новые возможности и установка релиза",
+    keywords: "версия релиз release update эксплуатация",
   },
   {
     section: "users",
-    title: "Пользователи",
+    title: "Локальные пользователи",
     description: "Создание и изменение локальных учётных записей",
     keywords: "администратор роль пароль",
   },
   {
     section: "integrations",
-    title: "Подключения",
+    title: "Подключения и интеграции",
     description: "Источники, адреса, состояние, опрос",
     keywords:
       "prometheus alertmanager grafana netbox wayline docker oxidized gitea отчёты",
-  },
-  {
-    section: "integrations",
-    integration: "builtin:sftp-exchange",
-    title: "Приём выгрузок 1С",
-    description: "Последние принятые архивы филиалов",
-    keywords: "обмен 1с sftp",
   },
   {
     section: "dictionaries",
@@ -204,15 +249,15 @@ export const searchEntries: SearchEntry[] = [
     section: "general",
     field: "timezone",
     title: "Часовой пояс",
-    description: "Общие параметры · время в Платформе",
+    description: "Время и данные · даты событий и отчётов",
     keywords: "время дата москва timezone",
   },
   {
     section: "general",
     field: "stale_after_seconds",
-    title: "Порог устаревания",
-    description: "Общие параметры · актуальность данных мониторинга",
-    keywords: "секунды stale",
+    title: "Когда считать данные устаревшими",
+    description: "Время и данные · актуальность показателей мониторинга",
+    keywords: "порог устаревания секунды stale",
   },
   {
     section: "system",
@@ -269,14 +314,14 @@ export type HistoryTarget = {
 export const fieldLabels: Record<string, string> = {
   name: "Название",
   kind: "Тип источника",
-  url: "Базовый URL",
+  url: "Адрес сервиса",
   enabled: "Подключение включено",
-  poll_seconds: "Интервал опроса, с",
-  timeout_seconds: "Таймаут, с",
-  concurrency: "Параллелизм",
-  secret_ref: "Ссылка на учётные данные",
+  poll_seconds: "Обновлять каждые, с",
+  timeout_seconds: "Ожидание ответа, с",
+  concurrency: "Одновременные запросы",
+  secret_ref: "Сохранённые учётные данные",
   timezone: "Часовой пояс",
-  stale_after_seconds: "Порог устаревания, с",
+  stale_after_seconds: "Данные устаревают через, с",
   board_enabled: "Публикация Board",
   board_anonymous: "Анонимный доступ",
   board_title: "Заголовок Board",

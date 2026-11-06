@@ -1,5 +1,4 @@
 import { useDraftRegistration } from "./settings/Draft";
-import { UpdateSettings } from "./UpdateSettings";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Server, Shield } from "lucide-react";
 import { APIError, api, refresh, useAPI, date } from "./api";
@@ -37,9 +36,12 @@ const bytes = (value?: number) =>
     : value >= 1073741824
       ? `${(value / 1073741824).toFixed(1)} ГиБ`
       : `${(value / 1048576).toFixed(1)} МБ`;
-export function RuntimeSettings() {
+export function SessionSettings() {
   const settings = useAPI<Settings>("/settings");
-  const runtime = useAPI<Runtime>("/runtime");
+  const runtime = useAPI<Runtime>(
+    "/runtime",
+    !!settings.data && !settings.data.session_lifetime_minutes,
+  );
   const [draft, setDraft] = useState<Settings>();
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
@@ -111,7 +113,6 @@ export function RuntimeSettings() {
   });
   return (
     <div className="runtime-settings">
-      <UpdateSettings />
       <Panel title="Сессии и пароли" icon={<Shield size={20} />}>
         <p className="muted">
           Изменения сохраняются на сервере и действуют без перезапуска.
@@ -128,10 +129,11 @@ export function RuntimeSettings() {
             <fieldset disabled={busy || conflict}>
               <div className="form-grid">
                 <Field
-                  label="Срок новой сессии, мин"
-                  hint="От 15 минут до 7 дней. Уже открытые сессии сохраняют прежний срок. Внешний вход также ограничен сроком токена провайдера."
+                  label="Повторный вход через, мин"
+                  hint="Когда PL попросит войти снова: от 15 минут до 7 дней. Уже выполненные входы сохраняют прежний срок. Доменный вход может завершиться раньше по правилам его сервера."
                 >
                   <input
+                    data-settings-field="session_lifetime_minutes"
                     type="number"
                     min={15}
                     max={10080}
@@ -151,9 +153,10 @@ export function RuntimeSettings() {
                 </Field>
                 <Field
                   label="Минимальная длина пароля"
-                  hint="От 8 до 128 символов. Для новых и изменяемых локальных паролей; существующие пароли сохраняются."
+                  hint="От 8 до 128 символов. Требование применяется при создании или смене пароля локального пользователя."
                 >
                   <input
+                    data-settings-field="local_password_min_length"
                     type="number"
                     min={8}
                     max={128}
@@ -201,7 +204,44 @@ export function RuntimeSettings() {
           <p>Загрузка настроек…</p>
         )}
       </Panel>
-      <Panel title="Хост Платформы" icon={<Server size={20} />}>
+      <Panel title="Роли пользователей" icon={<Shield size={20} />}>
+        <dl className="runtime-facts">
+          <div>
+            <dt>Администратор</dt>
+            <dd>
+              Настройки Платформы, пользователи, интеграции, установка и
+              конфигурация модулей.
+            </dd>
+          </div>
+          <div>
+            <dt>Пользователь</dt>
+            <dd>
+              Просмотр разрешённых сервисов и смена своего пароля. Настройки
+              сервера недоступны.
+            </dd>
+          </div>
+          <div>
+            <dt>Через администратора хоста</dt>
+            <dd>SSH, firewall, диски, перезагрузка и обновление ОС.</dd>
+          </div>
+          <div>
+            <dt>Обязательные проверки</dt>
+            <dd>
+              Вход в Платформу, проверка прав, защита изменяющих запросов и
+              проверка TLS подключаемых сервисов.
+            </dd>
+          </div>
+        </dl>
+      </Panel>
+    </div>
+  );
+}
+
+export function RuntimeSettings() {
+  const runtime = useAPI<Runtime>("/runtime");
+  return (
+    <div className="runtime-settings">
+      <Panel title="Состояние сервера" icon={<Server size={20} />}>
         {runtime.error ? (
           <ErrorBox error={runtime.error} />
         ) : runtime.data?.host ? (
@@ -263,7 +303,7 @@ export function RuntimeSettings() {
         ) : runtime.data ? (
           <p className="notice">
             {runtime.data.host_error ||
-              "Host controller не предоставил данные хоста"}
+              "Не удалось получить состояние сервера PL. Обновите проверку через несколько секунд."}
           </p>
         ) : (
           <p>Загрузка состояния…</p>
@@ -315,37 +355,6 @@ export function RuntimeSettings() {
             <p>Нет данных процесса</p>
           )}
         </details>
-      </Panel>
-      <Panel title="Права и границы управления" icon={<Shield size={20} />}>
-        <dl className="runtime-facts">
-          <div>
-            <dt>Администратор</dt>
-            <dd>
-              Настройки Платформы, пользователи, интеграции, установка и
-              конфигурация модулей.
-            </dd>
-          </div>
-          <div>
-            <dt>Пользователь</dt>
-            <dd>
-              Просмотр разрешённых сервисов и смена своего пароля. Настройки
-              сервера недоступны.
-            </dd>
-          </div>
-          <div>
-            <dt>Через администратора хоста</dt>
-            <dd>
-              SSH, firewall, диски, перезагрузка и обновление ОС.
-            </dd>
-          </div>
-          <div>
-            <dt>Обязательные проверки</dt>
-            <dd>
-              Вход в Платформу, проверка прав, защита изменяющих запросов и
-              проверка TLS подключаемых сервисов.
-            </dd>
-          </div>
-        </dl>
       </Panel>
     </div>
   );
