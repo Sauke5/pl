@@ -106,6 +106,7 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertTrue(all(command[command.index("--platform") + 1] == "linux/amd64" for command in calls))
         self.assertTrue(manifest["features"]["on_demand_modules"])
         self.assertTrue(manifest["features"]["icmp_probe"])
+        self.assertEqual(manifest["installation_counter_url"], package.INSTALLATION_COUNTER_URL)
         self.assertTrue({"delivery.py", "delivery-proxy.py", "installation-settings.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py", "icmp-probe.py", "icmp-install.py"} <= files)
         self.assertFalse(any(key.endswith("_module") for key in manifest["features"]))
         bootstrap.validate_bundled_images(manifest)

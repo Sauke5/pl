@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack, contextmanager, nullcontext
+from contextlib import ExitStack, closing, contextmanager, nullcontext
 import base64
 import fcntl
 import hashlib
 import hmac
+import http.client
 import http.server
 import ipaddress
 import io
@@ -1081,6 +1082,52 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('Module redirects refused')
 
 
+def report_installation(state_path, destination, installation, version, requested, stopped):
+    payload = json.dumps({'installation_id': installation, 'version': version}).encode('ascii')
+    headers = {'Content-Type': 'application/json', 'User-Agent': 'PL'}
+    while not stopped.is_set():
+        requested.clear()
+        delay = 10
+        try:
+            state = json.loads(state_path.read_bytes())
+            if (isinstance(state, dict) and state.get('phase') == 'ready'
+                    and state.get('install_id') == installation and state.get('version') == version):
+                with closing(http.client.HTTPSConnection(destination.hostname, destination.port, timeout=5)) as connection:
+                    connection.request('POST', destination.path, payload, headers)
+                    with connection.getresponse() as response:
+                        if response.status == 204:
+                            delay = 24 * 60 * 60
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
+        requested.wait(delay)
+
+
+@contextmanager
+def installation_counter(root, installation):
+    try:
+        manifest = json.loads(Path(__file__).with_name('manifest.json').read_bytes())
+        destination = urllib.parse.urlsplit(manifest.get('installation_counter_url', ''))
+        version = manifest.get('version', '')
+        enabled = (destination.scheme == 'https' and destination.hostname and destination.username is None
+                   and destination.path == '/v1/installs' and not (destination.query or destination.fragment)
+                   and isinstance(version, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', version))
+    except (AttributeError, OSError, TypeError, ValueError):
+        enabled = False
+    if not enabled:
+        yield
+        return
+
+    requested, stopped = threading.Event(), threading.Event()
+    thread = threading.Thread(target=report_installation, name='pl-installation-counter', daemon=True,
+                              args=(root / 'state/installation.json', destination, installation, version, requested, stopped))
+    thread.start()
+    try:
+        yield requested.set
+    finally:
+        stopped.set()
+        requested.set()
+
+
 def authenticated(key, headers, method, path, body, now=None):
     timestamp = headers.get('X-PL-Timestamp', '')
     signature = headers.get('X-PL-Signature', '')
@@ -1490,8 +1537,11 @@ def main():
         os.chown(path, 0, marker['gid'])
         path.chmod(0o660)
         server.controller, server.key = controller, key
-        monitor = controller.delivery().status_monitor() if controller.on_demand else nullcontext()
-        with monitor:
+        delivery = controller.delivery() if controller.on_demand else None
+        monitor = delivery.status_monitor() if delivery is not None else nullcontext()
+        with monitor, installation_counter(args.root, controller.installation) as request_report:
+            if delivery is not None:
+                delivery.request_installation_report = request_report
             server.serve_forever(poll_interval=0.5)
 
 

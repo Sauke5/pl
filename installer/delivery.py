@@ -335,6 +335,7 @@ class Delivery:
         directory(self.root / 'state')
         directory(self.base)
         self._checking = False
+        self.request_installation_report = None
 
     @contextmanager
     def lock(self, exclusive=True, blocking=True):
@@ -526,6 +527,8 @@ class Delivery:
                     raise ValueError('Invalid release channel configuration')
                 asset_url(cfg['catalog_url'])
                 with tempfile.TemporaryDirectory(dir=self.base) as tmp:
+                    if self.request_installation_report is not None:
+                        self.request_installation_report()
                     raw = self.download(cfg['catalog_url'], Path(tmp) / 'catalog.json', 1024**2)
                     envelope = load_json(raw)
                     verify_catalog(envelope, self.key, self.catalog(allow_expired=True))

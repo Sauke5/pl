@@ -16949,6 +16949,11 @@
       "size": 699
     },
     {
+      "path": "docs/releases/0.8.6.json",
+      "sha256": "ba2d4d9eaa564fc7efde9ec447be94a3a9179631d6c41e119f061bf32b49205c",
+      "size": 201
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -16960,13 +16965,13 @@
     },
     {
       "path": "installer/README.public.ru.md",
-      "sha256": "ba887fe817bafb476472523e9c119cbfec59ef5a1f464c031a793233d3c72ff8",
-      "size": 12203
+      "sha256": "f9ea55fc74f802ebadeba54a5d93d4182313fd2697a55b8dc31a70fde5fe5968",
+      "size": 12601
     },
     {
       "path": "installer/README.ru.md",
-      "sha256": "ba887fe817bafb476472523e9c119cbfec59ef5a1f464c031a793233d3c72ff8",
-      "size": 12203
+      "sha256": "f9ea55fc74f802ebadeba54a5d93d4182313fd2697a55b8dc31a70fde5fe5968",
+      "size": 12601
     },
     {
       "path": "installer/alertmanager-controller.py",
@@ -17000,8 +17005,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "b008d22ef3f3eba1e847bf8c90c315684c9699d4abf9ec57fda2bc0fa4e68844",
-      "size": 122728
+      "sha256": "1de173c0b0cc095afcc35ac4f2d6910770f9994eb91360fc5e217c23f5d2dab1",
+      "size": 122904
     },
     {
       "path": "installer/delivery.ru.md",
@@ -17100,8 +17105,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "10588701de582f2a553b7c8019d61ce09e1081ecaf0d805943b6e43cfcf9dcfd",
-      "size": 84739
+      "sha256": "46817bcc2ad8aba9ec05e65b8005314ecb9d43ff2be59850454268a629c57eb2",
+      "size": 87243
     },
     {
       "path": "installer/module-network.py",
@@ -17145,8 +17150,8 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "cc2aed8546ef039ae1ffc030e4b3f3d5d95d100b756a3976d3dfe9d5bb112b54",
-      "size": 37170
+      "sha256": "145a491f887584fa8fd28d5aa8e74c522627edddc73c694c61e5c9c76ff0383b",
+      "size": 37306
     },
     {
       "path": "installer/platform-guide.ru.md",
@@ -17155,8 +17160,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "f964cbb7d3fa8e5b059c8c2749752608c23e2aacda64e5e99602a825f84bf2b9",
-      "size": 35268
+      "sha256": "41692bf07288e908d5a90e8da272f9d1b887714a4e99906fcf06efabca2fca7b",
+      "size": 35350
     },
     {
       "path": "installer/release-catalog.py",
@@ -17324,6 +17329,11 @@
       "size": 24845
     },
     {
+      "path": "installer/tests/test_installation_counter.py",
+      "sha256": "27eef9b458e0c92b1e64c38e8de4ca49da005b311020cf2ec89d559a5ef83bab",
+      "size": 9200
+    },
+    {
       "path": "installer/tests/test_installation_settings.py",
       "sha256": "7d5b8efcb158fd12d5fde31f28e60515aee14c806d053d98da9c3c543690ab7e",
       "size": 22883
@@ -17370,8 +17380,8 @@
     },
     {
       "path": "installer/tests/test_minimal_package.py",
-      "sha256": "f7cbccc3326e1262ef4c9fea99cc4b9b4079f20010555038c3e49f56940e5581",
-      "size": 15391
+      "sha256": "f05078de10303c7d25b8e4448c3616b59aad5f474da72595afeac1306f73bb6a",
+      "size": 15488
     },
     {
       "path": "installer/tests/test_module_controller.py",
@@ -22192,6 +22202,11 @@
       "path": "monitoring/source/websites-admin/tests/test_template_assets.py",
       "sha256": "1d64b70af30ed6e2063effede392b3e717e76dd1287bb9283d5f8fd20c2c8d4c",
       "size": 3826
+    },
+    {
+      "path": "release/installation-counter-receiver.py",
+      "sha256": "9cec105113917b1fcf96b95242cf085d0b0c82283388ea81030bec47e58a8584",
+      "size": 3464
     }
   ],
   "generated_files": [
