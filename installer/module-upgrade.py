@@ -34,6 +34,7 @@ STORAGE = {'forms': {'mongo', 'keydb'}, 'doska': {'database'},
 IMAGE_FIELDS = {'id', 'architecture', 'ref', 'recipe', 'labels'}
 IMAGE_DEFAULTS = ('User', 'Env', 'Entrypoint', 'Cmd', 'WorkingDir', 'ExposedPorts', 'Volumes', 'Healthcheck', 'StopSignal')
 LEGACY_FINGERPRINT_CORES = {'0.5.0-rc.1', '0.5.1', '0.5.2'}
+NETMAP_TRANSITIONS = (('1.0.0', '1.1.0'), ('1.0.0', '1.2.0'), ('1.1.0', '1.2.0'))
 
 
 class UnsupportedTransition(ValueError):
@@ -43,10 +44,10 @@ class UnsupportedTransition(ValueError):
 
 
 def supported_version_transition(kind, previous, candidate):
-    """Only a rebuild, or the explicitly verified NetMap inventory extension."""
+    """Only a rebuild or an explicit compatible NetMap transition."""
     return (kind in ROLES and isinstance(previous, str) and bool(previous)
             and isinstance(candidate, str) and (previous == candidate
-                or (kind, previous, candidate) == ('netmap', '1.0.0', '1.1.0')))
+                or kind == 'netmap' and (previous, candidate) in NETMAP_TRANSITIONS))
 
 
 def _shape_versions(value):
@@ -54,7 +55,7 @@ def _shape_versions(value):
         return None
     pair = tuple(value.get(name, {}).get('adapter', {}).get('labels', {}).get('org.opencontainers.image.version')
                  for name in ('old_descriptor', 'new_descriptor'))
-    return pair if pair == ('1.0.0', '1.1.0') else None
+    return pair if pair in NETMAP_TRANSITIONS else None
 
 
 def digest(value):
@@ -285,7 +286,7 @@ def _fingerprint(obj, kind, *, shape=False, version=2, version_pair=None):
     if shape:
         config['Image'] = '<native-image>'
         config.setdefault('Labels', {}).pop('pl.source.sha256', None)
-        if kind == 'netmap' and version_pair == ('1.0.0', '1.1.0'):
+        if kind == 'netmap' and version_pair in NETMAP_TRANSITIONS:
             labels = config['Labels']
             if labels.get('org.opencontainers.image.version') in version_pair:
                 labels['org.opencontainers.image.version'] = '<netmap-compatible-version>'

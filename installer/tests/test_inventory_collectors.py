@@ -70,6 +70,135 @@ Vlan42 is administratively down, line protocol is down
 JUNOS_VERSION = '<rpc-reply xmlns="http://xml.juniper.net/junos"><software-information><host-name>edge-junos</host-name><product-model>ex2300-24t</product-model><junos-version>23.4R2</junos-version></software-information></rpc-reply>'
 JUNOS_INTERFACES = '''<rpc-reply><interface-information><physical-interface><name>ge-0/0/0</name><snmp-index>501</snmp-index><admin-status>up</admin-status><oper-status>up</oper-status><if-type>Ethernet</if-type><mtu>1514</mtu><speed>1000mbps</speed><current-physical-address>00:11:22:33:44:55</current-physical-address><logical-interface><name>ge-0/0/0.0</name><snmp-index>502</snmp-index><address-family><interface-address><ifa-local>192.0.2.3</ifa-local><ifa-destination>192.0.2.0/24</ifa-destination></interface-address></address-family></logical-interface></physical-interface></interface-information></rpc-reply>'''
 
+OPENWRT_BOARD = json.dumps({'hostname': 'lab-router', 'model': 'FriendlyElec NanoPi R3S LTS',
+    'board_name': 'friendlyarm,nanopi-r3s', 'release': {'distribution': 'OpenWrt', 'version': '25.12.2'}})
+OPENWRT_PORTS = '''1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN
+    inet 127.0.0.1/8 scope host lo
+2: eth0.11@eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
+    link/ether 02:11:22:33:44:55 brd ff:ff:ff:ff:ff:ff
+3: br-lan: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP
+    link/ether 02:11:22:33:44:56 brd ff:ff:ff:ff:ff:ff
+    inet 192.0.2.1/24 brd 192.0.2.255 scope global br-lan
+    inet6 2001:db8::1/64 scope global
+'''
+OPENWRT_ARP = '''192.0.2.13 dev br-lan lladdr 02:11:22:33:44:13 STALE
+192.0.2.14 dev br-lan INCOMPLETE
+192.0.2.15 dev br-lan lladdr ff:ff:ff:ff:ff:ff NOARP
+'''
+OPENWRT_DHCP = '2000000000 02:11:22:33:44:13 192.0.2.13 lab-host clientid-not-for-inventory\n'
+
+
+class RouterDriverTests(unittest.TestCase):
+    def test_friendlywrt_reads_observations_without_python_or_optional_commands(self):
+        outputs = {c.OPENWRT_BOARD: OPENWRT_BOARD, c.OPENWRT_PORTS: OPENWRT_PORTS,
+                   c.OPENWRT_ARP: OPENWRT_ARP, c.OPENWRT_NDP: '', c.OPENWRT_DHCP: OPENWRT_DHCP}
+        commands = []
+
+        def read(_client, command, _budget, **kwargs):
+            commands.append(command)
+            if command not in outputs:
+                c.fail('inventory_command_failed')
+            return outputs[command]
+
+        with patch.object(c, '_exec', side_effect=read):
+            value = c._collect_network(object(), {'driver': 'auto'}, c.Budget())
+        self.assertEqual(commands, [c.OPENWRT_BOARD, c.OPENWRT_PORTS, c.OPENWRT_ARP,
+                                   c.OPENWRT_NDP, c.OPENWRT_DHCP, c.OPENWRT_FDB])
+        self.assertEqual((value['manufacturer'], value['hostname'], value['os_name']),
+                         ('FriendlyElec', 'lab-router', 'OpenWrt'))
+        self.assertEqual([p['name'] for p in value['interfaces']], ['eth0.11', 'br-lan'])
+        self.assertEqual([a['address'] for a in value['interfaces'][1]['addresses']],
+                         ['192.0.2.1/24', '2001:db8::1/64'])
+        self.assertEqual([x['protocol'] for x in value['neighbors']], ['arp', 'dhcp'])
+        self.assertEqual(value['neighbors'][0]['local_port'], 'br-lan')
+        self.assertEqual(value['neighbors'][1]['hostname'], 'lab-host')
+        self.assertTrue(value['capabilities']['neighbors_ndp'])
+        self.assertNotIn('neighbors_fdb', value['capabilities'])
+        self.assertNotIn('clientid-not-for-inventory', json.dumps(value))
+
+    def test_fallback_arp_and_invalid_optional_format_preserve_table_authority(self):
+        outputs = {c.OPENWRT_PORTS: OPENWRT_PORTS,
+                   c.OPENWRT_ARP_FALLBACK: 'IP address HW type Flags HW address Mask Device\n'
+                    '192.0.2.13 0x1 0x2 02:11:22:33:44:13 * br-lan\n'
+                    '192.0.2.14 0x1 0x0 00:00:00:00:00:00 * br-lan\n',
+                   c.OPENWRT_DHCP: 'unexpected lease provider format'}
+        value = c._openwrt_snapshot(c._openwrt_board(OPENWRT_BOARD), outputs)
+        self.assertEqual([x['address'] for x in value['neighbors']], ['192.0.2.13'])
+        self.assertTrue(value['capabilities']['neighbors_arp'])
+        self.assertNotIn('neighbors_dhcp', value['capabilities'])
+        self.assertIn('neighbor_format_unrecognized', value['warnings'])
+        with patch.object(c, 'MAX_NEIGHBORS', 1):
+            value = c._openwrt_snapshot(c._openwrt_board(OPENWRT_BOARD), {**outputs, c.OPENWRT_DHCP: OPENWRT_DHCP})
+        self.assertEqual([x['protocol'] for x in value['neighbors']], ['arp'])
+        self.assertNotIn('neighbors_dhcp', value['capabilities'])
+        self.assertIn('neighbor_limit_reached', value['warnings'])
+
+    def test_routeros_uses_named_ports_and_distinguishes_neighbor_protocols(self):
+        outputs = {c.ROS_SYSTEM: 'version: 7.20.1 (stable)\nboard-name: hEX\nplatform: MikroTik',
+                   c.ROS_IDENTITY: 'name: edge-router', c.ROS_BOARD: 'model: RB750Gr3\nserial-number: DEMO1234',
+                   c.ROS_INTERFACES: 'Flags: R - RUNNING; X - DISABLED\n'
+                    '0 R name="uplink port" type=ether actual-mtu=1500 mac-address=02:11:22:33:44:55\n'
+                    '1 X name=ether2 type=ether actual-mtu=1500',
+                   c.ROS_IP: '0 address=192.0.2.1/24 interface="uplink port"',
+                   c.ROS_IPV6: '0 D address=2001:db8::1/64 interface="uplink port"',
+                   c.ROS_DHCP: '0 D address=192.0.2.13 mac-address=02:11:22:33:44:13 status=bound host-name=lab-host expires-after=1h2m3s\n'
+                    '1 address=192.0.2.14 mac-address=02:11:22:33:44:14 status=waiting',
+                   c.ROS_ARP: '0 DC address=192.0.2.13 mac-address=02:11:22:33:44:13 interface="uplink port"',
+                   c.ROS_FDB: '0 D mac-address=02:11:22:33:44:13 on-interface="uplink port"\n'
+                    '1 DL mac-address=02:11:22:33:44:55 on-interface="uplink port"',
+                   c.ROS_NEIGHBOR: '0 interface="uplink port" address=192.0.2.2 mac-address=02:11:22:33:44:02 '
+                    'identity="Switch 1" discovered-by=lldp,cdp interface-name=Gi1/0/1\n'
+                    '1 interface=ether2 address=192.0.2.3 mac-address=02:11:22:33:44:03 discovered-by=mndp'}
+        value = c._routeros_snapshot(outputs)
+        self.assertEqual((value['model'], value['serial'], value['hostname']), ('RB750Gr3', 'DEMO1234', 'edge-router'))
+        self.assertEqual(value['interfaces'][0]['name'], 'uplink port')
+        self.assertEqual(len(value['interfaces'][0]['addresses']), 2)
+        self.assertFalse(value['interfaces'][1]['enabled'])
+        rows = {x['protocol']: x for x in value['neighbors']}
+        self.assertEqual(set(rows), {'arp', 'dhcp', 'fdb', 'lldp', 'cdp'})
+        self.assertNotIn('remote_port', rows['lldp'])
+        self.assertEqual(rows['cdp']['remote_port'], 'Gi1/0/1')
+        self.assertEqual(rows['dhcp']['hostname'], 'lab-host')
+        old = c._routeros_snapshot({**outputs, c.ROS_NEIGHBOR: '0 interface=ether2 address=192.0.2.3 identity=legacy'})
+        self.assertNotIn('neighbors_lldp', old['capabilities'])
+
+    def test_keenetic_parses_nested_ports_and_remaining_lease(self):
+        outputs = {c.KEENETIC_VERSION: 'release: 4.2.1\nmanufacturer: Keenetic Ltd.\nmodel: Hero DSL\n',
+                   c.KEENETIC_PORTS: 'interface, name = "Home":\n  id: Bridge0\n type: Bridge\n'
+                    '  state: up\n  link: up\n  address: 192.0.2.1\n mask: 255.255.255.0\n'
+                    'interface, name = "Switch":\n id: GigabitEthernet0\n type: GigabitEthernet\n'
+                    ' port, name = 1:\n id: GigabitEthernet0/0\n type: Port\n link: down\n',
+                   c.KEENETIC_ARP: 'IP MAC Interface\n======================\n192.0.2.13 02:11:22:33:44:13 Home\n',
+                   c.KEENETIC_DHCP: 'lease:\n ip: 192.0.2.13\n mac: 02:11:22:33:44:13\n expires: 300\n hostname: lab-host\n'}
+        value = c._keenetic_snapshot(outputs)
+        self.assertEqual(value['os_name'], 'KeeneticOS')
+        self.assertEqual([x['name'] for x in value['interfaces']], ['Bridge0', 'GigabitEthernet0', 'GigabitEthernet0/0'])
+        self.assertEqual(value['interfaces'][0]['addresses'][0]['address'], '192.0.2.1/24')
+        self.assertFalse(value['interfaces'][2]['link_up'])
+        self.assertEqual(value['neighbors'][1]['hostname'], 'lab-host')
+        self.assertIn('expires_at', value['neighbors'][1])
+
+    def test_jetstream_keeps_fdb_direction_separate_from_ip_interfaces(self):
+        outputs = {c.TPLINK_SYSTEM: 'System Description - JetStream 24-Port Managed Switch\n'
+                    'System Name - edge-switch\nHardware Version - T2600G-28TS 3.0\n'
+                    'Software Version - 3.0.0 Build 20170820\nSerial Number - DEMO1234\n',
+                   c.TPLINK_PORTS: 'Port Status Speed Duplex\nGi1/0/1 LinkUp 1000M Full\nGi1/0/2 LinkDown N/A N/A\n',
+                   c.TPLINK_IP_BRIEF: 'Interface IP-Address Method Status Protocol Shutdown\n'
+                    'VLAN2 192.0.2.1/24 Static Up Up no\n',
+                   c.TPLINK_FDB: 'Vlan Mac Address Type Ports\n2 0211.2233.4413 DYNAMIC Gi1/0/1\n'
+                    '2 0211.2233.4414 STATIC Gi1/0/2\n'}
+        value = c._tplink_snapshot(outputs)
+        self.assertEqual(value['interfaces'][0]['speed_mbps'], 1000)
+        self.assertEqual(value['interfaces'][2]['addresses'][0]['address'], '192.0.2.1/24')
+        self.assertEqual(value['neighbors'], [{'protocol': 'fdb', 'mac': '02:11:22:33:44:13', 'local_port': 'Gi1/0/1'}])
+
+    def test_unknown_appliance_is_not_guessed_as_openwrt_or_routeros(self):
+        self.assertIsNone(c._openwrt_board('{"release":{"distribution":"other","version":"1.0"}}'))
+        self.assertIsNone(c._keenetic_identity('release: 4.2\nmanufacturer: generic'))
+        with self.assertRaises(c.InventoryCollectionError) as error:
+            c._routeros_snapshot({c.ROS_SYSTEM: 'version: 7.20\nplatform: generic'})
+        self.assertEqual(error.exception.code, 'inventory_driver_unsupported')
+
 
 class BoundaryTests(unittest.TestCase):
     def test_profile_strict_auth_driver_trust_and_defaults(self):

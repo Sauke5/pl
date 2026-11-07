@@ -163,6 +163,9 @@ async function stored(page: Page) {
     key,
   );
 }
+function notifications(page: Page) {
+  return page.getByRole("region", { name: "Уведомления о действиях" });
+}
 
 test("core first survives reload, unlocks initially blocked module and clearly skips unsupported", async ({
   context,
@@ -184,17 +187,37 @@ test("core first survives reload, unlocks initially blocked module and clearly s
       artifact_sha256: "a".repeat(64),
     },
   });
-  f.finish();
+  const toasts = notifications(page);
+  await expect(toasts.getByRole("status")).toContainText(
+    "Обновляем NetMap 1.1.0",
+  );
+  await expect(toasts.getByRole("status")).toContainText(
+    "Шаг 2 из 3 · Создаём резервную копию",
+  );
+  f.status.operation!.phase = "verifying";
+  await expect(toasts.getByRole("status")).toContainText(
+    "Шаг 2 из 3 · Проверяем готовность",
+  );
+  await expect(toasts.getByRole("listitem")).toHaveCount(1);
   await expect(
-    page.getByText("Очередь обновлений завершена", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Forms: пропущено/)).toBeVisible();
+    page.getByRole("region", { name: "Очередь обновлений" }),
+  ).toHaveCount(0);
+  await toasts.getByRole("button", { name: "Закрыть уведомление" }).click();
+  await page.mouse.move(20, 300);
+  await expect(toasts.getByRole("listitem")).toHaveCount(0);
+  f.finish();
+  await expect(toasts.getByRole("status")).toContainText(
+    "Обновление завершено",
+  );
+  await expect(toasts.getByRole("status")).toContainText(
+    "Пропущено: Forms 3.0.5. Нужна отдельная миграция Forms",
+  );
   await expect(
     page.getByRole("button", { name: "Проверить обновления", exact: true }),
   ).toBeEnabled();
   expect(f.writes).toHaveLength(2);
-  await page.getByRole("button", { name: "Сбросить очередь" }).click();
   await expect.poll(() => stored(page)).toBeNull();
+  await expect(toasts.getByRole("listitem")).toHaveCount(0);
 });
 
 test("lost accepted POST is reconciled with the stored UUID without a second POST", async ({
@@ -210,7 +233,7 @@ test("lost accepted POST is reconciled with the stored UUID without a second POS
   await page.reload();
   f.finish();
   await expect(
-    page.getByText("Очередь обновлений завершена", { exact: true }),
+    notifications(page).getByText("Обновление завершено", { exact: true }),
   ).toBeVisible();
   expect(f.writes).toHaveLength(1);
 });
@@ -227,10 +250,10 @@ test("two tabs share one queue and one POST; terminal failure stops remaining mo
   f.status.operation!.phase = "failed";
   f.status.operation!.error = "Fixture failed safely";
   await expect(
-    page.getByText("Обновление остановлено", { exact: true }),
+    notifications(page).getByText("Обновление остановлено", { exact: true }),
   ).toBeVisible();
   await expect(
-    other.getByText("Обновление остановлено", { exact: true }),
+    notifications(other).getByText("Обновление остановлено", { exact: true }),
   ).toBeVisible();
   expect((await stored(page)).error).toContain("Fixture failed safely");
   await expect(
@@ -249,7 +272,7 @@ test("catalog hash change and a foreign operation never launch a queued step", a
   f.finish();
   f.status.modules[0].artifact_sha256 = "c".repeat(64);
   await expect(
-    page.getByText("Обновление остановлено", { exact: true }),
+    notifications(page).getByText("Обновление остановлено", { exact: true }),
   ).toBeVisible();
   expect(f.writes).toHaveLength(1);
 });
@@ -292,7 +315,7 @@ test("foreign terminal operation pauses a persisted pending plan", async ({
   };
   await page.reload();
   await expect(
-    page.getByText("Обновление остановлено", { exact: true }),
+    notifications(page).getByText("Обновление остановлено", { exact: true }),
   ).toBeVisible();
   expect(f.writes).toHaveLength(0);
 });
@@ -320,7 +343,47 @@ test("temporary API outage after lost accepted core POST waits for reconciliatio
   });
   f.finish();
   await expect(
-    page.getByText("Очередь обновлений завершена", { exact: true }),
+    notifications(page).getByText("Обновление завершено", { exact: true }),
   ).toBeVisible();
   expect(f.writes).toHaveLength(2);
+});
+
+test("a completed queue left by an older version is cleared on launch", async ({
+  context,
+  page,
+}) => {
+  const f = await fixture(context, false);
+  await page.goto("/");
+  await page.evaluate((key) => {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        schema: 1,
+        id: crypto.randomUUID(),
+        actor: "batch-admin",
+        origin: location.origin,
+        created: Date.now(),
+        steps: [
+          {
+            operation_id: crypto.randomUUID(),
+            version: "1.1.0",
+            module_id: "netmap",
+            artifact_sha256: "a".repeat(64),
+            state: "done",
+          },
+        ],
+      }),
+    );
+  }, key);
+  await page.reload();
+  await expect(notifications(page).getByRole("status")).toContainText(
+    "Установлено: NetMap 1.1.0.",
+  );
+  await expect.poll(() => stored(page)).toBeNull();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Моё рабочее пространство" }),
+  ).toBeVisible();
+  await expect(notifications(page).getByRole("listitem")).toHaveCount(0);
+  expect(f.writes).toHaveLength(0);
 });

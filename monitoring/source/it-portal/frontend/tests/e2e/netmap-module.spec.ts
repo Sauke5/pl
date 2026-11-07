@@ -312,6 +312,11 @@ async function open(page: Page) {
   ).toBeVisible();
 }
 
+const section = (page: Page, name: string) =>
+  page
+    .getByRole("navigation", { name: "Разделы NetMap" })
+    .getByRole("button", { name, exact: true });
+
 test("NetMap creates a selected network without an automatic poll, then shows the actual asynchronous result", async ({
   page,
 }, testInfo) => {
@@ -320,6 +325,7 @@ test("NetMap creates a selected network without an automatic poll, then shows th
   await expect(
     page.getByRole("link", { name: "Открыть карту", exact: true }),
   ).toHaveAttribute("href", "/netmap/");
+  await section(page, "Доступ и конфигурации").click();
   await expect(
     page.getByRole("link", { name: "NetBox", exact: true }),
   ).toHaveAttribute("href", "/netmap/netbox/");
@@ -329,6 +335,7 @@ test("NetMap creates a selected network without an automatic poll, then shows th
   await expect(
     page.getByRole("link", { name: "Gitea", exact: true }),
   ).toHaveAttribute("href", "/netmap/gitea/");
+  await section(page, "Сети").click();
   await expect(page.getByLabel("CIDR", { exact: false })).toHaveValue("");
   expect(state.writes).toHaveLength(0);
   await page.getByLabel("Название сети", { exact: true }).fill("Тестовая сеть");
@@ -390,11 +397,15 @@ test("NetMap creates a selected network without an automatic poll, then shows th
     "0",
     "0",
   ]);
-  const columns = page.locator(".netmap-settings-grid > .panel");
-  const left = (await columns.nth(0).boundingBox())!;
-  const right = (await columns.nth(1).boundingBox())!;
-  expect(Math.abs(left.y - right.y)).toBeLessThan(2);
-  expect(right.x).toBeGreaterThan(left.x + left.width);
+  await expect(
+    page.getByRole("heading", { name: "История проверок", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Доступ для SNMP и Oxidized",
+      exact: true,
+    }),
+  ).toHaveCount(0);
   for (const theme of ["dark", "light"]) {
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;
@@ -426,6 +437,10 @@ test("collector secrets are write-only and blank edit values are omitted", async
 }) => {
   const state = await fixture(page);
   await open(page);
+  await section(page, "Доступ и конфигурации").click();
+  await page
+    .getByRole("button", { name: "Настроить профили", exact: true })
+    .click();
   await page.getByLabel("ID профиля", { exact: false }).fill("lab-two");
   await page
     .getByLabel("SNMP community", { exact: false })
@@ -623,6 +638,10 @@ test("a profile without SNMP allows basic discovery and optional enrichment", as
   await page
     .getByRole("button", { name: "Сохранить профиль", exact: true })
     .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Профиль сохранён." }),
+  ).toBeVisible();
+  await section(page, "Сети").click();
   await expect(page.getByRole("note")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Запустить проверку", exact: true }),
@@ -899,6 +918,7 @@ test("device SSH binding is selected-only and an old Git result never claims fre
     deviceAccess: true,
   });
   await open(page);
+  await section(page, "Доступ и конфигурации").click();
   await page
     .getByRole("button", { name: "Router · 192.0.2.1", exact: true })
     .click();
@@ -975,6 +995,7 @@ test("stale native version preserves device draft and never retries a binding wr
     staleBinding: true,
   });
   await open(page);
+  await section(page, "Доступ и конфигурации").click();
   await page
     .getByRole("button", { name: "Router · 192.0.2.1", exact: true })
     .click();

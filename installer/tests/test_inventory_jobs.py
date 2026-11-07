@@ -2,6 +2,7 @@
 import copy
 import base64
 from concurrent.futures import Future
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -12,6 +13,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 import test_netmap_access_profiles as shared
+from test_inventory_collectors_transport import HAS_SSH, SSHFixture
 import inventory_jobs as jobs
 
 
@@ -75,6 +77,72 @@ class InventoryJobsTests(unittest.TestCase):
         self.assertEqual(item['actor'], 'local:test')
         self.assertNotIn('fixture-password', json.dumps(item))
         self.assertNotIn('fixture-trusted-host', json.dumps(self.manager.profiles()))
+
+    def test_guided_enrollment_saves_device_and_queues_first_collection_once(self):
+        operation = str(uuid.uuid4())
+        claims = {'idempotency_key': operation, 'sub': 'local:test'}
+        body = {'address': '192.0.2.20', 'kind': 'network',
+                'profile': {'username': 'router-reader', 'password': 'enrollment-fixture',
+                            'port': 2222, 'ssh_known_hosts': '[192.0.2.20]:2222 ssh-ed25519 fixture'}}
+        result = self.app.mutation('/api/inventory/enroll', body, claims)
+        self.assertEqual(result['job_id'], operation)
+        self.assertEqual(result['state'], 'queued')
+        self.assertEqual(self.manager.target(result['target_id'])['profile_id'], result['profile_id'])
+        self.assertEqual(self.manager.target(result['target_id'])['name'], body['address'])
+        self.assertEqual(self.manager.profile(result['profile_id'])['driver'], 'auto')
+        self.collector.assert_not_called()
+        self.assertEqual(self.app.mutation('/api/inventory/enroll', body, claims), result)
+        with self.assertRaises(jobs.InventoryError) as conflict:
+            self.app.mutation('/api/inventory/enroll', {**body, 'name': 'Different device'}, claims)
+        self.assertEqual(conflict.exception.status, 409)
+        self.assertEqual(len(self.executor.calls), 1)
+        self.executor.run()
+        self.assertEqual(self.manager.jobs()['items'][0]['state'], 'succeeded')
+        for view in (result, self.manager.jobs(), self.manager.targets(), self.manager.profiles()):
+            self.assertNotIn('enrollment-fixture', json.dumps(view))
+
+    def test_rejected_enrollment_leaves_no_orphan_profile_or_target(self):
+        path = '/api/inventory/enroll'
+        initial = (self.manager.profiles(), self.manager.targets(), self.manager.jobs())
+        body = {'address': '192.0.2.1', 'kind': 'network', 'profile': {
+            'username': 'router-reader', 'password': 'enrollment-fixture',
+            'ssh_known_hosts': '192.0.2.1 ssh-ed25519 fixture'}}
+        for candidate, error in (
+            (body, 'inventory_address_exists'),
+            ({**body, 'address': '192.0.2.2'}, 'inventory_host_key_required'),
+            ({**body, 'network_id': '1234567890abcdef'}, 'inventory_network_mismatch'),
+        ):
+            with self.subTest(error=error), self.assertRaises(jobs.InventoryError) as rejected:
+                self.app.mutation(path, candidate, {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+            self.assertEqual(rejected.exception.code, error)
+            self.assertEqual(initial, (self.manager.profiles(), self.manager.targets(), self.manager.jobs()))
+        self.assertEqual(self.executor.calls, [])
+
+    def test_host_key_preview_checks_address_port_and_carries_no_credentials(self):
+        path = '/api/inventory/ssh-host-key'
+        claims = {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'}
+        body = {'address': '192.0.2.20', 'port': 22}
+        with patch.object(jobs, 'read_ssh_host_key', return_value={'fingerprint': 'SHA256:fixture'}) as read:
+            result = self.app.mutation(path, body, claims)
+            self.assertEqual(self.app.mutation(path, body, claims), result)
+            for invalid in ({**body, 'password': 'disallowed'}, {**body, 'port': True},
+                            {**body, 'address': '169.254.169.254'}, {**body, 'address': '127.0.0.1'}):
+                with self.assertRaises(jobs.InventoryError):
+                    self.app.mutation(path, invalid, {**claims, 'idempotency_key': str(uuid.uuid4())})
+            read.assert_called_once_with('192.0.2.20', 22)
+        self.collector.assert_not_called()
+        self.assertFalse(self.executor.calls)
+
+    @unittest.skipUnless(HAS_SSH, 'Install pinned SSH requirements for transport acceptance')
+    def test_host_key_exchange_stops_before_authentication(self):
+        server = SSHFixture()
+        self.addCleanup(server.close)
+        key = jobs.read_ssh_host_key('127.0.0.1', server.port)
+        expected = base64.b64encode(hashlib.sha256(server.key.asbytes()).digest()).decode().rstrip('=')
+        self.assertEqual(key['fingerprint'], 'SHA256:' + expected)
+        self.assertEqual(key['known_hosts'], f'[127.0.0.1]:{server.port} {server.key.get_name()} {server.key.get_base64()}')
+        self.assertEqual(server.auth_calls, [])
+        self.assertEqual(server.commands, [])
 
     def test_interrupted_mutation_reservation_cannot_be_replayed_as_success(self):
         operation = str(uuid.uuid4())

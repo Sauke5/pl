@@ -1,5 +1,6 @@
 """Address discovery contracts without network or Docker access."""
 import importlib.util
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import socket
@@ -69,6 +70,90 @@ class HostDiscovery(unittest.TestCase):
         self.assertIn('/virtualization/virtual-machines/1/', graph['nodes'][0]['netbox_url'])
         self.assertEqual(graph['edges'], [])
         self.assertEqual({n['id'] for n in self.app.graph()['nodes']}, {'vm:1', 'vm:2'})
+        self.app.netbox.request.assert_not_called()
+
+    def test_router_and_switch_observations_build_a_scoped_map_with_registered_cable(self):
+        network = self.app.mutation('/api/networks', {'cidr': '192.0.2.0/29', 'name': 'Lab', 'profile': ''},
+                                    {'idempotency_key': 'network', 'sub': 'tester'})['id']
+        now = datetime.now(timezone.utc)
+        stamp = now.isoformat()
+        client_mac = '02:00:00:00:00:03'
+        switch_mac = '02:00:00:00:00:02'
+        owner = 'inventory:b210573a-8369-41ef-8d56-4b7499126aab'
+
+        def fields(number, *, neighbors=(), **observed):
+            return {'collector_ip': f'192.0.2.{number}', 'pl_source': 'network:' + network,
+                    'pl_inventory_source': owner, 'pl_inventory': {'schema': 1, 'observed_at': stamp,
+                        'observed': {'kind': 'network', 'neighbors': list(neighbors), **observed}}}
+
+        devices = [
+            {'id': 17, 'name': 'lab-router', 'role': {'slug': 'pl-inventory'},
+             'primary_ip4': {'address': '192.0.2.1/29'}, 'serial': 'Native serial',
+             'custom_fields': fields(1, model='Collected model', os_name='OpenWrt', neighbors=[
+                 {'protocol': 'lldp', 'address': '192.0.2.2', 'mac': switch_mac,
+                  'local_port': 'lan1', 'remote_port': 'ether1', 'observed_at': stamp},
+                 {'protocol': 'arp', 'address': '192.0.2.3', 'mac': client_mac, 'local_port': 'br-lan'},
+                 {'protocol': 'ndp', 'address': '2001:db8::3', 'mac': client_mac, 'local_port': 'br-lan'},
+                 {'protocol': 'dhcp', 'address': '192.0.2.3', 'mac': client_mac, 'hostname': 'printer'},
+                 {'protocol': 'dhcp', 'address': '192.0.2.4', 'mac': '02:00:00:00:00:04',
+                  'expires_at': (now - timedelta(minutes=1)).isoformat()},
+                 {'protocol': 'arp', 'address': '198.51.100.4', 'mac': '02:00:00:00:00:05'},
+                 {'protocol': 'arp', 'address': '192.0.2.2', 'mac': '02:00:00:00:00:06'},
+             ])},
+            {'id': 18, 'name': 'Named switch', 'role': {'slug': 'switch'},
+             'primary_ip4': {'address': '192.0.2.2/29'},
+             'custom_fields': fields(2, neighbors=[
+                 {'protocol': 'arp', 'address': '192.0.2.3', 'mac': client_mac, 'local_port': 'bridge'},
+                 {'protocol': 'fdb', 'mac': client_mac, 'local_port': 'ether2',
+                  'remote_port': 'discarded'},
+             ])},
+        ]
+        interfaces = [{'id': 71, 'name': 'lan1', 'device': {'id': 17}, 'enabled': True,
+                       'custom_fields': fields(1, addresses=[{'address': '192.0.2.1/29'}], link_up=True)},
+                      {'id': 72, 'name': 'ether1', 'device': {'id': 18}, 'enabled': True,
+                       'primary_mac_address': {'id': 80, 'mac_address': switch_mac}}]
+        cables = [{'id': 91, 'a_terminations': [{'object': {'name': 'lan1', 'device': {'id': 17}}}],
+                   'b_terminations': [{'object': {'name': 'ether1', 'device': {'id': 18}}}]}]
+        self.app.netbox.all.side_effect = lambda path: {
+            '/dcim/devices/': devices, '/dcim/interfaces/': interfaces, '/dcim/cables/': cables}.get(path, [])
+
+        scope = '/api/sites/network-' + network
+        graph = self.app.graph(scope)
+        nodes = {node['id']: node for node in graph['nodes']}
+        router = nodes['device:17']
+        self.assertEqual(router['kind'], 'unknown')
+        self.assertEqual(router['details']['model'], 'Collected model')
+        self.assertEqual(router['details']['serial'], 'Native serial')
+        self.assertEqual(router['addresses'], [{'address': '192.0.2.1/29', 'role': 'primary', 'interface': 'lan1'}])
+        self.assertTrue(router['ports'][0]['oper_up'])
+        self.assertEqual(nodes['device:18']['kind'], 'switch')
+        client, = (node for node in nodes.values() if node['management_ip'] == '192.0.2.3')
+        self.assertEqual(client['name'], 'printer')
+        self.assertEqual(set(client['details']['observation_methods']), {'arp', 'dhcp', 'fdb'})
+        client_links = [edge for edge in graph['edges'] if edge['target'] == client['id']]
+        self.assertEqual(len(client_links), 2)
+        self.assertEqual({edge['source'] for edge in client_links}, {'device:17', 'device:18'})
+        self.assertTrue(all(not edge['target_port'] for edge in client_links))
+        switch_link = next(edge for edge in client_links if edge['source'] == 'device:18')
+        self.assertEqual(switch_link['source_port'], '')
+        self.assertEqual({item.get('source_port') for item in switch_link['details']['relationship']['observations']}, {'bridge', 'ether2'})
+        cable, = (edge for edge in graph['edges'] if edge['kind'] == 'physical')
+        self.assertEqual((cable['id'], cable['source_port'], cable['target_port'], cable['status']), ('cable:91', 'lan1', 'ether1', 'documented'))
+        self.assertEqual(cable['details']['relationship']['authority'], 'netbox')
+        self.assertEqual(cable['details']['relationship']['observations'][0]['protocol'], 'LLDP')
+        collision, = (node for node in nodes.values() if node['management_ip'] == '192.0.2.2' and node['id'] != 'device:18')
+        self.assertTrue(collision['details']['identity_unconfirmed'])
+        expired, = (node for node in nodes.values() if node['management_ip'] == '192.0.2.4')
+        self.assertEqual(expired['status'], 'stale')
+        self.assertEqual(next(edge for edge in graph['edges'] if edge['target'] == expired['id'])['status'], 'stale')
+        self.assertFalse(any(node['management_ip'] == '198.51.100.4' for node in nodes.values()))
+        all_nodes = self.app.graph()['nodes']
+        self.assertTrue(any(node['management_ip'] == '198.51.100.4' for node in all_nodes))
+        dual_stack, = (node for node in all_nodes if node['details'].get('mac') == client_mac)
+        self.assertEqual(dual_stack['id'], client['id'])
+        self.assertEqual(dual_stack['management_ip'], '192.0.2.3')
+        self.assertEqual({item['address'] for item in dual_stack['addresses']}, {'192.0.2.3', '2001:db8::3'})
+        self.assertEqual(set(nodes), {node['id'] for node in self.app.graph(scope)['nodes']})
         self.app.netbox.request.assert_not_called()
 
     def test_missing_ping_is_visible_while_tcp_still_runs(self):

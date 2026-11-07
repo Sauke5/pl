@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Check,
+  ChevronDown,
+  KeyRound,
+  Map as MapIcon,
   Pencil,
   Play,
   Plus,
@@ -17,6 +20,18 @@ import { Dialog } from "./components/ui/dialog";
 type Kind = "network" | "linux" | "windows";
 type Network = { id: string; name: string; cidr: string };
 type Items<T> = { items: T[] };
+type EnrollmentCapabilities = {
+  guided_enrollment?: boolean;
+  ssh_host_key?: boolean;
+  drivers?: string[];
+};
+type HostKey = { algorithm: string; fingerprint: string; known_hosts: string };
+type Enrollment = {
+  target_id: string;
+  profile_id: string;
+  job_id: string;
+  state: string;
+};
 type Profile = {
   id: string;
   name: string;
@@ -56,6 +71,7 @@ type Summary = {
   interfaces?: number;
   addresses?: number;
   disks?: number;
+  neighbors?: number;
 };
 type Job = {
   id: string;
@@ -112,10 +128,20 @@ const kinds: Record<Kind, string> = {
   windows: "Windows · WinRM",
 };
 const drivers: Record<string, string> = {
+  auto: "Определить автоматически",
+  openwrt: "OpenWrt / FriendlyWrt",
+  mikrotik_routeros: "MikroTik RouterOS",
+  keenetic: "Keenetic",
+  tplink_jetstream: "TP-Link JetStream (управляемые коммутаторы)",
   huawei_vrp: "Huawei VRP",
   cisco_ios: "Cisco IOS / IOS XE",
   junos: "Juniper Junos",
 };
+const legacyDrivers = ["huawei_vrp", "cisco_ios", "junos"];
+const driverOptions = (supported: string[]) =>
+  Object.entries(drivers).filter(([value]) => supported.includes(value));
+const supportsEnablePassword = (driver: string) =>
+  driver === "cisco_ios" || driver === "tplink_jetstream";
 const states: Record<string, [string, string]> = {
   queued: ["unknown", "В очереди"],
   running: ["warning", "Собираем данные"],
@@ -130,7 +156,10 @@ const explanations: Record<string, string> = {
   inventory_invalid_profile: "Проверьте поля профиля доступа.",
   inventory_invalid_target: "Проверьте поля устройства.",
   inventory_invalid_address:
-    "Укажите IP-адрес устройства, доступный с хоста PL. Служебные и локальные адреса использовать нельзя.",
+    "Укажите IPv4 или IPv6 устройства, доступный с хоста PL.",
+  inventory_invalid_port: "Укажите порт от 1 до 65535.",
+  inventory_host_key_required:
+    "У профиля нет доверенного SSH-ключа для этого адреса и порта. Введите данные входа и подтвердите отпечаток устройства.",
   inventory_invalid_name: "Укажите короткое название без переноса строки.",
   inventory_profile_kind_changed:
     "Тип сохранённого профиля изменить нельзя. Создайте профиль нужного типа.",
@@ -158,7 +187,7 @@ const explanations: Record<string, string> = {
     "Достигнут предел в 128 профилей доступа. Удалите неиспользуемый профиль.",
   inventory_target_limit: "Достигнут предел в 2048 устройств для опроса.",
   inventory_driver_unsupported:
-    "Выберите поддерживаемую операционную систему оборудования.",
+    "NetMap не распознал систему оборудования. Выберите её вручную и повторите опрос.",
   inventory_dependency_missing:
     "В установленной сборке NetMap отсутствует нужный сборщик. Обновите модуль.",
   inventory_timeout:
@@ -246,6 +275,28 @@ function failureText(failure: unknown): Error {
   );
 }
 
+function unsupportedEnrollment(failure: unknown) {
+  return (
+    failure instanceof APIError &&
+    ((failure.status === 404 && !explanations[failure.code]) ||
+      failure.status === 501 ||
+      (failure.status === 400 && failure.code === "invalid NetMap request") ||
+      failure.code === "inventory_invalid_route")
+  );
+}
+
+function enrollmentError(failure: unknown) {
+  if (failure instanceof TypeError)
+    return new Error(
+      "Не удалось связаться с NetMap. Проверьте подключение и повторите запрос.",
+    );
+  if (unsupportedEnrollment(failure))
+    return new Error(
+      "Обновите NetMap, чтобы добавлять устройства через мастер.",
+    );
+  return failureText(failure);
+}
+
 function jobLabel(job?: Job) {
   const [tone, label] = job
     ? states[job.state] || ["unknown", "Состояние неизвестно"]
@@ -259,6 +310,27 @@ function dateLabel(value?: string) {
   return Number.isNaN(date.valueOf())
     ? "—"
     : date.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+}
+
+function mapDeviceHref(job?: Job, networkID?: string) {
+  const sync = job?.result?.sync;
+  if (
+    !sync?.object_id ||
+    !Number.isSafeInteger(sync.object_id) ||
+    sync.object_id < 1
+  )
+    return undefined;
+  const type =
+    sync.object_type === "virtualization.virtualmachine" ||
+    sync.object_type === "virtual_machine"
+      ? "vm"
+      : sync.object_type === "dcim.device" || sync.object_type === "device"
+        ? "device"
+        : "";
+  if (!type) return undefined;
+  const query = new URLSearchParams({ device: type + ":" + sync.object_id });
+  if (networkID) query.set("scope", "network-" + networkID);
+  return "/netmap/?" + query.toString();
 }
 
 function emptyProfile(kind: Kind = "network"): ProfileDraft {
@@ -280,16 +352,544 @@ function emptyProfile(kind: Kind = "network"): ProfileDraft {
   };
 }
 
+const intervals = [
+  ["0", "Только по кнопке «Опросить»"],
+  ["15", "Каждые 15 минут"],
+  ["60", "Каждый час"],
+  ["1440", "Раз в сутки"],
+] as const;
+
+function EnrollmentDialog({
+  endpoint,
+  profiles,
+  networks,
+  supportedDrivers,
+  onClose,
+  onSaved,
+}: {
+  endpoint: string;
+  profiles: Profile[];
+  networks: Network[];
+  supportedDrivers: string[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState(() => ({
+    ...emptyProfile(),
+    driver: supportedDrivers.includes("auto")
+      ? "auto"
+      : supportedDrivers[0] || "",
+    address: "",
+    profileID: "",
+    networkID: "",
+    interval: "0",
+  }));
+  const [hostKey, setHostKey] = useState<HostKey>();
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState<"key" | "save">();
+  const [error, setError] = useState<Error>();
+  const pending = useRef(false);
+  const enrollmentID = useRef<string | undefined>(undefined);
+  const saved = profiles.find(
+    (profile) => profile.id === draft.profileID && profile.kind === draft.kind,
+  );
+  const needsHostKey = draft.kind !== "windows" && !saved;
+  const kindValue = draft.kind === "network" ? draft.driver : draft.kind;
+  const address = draft.address.trim();
+  const port = Number(draft.port);
+
+  function update(patch: Partial<typeof draft>) {
+    enrollmentID.current = undefined;
+    setError(undefined);
+    setDraft((previous) => ({ ...previous, ...patch }));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (pending.current || (hostKey && !confirmed)) return;
+    const readKey = needsHostKey && !hostKey;
+    pending.current = true;
+    setError(undefined);
+    setBusy(readKey ? "key" : "save");
+    try {
+      if (readKey) {
+        const key = await api<HostKey>(
+          endpoint + "/ssh-host-key",
+          "POST",
+          { address, port },
+          { "Idempotency-Key": crypto.randomUUID() },
+        );
+        if (!key?.algorithm || !key.fingerprint || !key.known_hosts)
+          throw new Error(
+            "NetMap не вернул отпечаток SSH-ключа. Повторите проверку.",
+          );
+        setHostKey(key);
+        return;
+      }
+
+      const profile = {
+        kind: draft.kind,
+        username: draft.username.trim(),
+        port,
+        ...(draft.kind === "windows"
+          ? {
+              password: draft.password,
+              scheme: draft.scheme,
+              ...(draft.scheme === "https" && draft.ca_pem.trim()
+                ? { ca_pem: draft.ca_pem.trim() }
+                : {}),
+            }
+          : {
+              auth_method: draft.auth_method,
+              ssh_known_hosts: hostKey?.known_hosts,
+              ...(draft.kind === "network"
+                ? {
+                    driver: draft.driver,
+                    ...(supportsEnablePassword(draft.driver) &&
+                    draft.enable_password
+                      ? { enable_password: draft.enable_password }
+                      : {}),
+                  }
+                : {}),
+              ...(draft.auth_method === "key"
+                ? {
+                    private_key: draft.private_key.trim(),
+                    ...(draft.passphrase
+                      ? { passphrase: draft.passphrase }
+                      : {}),
+                  }
+                : { password: draft.password }),
+            }),
+      };
+      enrollmentID.current ??= crypto.randomUUID();
+      const result = await api<Enrollment>(
+        endpoint + "/enroll",
+        "POST",
+        {
+          address,
+          kind: draft.kind,
+          ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
+          ...(draft.kind === "network" && draft.networkID
+            ? { network_id: draft.networkID }
+            : {}),
+          interval_minutes: Number(draft.interval),
+          ...(saved ? { profile_id: saved.id } : { profile }),
+        },
+        { "Idempotency-Key": enrollmentID.current },
+      );
+      if (
+        !result?.target_id ||
+        !result.profile_id ||
+        !result.job_id ||
+        result.state !== "queued"
+      )
+        throw new Error(
+          "NetMap не подтвердил запуск первого опроса. Повторите запрос.",
+        );
+      onSaved();
+    } catch (failure) {
+      setError(enrollmentError(failure));
+    } finally {
+      pending.current = false;
+      setBusy(undefined);
+    }
+  }
+
+  return (
+    <Dialog
+      title="Добавить устройство"
+      description={
+        hostKey
+          ? "Сверьте отпечаток SSH-ключа перед первым подключением."
+          : "Укажите IP и данные входа. NetMap опросит устройство и добавит полученные сведения на карту."
+      }
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <form
+        className="netmap-enrollment"
+        onSubmit={(event) => void submit(event)}
+      >
+        {hostKey ? (
+          <>
+            <div className="netmap-host-key">
+              <KeyRound size={20} aria-hidden="true" />
+              <div>
+                <strong>
+                  {address} · порт {port}
+                </strong>
+                <span>{hostKey.algorithm}</span>
+                <code>{hostKey.fingerprint}</code>
+              </div>
+            </div>
+            <p className="module-hint">
+              Сравните отпечаток с ключом в настройках устройства или в
+              SSH-клиенте, которому вы уже доверяете.
+            </p>
+            <label className="netmap-confirm-key">
+              <input
+                autoFocus
+                type="checkbox"
+                checked={confirmed}
+                disabled={!!busy}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              Отпечаток совпадает с ключом устройства
+            </label>
+          </>
+        ) : (
+          <fieldset disabled={!!busy}>
+            <div className="form-grid">
+              <Field label="IP-адрес">
+                <input
+                  autoFocus
+                  required
+                  maxLength={45}
+                  spellCheck={false}
+                  value={draft.address}
+                  placeholder="192.168.1.1"
+                  onChange={(event) => update({ address: event.target.value })}
+                />
+              </Field>
+              <Field label="Система оборудования">
+                <select
+                  value={kindValue}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    const kind =
+                      value === "linux" || value === "windows"
+                        ? value
+                        : "network";
+                    update({
+                      kind,
+                      driver: kind === "network" ? value : draft.driver,
+                      profileID: "",
+                      port:
+                        kind === draft.kind
+                          ? draft.port
+                          : kind === "windows"
+                            ? "5986"
+                            : "22",
+                      networkID: kind === "network" ? draft.networkID : "",
+                      auth_method:
+                        kind === "windows" ? "password" : draft.auth_method,
+                    });
+                  }}
+                >
+                  <optgroup label="Сетевое оборудование · SSH">
+                    {driverOptions(supportedDrivers).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Серверы">
+                    <option value="linux">Linux · SSH</option>
+                    <option value="windows">Windows · WinRM</option>
+                  </optgroup>
+                </select>
+              </Field>
+            </div>
+            {profiles.some((profile) => profile.kind === draft.kind) && (
+              <Field label="Данные входа">
+                <select
+                  value={draft.profileID}
+                  onChange={(event) =>
+                    update({ profileID: event.target.value })
+                  }
+                >
+                  <option value="">Ввести данные для этого устройства</option>
+                  {profiles
+                    .filter((profile) => profile.kind === draft.kind)
+                    .map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name} · {profile.username}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+            )}
+            {!saved && (
+              <div className="form-grid">
+                <Field label="Пользователь">
+                  <input
+                    required
+                    maxLength={120}
+                    autoComplete="off"
+                    value={draft.username}
+                    onChange={(event) =>
+                      update({ username: event.target.value })
+                    }
+                  />
+                </Field>
+                {draft.auth_method === "password" ? (
+                  <Field label="Пароль">
+                    <input
+                      required
+                      type="password"
+                      maxLength={4096}
+                      autoComplete="new-password"
+                      value={draft.password}
+                      onChange={(event) =>
+                        update({ password: event.target.value })
+                      }
+                    />
+                  </Field>
+                ) : (
+                  <Field label="Закрытый ключ SSH">
+                    <textarea
+                      required
+                      rows={3}
+                      maxLength={65536}
+                      spellCheck={false}
+                      value={draft.private_key}
+                      onChange={(event) =>
+                        update({ private_key: event.target.value })
+                      }
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+            {needsHostKey && (
+              <p className="module-hint">
+                Сначала NetMap прочитает отпечаток SSH-ключа. Данные входа будут
+                использованы после подтверждения.
+              </p>
+            )}
+            {!saved &&
+              draft.kind === "network" &&
+              draft.driver === "tplink_jetstream" && (
+                <p className="module-hint">
+                  Этот вариант подходит для управляемых коммутаторов JetStream с
+                  SSH. Если на устройстве доступен только SNMP, добавьте сеть в
+                  разделе «Сети».
+                </p>
+              )}
+            <details className="netmap-enrollment-options">
+              <summary>
+                <ChevronDown size={16} aria-hidden="true" /> Дополнительные
+                настройки
+              </summary>
+              <div className="form-grid">
+                <Field
+                  label="Название в списке"
+                  hint="По умолчанию появится имя устройства, полученное при опросе."
+                >
+                  <input
+                    maxLength={120}
+                    value={draft.name}
+                    onChange={(event) => update({ name: event.target.value })}
+                  />
+                </Field>
+                {!saved && (
+                  <Field label="Порт">
+                    <input
+                      required
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={draft.port}
+                      onChange={(event) => update({ port: event.target.value })}
+                    />
+                  </Field>
+                )}
+                {!saved && draft.kind !== "windows" && (
+                  <Field label="Способ входа">
+                    <select
+                      value={draft.auth_method}
+                      onChange={(event) =>
+                        update({
+                          auth_method: event.target.value as "password" | "key",
+                        })
+                      }
+                    >
+                      <option value="password">Пароль</option>
+                      <option value="key">Ключ SSH</option>
+                    </select>
+                  </Field>
+                )}
+                {!saved &&
+                  draft.kind !== "windows" &&
+                  draft.auth_method === "key" && (
+                    <Field label="Пароль ключа, если задан">
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        maxLength={4096}
+                        value={draft.passphrase}
+                        onChange={(event) =>
+                          update({ passphrase: event.target.value })
+                        }
+                      />
+                    </Field>
+                  )}
+                {!saved &&
+                  draft.kind === "network" &&
+                  supportsEnablePassword(draft.driver) && (
+                    <Field label="Пароль enable, если задан">
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        maxLength={4096}
+                        value={draft.enable_password}
+                        onChange={(event) =>
+                          update({ enable_password: event.target.value })
+                        }
+                      />
+                    </Field>
+                  )}
+                {!saved && draft.kind === "windows" && (
+                  <Field label="Соединение WinRM">
+                    <select
+                      value={draft.scheme}
+                      onChange={(event) => {
+                        const scheme = event.target.value as "https" | "http";
+                        update({
+                          scheme,
+                          port:
+                            draft.port === "5985" || draft.port === "5986"
+                              ? scheme === "https"
+                                ? "5986"
+                                : "5985"
+                              : draft.port,
+                        });
+                      }}
+                    >
+                      <option value="https">HTTPS</option>
+                      <option value="http">HTTP · NTLM с шифрованием</option>
+                    </select>
+                  </Field>
+                )}
+                {!saved &&
+                  draft.kind === "windows" &&
+                  draft.scheme === "https" && (
+                    <Field label="Сертификат центра сертификации, если нужен">
+                      <textarea
+                        rows={3}
+                        maxLength={65536}
+                        spellCheck={false}
+                        value={draft.ca_pem}
+                        onChange={(event) =>
+                          update({ ca_pem: event.target.value })
+                        }
+                      />
+                    </Field>
+                  )}
+                {draft.kind === "network" && networks.length > 0 && (
+                  <Field
+                    label="Связать с опрошенной сетью"
+                    hint="Выберите сеть, если устройство уже найдено по SNMP."
+                  >
+                    <select
+                      value={draft.networkID}
+                      onChange={(event) =>
+                        update({ networkID: event.target.value })
+                      }
+                    >
+                      <option value="">Отдельное устройство</option>
+                      {networks.map((network) => (
+                        <option key={network.id} value={network.id}>
+                          {network.name} · {network.cidr}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <Field label="Когда обновлять сведения">
+                  <select
+                    value={draft.interval}
+                    onChange={(event) =>
+                      update({ interval: event.target.value })
+                    }
+                  >
+                    {intervals.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </details>
+          </fieldset>
+        )}
+        {error && <ErrorBox error={error} />}
+        <div className="dialog-footer">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!!busy}
+            onClick={() => {
+              if (!hostKey) return onClose();
+              setHostKey(undefined);
+              setConfirmed(false);
+              setError(undefined);
+              enrollmentID.current = undefined;
+            }}
+          >
+            {hostKey ? "Назад" : "Отмена"}
+          </Button>
+          <Button
+            type="submit"
+            variant="default"
+            disabled={
+              !!busy ||
+              (hostKey
+                ? !confirmed
+                : !address ||
+                  (!saved &&
+                    (!draft.username.trim() ||
+                      (draft.auth_method === "password"
+                        ? !draft.password
+                        : !draft.private_key.trim()))))
+            }
+          >
+            {busy === "key"
+              ? "Читаем отпечаток…"
+              : busy === "save"
+                ? "Добавляем…"
+                : needsHostKey && !hostKey
+                  ? "Получить отпечаток"
+                  : "Добавить и опросить"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 export default function NetMapInventory({
   base,
   enabled = true,
   networks = [],
+  view = "devices",
 }: {
   base: string;
   enabled?: boolean;
   networks?: Network[];
+  view?: "devices" | "profiles" | "hidden";
 }) {
   const endpoint = base + "/inventory";
+  const capabilities = useAPI<EnrollmentCapabilities>(
+    endpoint + "/capabilities",
+    enabled,
+  );
+  const guided =
+    capabilities.data?.guided_enrollment === true &&
+    capabilities.data.ssh_host_key === true;
+  const capabilitiesError = capabilities.error;
+  const legacy =
+    (!!capabilities.data && !guided) ||
+    unsupportedEnrollment(capabilitiesError) ||
+    (capabilitiesError instanceof APIError &&
+      capabilitiesError.status === 400 &&
+      capabilitiesError.code === "netmap_invalid_request");
+  const availableDrivers =
+    guided && Array.isArray(capabilities.data?.drivers)
+      ? capabilities.data.drivers
+      : legacyDrivers;
   const profiles = useAPI<Items<Profile>>(endpoint + "/profiles", enabled);
   const targets = useAPI<Items<Target>>(endpoint + "/targets", enabled);
   const jobs = useAPI<Items<Job>>(endpoint + "/jobs", enabled);
@@ -299,7 +899,10 @@ export default function NetMapInventory({
   const targetItems = Array.isArray(targets.data?.items)
     ? targets.data.items
     : [];
+  const emptyTargets =
+    Array.isArray(targets.data?.items) && !targetItems.length && !targets.error;
   const jobItems = Array.isArray(jobs.data?.items) ? jobs.data.items : [];
+  const [enrolling, setEnrolling] = useState(false);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>();
   const [targetDraft, setTargetDraft] = useState<TargetDraft>();
   const [testing, setTesting] = useState<Profile>();
@@ -335,10 +938,22 @@ export default function NetMapInventory({
     (profile) => profile.id === profileDraft?.id,
   );
   const latestJobs = new Map<string, Job>();
+  const latestReportedJobs = new Map<string, Job>();
+  const profileUse = new Map<string, number>();
+  for (const target of targetItems)
+    profileUse.set(
+      target.profile_id,
+      (profileUse.get(target.profile_id) || 0) + 1,
+    );
   for (const job of jobItems) {
     const previous = latestJobs.get(job.target_id);
     if (!previous || job.created_at > previous.created_at)
       latestJobs.set(job.target_id, job);
+    if (["succeeded", "partial"].includes(job.state) && job.result?.summary) {
+      const reported = latestReportedJobs.get(job.target_id);
+      if (!reported || job.created_at > reported.created_at)
+        latestReportedJobs.set(job.target_id, job);
+    }
   }
 
   useEffect(() => {
@@ -455,6 +1070,12 @@ export default function NetMapInventory({
   }
 
   function newTarget() {
+    if (guided) {
+      setError(undefined);
+      setNotice("");
+      setEnrolling(true);
+      return;
+    }
     const first = profileItems[0];
     setError(undefined);
     setTargetDraft({
@@ -467,335 +1088,433 @@ export default function NetMapInventory({
     });
   }
 
+  function editTarget(target: Target) {
+    setError(undefined);
+    setTargetDraft({
+      ...target,
+      interval_minutes: String(target.interval_minutes || 0),
+    });
+  }
+
   if (!enabled) return null;
 
+  const addDevice = (
+    <Button
+      size={emptyTargets ? "default" : "sm"}
+      variant="default"
+      onClick={newTarget}
+      disabled={
+        !!busy || capabilities.isPending || (!guided && !profileItems.length)
+      }
+    >
+      <Plus size={16} aria-hidden="true" />
+      {guided || capabilities.isPending
+        ? "Добавить устройство"
+        : "Добавить вручную"}
+    </Button>
+  );
   return (
     <div className="netmap-inventory netmap-history">
       <ActionFeedback notice={notice} error={error} />
-      <Panel
-        title="Автонаполнение NetBox"
-        icon={<Server size={20} aria-hidden="true" />}
-        action={
-          <div className="actions">
-            <Button
-              size="sm"
-              onClick={() => void reload()}
-              disabled={!!busy}
-              aria-label="Обновить инвентаризацию"
-            >
-              <RefreshCw size={16} aria-hidden="true" />
-            </Button>
-            <Button
-              size="sm"
-              variant="default"
-              onClick={newTarget}
-              disabled={!!busy || !profileItems.length}
-            >
-              <Plus size={16} aria-hidden="true" /> Добавить устройство
-            </Button>
-          </div>
-        }
-      >
-        <p className="module-hint">
-          Добавьте оборудование или сервер: PL прочитает сведения об устройстве,
-          его интерфейсах и IP-адресах и сохранит их в NetBox. Конфигурации
-          сетевого оборудования по-прежнему собирает Oxidized, историю хранит
-          Gitea.
-        </p>
-        {targets.error && (
-          <ErrorBox
-            error={failureText(targets.error)}
-            retry={() => void targets.refetch()}
-          />
-        )}
-        {jobs.error && (
-          <ErrorBox
-            error={failureText(jobs.error)}
-            retry={() => void jobs.refetch()}
-          />
-        )}
-        {!targets.data && !targets.error && (
-          <p role="status">Загружаем устройства…</p>
-        )}
-        {targets.data && !Array.isArray(targets.data.items) && (
-          <ErrorBox
-            error={new Error("Не удалось прочитать список устройств.")}
-          />
-        )}
-        {targets.data && !targetItems.length && !targets.error ? (
-          <Empty
-            title="Устройства ещё не добавлены"
-            detail={
-              profileItems.length
-                ? "Укажите адрес устройства и выберите профиль доступа для первого сбора."
-                : "Сначала добавьте профиль доступа ниже: его можно использовать для нескольких устройств."
-            }
-            action={
-              !profileItems.length && (
+      {view === "devices" && (
+        <Panel
+          title="Устройства"
+          icon={<Server size={20} aria-hidden="true" />}
+          action={
+            !emptyTargets && (
+              <div className="actions">
                 <Button
                   size="sm"
-                  onClick={() => {
-                    setError(undefined);
-                    setProfileDraft(emptyProfile());
-                  }}
+                  onClick={() => void reload()}
                   disabled={!!busy}
+                  aria-label="Обновить инвентаризацию"
                 >
-                  Добавить профиль доступа
+                  <RefreshCw size={16} aria-hidden="true" />
                 </Button>
-              )
-            }
-          />
-        ) : targetItems.length ? (
-          <div className="netmap-history-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Устройство</th>
-                  <th>Доступ и расписание</th>
-                  <th>Последний сбор</th>
-                  <th>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {targetItems.map((target) => {
-                  const profile = profileItems.find(
-                    (item) => item.id === target.profile_id,
-                  );
-                  const job = latestJobs.get(target.id);
-                  const collecting =
-                    !!job && ["queued", "running"].includes(job.state);
-                  return (
-                    <tr key={target.id}>
-                      <td>
-                        <strong>{target.name || target.address}</strong>
-                        <br />
-                        <small>
-                          {target.address} · {kinds[target.kind]}
-                        </small>
-                      </td>
-                      <td>
-                        {profile?.name || "Профиль недоступен"}
-                        <br />
-                        <small>
-                          {target.interval_minutes
-                            ? `Каждые ${target.interval_minutes} мин`
-                            : "По кнопке"}
-                        </small>
-                      </td>
-                      <td>
-                        {jobLabel(job)}
-                        <br />
-                        <small>
-                          {dateLabel(job?.finished_at || job?.started_at)}
-                        </small>
-                        {job && (
-                          <div>
+                {addDevice}
+              </div>
+            )
+          }
+        >
+          <p className="module-hint">
+            Укажите IP и доступ к роутеру, коммутатору или серверу. NetMap
+            опросит устройство и покажет его на карте.
+          </p>
+          {legacy && (
+            <div className="netmap-setup-note" role="note">
+              <span>
+                Мастер добавления доступен после обновления NetMap.{" "}
+                <a href="#settings?section=updates">Открыть обновления</a>
+              </span>
+            </div>
+          )}
+          {capabilities.error && !legacy && (
+            <ErrorBox
+              error={new Error("Не удалось узнать возможности NetMap.")}
+              retry={() => void capabilities.refetch()}
+            />
+          )}
+          {targets.error && (
+            <ErrorBox
+              error={failureText(targets.error)}
+              retry={() => void targets.refetch()}
+            />
+          )}
+          {jobs.error && (
+            <ErrorBox
+              error={failureText(jobs.error)}
+              retry={() => void jobs.refetch()}
+            />
+          )}
+          {!targets.data && !targets.error && (
+            <p role="status">Загружаем устройства…</p>
+          )}
+          {targets.data && !Array.isArray(targets.data.items) && (
+            <ErrorBox
+              error={new Error("Не удалось прочитать список устройств.")}
+            />
+          )}
+          {emptyTargets ? (
+            <Empty
+              title="Устройства ещё не добавлены"
+              detail={
+                !legacy
+                  ? "Начните с роутера или коммутатора. После первого опроса здесь появятся его данные."
+                  : "Для ручного добавления сохраните профиль в разделе «Доступ и конфигурации»."
+              }
+              action={addDevice}
+            />
+          ) : targetItems.length ? (
+            <div className="netmap-history-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Устройство</th>
+                    <th>Доступ и расписание</th>
+                    <th>Последний опрос</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {targetItems.map((target) => {
+                    const profile = profileItems.find(
+                      (item) => item.id === target.profile_id,
+                    );
+                    const job = latestJobs.get(target.id);
+                    const reported = latestReportedJobs.get(target.id);
+                    const summary = reported?.result?.summary;
+                    const displayName =
+                      target.name && target.name !== target.address
+                        ? target.name
+                        : summary?.hostname || target.address;
+                    const deviceDetails = [
+                      summary?.manufacturer,
+                      summary?.model,
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+                    const mapHref = mapDeviceHref(reported, target.network_id);
+                    const collecting =
+                      !!job && ["queued", "running"].includes(job.state);
+                    const sharedProfile =
+                      (profileUse.get(target.profile_id) || 0) > 1;
+                    return (
+                      <tr key={target.id}>
+                        <td>
+                          <strong>{displayName}</strong>
+                          <small className="netmap-device-meta">
+                            {target.address}
+                            {deviceDetails
+                              ? " · " + deviceDetails
+                              : " · " + kinds[target.kind]}
+                          </small>
+                          {summary?.hostname &&
+                            summary.hostname !== displayName && (
+                              <small className="netmap-device-meta">
+                                {summary.hostname}
+                              </small>
+                            )}
+                        </td>
+                        <td>
+                          {profile?.name || "Профиль недоступен"}
+                          <br />
+                          <small>
+                            {target.interval_minutes
+                              ? `Каждые ${target.interval_minutes} мин`
+                              : "По кнопке"}
+                          </small>
+                        </td>
+                        <td>
+                          {jobLabel(job)}
+                          {job && (
+                            <small className="netmap-device-meta">
+                              {dateLabel(
+                                job.finished_at ||
+                                  job.started_at ||
+                                  job.created_at,
+                              )}
+                            </small>
+                          )}
+                          {job?.error && (
+                            <small className="netmap-device-meta netmap-device-error">
+                              {explanations[job.error] ||
+                                "Не удалось завершить опрос. Откройте результат."}
+                            </small>
+                          )}
+                          {job && !collecting && (
+                            <div>
+                              <Button
+                                size="sm"
+                                onClick={() => setSelectedJob(job.id)}
+                              >
+                                Результат
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="actions">
+                            {mapHref && (
+                              <a
+                                className="button button-secondary button-sm netmap-device-map"
+                                href={mapHref}
+                              >
+                                <MapIcon size={14} aria-hidden="true" /> На
+                                карте
+                              </a>
+                            )}
                             <Button
                               size="sm"
-                              onClick={() => setSelectedJob(job.id)}
+                              disabled={!!busy || collecting || !profile}
+                              onClick={() =>
+                                void mutate<{ id?: string }>(
+                                  "collect-" + target.id,
+                                  "/targets/" + target.id + "/collect",
+                                  "POST",
+                                  {},
+                                  () =>
+                                    setNotice(
+                                      "Сбор поставлен в очередь. Результат появится здесь.",
+                                    ),
+                                )
+                              }
                             >
-                              Результат
+                              <Play size={14} aria-hidden="true" />
+                              {collecting ? "Сбор выполняется" : "Опросить"}
+                            </Button>
+                            {job?.error &&
+                              profile &&
+                              [
+                                "inventory_auth_failed",
+                                "inventory_host_key_failed",
+                                "inventory_driver_unsupported",
+                                "inventory_command_failed",
+                                "inventory_output_invalid",
+                              ].includes(job.error) && (
+                                <Button
+                                  size="sm"
+                                  disabled={!!busy}
+                                  onClick={() =>
+                                    sharedProfile
+                                      ? editTarget(target)
+                                      : editProfile(profile)
+                                  }
+                                >
+                                  {sharedProfile
+                                    ? "Сменить профиль"
+                                    : "Изменить доступ"}
+                                </Button>
+                              )}
+                            <Button
+                              size="sm"
+                              aria-label={`Изменить устройство ${target.name || target.address}`}
+                              disabled={!!busy || collecting}
+                              onClick={() => editTarget(target)}
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              aria-label={`Удалить устройство ${target.name || target.address}`}
+                              disabled={!!busy || collecting}
+                              onClick={() =>
+                                setRemoving({
+                                  type: "targets",
+                                  id: target.id,
+                                  name: target.name || target.address,
+                                })
+                              }
+                            >
+                              <Trash2 size={14} aria-hidden="true" />
                             </Button>
                           </div>
-                        )}
-                      </td>
-                      <td>
-                        <div className="actions">
-                          <Button
-                            size="sm"
-                            disabled={!!busy || collecting || !profile}
-                            onClick={() =>
-                              void mutate<{ id?: string }>(
-                                "collect-" + target.id,
-                                "/targets/" + target.id + "/collect",
-                                "POST",
-                                {},
-                                () =>
-                                  setNotice(
-                                    "Сбор поставлен в очередь. Результат появится здесь.",
-                                  ),
-                              )
-                            }
-                          >
-                            <Play size={14} aria-hidden="true" />
-                            {collecting ? "Сбор выполняется" : "Опросить"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            aria-label={`Изменить устройство ${target.name || target.address}`}
-                            disabled={!!busy || collecting}
-                            onClick={() => {
-                              setError(undefined);
-                              setTargetDraft({
-                                ...target,
-                                interval_minutes: String(
-                                  target.interval_minutes || 0,
-                                ),
-                              });
-                            }}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            aria-label={`Удалить устройство ${target.name || target.address}`}
-                            disabled={!!busy || collecting}
-                            onClick={() =>
-                              setRemoving({
-                                type: "targets",
-                                id: target.id,
-                                name: target.name || target.address,
-                              })
-                            }
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </Panel>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </Panel>
+      )}
 
-      <Panel
-        title="Профили для опроса"
-        action={
-          <Button
-            size="sm"
-            onClick={() => {
-              setError(undefined);
-              setProfileDraft(emptyProfile());
-            }}
-            disabled={!!busy}
-          >
-            <Plus size={16} aria-hidden="true" /> Добавить профиль
-          </Button>
-        }
-      >
-        <p className="module-hint">
-          В одной сети могут быть разные учётные записи. Создайте нужные профили
-          и выберите подходящий для каждого устройства.
-        </p>
-        {profiles.error && (
-          <ErrorBox
-            error={failureText(profiles.error)}
-            retry={() => void profiles.refetch()}
-          />
-        )}
-        {!profiles.data && !profiles.error && (
-          <p role="status">Загружаем профили…</p>
-        )}
-        {profiles.data && !Array.isArray(profiles.data.items) && (
-          <ErrorBox
-            error={new Error("Не удалось прочитать список профилей доступа.")}
-          />
-        )}
-        {profileItems.length > 0 && (
-          <div className="netmap-history-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Профиль</th>
-                  <th>Подключение</th>
-                  <th>Используется</th>
-                  <th>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {profileItems.map((profile) => {
-                  const used = targetItems.filter(
-                    (target) => target.profile_id === profile.id,
-                  ).length;
-                  return (
-                    <tr key={profile.id}>
-                      <td>
-                        <strong>{profile.name}</strong>
-                        <br />
-                        <small>
-                          {kinds[profile.kind]}
-                          {profile.driver &&
-                            ` · ${drivers[profile.driver] || profile.driver}`}
-                        </small>
-                      </td>
-                      <td>
-                        {profile.username} · порт {profile.port}
-                        <br />
-                        <small>
-                          {profile.kind === "windows"
-                            ? profile.scheme === "http"
-                              ? "HTTP · NTLM с шифрованием"
-                              : "HTTPS · проверка сертификата"
-                            : profile.private_key_set
-                              ? "Ключ SSH"
-                              : "Пароль SSH"}
-                        </small>
-                      </td>
-                      <td>{used ? `${used} устр.` : "Не назначен"}</td>
-                      <td>
-                        <div className="actions">
-                          <Button
-                            size="sm"
-                            disabled={!!busy}
-                            onClick={() => {
-                              setError(undefined);
-                              setTestAddress(
-                                targetItems.find(
-                                  (target) => target.profile_id === profile.id,
-                                )?.address || "",
-                              );
-                              setTestResult(undefined);
-                              setTesting(profile);
-                            }}
-                          >
-                            <Check size={14} aria-hidden="true" /> Проверить
-                            доступ
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={!!busy}
-                            onClick={() => editProfile(profile)}
-                            aria-label={`Изменить профиль ${profile.name}`}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            disabled={
-                              !!busy ||
-                              !!used ||
-                              !!targets.error ||
-                              !targets.data
-                            }
-                            title={
-                              used
-                                ? "Сначала назначьте устройствам другой профиль"
-                                : undefined
-                            }
-                            onClick={() =>
-                              setRemoving({
-                                type: "profiles",
-                                id: profile.id,
-                                name: profile.name,
-                              })
-                            }
-                            aria-label={`Удалить профиль ${profile.name}`}
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      {view === "profiles" && (
+        <Panel
+          title="Профили для опроса"
+          action={
+            <Button
+              size="sm"
+              onClick={() => {
+                setError(undefined);
+                setProfileDraft({
+                  ...emptyProfile(),
+                  driver: availableDrivers.includes("auto")
+                    ? "auto"
+                    : "huawei_vrp",
+                });
+              }}
+              disabled={!!busy}
+            >
+              <Plus size={16} aria-hidden="true" /> Добавить профиль
+            </Button>
+          }
+        >
+          <p className="module-hint">
+            Профиль хранит данные входа. Его можно назначить нескольким
+            устройствам, у которых одинаковые учётные данные.
+          </p>
+          {profiles.error && (
+            <ErrorBox
+              error={failureText(profiles.error)}
+              retry={() => void profiles.refetch()}
+            />
+          )}
+          {!profiles.data && !profiles.error && (
+            <p role="status">Загружаем профили…</p>
+          )}
+          {profiles.data && !Array.isArray(profiles.data.items) && (
+            <ErrorBox
+              error={new Error("Не удалось прочитать список профилей доступа.")}
+            />
+          )}
+          {profileItems.length > 0 && (
+            <div className="netmap-history-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Профиль</th>
+                    <th>Подключение</th>
+                    <th>Используется</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profileItems.map((profile) => {
+                    const used = profileUse.get(profile.id) || 0;
+                    return (
+                      <tr key={profile.id}>
+                        <td>
+                          <strong>{profile.name}</strong>
+                          <br />
+                          <small>
+                            {kinds[profile.kind]}
+                            {profile.driver &&
+                              ` · ${drivers[profile.driver] || profile.driver}`}
+                          </small>
+                        </td>
+                        <td>
+                          {profile.username} · порт {profile.port}
+                          <br />
+                          <small>
+                            {profile.kind === "windows"
+                              ? profile.scheme === "http"
+                                ? "HTTP · NTLM с шифрованием"
+                                : "HTTPS · проверка сертификата"
+                              : profile.private_key_set
+                                ? "Ключ SSH"
+                                : "Пароль SSH"}
+                          </small>
+                        </td>
+                        <td>{used ? `${used} устр.` : "Не назначен"}</td>
+                        <td>
+                          <div className="actions">
+                            <Button
+                              size="sm"
+                              disabled={!!busy}
+                              onClick={() => {
+                                setError(undefined);
+                                setTestAddress(
+                                  targetItems.find(
+                                    (target) =>
+                                      target.profile_id === profile.id,
+                                  )?.address || "",
+                                );
+                                setTestResult(undefined);
+                                setTesting(profile);
+                              }}
+                            >
+                              <Check size={14} aria-hidden="true" /> Проверить
+                              доступ
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={!!busy}
+                              onClick={() => editProfile(profile)}
+                              aria-label={`Изменить профиль ${profile.name}`}
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={
+                                !!busy ||
+                                !!used ||
+                                !!targets.error ||
+                                !targets.data
+                              }
+                              title={
+                                used
+                                  ? "Сначала назначьте устройствам другой профиль"
+                                  : undefined
+                              }
+                              onClick={() =>
+                                setRemoving({
+                                  type: "profiles",
+                                  id: profile.id,
+                                  name: profile.name,
+                                })
+                              }
+                              aria-label={`Удалить профиль ${profile.name}`}
+                            >
+                              <Trash2 size={14} aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {enrolling && (
+        <EnrollmentDialog
+          endpoint={endpoint}
+          profiles={profileItems}
+          networks={networks}
+          supportedDrivers={availableDrivers}
+          onClose={() => setEnrolling(false)}
+          onSaved={() => {
+            setEnrolling(false);
+            setNotice("Устройство добавлено. Первый опрос в очереди.");
+            void reload();
+          }}
+        />
+      )}
 
       {profileDraft && (
         <Dialog
@@ -901,12 +1620,11 @@ export default function NetMapInventory({
                       setProfileDraft({
                         ...profileDraft,
                         driver,
-                        enable_password:
-                          driver === "cisco_ios"
-                            ? profileDraft.enable_password
-                            : "",
+                        enable_password: supportsEnablePassword(driver)
+                          ? profileDraft.enable_password
+                          : "",
                         clear_secrets:
-                          driver !== "cisco_ios" &&
+                          !supportsEnablePassword(driver) &&
                           existingProfile?.enable_password_set
                             ? [
                                 ...new Set([
@@ -920,7 +1638,7 @@ export default function NetMapInventory({
                       });
                     }}
                   >
-                    {Object.entries(drivers).map(([value, label]) => (
+                    {driverOptions(availableDrivers).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -1083,7 +1801,7 @@ export default function NetMapInventory({
                 </>
               )}
             {profileDraft.kind === "network" &&
-              profileDraft.driver === "cisco_ios" && (
+              supportsEnablePassword(profileDraft.driver) && (
                 <>
                   <Field
                     label="Пароль привилегированного режима, если нужен"
@@ -1247,7 +1965,9 @@ export default function NetMapInventory({
                 () => {
                   setTargetDraft(undefined);
                   setNotice(
-                    "Устройство сохранено. Можно запустить первый сбор.",
+                    targetDraft.id
+                      ? "Настройки устройства сохранены."
+                      : "Устройство сохранено. Запустите первый опрос кнопкой «Опросить».",
                   );
                 },
               );
@@ -1536,6 +2256,12 @@ export default function NetMapInventory({
                 {selected.result.summary.interfaces ?? "—"} /{" "}
                 {selected.result.summary.addresses ?? "—"}
               </dd>
+              {selected.result.summary.neighbors != null && (
+                <>
+                  <dt>Наблюдения о соседях</dt>
+                  <dd>{selected.result.summary.neighbors}</dd>
+                </>
+              )}
               {selected.result.summary.cpu_count != null && (
                 <>
                   <dt>Процессоры</dt>
@@ -1586,6 +2312,14 @@ export default function NetMapInventory({
             </>
           )}
           <div className="dialog-footer">
+            {mapDeviceHref(selected) && (
+              <a
+                className="button button-secondary"
+                href={mapDeviceHref(selected)}
+              >
+                Показать на карте
+              </a>
+            )}
             <a
               className="button button-secondary"
               href="/netmap/netbox/"

@@ -18,6 +18,8 @@ import re
 import time
 import uuid
 
+from inventory_topology import inventory_metadata, merge_neighbors, neighbor
+
 
 SOURCE = 'pl_inventory_source'
 KEY = 'pl_inventory_key'
@@ -229,6 +231,7 @@ def _validated(target, snapshot):
         value = snapshot.get(name, [])
         if not isinstance(value, list) or len(value) > 1024:
             raise ValueError('inventory_invalid_snapshot')
+    result['neighbors'] = [neighbor(row) for row in snapshot.get('neighbors', [])]
     vids, vrf_names = set(), set()
     for vlan in snapshot.get('vlans', []):
         if not isinstance(vlan, dict) or set(vlan) - {'vid', 'name'}:
@@ -466,7 +469,10 @@ class _Sync:
             'virtualization', 'disks', 'capabilities')}
         observed.update(cpu_count=self.snapshot.get('cpu_count'), memory_mib=self.snapshot.get('memory_mib'),
                         collector_ip=self.target['address'])
-        for name in ('neighbors', 'vlans', 'vrfs', 'chassis', 'modules'):
+        metadata, previous = inventory_metadata(existing or {})
+        if self.snapshot['neighbors'] or self.snapshot['capabilities'].get('neighbors') or previous.get('neighbors'):
+            observed['neighbors'] = merge_neighbors(self.snapshot, previous, metadata.get('observed_at'))
+        for name in ('vlans', 'vrfs', 'chassis', 'modules'):
             if name in self.snapshot:
                 observed[name] = copy.deepcopy(self.snapshot[name])
         name = (self.snapshot['hostname'].strip() or self.target.get('name', '').strip() or self.target['address'])[:64]
@@ -538,7 +544,7 @@ class _Sync:
             desired['type'] = {'virtual': 'virtual', 'lag': 'lag'}.get(interface.get('type'), 'other')
             if interface.get('speed_mbps') is not None:
                 desired['speed'] = interface['speed_mbps'] * 1000  # NetBox interface speed is Kbps.
-        observed = {k: copy.deepcopy(v) for k, v in interface.items() if k != 'addresses'}
+        observed = copy.deepcopy(interface)
         if existing:
             if adopted and existing.get('primary_mac_address') is None:
                 desired['primary_mac_address'] = None
@@ -586,7 +592,7 @@ class _Sync:
             raise InventoryConflict('inventory_mac_assignment_changed')
         self.remember('mac_addresses', value['id'])
         self.update(path, interface, 'interface:' + observed['key'], {'primary_mac_address': value['id']},
-                    {k: copy.deepcopy(v) for k, v in observed.items() if k != 'addresses'})
+                    copy.deepcopy(observed))
 
     def vlans(self, asset):
         if not self.snapshot.get('vlans'):
@@ -671,7 +677,7 @@ class _Sync:
                     # changed one member, preserve the whole tuple, not a mix of
                     # manual and collected mode/membership that NetBox rejects.
                     self.update(path, row, 'interface:' + observed['key'], desired,
-                                {k: copy.deepcopy(v) for k, v in observed.items() if k != 'addresses'},
+                                copy.deepcopy(observed),
                                 claim_empty=('mode', 'untagged_vlan', 'tagged_vlans', 'lag'),
                                 atomic_fields=('mode', 'untagged_vlan', 'tagged_vlans') if 'mode' in desired else ())
             except Exception as error:

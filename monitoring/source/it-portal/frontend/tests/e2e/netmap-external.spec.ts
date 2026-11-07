@@ -259,6 +259,9 @@ test("NetMap external uses PL links and never requests local initial credentials
   await expect(
     page.getByRole("heading", { name: "NetMap", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Доступ и конфигурации", exact: true })
+    .click();
   const services = page.getByRole("navigation", { name: "Сервисы NetMap" });
   for (const [name, path] of [
     ["NetBox", "netbox"],
@@ -284,7 +287,7 @@ for (const [mode, state] of [
     });
     const navigation = page
       .locator(".sidebar")
-      .getByRole("button", { name: "NetMap", exact: true });
+      .getByRole("link", { name: "NetMap", exact: true });
     await expect(navigation).toBeVisible();
     // Merely drawing navigation reads PL's saved module list, not the adapter.
     expect(

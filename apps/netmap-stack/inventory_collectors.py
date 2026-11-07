@@ -1,6 +1,6 @@
 """Finite read-only inventory collectors. No discovery, configuration or plugins.
 
-Own CLI parsers (Huawei VRP, Cisco IOS/IOS-XE, Junos); no Orb/NAPALM code.
+Own CLI parsers for network appliances; no Orb/NAPALM code.
 SSH: Paramiko, explicitly supplied host keys and credentials only.
 Windows: pywinrm NTLM, verified HTTPS or mandatory HTTP message encryption.
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import io
 import ipaddress
 import json
@@ -27,9 +27,11 @@ import xml.etree.ElementTree as ET
 MAX_OUTPUT = 2 * 1024 * 1024
 MAX_SNAPSHOT = 1024 * 1024
 MAX_INTERFACES = 1024
+MAX_NEIGHBORS = 1024
 MAX_DISKS = 128
 MAX_DURATION = 90
-DRIVERS = ('huawei_vrp', 'cisco_ios', 'junos')
+DRIVERS = ('auto', 'openwrt', 'mikrotik_routeros', 'keenetic', 'tplink_jetstream',
+           'huawei_vrp', 'cisco_ios', 'junos')
 COMMON = {'id', 'name', 'kind', 'username', 'password', 'private_key', 'passphrase', 'ssh_known_hosts', 'port', 'auth_method'}
 CODES = {'inventory_profile_invalid', 'inventory_target_invalid', 'inventory_driver_unsupported',
          'inventory_dependency_missing', 'inventory_timeout', 'inventory_output_limit', 'inventory_auth_failed',
@@ -115,7 +117,8 @@ def validate_profile(profile):
             if kind == 'network':
                 if result.get('driver') not in DRIVERS: fail('inventory_driver_unsupported')
                 result['enable_password'] = _text(result.get('enable_password', ''), 4096)
-                if result['enable_password'] and result['driver'] != 'cisco_ios': fail('inventory_profile_invalid')
+                if result['enable_password'] and result['driver'] not in ('cisco_ios', 'tplink_jetstream'):
+                    fail('inventory_profile_invalid')
         return result
     except InventoryCollectionError:
         raise
@@ -248,18 +251,26 @@ def _ssh(address, profile, budget):
             client.close()
 
 
-def _exec(client, command, budget):
-    channel = client.get_transport().open_session(timeout=budget.remaining())
+def _exec(client, command, budget, *, until=None):
+    def remaining():
+        timeout = budget.remaining()
+        if until is not None:
+            timeout = min(timeout, until - time.monotonic())
+            if timeout <= 0:
+                raise socket.timeout()
+        return timeout
+
+    channel = client.get_transport().open_session(timeout=remaining())
     try:
-        channel.settimeout(budget.remaining()); channel.exec_command(command)
+        channel.settimeout(remaining()); channel.exec_command(command)
         output, errors = bytearray(), bytearray()
         while True:
-            budget.remaining()
+            remaining()
             for ready, receive, destination in ((channel.recv_ready, channel.recv, output), (channel.recv_stderr_ready, channel.recv_stderr, errors)):
                 if ready():
                     part = receive(65536); budget.add(part); destination.extend(part)
             if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready(): break
-            time.sleep(min(0.01, budget.remaining()))
+            time.sleep(min(0.01, remaining()))
         if channel.recv_exit_status() != 0: fail('inventory_command_failed')
         return bytes(output).decode('utf-8-sig', errors='strict')
     finally: channel.close()
@@ -373,7 +384,7 @@ PROMPT = re.compile(r'(?m)^(?:<[^<>\r\n]{1,100}>|[A-Za-z0-9_.@:/()\-]{1,160}[>#]
 ANSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 
 
-def _shell_read(channel, budget, prompt=None, *, password=False, until=None):
+def _shell_read(channel, budget, prompt=None, *, password=False, until=None, paging=False):
     data = bytearray()
     while True:
         remaining = budget.remaining()
@@ -385,6 +396,10 @@ def _shell_read(channel, budget, prompt=None, *, password=False, until=None):
         if not part: fail('inventory_command_failed')
         budget.add(part); data.extend(part)
         text = ANSI.sub('', data.decode('utf-8', errors='replace')).replace('\r', '')
+        if paging and (page := re.search(r'(?:--+\s*More\s*--+|Press (?:any key|<space>) to continue)[ \t\b]*$', text, re.I)):
+            data = bytearray(text[:page.start()].encode())
+            channel.sendall(' ')
+            continue
         if password and re.search(r'(?i)password:\s*$', text): return text, None
         matches = list(PROMPT.finditer(text))
         if matches and (prompt is None or matches[-1][0].strip() == prompt):
@@ -640,7 +655,7 @@ def _huawei_optional(result, outputs):
 
 
 def parse_network(driver, outputs, prompt=''):
-    if driver not in DRIVERS: fail('inventory_driver_unsupported')
+    if driver not in COMMANDS: fail('inventory_driver_unsupported')
     outputs = {key: re.sub(r'----\s*More\s*----', '', ANSI.sub('', value)).replace('\r', '') for key, value in outputs.items()}
     for command in COMMANDS[driver][1:3]:
         if not outputs.get(command, '').strip() or CLI_ERROR.search(outputs[command]): fail('inventory_command_failed')
@@ -670,6 +685,688 @@ def parse_network(driver, outputs, prompt=''):
     if not result['model']: result['warnings'].append('model_unavailable')
     result['capabilities'].update(system=bool(result['hostname'] or result['model']), interfaces=bool(result['interfaces']), addresses=any(p['addresses'] for p in result['interfaces']))
     return _finish(result)
+
+
+OPENWRT_BOARD = 'ubus call system board'
+OPENWRT_PORTS = 'ip address show'
+OPENWRT_ARP = 'ip -4 neigh show'
+OPENWRT_ARP_FALLBACK = 'cat /proc/net/arp'
+OPENWRT_NDP = 'ip -6 neigh show'
+OPENWRT_DHCP = 'cat /tmp/dhcp.leases'
+OPENWRT_FDB = 'bridge fdb show'
+ROS_SYSTEM = '/system resource print'
+ROS_IDENTITY = '/system identity print'
+ROS_BOARD = '/system routerboard print'
+ROS_INTERFACES = '/interface print terse without-paging'
+ROS_IP = '/ip address print terse without-paging'
+ROS_IPV6 = '/ipv6 address print terse without-paging'
+ROS_ARP = '/ip arp print terse without-paging'
+ROS_NDP = '/ipv6 neighbor print terse without-paging'
+ROS_DHCP = '/ip dhcp-server lease print terse without-paging'
+ROS_FDB = '/interface bridge host print terse without-paging'
+ROS_NEIGHBOR = '/ip neighbor print terse without-paging'
+KEENETIC_VERSION = 'show version'
+KEENETIC_PORTS = 'show interface'
+KEENETIC_ARP = 'show ip arp'
+KEENETIC_DHCP = 'show ip dhcp bindings'
+TPLINK_SYSTEM = 'show system-info'
+TPLINK_PORTS = 'show interface status'
+TPLINK_IP_BRIEF = 'show ip interface brief'
+TPLINK_IP = 'show ip address'
+TPLINK_FDB = 'show mac address-table'
+VENDOR_CLI_ERROR = re.compile(r'(?im)^\s*(?:bad command name|syntax error|expected end of command|'
+                              r'failure:|input does not match|not enough permissions|'
+                              r'permission denied|unknown command|command not found|'
+                              r'Core::Configurator: (?:no such command|invalid))')
+
+
+def _router_finish(result):
+    if not result['interfaces'] or not result['os_version']:
+        fail('inventory_output_invalid')
+    for name in ('serial', 'model'):
+        if not result[name]:
+            result['warnings'].append(name + '_unavailable')
+    result['capabilities'].update(system=True, interfaces=True,
+                                  addresses=any(_address(a.get('address')) for p in result['interfaces'] for a in p['addresses']))
+    if not result['capabilities']['neighbors']:
+        result['warnings'].append('neighbor_sources_unavailable')
+    return _finish(result)
+
+
+def _peer_ip(value):
+    try:
+        addr = ipaddress.ip_address(value)
+    except (TypeError, ValueError):
+        return ''
+    effective = getattr(addr, 'ipv4_mapped', None) or addr
+    if (getattr(addr, 'scope_id', None) or effective.is_unspecified or effective.is_multicast
+            or effective.is_loopback or effective.is_link_local or str(effective) == '255.255.255.255'):
+        return ''
+    return str(addr)
+
+
+def _observed_neighbors(result, protocol, rows):
+    if rows is None:
+        return
+    # An empty valid table can expire old data. An unreadable or truncated one cannot.
+    seen = {}
+    for row in rows:
+        ip = _peer_ip(row.get('address', ''))
+        mac = _mac(row.get('mac', ''))
+        if mac and int(mac[:2], 16) & 1:
+            mac = ''
+        if not ip and not mac:
+            continue
+        item = {'protocol': protocol}
+        for name, value in (('address', ip), ('mac', mac), ('hostname', row.get('hostname')),
+                            ('local_port', row.get('local_port')), ('expires_at', row.get('expires_at'))):
+            if value and value != '*':
+                item[name] = _string(value, 128)
+        if protocol in ('lldp', 'cdp') and row.get('remote_port'):
+            item['remote_port'] = _string(row['remote_port'], 128)
+        seen[tuple(item.get(k, '') for k in ('address', 'mac', 'local_port', 'remote_port'))] = item
+        if len(result['neighbors']) + len(seen) > MAX_NEIGHBORS:
+            result['warnings'].append('neighbor_limit_reached')
+            return
+    result['neighbors'].extend(seen.values())
+    result['capabilities']['neighbors'] = True
+    result['capabilities']['neighbors_' + protocol] = True
+
+
+def _kv_lines(value, separator=r':'):
+    return {key.strip().lower(): data.strip()
+            for key, data in re.findall(r'(?m)^[ \t]*([^:\r\n]+?)[ \t]*' + separator + r'[ \t]*([^\r\n]*)$', value or '')}
+
+
+def _openwrt_board(value):
+    try:
+        board = json.loads(value or '')
+    except (ValueError, TypeError):
+        return None
+    release = board.get('release') if isinstance(board, dict) else None
+    if isinstance(release, dict) and isinstance(release.get('distribution'), str):
+        if release['distribution'].casefold() in ('openwrt', 'friendlywrt'):
+            return board
+    return None
+
+
+def _openwrt_ports(value):
+    ports, current = [], None
+    for line in (value or '').splitlines():
+        if head := re.match(r'^\d+:\s+([^\s:]+):\s+<([^>]*)>.*?\bmtu\s+(\d+)\b(.*)$', line):
+            current = None
+            flags = head[2].split(',')
+            if 'LOOPBACK' in flags:
+                continue
+            name = head[1].split('@', 1)[0]
+            current = _interface(name)
+            current.update(mtu=_integer(head[3], 65536), enabled='UP' in flags)
+            state = _match(r'\bstate\s+(UP|DOWN)\b', head[4])
+            if state:
+                current['link_up'] = state.upper() == 'UP'
+            elif 'LOWER_UP' in flags:
+                current['link_up'] = True
+            ports.append(current)
+        if current is None:
+            continue
+        if mac := re.match(r'\s+link/ether\s+(\S+)', line):
+            current['mac_address'] = _mac(mac[1])
+        if addr := re.match(r'\s+inet6?\s+(\S+)', line):
+            current['addresses'].append({'address': addr[1], 'vrf': ''})
+    return ports
+
+
+def _ip_neighbors(value):
+    rows = []
+    for line in value.splitlines():
+        if not line.strip():
+            continue
+        match = re.match(r'^(\S+)\s+dev\s+(\S+)(?:\s+(.*))?$', line)
+        if not match:
+            return None
+        attributes = (match[3] or '').split()
+        if 'lladdr' in attributes and not {'FAILED', 'INCOMPLETE', 'NOARP'} & set(attributes):
+            at = attributes.index('lladdr') + 1
+            if at < len(attributes):
+                rows.append({'address': match[1], 'mac': attributes[at], 'local_port': match[2]})
+    return rows
+
+
+def _proc_arp(value):
+    lines = value.splitlines()
+    if not lines or not lines[0].startswith('IP address'):
+        return None
+    rows = []
+    for line in lines[1:]:
+        fields = line.split()
+        if not fields:
+            continue
+        if len(fields) != 6 or not re.fullmatch(r'0x[0-9a-fA-F]+', fields[2]):
+            return None
+        flags = int(fields[2], 16)
+        if flags & 2 and not flags & 8:
+            rows.append({'address': fields[0], 'mac': fields[3], 'local_port': fields[5]})
+    return rows
+
+
+def _dnsmasq_leases(value):
+    rows = []
+    for line in value.splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        if len(fields) != 5 or not re.fullmatch(r'[0-9]{1,12}', fields[0]):
+            return None
+        timestamp = int(fields[0])
+        expires = ''
+        if timestamp:
+            try:
+                expires = datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
+            except (ValueError, OverflowError, OSError):
+                continue
+        rows.append({'address': fields[2], 'mac': fields[1], 'hostname': fields[3], 'expires_at': expires})
+    return rows
+
+
+def _bridge_fdb(value):
+    rows = []
+    for line in value.splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        if len(fields) < 3 or fields[1] != 'dev' or not _mac(fields[0]):
+            return None
+        if not {'self', 'permanent', 'static'} & set(fields[3:]):
+            rows.append({'mac': fields[0], 'local_port': fields[2]})
+    return rows
+
+
+def _neighbor_table(result, outputs, protocol, command, parser):
+    value = outputs.get(command)
+    if value is None:
+        return
+    rows = parser(value)
+    if rows is None:
+        result['warnings'].append('neighbor_format_unrecognized')
+        return
+    _observed_neighbors(result, protocol, rows)
+
+
+def _openwrt_snapshot(board, outputs):
+    result = _snapshot('network')
+    release = board['release']
+    model = board.get('model')
+    board_name = board.get('board_name')
+    brand = board_name.split(',')[0].lower() if isinstance(board_name, str) and ',' in board_name else ''
+    manufacturers = {'friendlyarm': 'FriendlyElec', 'friendlyelec': 'FriendlyElec',
+                     'tplink': 'TP-Link', 'glinet': 'GL.iNet', 'mikrotik': 'MikroTik'}
+    result.update(
+        manufacturer=manufacturers.get(brand, brand),
+        model=_string(model) if isinstance(model, str) else '',
+        hostname=_string(board.get('hostname')) if isinstance(board.get('hostname'), str) else '',
+        os_name=_string(release['distribution']),
+        os_version=_string(release.get('version')) if isinstance(release.get('version'), str) else '',
+        serial=_string(board.get('serial')) if isinstance(board.get('serial'), str) else '',
+        interfaces=_openwrt_ports(outputs.get(OPENWRT_PORTS)),
+    )
+    arp_source, arp_parser = ((OPENWRT_ARP_FALLBACK, _proc_arp)
+                              if outputs.get(OPENWRT_ARP) is None else (OPENWRT_ARP, _ip_neighbors))
+    _neighbor_table(result, outputs, 'arp', arp_source, arp_parser)
+    _neighbor_table(result, outputs, 'ndp', OPENWRT_NDP, _ip_neighbors)
+    _neighbor_table(result, outputs, 'dhcp', OPENWRT_DHCP, _dnsmasq_leases)
+    _neighbor_table(result, outputs, 'fdb', OPENWRT_FDB, _bridge_fdb)
+    return _router_finish(result)
+
+
+ROS_FIELD = re.compile(r'(?:^|[ \t])([A-Za-z][A-Za-z0-9-]*)=(?:"((?:[^"\\]|\\.)*)"|(\S*))')
+
+
+def _ros_rows(value):
+    records, record = [], None
+    for line in value.splitlines():
+        line = line.strip()
+        if not line or line.startswith(('Flags:', 'Columns:', ';;;', '#')):
+            continue
+        if row := re.match(r'^\d+\s+(.*)$', line):
+            record = row[1]
+            records.append(record)
+        elif record is not None and ROS_FIELD.search(line):
+            record += ' ' + line
+            records[-1] = record
+        else:
+            return None
+    rows = []
+    for record in records:
+        fields = list(ROS_FIELD.finditer(record))
+        if not fields:
+            return None
+        flags = record[:fields[0].start()].strip().replace(' ', '')
+        values = {key: (re.sub(r'\\(["\\])', r'\1', quoted) if quoted is not None else plain)
+                  for key, quoted, plain in (item.groups() for item in fields)}
+        rows.append((flags, values))
+    return rows
+
+
+def _ros_yes(value):
+    return {'yes': True, 'true': True, 'no': False, 'false': False}.get(value)
+
+
+def _lease_expiry(value, observed_at):
+    if not value:
+        return ''
+    seconds = 0
+    if re.fullmatch(r'\d{1,6}(?::\d{2}){2}', value):
+        h, m, s = map(int, value.split(':'))
+        seconds = 3600 * h + 60 * m + s
+    elif re.fullmatch(r'(?:\d{1,7}[wdhms])+', value):
+        units = {'w': 604800, 'd': 86400, 'h': 3600, 'm': 60, 's': 1}
+        seconds = sum(int(n) * units[unit] for n, unit in re.findall(r'(\d+)([wdhms])', value))
+    elif re.fullmatch(r'\d{1,9}', value):
+        seconds = int(value)
+    if not 0 < seconds <= 366 * 86400:
+        return ''
+    return (datetime.fromisoformat(observed_at.replace('Z', '+00:00')) + timedelta(seconds=seconds)).isoformat()
+
+
+def _ros_neighbors(result, outputs, protocol, command):
+    value = outputs.get(command)
+    if value is None:
+        return
+    rows = _ros_rows(value)
+    if rows is None:
+        result['warnings'].append('neighbor_format_unrecognized')
+        return
+    observations = []
+    for flags, row in rows:
+        if 'X' in flags or 'I' in flags or _ros_yes(row.get('disabled')) is True:
+            continue
+        if protocol == 'dhcp':
+            if row.get('status') != 'bound':
+                continue
+            observations.append({'address': row.get('active-address', row.get('address', '')),
+                                 'mac': row.get('active-mac-address', row.get('mac-address', '')),
+                                 'hostname': row.get('host-name', ''),
+                                 'expires_at': _lease_expiry(row.get('expires-after'), result['observed_at'])})
+        elif protocol == 'fdb':
+            if 'L' not in flags and _ros_yes(row.get('local')) is not True and ('D' in flags or _ros_yes(row.get('dynamic')) is True):
+                observations.append({'mac': row.get('mac-address', ''), 'local_port': row.get('on-interface') or row.get('interface')})
+        elif protocol in ('lldp', 'cdp'):
+            methods = re.findall(r'\b(?:lldp|cdp|mndp)\b', row.get('discovered-by', '').lower())
+            if protocol in methods:
+                observations.append({'address': row.get('address') or row.get('address6', ''),
+                                     'mac': row.get('mac-address', ''), 'hostname': row.get('identity', ''),
+                                     'local_port': row.get('interface'),
+                                     'remote_port': row.get('interface-name') if protocol == 'cdp' else None})
+        elif row.get('status', '').lower() not in ('failed', 'incomplete') and row.get('mac-address'):
+            observations.append({'address': row.get('address', ''), 'mac': row['mac-address'], 'local_port': row.get('interface')})
+    # Older RouterOS cannot distinguish MNDP from LLDP/CDP on nonempty tables.
+    if protocol in ('lldp', 'cdp') and any(not row.get('discovered-by') for _, row in rows):
+        result['warnings'].append('neighbor_format_unrecognized')
+        return
+    _observed_neighbors(result, protocol, observations)
+
+
+def _routeros_snapshot(outputs):
+    result = _snapshot('network')
+    system = _kv_lines(outputs.get(ROS_SYSTEM))
+    if system.get('platform', '').lower() != 'mikrotik':
+        fail('inventory_driver_unsupported')
+    board = _kv_lines(outputs.get(ROS_BOARD))
+    identity = _kv_lines(outputs.get(ROS_IDENTITY))
+    result.update(manufacturer='MikroTik', os_name='RouterOS', os_version=_string(system.get('version')),
+                  hostname=_string(identity.get('name')),
+                  model=_string(board.get('model') or system.get('board-name')),
+                  serial=_string(board.get('serial-number')))
+    ports = {}
+    for flags, row in _ros_rows(outputs.get(ROS_INTERFACES) or '') or []:
+        name = row.get('name')
+        if not name or row.get('type') == 'loopback':
+            continue
+        port = _interface(name)
+        kind = row.get('type', '')
+        port.update(mac_address=_mac(row.get('mac-address', '')),
+                    mtu=_integer(row.get('actual-mtu') or row.get('mtu'), 65536),
+                    enabled='X' not in flags if 'disabled' not in row else not _ros_yes(row['disabled']),
+                    link_up=_ros_yes(row.get('running')) if 'running' in row else 'R' in flags,
+                    type=('physical' if kind in ('ether', 'wlan', 'wifi') else
+                          'lag' if kind == 'bonding' else
+                          'virtual' if kind in ('bridge', 'vlan', 'wireguard', 'vrrp', 'eoip', 'vxlan') else 'unknown'))
+        ports[name] = port
+    for command in (ROS_IP, ROS_IPV6):
+        raw = outputs.get(command)
+        if raw is None:
+            continue
+        addresses = _ros_rows(raw)
+        if addresses is None:
+            result['warnings'].append('optional_format_unrecognized')
+            continue
+        for flags, row in addresses:
+            port = ports.get(row.get('interface'))
+            if port and 'X' not in flags and 'I' not in flags and row.get('address'):
+                port['addresses'].append({'address': row['address'], 'vrf': ''})
+    result['interfaces'] = list(ports.values())
+    for protocol, command in (('arp', ROS_ARP), ('ndp', ROS_NDP), ('dhcp', ROS_DHCP), ('fdb', ROS_FDB),
+                              ('lldp', ROS_NEIGHBOR), ('cdp', ROS_NEIGHBOR)):
+        _ros_neighbors(result, outputs, protocol, command)
+    return _router_finish(result)
+
+
+def _mask_address(address, mask):
+    if not address:
+        return None
+    if '/' in address:
+        candidate = _address(address)
+    elif mask:
+        candidate = _address(f"{address}/{mask.lstrip('/')}")
+    else:
+        candidate = None
+    if candidate and not ipaddress.ip_interface(candidate).ip.is_unspecified:
+        return candidate
+    return None
+
+
+def _keenetic_identity(value):
+    fields = _kv_lines(value)
+    marker = ' '.join(fields.get(name, '') for name in ('vendor', 'manufacturer', 'series', 'device', 'title', 'model'))
+    if re.search(r'\bkeenetic\b|\bkeeneticos\b', marker, re.I) and fields.get('release'):
+        return fields
+    return None
+
+
+def _keenetic_ports(value):
+    result = {}
+    chunks = re.split(r'(?mi)(?=^[ \t]*id:[ \t]*\S+)', value)
+    has_ids = len(chunks) > 1
+    if not has_ids:
+        chunks = re.split(r'(?mi)(?=^[ \t]*interface,[ \t]*name[ \t]*=)', value)
+    for chunk in chunks:
+        fields = _kv_lines(chunk)
+        name = (fields.get('id') if has_ids else
+                _match(r'^[ \t]*interface,\s*name\s*=\s*"?([^":\r\n]+)"?:\s*$', chunk))
+        if not name:
+            continue
+        kind = fields.get('type', '').lower()
+        if kind == 'loopback':
+            continue
+        port = _interface(name)
+        port.update(description=_string(fields.get('description')), mac_address=_mac(fields.get('mac', '')),
+                    mtu=_integer(fields.get('mtu'), 65536), speed_mbps=_integer((fields.get('speed') or '').rstrip('mM'), 2147483),
+                    enabled={'up': True, 'down': False}.get(fields.get('state')),
+                    link_up={'up': True, 'down': False}.get(fields.get('link')),
+                    type=('physical' if kind in ('port', 'ethernet', 'fastethernet', 'gigabitethernet') else
+                          'virtual' if kind in ('vlan', 'bridge', 'wireguard', 'pppoe', 'tunnel') else 'unknown'))
+        if address := _mask_address(fields.get('address'), fields.get('mask')):
+            port['addresses'].append({'address': address, 'vrf': ''})
+        result[name] = port
+    return list(result.values())
+
+
+def _keenetic_arp(value):
+    rows = []
+    for line in value.splitlines():
+        fields = line.strip().split(maxsplit=2)
+        if not fields or re.fullmatch(r'[=-]+', fields[0]) or fields[0].lower() == 'ip':
+            continue
+        if len(fields) != 3 or not _peer_ip(fields[0]):
+            return None
+        rows.append({'address': fields[0], 'mac': fields[1], 'local_port': fields[2]})
+    return rows
+
+
+def _keenetic_leases(value, observed_at):
+    chunks = re.split(r'(?mi)^[ \t]*lease[ \t]*:[ \t]*$', value)
+    if len(chunks) < 2:
+        return [] if not value.strip() else None
+    rows = []
+    for chunk in chunks[1:]:
+        fields = _kv_lines(chunk)
+        if not fields.get('ip'):
+            return None
+        rows.append({'address': fields['ip'], 'mac': fields.get('mac', ''), 'hostname': fields.get('hostname'),
+                     'expires_at': _lease_expiry(fields.get('expires'), observed_at)})
+    return rows
+
+
+def _keenetic_snapshot(outputs):
+    version = _keenetic_identity(outputs.get(KEENETIC_VERSION))
+    if version is None:
+        fail('inventory_driver_unsupported')
+    result = _snapshot('network')
+    result.update(manufacturer='Keenetic', os_name='KeeneticOS', os_version=_string(version['release']),
+                  model=_string(version.get('model') or version.get('device')),
+                  hostname=_string(version.get('hostname') or version.get('host-name')),
+                  serial=_string(version.get('serial') or version.get('serial-number')),
+                  interfaces=_keenetic_ports(outputs.get(KEENETIC_PORTS, '')))
+    _neighbor_table(result, outputs, 'arp', KEENETIC_ARP, _keenetic_arp)
+    _neighbor_table(result, outputs, 'dhcp', KEENETIC_DHCP,
+                    lambda value: _keenetic_leases(value, result['observed_at']))
+    return _router_finish(result)
+
+
+def _tplink_identity(value):
+    fields = _kv_lines(value, r'[ \t]+-[ \t]+')
+    fields.update(_kv_lines(value))
+    marker = ' '.join(fields.get(name, '') for name in ('system description', 'bootloader version', 'device description'))
+    if re.search(r'\b(?:jetstream|tp-link|tp link|omada)\b', marker, re.I) and fields.get('hardware version'):
+        return fields
+    return None
+
+
+def _tplink_ports(value):
+    result = []
+    for line in value.splitlines():
+        row = re.match(r'^\s*([A-Za-z]+[0-9]+(?:/[0-9]+){1,2})\s+'
+                       r'(LinkUp|LinkDown|Up|Down|Disabled?)\s+(\S+)', line, re.I)
+        if not row:
+            continue
+        port = _interface(row[1])
+        status = row[2].lower()
+        speed = re.fullmatch(r'(\d{1,4}(?:\.\d{1,3})?)([mMgG])', row[3])
+        port.update(type='physical', link_up=status in ('linkup', 'up'))
+        if status.startswith('disabl'):
+            port['enabled'] = False
+        if speed:
+            port['speed_mbps'] = _integer(int(float(speed[1]) * (1000 if speed[2].lower() == 'g' else 1)), 2147483)
+        result.append(port)
+    return result
+
+
+def _tplink_fdb(value):
+    rows = []
+    recognized = not value.strip()
+    for line in value.splitlines():
+        if re.search(r'\b(?:MAC|Destination)\s+Address\b|\btotal\s+(?:entries|addresses)\b', line, re.I):
+            recognized = True
+        fields = line.split()
+        if not fields:
+            continue
+        mac = next((word for word in fields if _mac(word)), None)
+        if not mac:
+            continue
+        recognized = True
+        if 'dynamic' in (word.lower() for word in fields):
+            port = next((word for word in fields if re.fullmatch(r'[A-Za-z]*\d+(?:/\d+){1,2}', word)), None)
+            if not port:
+                return None
+            rows.append({'mac': mac, 'local_port': port})
+    return rows if recognized else None
+
+
+def _tplink_snapshot(outputs):
+    system = _tplink_identity(outputs.get(TPLINK_SYSTEM))
+    if system is None:
+        fail('inventory_driver_unsupported')
+    result = _snapshot('network')
+    result.update(manufacturer='TP-Link', os_name='Omada' if 'omada' in system.get('system description', '').lower() else 'JetStream',
+                  os_version=_string(system.get('software version') or system.get('firmware version')),
+                  model=_string(system.get('hardware version')), hostname=_string(system.get('system name') or system.get('device name')),
+                  serial=_string(system.get('serial number')), interfaces=_tplink_ports(outputs.get(TPLINK_PORTS, '')))
+    ports = {port['name'].lower(): port for port in result['interfaces']}
+    for line in (outputs.get(TPLINK_IP_BRIEF) or '').splitlines():
+        row = re.match(r'^\s*(\S+)\s+(\S+)\s+\S+\s+(Up|Down)\s+(Up|Down)\s+(yes|no)\s*$', line, re.I)
+        if not row or not (address := _mask_address(row[2], '')):
+            continue
+        key = row[1].lower()
+        port = ports.get(key)
+        if port is None:
+            if not re.fullmatch(r'vlan\d{1,4}', key):
+                continue
+            port = ports[key] = _interface(row[1])
+            port['type'] = 'virtual'
+            result['interfaces'].append(port)
+        port.update(enabled=row[5].lower() == 'no', link_up=row[4].lower() == 'up')
+        port['addresses'].append({'address': address, 'vrf': ''})
+    management = _kv_lines(outputs.get(TPLINK_IP), r'[ \t]+-[ \t]+')
+    management.update(_kv_lines(outputs.get(TPLINK_IP)))
+    vlan = _integer(management.get('management vlan') or management.get('vlan id'), 4094)
+    address = _mask_address(management.get('ip address'), management.get('subnet mask'))
+    if vlan and address:
+        port = ports.get(f'vlan{vlan}')
+        if port is None:
+            port = _interface(f'Vlan{vlan}')
+            port['type'] = 'virtual'
+            result['interfaces'].append(port)
+        if mac := _mac(management.get('mac address', '')):
+            port['mac_address'] = mac
+        port['addresses'].append({'address': address, 'vrf': ''})
+    _neighbor_table(result, outputs, 'fdb', TPLINK_FDB, _tplink_fdb)
+    return _router_finish(result)
+
+
+def _optional_exec(client, command, budget, *, seconds=3):
+    now = time.monotonic()
+    # Preserve time to return the mandatory facts when optional tables stall.
+    until = min(now + seconds, budget.deadline - 0.25)
+    if until <= now:
+        return None
+    try:
+        value = _exec(client, command, budget, until=until)
+    except (socket.timeout, EOFError):
+        return None
+    except InventoryCollectionError as error:
+        if error.code == 'inventory_command_failed':
+            return None
+        raise
+    except Exception as error:
+        # A server can refuse exec while its interactive shell is supported.
+        import paramiko
+        if isinstance(error, paramiko.SSHException):
+            return None
+        raise
+    return None if CLI_ERROR.search(value) or VENDOR_CLI_ERROR.search(value) else value
+
+
+def _openwrt_collect(client, board, budget):
+    outputs = {OPENWRT_PORTS: _exec(client, OPENWRT_PORTS, budget)}
+    for command in (OPENWRT_ARP, OPENWRT_NDP, OPENWRT_DHCP, OPENWRT_FDB):
+        outputs[command] = _optional_exec(client, command, budget)
+    if outputs[OPENWRT_ARP] is None:
+        outputs[OPENWRT_ARP_FALLBACK] = _optional_exec(client, OPENWRT_ARP_FALLBACK, budget)
+    return _openwrt_snapshot(board, outputs)
+
+
+def _routeros_collect(client, system, budget):
+    outputs = {ROS_SYSTEM: system, ROS_INTERFACES: _exec(client, ROS_INTERFACES, budget)}
+    for command in (ROS_IDENTITY, ROS_BOARD, ROS_IP, ROS_IPV6, ROS_ARP, ROS_NDP, ROS_DHCP, ROS_NEIGHBOR, ROS_FDB):
+        outputs[command] = _optional_exec(client, command, budget)
+    return _routeros_snapshot(outputs)
+
+
+def _appliance_shell(client, profile, budget):
+    driver = profile['driver']
+    channel = client.invoke_shell(width=200, height=100)
+    try:
+        _, prompt = _shell_read(channel, budget, until=time.monotonic() + budget.remaining(4))
+        outputs = {}
+
+        def run(command, *, optional=False):
+            channel.sendall(command + '\n')
+            body, _ = _shell_read(channel, budget, prompt, paging=driver in ('auto', 'tplink_jetstream'),
+                                  until=time.monotonic() + budget.remaining(4 if optional else 12))
+            lines = body.strip('\n').splitlines()
+            if lines and lines[0].strip() == command:
+                lines.pop(0)
+            value = '\n'.join(lines)
+            if CLI_ERROR.search(value) or VENDOR_CLI_ERROR.search(value):
+                if not optional:
+                    fail('inventory_command_failed')
+                return None
+            outputs[command] = value
+            return value
+
+        if driver == 'auto':
+            if prompt.startswith('<'):
+                version = run('display version', optional=True) or ''
+                if re.search(r'Versatile Routing Platform|\bVRP\b.*Version', version, re.I):
+                    return 'huawei_vrp', None
+            else:
+                version = run(KEENETIC_VERSION, optional=True) or ''
+                if _keenetic_identity(version):
+                    driver = 'keenetic'
+                elif re.search(r'\bCisco\s+IOS(?:[\s-]|$)', version, re.I):
+                    return 'cisco_ios', None
+                elif re.search(r'(?mi)^\s*(?:Junos|JUNOS Software Release)\s*[:\[]', version):
+                    return 'junos', None
+                elif _tplink_identity(run(TPLINK_SYSTEM, optional=True)):
+                    driver = 'tplink_jetstream'
+            if driver == 'auto':
+                fail('inventory_driver_unsupported')
+
+        if driver == 'tplink_jetstream' and prompt.endswith('>'):
+            channel.sendall('enable\n')
+            _, elevated = _shell_read(channel, budget, password=True)
+            if elevated is None:
+                if not profile.get('enable_password'):
+                    fail('inventory_auth_failed')
+                channel.sendall(profile['enable_password'] + '\n')
+                _, elevated = _shell_read(channel, budget, password=True)
+            if elevated is None or not elevated.endswith('#'):
+                fail('inventory_auth_failed')
+            prompt = elevated
+
+        if driver == 'keenetic':
+            required, optional = (KEENETIC_VERSION, KEENETIC_PORTS), (KEENETIC_ARP, KEENETIC_DHCP)
+        else:
+            required, optional = (TPLINK_SYSTEM, TPLINK_PORTS), (TPLINK_IP_BRIEF, TPLINK_IP, TPLINK_FDB)
+        for command in required:
+            if command not in outputs and not run(command):
+                fail('inventory_command_failed')
+        for command in optional:
+            try:
+                run(command, optional=True)
+            except (OSError, EOFError):
+                break  # Lost prompt: do not send another command into the stream.
+            except InventoryCollectionError as error:
+                if error.code not in ('inventory_timeout', 'inventory_command_failed'):
+                    raise
+                break
+        return driver, outputs
+    finally:
+        channel.close()
+
+
+def _collect_network(client, profile, budget):
+    driver = profile['driver']
+    if driver in ('openwrt', 'auto'):
+        board = _openwrt_board(_optional_exec(client, OPENWRT_BOARD, budget))
+        if board is not None:
+            return _openwrt_collect(client, board, budget)
+        if driver == 'openwrt':
+            fail('inventory_driver_unsupported')
+    if driver in ('mikrotik_routeros', 'auto'):
+        system = _optional_exec(client, ROS_SYSTEM, budget)
+        if _kv_lines(system).get('platform', '').lower() == 'mikrotik':
+            return _routeros_collect(client, system, budget)
+        if driver == 'mikrotik_routeros':
+            fail('inventory_driver_unsupported')
+    if driver in ('keenetic', 'tplink_jetstream', 'auto'):
+        driver, outputs = _appliance_shell(client, profile, budget)
+        if driver == 'keenetic':
+            return _keenetic_snapshot(outputs)
+        if driver == 'tplink_jetstream':
+            return _tplink_snapshot(outputs)
+    outputs, prompt = _network_raw(client, {**profile, 'driver': driver}, budget)
+    return parse_network(driver, outputs, prompt)
 
 
 WINDOWS_SCRIPT = r'''$ErrorActionPreference='Stop'
@@ -796,8 +1493,7 @@ def _collect_impl(target, profile, *, deadline=None):
         if profile['kind'] == 'windows': return _windows(address, profile, budget)
         with _ssh(address, profile, budget) as client:
             if profile['kind'] == 'linux': return _host_snapshot('linux', _exec(client, LINUX_COMMAND, budget))
-            outputs, prompt = _network_raw(client, profile, budget)
-            return parse_network(profile['driver'], outputs, prompt)
+            return _collect_network(client, profile, budget)
     except InventoryCollectionError:
         raise
     except (socket.timeout, TimeoutError): fail('inventory_timeout')

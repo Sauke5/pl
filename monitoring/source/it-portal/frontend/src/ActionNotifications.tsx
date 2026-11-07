@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -13,14 +14,30 @@ import { errorText } from "./api";
 import "./action-notifications.css";
 
 type Kind = "success" | "info" | "error";
-type Notification = { id: number; kind: Kind; message: string };
+type Status = {
+  kind: Kind;
+  message: string;
+  title?: string;
+  ongoing?: boolean;
+};
+type Notification = Status & { id: number | string; hidden?: boolean };
 type Notify = (kind: Kind, message: string, allowRepeat?: boolean) => void;
-const NotificationsContext = createContext<Notify | null>(null);
+const NotificationsContext = createContext<{
+  notify: Notify;
+  setStatus: (id: string, status?: Status) => void;
+} | null>(null);
 const titles: Record<Kind, string> = {
   success: "Готово",
   info: "Информация",
   error: "Не удалось выполнить действие",
 };
+function appendNotification(items: Notification[], item: Notification) {
+  const oldest =
+    items.length >= 4
+      ? (items.find((entry) => !entry.ongoing) ?? items[0])
+      : undefined;
+  return [...items.filter((entry) => entry !== oldest), item];
+}
 
 export function ActionNotificationsProvider({
   children,
@@ -46,13 +63,37 @@ export function ActionNotificationsProvider({
       }
     }
     const item = { id: ++sequence.current, kind, message };
-    setItems((current) => [...current, item].slice(-4));
+    setItems((current) => appendNotification(current, item));
   }, []);
-  const dismiss = useCallback((id: number) => {
-    setItems((current) => current.filter((item) => item.id !== id));
+  const setStatus = useCallback((id: string, status?: Status) => {
+    setItems((current) => {
+      const previous = current.find((item) => item.id === id);
+      // A finished notification stays visible for its normal timeout.
+      if (!status)
+        return previous?.ongoing
+          ? current.filter((item) => item.id !== id)
+          : current;
+      const item = {
+        ...status,
+        id,
+        hidden: status.ongoing && previous?.hidden,
+      };
+      return previous
+        ? current.map((entry) => (entry.id === id ? item : entry))
+        : appendNotification(current, item);
+    });
   }, []);
+  const dismiss = useCallback((id: Notification["id"]) => {
+    setItems((current) =>
+      current.flatMap((item) => {
+        if (item.id !== id) return [item];
+        return item.ongoing ? [{ ...item, hidden: true }] : [];
+      }),
+    );
+  }, []);
+  const actions = useMemo(() => ({ notify, setStatus }), [notify, setStatus]);
   return (
-    <NotificationsContext.Provider value={notify}>
+    <NotificationsContext.Provider value={actions}>
       {children}
       {createPortal(
         <section
@@ -60,9 +101,15 @@ export function ActionNotificationsProvider({
           aria-label="Уведомления о действиях"
         >
           <ul>
-            {items.map((item) => (
-              <ActionNotification key={item.id} item={item} dismiss={dismiss} />
-            ))}
+            {items
+              .filter((item) => !item.hidden)
+              .map((item) => (
+                <ActionNotification
+                  key={`${item.id}-${item.ongoing ? "progress" : "result"}`}
+                  item={item}
+                  dismiss={dismiss}
+                />
+              ))}
           </ul>
         </section>,
         document.body,
@@ -76,14 +123,14 @@ function ActionNotification({
   dismiss,
 }: {
   item: Notification;
-  dismiss: (id: number) => void;
+  dismiss: (id: Notification["id"]) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const remaining = useRef(item.kind === "error" ? 10000 : 6000);
   const paused = hovered || focused;
   useEffect(() => {
-    if (paused) return;
+    if (item.ongoing || paused) return;
     const started = performance.now();
     const timeout = window.setTimeout(
       () => dismiss(item.id),
@@ -96,7 +143,7 @@ function ActionNotification({
         remaining.current - (performance.now() - started),
       );
     };
-  }, [paused, item.id, dismiss]);
+  }, [paused, item.id, item.ongoing, dismiss]);
   const Icon =
     item.kind === "error"
       ? AlertCircle
@@ -121,7 +168,7 @@ function ActionNotification({
         aria-live={item.kind === "error" ? "assertive" : "polite"}
         aria-atomic="true"
       >
-        <strong>{titles[item.kind]}</strong>
+        <strong>{item.title || titles[item.kind]}</strong>
         <p>{item.message}</p>
       </div>
       <button
@@ -136,6 +183,20 @@ function ActionNotification({
   );
 }
 
+/** Keep one notification up to date for a long running action. */
+export function useActionStatus(
+  id: string | undefined,
+  { kind, message, title, ongoing }: Status,
+) {
+  const setStatus = useContext(NotificationsContext)?.setStatus;
+  useEffect(() => {
+    if (id) setStatus?.(id, { kind, message, title, ongoing });
+  }, [id, kind, message, title, ongoing, setStatus]);
+  useEffect(() => {
+    if (id) return () => setStatus?.(id);
+  }, [id, setStatus]);
+}
+
 /** Publish action feedback only. Persistent query/service errors stay in their views. */
 export function ActionFeedback({
   notice,
@@ -146,7 +207,7 @@ export function ActionFeedback({
   error?: unknown;
   noticeKind?: "success" | "info";
 }) {
-  const notify = useContext(NotificationsContext);
+  const notify = useContext(NotificationsContext)?.notify;
   const previousNotice = useRef("");
   const previousError = useRef("");
   const previousErrorValue = useRef<unknown>(undefined);

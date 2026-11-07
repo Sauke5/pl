@@ -19,10 +19,11 @@ if HAS_SSH:
 
 
 class SSHFixture:
-    def __init__(self, *, stall=False, huge=False, command_outputs=None):
+    def __init__(self, *, stall=False, huge=False, command_outputs=None, prompt='<edge-vrp>'):
         self.key = paramiko.RSAKey.generate(2048)
         self.auth_calls, self.commands = [], []
         self.stall, self.huge = stall, huge
+        self.prompt = prompt
         self.command_outputs = command_outputs or {}
         self.listener = socket.socket(); self.listener.bind(('127.0.0.1', 0)); self.listener.listen(4); self.listener.settimeout(0.1)
         self.port = self.listener.getsockname()[1]
@@ -70,13 +71,16 @@ class SSHFixture:
                             'capabilities': {'interfaces': True, 'addresses': True, 'disks': True}}).encode())
                     channel.send_exit_status(0)
                 else:
-                    channel.sendall(b'<edge-vrp>')
+                    prompt = self.prompt
+                    channel.sendall(prompt.encode())
                     stream = channel.makefile('rb')
                     for line in stream:
                         command = line.decode().strip(); self.commands.append(command)
+                        if prompt == 'Switch>' and command == 'enable':
+                            prompt = 'Switch#'
                         output = {**{'display version': fixtures.VRP_VERSION, 'display interface': fixtures.VRP_INTERFACES,
                                   'display device manuinfo': 'BarCode=VRP123456'}, **self.command_outputs}.get(command, '')
-                        channel.sendall((command + '\r\n' + output + '\r\n<edge-vrp>').encode())
+                        channel.sendall((command + '\r\n' + output + '\r\n' + prompt).encode())
             except (OSError, EOFError, paramiko.SSHException): pass
             finally: transport.close()
 
@@ -105,6 +109,35 @@ class SSHTests(unittest.TestCase):
         self.assertEqual(len(value['interfaces']), 2)
         self.assertEqual(server.commands, list(c.COMMANDS['huawei_vrp']) + [c.HUAWEI_OPTIONAL[0], 'display vlan', *c.HUAWEI_OPTIONAL[1:]])
         self.assertEqual(server.auth_calls, ['password'])
+
+    def test_real_keenetic_cli_uses_show_commands_and_reads_arp(self):
+        server = self.fixture(prompt='(config)>', command_outputs={
+            c.KEENETIC_VERSION: 'release: 4.3.1\nvendor: Keenetic\nmodel: Hopper',
+            c.KEENETIC_PORTS: 'id: Bridge0\ntype: Bridge\naddress: 192.0.2.1\nmask: 255.255.255.0',
+            c.KEENETIC_ARP: 'IP MAC Interface\n192.0.2.10 02:11:22:33:44:10 Bridge0',
+            c.KEENETIC_DHCP: '',
+        })
+        value = self.collect_local(server, driver='keenetic')
+        self.assertEqual(value['model'], 'Hopper')
+        self.assertEqual(value['neighbors'][0]['local_port'], 'Bridge0')
+        self.assertTrue(value['capabilities']['neighbors_dhcp'])
+        self.assertEqual(server.commands, [c.KEENETIC_VERSION, c.KEENETIC_PORTS, c.KEENETIC_ARP, c.KEENETIC_DHCP])
+
+    def test_real_tplink_cli_elevates_exec_session_and_never_enters_configuration(self):
+        server = self.fixture(prompt='Switch>', command_outputs={
+            c.TPLINK_SYSTEM: 'System Description - JetStream managed switch\nHardware Version - T2600G-28TS 3.0\n'
+                            'Software Version - 3.0.0 Build 20170820\nSystem Name - Switch',
+            c.TPLINK_PORTS: 'Gi1/0/1 LinkUp 1000M Full\n',
+            c.TPLINK_IP_BRIEF: '% Invalid input detected',
+            c.TPLINK_IP: 'IP Address - 192.0.2.1\nSubnet Mask - 255.255.255.0\nManagement VLAN - 2',
+            c.TPLINK_FDB: '2 0211.2233.4410 DYNAMIC Gi1/0/1',
+        })
+        value = self.collect_local(server, driver='tplink_jetstream')
+        self.assertEqual(value['manufacturer'], 'TP-Link')
+        self.assertEqual(value['interfaces'][1]['addresses'][0]['address'], '192.0.2.1/24')
+        self.assertEqual(value['neighbors'][0]['protocol'], 'fdb')
+        self.assertEqual(server.commands, ['enable', c.TPLINK_SYSTEM, c.TPLINK_PORTS,
+                                           c.TPLINK_IP_BRIEF, c.TPLINK_IP, c.TPLINK_FDB])
 
     def test_real_usg_optional_serial_fallback_and_mandatory_command_failure(self):
         errors = {'display version': fixtures.USG_VERSION,

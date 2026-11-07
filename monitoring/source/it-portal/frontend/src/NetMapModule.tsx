@@ -50,6 +50,12 @@ type Networks = Items<Network> & {
     inventory?: number;
   };
 };
+const netMapSections = [
+  ["devices", "Устройства"],
+  ["networks", "Сети"],
+  ["access", "Доступ и конфигурации"],
+] as const;
+type NetMapSection = (typeof netMapSections)[number][0];
 type Device = {
   id: number;
   name: string;
@@ -701,6 +707,11 @@ function NetMapSettings({ instance }: { instance: Instance }) {
   const enabled = instance.desired_state === "enabled";
   const base = `/modules/${instance.id}/netmap`;
   const networks = useAPI<Networks>(base + "/networks", enabled);
+  const inventory = networks.data?.capabilities?.inventory === 1;
+  const [selectedSection, setSelectedSection] = useState<NetMapSection>();
+  const section =
+    selectedSection || (networks.data && !inventory ? "networks" : "devices");
+  const [legacyProfileOpen, setLegacyProfileOpen] = useState(false);
   const deviceAccess = networks.data?.capabilities?.device_access === 1;
   const orderedSNMP = networks.data?.capabilities?.ordered_snmp_profiles === 1;
   const profiles = useAPI<Items<Profile>>(base + "/profiles", enabled);
@@ -809,38 +820,24 @@ function NetMapSettings({ instance }: { instance: Instance }) {
     setModel(profile?.oxidized_model || "");
   }
 
+  function configureNetworkProfile(id: string) {
+    editProfile(id);
+    setSelectedSection("access");
+    setLegacyProfileOpen(true);
+    requestAnimationFrame(() => profileInput.current?.focus());
+  }
+
   return (
     <div className="modules-page netmap-page">
       <div className="page-title netmap-title">
-        <div className="netmap-header-main">
-          <div>
-            <h1>NetMap</h1>
-            <p>Сети и конфигурации</p>
-          </div>
-          {enabled && (
-            <nav className="netmap-native-links" aria-label="Сервисы NetMap">
-              {[
-                ["NetBox", "/netmap/netbox/"],
-                ["Oxidized", "/netmap/oxidized/"],
-                ["Gitea", "/netmap/gitea/"],
-              ].map(([label, path]) => (
-                <a
-                  key={path}
-                  className="button button-secondary"
-                  href={path}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {label}
-                  <ExternalLink size={15} aria-hidden="true" />
-                </a>
-              ))}
-            </nav>
-          )}
+        <div>
+          <h1>NetMap</h1>
+          <p>Карта сети и опрос устройств</p>
         </div>
         <div className="actions">
           {enabled && (
-            <a className="button button-primary" href="/netmap/">
+            <a className="button button-secondary" href="/netmap/">
+              <Map size={17} aria-hidden="true" />
               Открыть карту
             </a>
           )}
@@ -857,7 +854,61 @@ function NetMapSettings({ instance }: { instance: Instance }) {
         />
       ) : (
         <>
-          <div className="netmap-settings-grid">
+          <nav
+            className="segmented netmap-sections"
+            aria-label="Разделы NetMap"
+          >
+            {netMapSections.map(([value, label]) => (
+              <Button
+                key={value}
+                variant={section === value ? "default" : "ghost"}
+                aria-current={section === value ? "page" : undefined}
+                onClick={() => setSelectedSection(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </nav>
+          {inventory && (
+            <NetMapInventory
+              base={base}
+              enabled={enabled}
+              networks={networkItems}
+              view={
+                section === "devices"
+                  ? "devices"
+                  : section === "access"
+                    ? "profiles"
+                    : "hidden"
+              }
+            />
+          )}
+          {section === "devices" && !inventory && (
+            <Panel title="Устройства">
+              {networks.error ? (
+                <ErrorBox
+                  error={networks.error}
+                  retry={() => void networks.refetch()}
+                />
+              ) : networks.isPending ? (
+                <p role="status">Загружаем возможности NetMap…</p>
+              ) : (
+                <Empty
+                  title="Опрос устройств доступен после обновления NetMap"
+                  detail="В разделе «Сети» можно проверить диапазон адресов."
+                  action={
+                    <a
+                      className="button button-secondary"
+                      href="#settings?section=updates"
+                    >
+                      Открыть обновления
+                    </a>
+                  }
+                />
+              )}
+            </Panel>
+          )}
+          {section === "networks" && (
             <Panel
               title="Сети"
               className="netmap-networks"
@@ -873,6 +924,10 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                 </Button>
               }
             >
+              <p className="module-hint">
+                Проверка сети ищет устройства в диапазоне адресов. Профили SNMP
+                добавляют сведения об оборудовании.
+              </p>
               {networks.error && (
                 <ErrorBox
                   error={networks.error}
@@ -1073,10 +1128,9 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                             {selected.profile && (
                               <Button
                                 size="sm"
-                                onClick={() => {
-                                  editProfile(selected.profile);
-                                  profileInput.current?.focus();
-                                }}
+                                onClick={() =>
+                                  configureNetworkProfile(selected.profile)
+                                }
                               >
                                 Настроить профиль
                               </Button>
@@ -1111,7 +1165,10 @@ function NetMapSettings({ instance }: { instance: Instance }) {
               ) : networks.data && Array.isArray(networks.data.items) ? (
                 <p>Сетей пока нет. Добавьте первую сеть для инвентаризации.</p>
               ) : null}
-              <details className="netmap-add-network" open>
+              <details
+                className="netmap-add-network"
+                open={!networkItems.length}
+              >
                 <summary>
                   <ChevronDown size={18} aria-hidden="true" />
                   Добавить сеть
@@ -1201,302 +1258,375 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                 </form>
               </details>
             </Panel>
-            <Panel title="Профили доступа" className="netmap-profiles">
-              {profiles.error && (
+          )}
+          {section === "access" && (
+            <>
+              <Panel
+                title="Доступ для SNMP и Oxidized"
+                className="netmap-profiles"
+                action={
+                  <Button
+                    size="sm"
+                    aria-expanded={legacyProfileOpen}
+                    onClick={() => setLegacyProfileOpen((open) => !open)}
+                  >
+                    {legacyProfileOpen
+                      ? "Скрыть настройки"
+                      : "Настроить профили"}
+                  </Button>
+                }
+              >
+                <p className="module-hint">
+                  SNMP дополняет проверку сети именами и интерфейсами. Oxidized
+                  сохраняет конфигурации оборудования в Gitea.
+                </p>
+                {profiles.error && (
+                  <ErrorBox
+                    error={profiles.error}
+                    retry={() => void profiles.refetch()}
+                  />
+                )}
+                {!profiles.data && !profiles.error && (
+                  <p role="status">Загружаем профили…</p>
+                )}
+                {profiles.data && !Array.isArray(profiles.data.items) && (
+                  <ErrorBox
+                    error={
+                      new Error("NetMap вернул некорректный список профилей")
+                    }
+                  />
+                )}
+                {legacyProfileOpen && (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void mutate(
+                        "profile",
+                        "/profiles",
+                        {
+                          id: profileID,
+                          username,
+                          oxidized_model: model,
+                          ...(community ? { snmp_community: community } : {}),
+                          ...(password ? { password } : {}),
+                          ...(hostKeys.trim()
+                            ? { ssh_known_hosts: hostKeys.trim() }
+                            : {}),
+                        },
+                        "Профиль сохранён.",
+                        () => {
+                          setCommunity("");
+                          setPassword("");
+                          setHostKeys("");
+                          setNetworkProfile(profileID);
+                        },
+                      );
+                    }}
+                  >
+                    <div className="form-grid">
+                      <Field label="Профиль">
+                        <select
+                          value={selectedProfile?.id || ""}
+                          onChange={(event) => editProfile(event.target.value)}
+                        >
+                          <option value="">Новый профиль</option>
+                          {profileItems.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.id}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field
+                        label="ID профиля"
+                        hint="Латинские строчные буквы, цифры, дефис и подчёркивание."
+                      >
+                        <input
+                          ref={profileInput}
+                          required
+                          pattern={"[a-z0-9_\\-]{1,64}"}
+                          maxLength={64}
+                          value={profileID}
+                          onChange={(event) => editProfile(event.target.value)}
+                        />
+                      </Field>
+                      <Field
+                        label="SNMP community"
+                        hint={
+                          selectedProfile?.snmp_community_set
+                            ? "Сохранена. Пустое поле сохраняет текущее значение."
+                            : "Необязательно. Добавляет имя и интерфейсы устройства."
+                        }
+                      >
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          maxLength={1024}
+                          value={community}
+                          onChange={(event) => setCommunity(event.target.value)}
+                        />
+                      </Field>
+                      <Field label="Модель Oxidized">
+                        <input
+                          pattern="[a-z][a-z0-9_]{0,63}"
+                          maxLength={64}
+                          placeholder="ios"
+                          value={model}
+                          onChange={(event) => setModel(event.target.value)}
+                        />
+                      </Field>
+                      <Field label="Логин SSH">
+                        <input
+                          autoComplete="off"
+                          maxLength={1024}
+                          value={username}
+                          onChange={(event) => setUsername(event.target.value)}
+                        />
+                      </Field>
+                      <Field
+                        label="Пароль SSH"
+                        hint={
+                          selectedProfile?.password_set
+                            ? "Сохранён. Пустое поле сохраняет текущее значение."
+                            : "Для сбора конфигураций Oxidized."
+                        }
+                      >
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          maxLength={1024}
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                        />
+                      </Field>
+                      <Field
+                        label="SSH host keys (known_hosts)"
+                        hint={
+                          selectedProfile?.ssh_known_hosts_set
+                            ? "Ключи сохранены. Пустое поле сохраняет текущие ключи."
+                            : "Проверенные ключи: IP, тип и ключ сервера. Без них SSH-сбор завершится ошибкой."
+                        }
+                      >
+                        <textarea
+                          rows={3}
+                          maxLength={65536}
+                          spellCheck={false}
+                          value={hostKeys}
+                          onChange={(event) => setHostKeys(event.target.value)}
+                        />
+                      </Field>
+                    </div>
+                    <p className="module-hint">
+                      ICMP/TCP работают без профиля. SNMP добавляет
+                      инвентаризацию, SSH и модель — сбор конфигураций.
+                      Сохранение профиля не запускает проверку сети.
+                    </p>
+                    <div className="netmap-form-actions">
+                      <Button
+                        type="submit"
+                        disabled={!!busy || !profileID || !!profiles.error}
+                      >
+                        {busy === "profile"
+                          ? "Сохраняем…"
+                          : "Сохранить профиль"}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+                <nav
+                  className="netmap-native-links"
+                  aria-label="Сервисы NetMap"
+                >
+                  {[
+                    ["NetBox", "/netmap/netbox/"],
+                    ["Oxidized", "/netmap/oxidized/"],
+                    ["Gitea", "/netmap/gitea/"],
+                  ].map(([label, path]) => (
+                    <a
+                      key={path}
+                      className="button button-secondary"
+                      href={path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {label}
+                      <ExternalLink size={15} aria-hidden="true" />
+                    </a>
+                  ))}
+                </nav>
+              </Panel>
+              {selected && deviceAccess && (
+                <>
+                  {networkItems.length > 1 && (
+                    <div className="netmap-backup-network">
+                      <Field label="Сеть для сбора конфигураций">
+                        <select
+                          disabled={!!busy}
+                          value={selected.id}
+                          onChange={(event) => {
+                            setSelectedID(event.target.value);
+                            setNetworkAccess(undefined);
+                            setSnmpDraft(undefined);
+                          }}
+                        >
+                          {networkItems.map((network) => (
+                            <option key={network.id} value={network.id}>
+                              {network.name} · {network.cidr}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+                  <DeviceAccess
+                    key={selected.id}
+                    base={base}
+                    network={selected}
+                    profiles={profileItems}
+                    disabled={
+                      !!busy ||
+                      activePoll ||
+                      !!networks.error ||
+                      !!profiles.error
+                    }
+                    setBusy={setBusy}
+                  />
+                </>
+              )}
+              {selected && !deviceAccess && (
+                <p className="module-hint">
+                  Настройка SSH для отдельных устройств доступна после
+                  обновления NetMap.{" "}
+                  <a href="#settings?section=updates">Открыть обновления</a>
+                </p>
+              )}
+            </>
+          )}
+          {section === "networks" && (
+            <Panel
+              title="История проверок"
+              className="netmap-history"
+              action={
+                <span className="netmap-count">{selectedPolls.length}</span>
+              }
+            >
+              {polls.error && (
                 <ErrorBox
-                  error={profiles.error}
-                  retry={() => void profiles.refetch()}
+                  error={polls.error}
+                  retry={() => void polls.refetch()}
                 />
               )}
-              {!profiles.data && !profiles.error && (
-                <p role="status">Загружаем профили…</p>
+              {!polls.data && !polls.error && (
+                <p role="status">Загружаем проверки…</p>
               )}
-              {profiles.data && !Array.isArray(profiles.data.items) && (
+              {polls.data && !Array.isArray(polls.data.items) && (
                 <ErrorBox
                   error={
-                    new Error("NetMap вернул некорректный список профилей")
+                    new Error("NetMap вернул некорректный список проверок")
                   }
                 />
               )}
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void mutate(
-                    "profile",
-                    "/profiles",
-                    {
-                      id: profileID,
-                      username,
-                      oxidized_model: model,
-                      ...(community ? { snmp_community: community } : {}),
-                      ...(password ? { password } : {}),
-                      ...(hostKeys.trim()
-                        ? { ssh_known_hosts: hostKeys.trim() }
-                        : {}),
-                    },
-                    "Профиль сохранён.",
-                    () => {
-                      setCommunity("");
-                      setPassword("");
-                      setHostKeys("");
-                      setNetworkProfile(profileID);
-                    },
-                  );
-                }}
-              >
-                <div className="form-grid">
-                  <Field label="Профиль">
-                    <select
-                      value={selectedProfile?.id || ""}
-                      onChange={(event) => editProfile(event.target.value)}
-                    >
-                      <option value="">Новый профиль</option>
-                      {profileItems.map((profile) => (
-                        <option key={profile.id} value={profile.id}>
-                          {profile.id}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field
-                    label="ID профиля"
-                    hint="Латинские строчные буквы, цифры, дефис и подчёркивание."
-                  >
-                    <input
-                      ref={profileInput}
-                      required
-                      pattern={"[a-z0-9_\\-]{1,64}"}
-                      maxLength={64}
-                      value={profileID}
-                      onChange={(event) => editProfile(event.target.value)}
-                    />
-                  </Field>
-                  <Field
-                    label="SNMP community"
-                    hint={
-                      selectedProfile?.snmp_community_set
-                        ? "Сохранена. Пустое поле сохраняет текущее значение."
-                        : "Необязательно. Добавляет имя и интерфейсы устройства."
-                    }
-                  >
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      maxLength={1024}
-                      value={community}
-                      onChange={(event) => setCommunity(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Модель Oxidized">
-                    <input
-                      pattern="[a-z][a-z0-9_]{0,63}"
-                      maxLength={64}
-                      placeholder="ios"
-                      value={model}
-                      onChange={(event) => setModel(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Логин SSH">
-                    <input
-                      autoComplete="off"
-                      maxLength={1024}
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                    />
-                  </Field>
-                  <Field
-                    label="Пароль SSH"
-                    hint={
-                      selectedProfile?.password_set
-                        ? "Сохранён. Пустое поле сохраняет текущее значение."
-                        : "Для сбора конфигураций Oxidized."
-                    }
-                  >
-                    <input
-                      type="password"
-                      autoComplete="new-password"
-                      maxLength={1024}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                    />
-                  </Field>
-                  <Field
-                    label="SSH host keys (known_hosts)"
-                    hint={
-                      selectedProfile?.ssh_known_hosts_set
-                        ? "Ключи сохранены. Пустое поле сохраняет текущие ключи."
-                        : "Проверенные ключи: IP, тип и ключ сервера. Без них SSH-сбор завершится ошибкой."
-                    }
-                  >
-                    <textarea
-                      rows={3}
-                      maxLength={65536}
-                      spellCheck={false}
-                      value={hostKeys}
-                      onChange={(event) => setHostKeys(event.target.value)}
-                    />
-                  </Field>
-                </div>
+              {polls.data &&
+                Array.isArray(polls.data.items) &&
+                selectedPolls.length === 0 && (
+                  <p>Проверки ещё не запускались.</p>
+                )}
+              {polls.error && pollItems.length > 0 && (
                 <p className="module-hint">
-                  ICMP/TCP работают без профиля. SNMP добавляет инвентаризацию,
-                  SSH и модель — сбор конфигураций. Сохранение профиля не
-                  запускает проверку сети.
+                  Показаны сохранённые данные. Текущее состояние не получено.
                 </p>
-                <div className="netmap-form-actions">
-                  <Button
-                    type="submit"
-                    disabled={!!busy || !profileID || !!profiles.error}
-                  >
-                    {busy === "profile" ? "Сохраняем…" : "Сохранить профиль"}
-                  </Button>
+              )}
+              {selectedPolls.length > 0 && (
+                <div className="netmap-history-scroll">
+                  <table aria-label="История проверок сетей">
+                    <thead>
+                      <tr>
+                        <th>Сеть</th>
+                        {resultColumns.map(([key, label]) => (
+                          <th key={key}>{label}</th>
+                        ))}
+                        <th>Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedPolls.map((poll) => {
+                        const network = networkItems.find(
+                          (item) => item.id === poll.network,
+                        );
+                        const values = pollResult(poll);
+                        const hasErrors =
+                          !!poll.error ||
+                          typeof values.error === "string" ||
+                          (Array.isArray(values.errors) &&
+                            values.errors.length > 0);
+                        const icmpUnavailable =
+                          Array.isArray(values.warnings) &&
+                          values.warnings.includes("icmp_unavailable");
+                        return (
+                          <Fragment key={poll.id}>
+                            <tr className="netmap-poll-row">
+                              <td>
+                                <strong>{network?.name || poll.network}</strong>
+                                {network && <small>{network.cidr}</small>}
+                              </td>
+                              {resultColumns.map(([key]) => (
+                                <td key={key} className="netmap-poll-value">
+                                  {pollValue(poll, key)}
+                                </td>
+                              ))}
+                              <td>
+                                <Badge
+                                  value={
+                                    running(poll.state)
+                                      ? "running"
+                                      : ["error", "failed"].includes(poll.state)
+                                        ? "error"
+                                        : [
+                                              "complete",
+                                              "completed",
+                                              "succeeded",
+                                            ].includes(poll.state)
+                                          ? "success"
+                                          : "unknown"
+                                  }
+                                >
+                                  {pollLabels[poll.state] ||
+                                    "Состояние неизвестно"}
+                                </Badge>
+                              </td>
+                            </tr>
+                            {hasErrors && (
+                              <tr className="netmap-poll-errors">
+                                <td colSpan={resultColumns.length + 2}>
+                                  <PollErrors poll={poll} />
+                                </td>
+                              </tr>
+                            )}
+                            {Array.isArray(pollResult(poll).snmp_attempts) && (
+                              <tr>
+                                <td colSpan={resultColumns.length + 2}>
+                                  <PollSNMP poll={poll} />
+                                </td>
+                              </tr>
+                            )}
+                            {icmpUnavailable && (
+                              <tr className="netmap-poll-warning">
+                                <td colSpan={resultColumns.length + 2}>
+                                  ICMP недоступен. Проверка использовала TCP;
+                                  устройства без ответа на TCP могли остаться
+                                  необнаруженными.
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              </form>
+              )}
             </Panel>
-          </div>
-          {selected && deviceAccess && (
-            <DeviceAccess
-              key={selected.id}
-              base={base}
-              network={selected}
-              profiles={profileItems}
-              disabled={
-                !!busy || activePoll || !!networks.error || !!profiles.error
-              }
-              setBusy={setBusy}
-            />
           )}
-          {selected && !deviceAccess && (
-            <p className="module-hint">
-              Настройка SSH для отдельных устройств доступна после обновления
-              NetMap. <a href="#settings?section=updates">Открыть обновления</a>
-            </p>
-          )}
-          {networks.data?.capabilities?.inventory === 1 && (
-            <NetMapInventory
-              base={base}
-              enabled={enabled}
-              networks={networkItems}
-            />
-          )}
-          <Panel
-            title="История проверок"
-            className="netmap-history"
-            action={
-              <span className="netmap-count">{selectedPolls.length}</span>
-            }
-          >
-            {polls.error && (
-              <ErrorBox
-                error={polls.error}
-                retry={() => void polls.refetch()}
-              />
-            )}
-            {!polls.data && !polls.error && (
-              <p role="status">Загружаем проверки…</p>
-            )}
-            {polls.data && !Array.isArray(polls.data.items) && (
-              <ErrorBox
-                error={new Error("NetMap вернул некорректный список проверок")}
-              />
-            )}
-            {polls.data &&
-              Array.isArray(polls.data.items) &&
-              selectedPolls.length === 0 && <p>Проверки ещё не запускались.</p>}
-            {polls.error && pollItems.length > 0 && (
-              <p className="module-hint">
-                Показаны сохранённые данные. Текущее состояние не получено.
-              </p>
-            )}
-            {selectedPolls.length > 0 && (
-              <div className="netmap-history-scroll">
-                <table aria-label="История проверок сетей">
-                  <thead>
-                    <tr>
-                      <th>Сеть</th>
-                      {resultColumns.map(([key, label]) => (
-                        <th key={key}>{label}</th>
-                      ))}
-                      <th>Статус</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedPolls.map((poll) => {
-                      const network = networkItems.find(
-                        (item) => item.id === poll.network,
-                      );
-                      const values = pollResult(poll);
-                      const hasErrors =
-                        !!poll.error ||
-                        typeof values.error === "string" ||
-                        (Array.isArray(values.errors) &&
-                          values.errors.length > 0);
-                      const icmpUnavailable =
-                        Array.isArray(values.warnings) &&
-                        values.warnings.includes("icmp_unavailable");
-                      return (
-                        <Fragment key={poll.id}>
-                          <tr className="netmap-poll-row">
-                            <td>
-                              <strong>{network?.name || poll.network}</strong>
-                              {network && <small>{network.cidr}</small>}
-                            </td>
-                            {resultColumns.map(([key]) => (
-                              <td key={key} className="netmap-poll-value">
-                                {pollValue(poll, key)}
-                              </td>
-                            ))}
-                            <td>
-                              <Badge
-                                value={
-                                  running(poll.state)
-                                    ? "running"
-                                    : ["error", "failed"].includes(poll.state)
-                                      ? "error"
-                                      : [
-                                            "complete",
-                                            "completed",
-                                            "succeeded",
-                                          ].includes(poll.state)
-                                        ? "success"
-                                        : "unknown"
-                                }
-                              >
-                                {pollLabels[poll.state] ||
-                                  "Состояние неизвестно"}
-                              </Badge>
-                            </td>
-                          </tr>
-                          {hasErrors && (
-                            <tr className="netmap-poll-errors">
-                              <td colSpan={resultColumns.length + 2}>
-                                <PollErrors poll={poll} />
-                              </td>
-                            </tr>
-                          )}
-                          {Array.isArray(pollResult(poll).snmp_attempts) && (
-                            <tr>
-                              <td colSpan={resultColumns.length + 2}>
-                                <PollSNMP poll={poll} />
-                              </td>
-                            </tr>
-                          )}
-                          {icmpUnavailable && (
-                            <tr className="netmap-poll-warning">
-                              <td colSpan={resultColumns.length + 2}>
-                                ICMP недоступен. Проверка использовала TCP;
-                                устройства без ответа на TCP могли остаться
-                                необнаруженными.
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
         </>
       )}
       {removing && (

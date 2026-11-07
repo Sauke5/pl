@@ -5,16 +5,19 @@ boundaries. Credentials never enter job records or HTTP results.
 """
 from __future__ import annotations
 
+import base64
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import hashlib
 import ipaddress
 import json
 import re
+import socket
 import threading
 import time
 import uuid
 
-from inventory_collectors import collect, validate_profile, InventoryCollectionError
+from inventory_collectors import DRIVERS, collect, validate_profile, InventoryCollectionError
 from inventory_netbox import sync_snapshot
 
 UUID = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
@@ -22,6 +25,7 @@ ACTIVE = ('queued', 'running')
 SECRETS = ('password', 'private_key', 'passphrase', 'enable_password', 'ssh_known_hosts', 'ca_pem')
 PROFILE_KEYS = {'id', 'name', 'kind', 'username', 'port', 'driver', 'scheme', 'transport', 'auth_method', 'clear_secrets', *SECRETS}
 TARGET_KEYS = {'id', 'name', 'kind', 'address', 'profile_id', 'network_id', 'interval_minutes'}
+ENROLL_KEYS = (TARGET_KEYS - {'id'}) | {'profile'}
 KIND = ('network', 'linux', 'windows')
 
 
@@ -61,6 +65,38 @@ def text(value, limit=128):
     return value.strip()
 
 
+def host_key_name(ip, port):
+    return ip if port == 22 else f'[{ip}]:{port}'
+
+
+def read_ssh_host_key(ip, port):
+    """Stop after key exchange. There is no SSH login or trust-on-first-use write."""
+    try:
+        import paramiko
+    except ImportError:
+        raise InventoryError('inventory_dependency_missing', 503) from None
+    deadline = time.monotonic() + 8
+    try:
+        with socket.create_connection((ip, port), timeout=3) as connection:
+            transport = paramiko.Transport(connection)
+            try:
+                remaining = max(0.1, deadline - time.monotonic())
+                transport.banner_timeout = remaining
+                transport.start_client(timeout=remaining)
+                if time.monotonic() >= deadline:
+                    raise TimeoutError()
+                key = transport.get_remote_server_key()
+                digest = base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip('=')
+                return {'algorithm': key.get_name(), 'fingerprint': 'SHA256:' + digest,
+                        'known_hosts': f'{host_key_name(ip, port)} {key.get_name()} {key.get_base64()}'}
+            finally:
+                transport.close()
+    except TimeoutError:
+        raise InventoryError('inventory_timeout', 422) from None
+    except (OSError, EOFError, paramiko.SSHException):
+        raise InventoryError('inventory_connection_failed', 422) from None
+
+
 class InventoryJobs:
     def __init__(self, application, *, collector=collect, writer=sync_snapshot, executor=None):
         self.app, self.store = application, application.store
@@ -81,10 +117,12 @@ class InventoryJobs:
         self.stop.set()
         self.executor.shutdown(wait=True, cancel_futures=False)
 
-    def _get(self, table, key):
-        with self.store.connect() as db:
-            row = db.execute('SELECT payload FROM ' + table + ' WHERE id=?', (key,)).fetchone()
-            return json.loads(row[0]) if row else None
+    def _get(self, table, key, db=None):
+        if db is None:
+            with self.store.connect() as connection:
+                return self._get(table, key, connection)
+        row = db.execute('SELECT payload FROM ' + table + ' WHERE id=?', (key,)).fetchone()
+        return json.loads(row[0]) if row else None
 
     def profile(self, key):
         return self._get('inventory_profiles', key)
@@ -118,10 +156,14 @@ class InventoryJobs:
         return any(row[0] == target_id or profile_id is not None and json.loads(row[1])['profile_id'] == profile_id for row in rows)
 
     def save_profile(self, body):
+        with self.store.connect() as db:
+            return self._save_profile(db, body)
+
+    def _save_profile(self, db, body):
         if not isinstance(body, dict) or set(body) - PROFILE_KEYS:
             raise InventoryError('inventory_invalid_profile')
         key = identifier(body.get('id', str(uuid.uuid4())))
-        previous = self.profile(key) or {}
+        previous = self._get('inventory_profiles', key, db) or {}
         if previous and body.get('kind', previous['kind']) != previous['kind']:
             raise InventoryError('inventory_profile_kind_changed')
         clears = body.get('clear_secrets', [])
@@ -145,46 +187,52 @@ class InventoryJobs:
             value = validate_profile(value)
         except InventoryCollectionError as exc:
             raise InventoryError(exc.code) from None
-        with self.store.connect() as db:
-            if self._busy(db, profile_id=key):
-                raise InventoryError('inventory_profile_busy', 409)
-            if not previous and db.execute('SELECT COUNT(*) FROM inventory_profiles').fetchone()[0] >= 128:
-                raise InventoryError('inventory_profile_limit')
-            db.execute('INSERT INTO inventory_profiles VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (key, json.dumps(value)))
+        if self._busy(db, profile_id=key):
+            raise InventoryError('inventory_profile_busy', 409)
+        if not previous and db.execute('SELECT COUNT(*) FROM inventory_profiles').fetchone()[0] >= 128:
+            raise InventoryError('inventory_profile_limit')
+        db.execute('INSERT INTO inventory_profiles VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (key, json.dumps(value)))
         return {'id': key}
 
     def save_target(self, body):
+        with self.store.connect() as db:
+            return {'id': self._save_target(db, body)['id']}
+
+    def _save_target(self, db, body):
         if not isinstance(body, dict) or set(body) - TARGET_KEYS:
             raise InventoryError('inventory_invalid_target')
         key = identifier(body.get('id', str(uuid.uuid4())))
-        value = {**(self.target(key) or {}), **body}
+        previous = self._get('inventory_targets', key, db)
+        value = {**(previous or {}), **body}
         value['id'] = key
         value['name'] = text(value.get('name'))
         value['address'] = address(value.get('address'))
         value['profile_id'] = identifier(value.get('profile_id'))
-        profile = self.profile(value['profile_id'])
+        profile = self._get('inventory_profiles', value['profile_id'], db)
         if value.get('kind') not in KIND or not profile or profile['kind'] != value['kind']:
             raise InventoryError('inventory_profile_mismatch')
-        value['network_id'] = value.get('network_id', '')
+        if value.get('network_id') is None:
+            value['network_id'] = ''
+        if not isinstance(value['network_id'], str):
+            raise InventoryError('inventory_network_mismatch')
         if value['network_id']:
-            network = next((n for n in self.store.networks() if n['id'] == value['network_id']), None)
+            network = db.execute('SELECT cidr FROM networks WHERE id=?', (value['network_id'],)).fetchone()
             if (not network or value['kind'] != 'network'
                     or ipaddress.ip_address(value['address']) not in ipaddress.ip_network(network['cidr'])):
                 raise InventoryError('inventory_network_mismatch')
         interval = value.setdefault('interval_minutes', 0)
         if type(interval) is not int or interval != 0 and not 5 <= interval <= 1440:
             raise InventoryError('inventory_invalid_interval')
-        with self.store.connect() as db:
-            if self._busy(db, target_id=key):
-                raise InventoryError('inventory_target_busy', 409)
-            existing = db.execute('SELECT id FROM inventory_targets WHERE address=? AND id<>?', (value['address'], key)).fetchone()
-            if existing:
-                raise InventoryError('inventory_address_exists', 409)
-            if not self.target(key) and db.execute('SELECT COUNT(*) FROM inventory_targets').fetchone()[0] >= 2048:
-                raise InventoryError('inventory_target_limit')
-            db.execute('INSERT INTO inventory_targets VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET address=excluded.address,payload=excluded.payload,next_due=excluded.next_due',
-                       (key, value['address'], json.dumps(value), time.time() + interval * 60 if interval else 0))
-        return {'id': key}
+        if self._busy(db, target_id=key):
+            raise InventoryError('inventory_target_busy', 409)
+        existing = db.execute('SELECT id FROM inventory_targets WHERE address=? AND id<>?', (value['address'], key)).fetchone()
+        if existing:
+            raise InventoryError('inventory_address_exists', 409)
+        if not previous and db.execute('SELECT COUNT(*) FROM inventory_targets').fetchone()[0] >= 2048:
+            raise InventoryError('inventory_target_limit')
+        db.execute('INSERT INTO inventory_targets VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET address=excluded.address,payload=excluded.payload,next_due=excluded.next_due',
+                   (key, value['address'], json.dumps(value), time.time() + interval * 60 if interval else 0))
+        return value
 
     def remove(self, kind, key):
         identifier(key)
@@ -216,9 +264,70 @@ class InventoryJobs:
     preview_slots = threading.BoundedSemaphore(2)
 
     @staticmethod
+    def capabilities():
+        return {'guided_enrollment': True, 'ssh_host_key': True, 'drivers': list(DRIVERS)}
+
+    def ssh_host_key(self, body):
+        if not isinstance(body, dict) or set(body) != {'address', 'port'}:
+            raise InventoryError('inventory_invalid_target')
+        ip, port = address(body['address']), body['port']
+        if type(port) is not int or not 1 <= port <= 65535:
+            raise InventoryError('inventory_invalid_port')
+        if not self.preview_slots.acquire(blocking=False):
+            raise InventoryError('inventory_busy', 409)
+        try:
+            return read_ssh_host_key(ip, port)
+        finally:
+            self.preview_slots.release()
+
+    @staticmethod
     def summary(snapshot):
         return {**{k: snapshot.get(k) for k in ('kind', 'observed_at', 'hostname', 'manufacturer', 'model', 'serial', 'os_name', 'os_version', 'virtualization', 'cpu_count', 'memory_mib')},
-                'interfaces': len(snapshot.get('interfaces', [])), 'addresses': sum(len(i.get('addresses', [])) for i in snapshot.get('interfaces', [])), 'disks': len(snapshot.get('disks', []))}
+                'interfaces': len(snapshot.get('interfaces', [])), 'addresses': sum(len(i.get('addresses', [])) for i in snapshot.get('interfaces', [])),
+                'disks': len(snapshot.get('disks', [])), 'neighbors': len(snapshot.get('neighbors', []))}
+
+    def enroll(self, body, operation, actor, fingerprint):
+        identifier(operation)
+        if (not isinstance(body, dict) or set(body) - ENROLL_KEYS
+                or body.get('kind') not in KIND or ('profile' in body) == ('profile_id' in body)):
+            raise InventoryError('inventory_invalid_target')
+        ip = address(body.get('address'))
+        kind = body['kind']
+        name = text(body.get('name', ip))
+        with self.lock, self.store.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            previous = db.execute('SELECT digest,response FROM requests WHERE id=?', (operation,)).fetchone()
+            if previous:
+                if previous['digest'] != fingerprint:
+                    raise InventoryError('netmap_idempotency_conflict', 409)
+                return json.loads(previous['response'])
+            if 'profile' in body:
+                draft = body['profile']
+                if (not isinstance(draft, dict) or set(draft) - (PROFILE_KEYS - {'id', 'clear_secrets'})
+                        or draft.get('kind', kind) != kind):
+                    raise InventoryError('inventory_invalid_profile')
+                draft = {**draft, 'name': draft.get('name') or name, 'kind': kind}
+                if kind == 'network':
+                    draft.setdefault('driver', 'auto')
+                profile_id = self._save_profile(db, draft)['id']
+            else:
+                profile_id = identifier(body['profile_id'])
+            profile = self._get('inventory_profiles', profile_id, db)
+            if not profile or profile['kind'] != kind:
+                raise InventoryError('inventory_profile_mismatch')
+            if kind != 'windows':
+                expected = host_key_name(ip, profile.get('port', 22))
+                pins = [line.split()[0].split(',') for line in profile.get('ssh_known_hosts', '').splitlines()
+                        if line.strip() and not line.lstrip().startswith('#')]
+                if not any(expected in hosts for hosts in pins):
+                    raise InventoryError('inventory_host_key_required', 422)
+            target = self._save_target(db, {**{key: body[key] for key in ('network_id', 'interval_minutes') if key in body},
+                'address': ip, 'name': name, 'kind': kind, 'profile_id': profile_id})
+            self._enqueue(db, target, operation, actor)
+            result = {'target_id': target['id'], 'profile_id': profile_id, 'job_id': operation, 'state': 'queued'}
+            db.execute('INSERT INTO requests VALUES(?,?,?)', (operation, fingerprint, json.dumps(result)))
+        self._dispatch(operation, target)
+        return result
 
     def start(self, key, operation, actor):
         target = self.target(identifier(key))
@@ -226,22 +335,29 @@ class InventoryJobs:
             raise InventoryError('inventory_target_missing', 404)
         with self.store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            if self._busy(db, target_id=key):
-                raise InventoryError('inventory_target_busy', 409)
-            if db.execute("SELECT COUNT(*) FROM inventory_jobs WHERE state IN ('queued','running')").fetchone()[0] >= 16:
-                raise InventoryError('inventory_busy', 409)
-            db.execute('INSERT INTO inventory_jobs VALUES(?,?,?,?,?,?,?,?,?,?)', (operation, key, json.dumps(target), 'queued', now(), '', '', actor, '{}', ''))
-            interval = target.get('interval_minutes', 0)
-            db.execute('UPDATE inventory_targets SET next_due=? WHERE id=?', (time.time() + interval * 60 if interval else 0, key))
-            # Only terminal jobs expire; native inventory/history never do.
-            db.execute("DELETE FROM inventory_jobs WHERE state NOT IN ('queued','running') AND id NOT IN (SELECT id FROM inventory_jobs ORDER BY rowid DESC LIMIT 200)")
+            self._enqueue(db, target, operation, actor)
+        self._dispatch(operation, target)
+        return {'id': operation, 'state': 'queued'}
+
+    def _enqueue(self, db, target, operation, actor):
+        key = target['id']
+        if self._busy(db, target_id=key):
+            raise InventoryError('inventory_target_busy', 409)
+        if db.execute("SELECT COUNT(*) FROM inventory_jobs WHERE state IN ('queued','running')").fetchone()[0] >= 16:
+            raise InventoryError('inventory_busy', 409)
+        db.execute('INSERT INTO inventory_jobs VALUES(?,?,?,?,?,?,?,?,?,?)', (operation, key, json.dumps(target), 'queued', now(), '', '', actor, '{}', ''))
+        interval = target.get('interval_minutes', 0)
+        db.execute('UPDATE inventory_targets SET next_due=? WHERE id=?', (time.time() + interval * 60 if interval else 0, key))
+        # Only terminal jobs expire; native inventory/history never do.
+        db.execute("DELETE FROM inventory_jobs WHERE state NOT IN ('queued','running') AND id NOT IN (SELECT id FROM inventory_jobs ORDER BY rowid DESC LIMIT 200)")
+
+    def _dispatch(self, operation, target):
         try:
             self.executor.submit(self._run, operation, target)
         except RuntimeError:
             with self.store.connect() as db:
                 db.execute("UPDATE inventory_jobs SET state='failed',finished_at=?,error='inventory_interrupted' WHERE id=?", (now(), operation))
             raise InventoryError('inventory_interrupted', 503) from None
-        return {'id': operation, 'state': 'queued'}
 
     def _run(self, operation, target):
         state, result, error = 'failed', {}, 'inventory_collection_failed'

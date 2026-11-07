@@ -1094,9 +1094,10 @@ class Delivery:
                     actual = load_json(self.parent.docker('image', 'inspect', image['id']))[0]
                     config = copy.deepcopy(actual.get('Config') or {}); config.pop('Labels', None)
                     values.append((actual.get('Os'), actual.get('Architecture'), actual.get('RootFS'), config))
-                retain_installed = (kind == 'netmap'
-                    and old['labels'].get('org.opencontainers.image.version') == '1.0.0'
-                    and new['labels'].get('org.opencontainers.image.version') == '1.1.0')
+                # A differing version reached this point only if the exact
+                # transition was allowed by the native helper above.
+                retain_installed = (kind == 'netmap' and old['labels'].get('org.opencontainers.image.version')
+                    != new['labels'].get('org.opencontainers.image.version'))
                 if retain_installed:
                     # This approved extension keeps the exact installed storage
                     # image. Discarded candidate COPY layers are never executed;

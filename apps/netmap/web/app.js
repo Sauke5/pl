@@ -26,9 +26,12 @@
   function scopeOptions() { return scopeDefinitions.get(state.scope) || {}; }
   function groupedScope() { return state.layout === 'groups'; }
   function rackScope() { return scopeOptions().rack === true; }
-  const requestedScope = new URLSearchParams(location.search).get('scope');
+  const queryParams = new URLSearchParams(location.search);
+  const requestedScope = queryParams.get('scope');
+  const requestedDevice = queryParams.get('device');
+  let initialDevice = /^(?:device|vm):[1-9][0-9]{0,14}$/.test(requestedDevice || '') ? requestedDevice : null;
   state.scope = Object.hasOwn(SCOPES, requestedScope) ? requestedScope : config.default_scope;
-  state.layout = new URLSearchParams(location.search).get('layout') === 'groups' ? 'groups' : 'graph';
+  state.layout = queryParams.get('layout') === 'groups' ? 'groups' : 'graph';
   $('layout-mode').value = state.layout;
   $('site-name').textContent = SCOPES[state.scope];
   $('tab-rack').hidden = !rackScope();
@@ -112,7 +115,7 @@
     try { const u = new URL(value, location.origin); return ['http:', 'https:'].includes(u.protocol) ? u.href : null; } catch { return null; }
   }
   function nodeTypeLabel(node) {
-    if (node.details?.observation_methods) return 'Наблюдаемый адрес';
+    if (node.details?.observation_methods) return node.management_ip ? 'Наблюдаемый адрес' : 'Наблюдаемое устройство';
     if (node.kind === 'unknown' && (/^Сегмент/i.test(node.name || '') || (node.details?.macs || []).length > 1)) return 'Сегмент';
     return TYPES[node.kind] || 'Устройство';
   }
@@ -131,7 +134,7 @@
     return parent ? { item: parent, member: true } : null;
   }
   function nodeSite(node) { return node.site_name || node.site?.name || node.details?.site?.name || (typeof node.details?.site === 'string' ? node.details.site : '') || ''; }
-  const ADDRESS_ROLES = {primary:'Основной',management:'Управление',bmc:'BMC',production:'Рабочая сеть',reserve:'Резервный',interface:'Интерфейс',uplink:'Uplink'};
+  const ADDRESS_ROLES = {primary:'Основной',management:'Управление',bmc:'BMC',production:'Рабочая сеть',reserve:'Резервный',interface:'Интерфейс',uplink:'Uplink',observed:'Наблюдение'};
   function identityConfidence(identity) {
     const labels = [];
     if (identity.source === 'dns-ptr' && identity.forward_confirmed === true) labels.push('A/PTR');
@@ -254,7 +257,11 @@
       state.data = next;
       state.nodes = new Map(next.nodes.map(n => [n.id, n]));
       state.lastError = null;
-      if (first) loadPositions();
+      if (first) {
+        loadPositions();
+        if (initialDevice && state.nodes.has(initialDevice)) state.selected = initialDevice;
+        initialDevice = null;
+      }
       if (state.selected && !state.nodes.has(state.selected)) state.selected = null;
       // Topology is the default in every scope. An explicit rack-tab choice
       // stays active through refreshes, but does not carry into another scope.
@@ -786,7 +793,8 @@
       root.append(detailHeader('Соединение', 'Данные связи', edge.status, edgeStatusLabel(edge)));
       const info = section('Конечные точки');
       for (const [label,id,port] of [['A',edge.source,edge.source_port],['B',edge.target,edge.target_port]]) {
-        const target = state.nodes.get(id); info.append(row(`Устройство ${label}`,target?.name || id),row(`Порт ${label}`,port || 'Не определён'));
+        const target = state.nodes.get(id); info.append(row(`Устройство ${label}`,target?.name || id));
+        if(port || edge.kind!=='observed')info.append(row(`Порт ${label}`,port || 'Не определён'));
         for(const fact of portFacts(target,port))info.append(row(`Порт ${label} · состояние`,fact));
         if (edge.kind === 'tunnel') for (const [name,value] of tunnelEndpointRows(edge,label === 'A' ? 'source' : 'target',label)) info.append(row(name,value));
         if(target) info.append(action('Открыть '+target.name,()=>selectNode(id)));
@@ -809,9 +817,9 @@
       if(edge.last_seen && edge.status!=='documented')evidence.append(row('Возраст наблюдения',observationAge(edge.last_seen)));
       if(relationship) {
         const authority={netbox:'NetBox · зарегистрированный кабель',observation:'Наблюдение коллектора',operator:'Подтверждение оператора',esxi_api:'ESXi API',wan_configuration:'Конфигурация WAN',routing_configuration:'Конфигурация маршрутизации'};
-        const assurance={registered:'Зарегистрировано в NetBox',legacy_inferred:'Автоматическая запись NetBox',exact_lldp:'LLDP/CDP · точная пара портов',direction:'Наблюдаемое направление',conflict:'Противоречивые наблюдения',documented:'Из конфигурации',explicit:'Подтверждено API'};
+        const assurance={registered:'Зарегистрировано в NetBox',legacy_inferred:'Автоматическая запись NetBox',exact_lldp:'LLDP/CDP · точная пара портов',direction:'Наблюдаемое направление',report:'Запись источника',conflict:'Противоречивые наблюдения',documented:'Из конфигурации',explicit:'Подтверждено API'};
         evidence.append(row('Источник связи',authority[relationship.authority] || relationship.authority),row('Основание',assurance[relationship.assurance] || relationship.assurance));
-        for(const observation of relationship.observations || []) evidence.append(row(observation.protocol+' · '+date(observation.observed_at),[observation.source,edge.status==='stale' && Date.parse(observation.observed_at)<=Date.parse(edge.last_seen)?'Устарело':observation.status==='stale'?'Устарело':'',observationAge(observation.observed_at)].filter(Boolean).join(' · ')));
+        for(const observation of relationship.observations || []) evidence.append(row(observation.protocol+' · '+date(observation.observed_at),[observation.source,[observation.source_port,observation.target_port].filter(Boolean).join(' → '),edge.status==='stale' && Date.parse(observation.observed_at)<=Date.parse(edge.last_seen)?'Устарело':observation.status==='stale'?'Устарело':'',observationAge(observation.observed_at)].filter(Boolean).join(' · ')));
         if(relationship.conflicts?.length) evidence.append(element('p',{class:'connection-conflict'},'Есть расхождение с другой связью на этом порту. Зарегистрированный кабель сохранён.'));
       }
       if (edge.evidence.length) for(const item of edge.evidence.filter(factualNote)) evidence.append(element('p',{class:'detail-text'},plain(item)));
@@ -824,21 +832,21 @@
     if(node?.details?.observation_methods) {
       const observed=section('Наблюдение сети'), details=node.details;
       observed.append(row('Источник',details.observation_source || details.source || 'Опрос сети'));
-      observed.append(row('Способ',details.observation_methods.join(', ')));
-      observed.append(row('Состояние',({observed:'Ответ получен',reported:'Сообщено источником',stale:'Нет свежего подтверждения'})[details.observation_state] || 'Неизвестно'));
+      const labels={dhcp:'DHCP',arp:'ARP',ndp:'NDP',fdb:'FDB',lldp:'LLDP',cdp:'CDP',wifi:'Wi-Fi'};
+      observed.append(row('Способ',details.observation_methods.map(method=>labels[method] || method).join(', ')));
+      observed.append(row('Состояние',({observed:'Ответ получен',reported:'Сообщено источником',stale:'Данные устарели'})[details.observation_state] || 'Неизвестно'));
       if(details.last_seen) observed.append(row('Последнее наблюдение',date(details.last_seen)));
       if(details.mac) observed.append(row('MAC',details.mac));
-      if(details.identity_unconfirmed) observed.append(element('p',{class:'detail-text'},'Этот IP также указан в NetBox. Совпадение адреса не подтверждает, что это то же устройство.'));
+      if(details.identity_unconfirmed) observed.append(element('p',{class:'detail-text'},'Этот IP также есть в NetBox. Здесь показана запись наблюдения.'));
       for(const report of details.reports || []) {
-        const labels={dhcp:'DHCP',arp:'ARP',wifi:'Wi-Fi'};
         observed.append(row('Источник',report.source));
         observed.append(row('Данные источника',(report.methods || []).map(method=>labels[method] || method).join(', ')));
         if(report.hostname) observed.append(row('Имя от источника',report.hostname));
+        if(report.address) observed.append(row('IP от источника',report.address));
         if(report.mac) observed.append(row('MAC от источника',report.mac));
         if(report.observed_at) observed.append(row('Прочитано из источника',date(report.observed_at)));
         if(report.expires_at) observed.append(row('Срок записи',date(report.expires_at)));
       }
-      observed.append(element('p',{class:'detail-text'},'Наблюдение адреса не подтверждает физическое подключение или постоянную идентичность устройства.'));
       root.append(observed);
     }
     if(node?.details?.direct_poll) {

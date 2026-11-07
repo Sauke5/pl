@@ -28,6 +28,7 @@ var netmapWaiting = make(chan struct{}, 16)
 var netmapScopeID = regexp.MustCompile(`^(network|network-[a-f0-9]{16})$`)
 var netmapPollRoute = regexp.MustCompile(`^/netmap/api/networks/[a-f0-9]{16}/(poll|remove|observations)$`)
 var netmapDeviceRoute = regexp.MustCompile(`^/netmap/api/devices/[1-9][0-9]{0,14}$`)
+var netmapMapNodeID = regexp.MustCompile(`^(device|vm):[1-9][0-9]{0,14}$`)
 var netmapDeviceWriteRoute = regexp.MustCompile(`^/netmap/api/devices/[1-9][0-9]{0,14}/(ssh-binding|collect)$`)
 var netmapNetworkID = regexp.MustCompile(`^[a-f0-9]{16}$`)
 var netmapInventoryItem = regexp.MustCompile(`^/netmap/api/inventory/(profiles|targets)/[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
@@ -89,7 +90,23 @@ func netmapMatchRoute(r *http.Request) (netmapRoute, bool) {
 		}
 		if media != "" {
 			for key, values := range query {
-				if len(values) != 1 || key != "scope" || (r.URL.Path != "/netmap/" && r.URL.Path != "/netmap/index.html") || !netmapScopeID.MatchString(values[0]) {
+				if len(values) != 1 || media != "text/html" {
+					return netmapRoute{}, false
+				}
+				switch key {
+				case "scope":
+					if !netmapScopeID.MatchString(values[0]) {
+						return netmapRoute{}, false
+					}
+				case "device":
+					if !netmapMapNodeID.MatchString(values[0]) {
+						return netmapRoute{}, false
+					}
+				case "layout":
+					if values[0] != "groups" {
+						return netmapRoute{}, false
+					}
+				default:
 					return netmapRoute{}, false
 				}
 			}
@@ -106,7 +123,7 @@ func netmapMatchRoute(r *http.Request) (netmapRoute, bool) {
 			return netmapRoute{}, false
 		}
 		switch r.URL.Path {
-		case "/netmap/api/networks", "/netmap/api/profiles", "/netmap/api/polls", "/netmap/api/inventory/profiles", "/netmap/api/inventory/targets", "/netmap/api/inventory/jobs":
+		case "/netmap/api/networks", "/netmap/api/profiles", "/netmap/api/polls", "/netmap/api/inventory/capabilities", "/netmap/api/inventory/profiles", "/netmap/api/inventory/targets", "/netmap/api/inventory/jobs":
 			return netmapRoute{"netmap:admin", "application/json", ""}, true
 		case "/netmap/api/instance", "/netmap/api/topology", "/netmap/api/health", "/netmap/api/wan", "/netmap/api/wan/health", "/netmap/api/sites/health":
 			return netmapRoute{"netmap:read", "application/json", ""}, true
@@ -118,8 +135,14 @@ func netmapMatchRoute(r *http.Request) (netmapRoute, bool) {
 			return netmapRoute{"netmap:read", "application/json", ""}, true
 		}
 	}
-	if r.Method == "POST" && len(query) == 0 && (r.URL.Path == "/netmap/api/networks" || r.URL.Path == "/netmap/api/profiles" || netmapPollRoute.MatchString(r.URL.Path) || netmapDeviceWriteRoute.MatchString(r.URL.Path) || r.URL.Path == "/netmap/api/inventory/profiles" || r.URL.Path == "/netmap/api/inventory/targets" || netmapInventoryAction.MatchString(r.URL.Path)) {
-		return netmapRoute{"netmap:admin", "application/json", ""}, true
+	if r.Method == "POST" && len(query) == 0 {
+		switch r.URL.Path {
+		case "/netmap/api/networks", "/netmap/api/profiles", "/netmap/api/inventory/profiles", "/netmap/api/inventory/targets", "/netmap/api/inventory/enroll", "/netmap/api/inventory/ssh-host-key":
+			return netmapRoute{"netmap:admin", "application/json", ""}, true
+		}
+		if netmapPollRoute.MatchString(r.URL.Path) || netmapDeviceWriteRoute.MatchString(r.URL.Path) || netmapInventoryAction.MatchString(r.URL.Path) {
+			return netmapRoute{"netmap:admin", "application/json", ""}, true
+		}
 	}
 	if r.Method == "DELETE" && len(query) == 0 && netmapInventoryItem.MatchString(r.URL.Path) {
 		return netmapRoute{"netmap:admin", "application/json", ""}, true

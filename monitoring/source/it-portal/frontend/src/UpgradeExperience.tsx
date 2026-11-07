@@ -99,6 +99,20 @@ const stages: Record<string, string> = {
   completed: "Обновление установлено",
   succeeded: "Обновление установлено",
 };
+export function upgradeStageLabel(operation: UpgradeOperation) {
+  const scoped = operation.scope === "module";
+  const name = upgradeModuleName(operation.module_id);
+  if (
+    operation.phase === "queued_recovery" &&
+    operation.recovery_mode === "resume"
+  )
+    return scoped ? `Готовим запуск ${name}` : "Готовим запуск модулей";
+  if (scoped && ["starting", "resuming"].includes(operation.phase))
+    return `Запускаем ${name}`;
+  return Object.hasOwn(stages, operation.phase)
+    ? stages[operation.phase]
+    : undefined;
+}
 function validOperation(value: unknown): value is UpgradeOperation {
   if (!value || typeof value !== "object") return false;
   const op = value as UpgradeOperation;
@@ -217,15 +231,7 @@ export function UpgradeScreen({
       ? upgradeModuleName(operation.module_id)
       : undefined;
   const scoped = operation.scope === "module";
-  const stageLabel =
-    operation.phase === "queued_recovery" &&
-    operation.recovery_mode === "resume"
-      ? scoped
-        ? `Готовим запуск ${moduleName}`
-        : "Готовим запуск модулей"
-      : scoped && ["starting", "resuming"].includes(operation.phase)
-        ? `Запускаем ${moduleName}`
-        : stages[operation.phase];
+  const stageLabel = upgradeStageLabel(operation);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });

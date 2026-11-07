@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
-import { api, APIError, errorText } from "./api";
+import { useActionStatus } from "./ActionNotifications";
+import { api, APIError, errorText, queryClient } from "./api";
 import type { Session } from "./types";
 import type { Delivery } from "./UpdateSettings";
-import { rememberUpgrade, upgradeModuleName } from "./UpgradeExperience";
-import { Button } from "./components/ui/button";
+import {
+  rememberUpgrade,
+  upgradeModuleName,
+  upgradeStageLabel,
+  type UpgradeOperation,
+} from "./UpgradeExperience";
 
 const key = "pl.update-batch.v1",
   event = "pl:update-batch",
@@ -126,6 +131,35 @@ function save(expected: string | null, batch?: Batch) {
   window.dispatchEvent(new Event(event));
   return true;
 }
+function pendingStep(batch?: Batch) {
+  return batch?.steps.find(
+    (step) => step.state === "pending" || step.state === "sent",
+  );
+}
+function stepLabel(step: Step) {
+  return `${step.module_id ? upgradeModuleName(step.module_id) : "PL"} ${step.version}`;
+}
+function rememberProgress(
+  raw: string | null,
+  batch: Batch,
+  step: Step,
+  operation: UpgradeOperation,
+) {
+  const stage = upgradeStageLabel(operation);
+  if (step.note !== stage) {
+    step.note = stage;
+    save(raw, batch);
+  }
+  rememberUpgrade(operation);
+}
+export async function clearUpdateBatch(id: string) {
+  if (!navigator.locks)
+    throw new Error("Браузер не позволяет очистить очередь обновлений.");
+  await navigator.locks.request(lock, async () => {
+    const current = load();
+    if (current.batch?.id === id) save(current.raw);
+  });
+}
 export function useUpdateBatch() {
   const [batch, setBatch] = useState(() => load().batch);
   useEffect(() => {
@@ -154,9 +188,9 @@ export async function startUpdateBatch(value: Delivery) {
     throw new Error("Для запуска обновлений войдите как администратор.");
   await navigator.locks.request(lock, async () => {
     const existing = load();
-    if (existing.batch)
+    if (existing.batch?.error || pendingStep(existing.batch))
       throw new Error(
-        "Сначала завершите или сбросьте сохранённую очередь обновлений.",
+        "Сначала завершите текущую очередь или очистите её в настройках обновлений.",
       );
     const steps: Step[] = value.modules
       .filter(
@@ -195,7 +229,10 @@ export async function startUpdateBatch(value: Delivery) {
 }
 export function UpdateBatchRunner({ session }: { session: Session }) {
   const batch = useUpdateBatch();
-  const [coordinationError, setCoordinationError] = useState("");
+  const [coordinationFailure, setCoordinationFailure] = useState<{
+    id: string;
+    message: string;
+  }>();
   const actor =
     session.authenticated &&
     session.user?.admin &&
@@ -203,13 +240,12 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
     !session.local_password_change_required
       ? session.user.id
       : "";
-  const active =
-    !!batch &&
-    batch.actor === actor &&
-    !batch.error &&
-    batch.steps.some((s) => s.state === "pending" || s.state === "sent");
+  const batchId = batch?.id;
+  const currentStep = pendingStep(batch);
+  const active = batch?.actor === actor && !batch.error && !!currentStep;
+  const completed = !!batch && !batch.error && !currentStep;
   useEffect(() => {
-    if (!active || !actor || !navigator.locks) return;
+    if (!active || !actor || !batchId || !navigator.locks) return;
     let stopped = false,
       timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
@@ -221,9 +257,7 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
             if (!lease || stopped) return;
             const { raw, batch: b } = load();
             if (!b || b.actor !== actor || b.error) return;
-            const step = b.steps.find(
-              (s) => s.state === "pending" || s.state === "sent",
-            );
+            const step = pendingStep(b);
             if (!step) return;
             const name = step.module_id
               ? upgradeModuleName(step.module_id)
@@ -271,8 +305,9 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
                     );
                   step.state = "done";
                   b.previous_operation_id = op!.operation_id;
-                  save(raw, b);
-                } else rememberUpgrade(op);
+                  if (save(raw, b) && step.module_id)
+                    queryClient.setQueryData(["/delivery"], value);
+                } else rememberProgress(raw, b, step, op!);
                 return;
               }
               if (op?.operation_id !== b.previous_operation_id)
@@ -342,8 +377,8 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
                 throw new Error(
                   "Не удалось подтвердить запуск. Очередь остановлена; проверьте состояние операции.",
                 );
-              if (localStorage.getItem(key) === submitted)
-                rememberUpgrade(accepted.operation);
+              if (localStorage.getItem(key) === submitted && accepted.operation)
+                rememberProgress(submitted, b, step, accepted.operation);
             } catch (e) {
               // Core may temporarily stop the API, including after accepting a
               // POST whose response was lost. Keep the sent UUID; subsequent
@@ -352,9 +387,7 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
               const latest = load();
               if (
                 latest.batch?.id === b.id &&
-                latest.batch.steps.find(
-                  (s) => s.state === "pending" || s.state === "sent",
-                )?.operation_id === step.operation_id
+                pendingStep(latest.batch)?.operation_id === step.operation_id
               ) {
                 latest.batch.error = `${name}: ${errorText(e)}`.slice(0, 2000);
                 save(latest.raw, latest.batch);
@@ -364,9 +397,11 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
         );
       } catch {
         stopped = true;
-        setCoordinationError(
-          "Браузер не позволяет продолжить очередь. Проверьте состояние операций и сбросьте очередь.",
-        );
+        setCoordinationFailure({
+          id: batchId,
+          message:
+            "Браузер не позволяет продолжить очередь. Проверьте состояние операций в настройках обновлений.",
+        });
       } finally {
         if (!stopped) timer = setTimeout(() => void tick(), 1000);
       }
@@ -376,52 +411,51 @@ export function UpdateBatchRunner({ session }: { session: Session }) {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [actor, batch?.id, active]);
-  if (!batch || !actor) return null;
-  const pending = batch.steps.find(
-    (s) => s.state === "pending" || s.state === "sent",
+  }, [actor, batchId, active]);
+
+  const error =
+    batch?.error ||
+    (coordinationFailure?.id === batchId
+      ? coordinationFailure?.message
+      : undefined);
+  const done = batch?.steps.filter((step) => step.state === "done") ?? [];
+  const skipped = batch?.steps.filter((step) => step.state === "skipped") ?? [];
+  useActionStatus(
+    actor && batch?.actor === actor ? `update-batch:${batch.id}` : undefined,
+    {
+      kind: error ? "error" : completed && done.length ? "success" : "info",
+      ongoing: !!currentStep && !error,
+      title: error
+        ? "Обновление остановлено"
+        : currentStep
+          ? `Обновляем ${stepLabel(currentStep)}`
+          : done.length
+            ? "Обновление завершено"
+            : "Обновления пропущены",
+      message:
+        error ||
+        (currentStep && batch
+          ? `Шаг ${batch.steps.indexOf(currentStep) + 1} из ${batch.steps.length} · ${currentStep.note || "Готовим обновление"}`
+          : [
+              done.length
+                ? `Установлено: ${done.map(stepLabel).join(", ")}.`
+                : "",
+              ...skipped.map((step) =>
+                `Пропущено: ${stepLabel(step)}. ${step.note || ""}`.trim(),
+              ),
+            ]
+              .filter(Boolean)
+              .join("\n")),
+    },
   );
-  return (
-    <section className="notice" aria-label="Очередь обновлений">
-      <div role="status">
-        <strong>
-          {batch.error
-            ? "Обновление остановлено"
-            : pending
-              ? `Обновить всё: ${batch.steps.filter((s) => s.state === "done").length} из ${batch.steps.length}`
-              : "Очередь обновлений завершена"}
-        </strong>
-        <p>
-          {batch.actor !== actor
-            ? "Очередь создана другим администратором и приостановлена."
-            : batch.error ||
-              coordinationError ||
-              (pending
-                ? "Оставьте вкладку открытой. После перезагрузки страницы очередь продолжится."
-                : "Все доступные шаги обработаны.")}
-        </p>
-        {batch.steps
-          .filter((s) => s.state === "skipped")
-          .map((s) => (
-            <p key={s.operation_id}>
-              {upgradeModuleName(s.module_id)}: пропущено — {s.note}
-            </p>
-          ))}
-      </div>
-      <Button
-        variant="secondary"
-        onClick={() =>
-          void navigator.locks?.request(lock, async () => {
-            const current = load();
-            if (current.batch?.id === batch.id) save(current.raw);
-          })
-        }
-      >
-        Сбросить очередь
-      </Button>
-      {pending?.state === "sent" && (
-        <span>Сброс очереди не отменяет уже запущенную операцию.</span>
-      )}
-    </section>
-  );
+  useEffect(() => {
+    if (!actor || !batchId || !completed) return;
+    void clearUpdateBatch(batchId).catch(() => {
+      setCoordinationFailure({
+        id: batchId,
+        message: "Не удалось очистить завершённую очередь.",
+      });
+    });
+  }, [actor, batchId, completed]);
+  return null;
 }

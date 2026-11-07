@@ -69,7 +69,7 @@ class CollectorLifecycle(unittest.TestCase):
         with patch.object(service.http.client, 'HTTPConnection') as native:
             status, body = self.request()
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body), {'status': 'ready', 'version': '1.1.0', 'collector': WAITING})
+        self.assertEqual(json.loads(body), {'status': 'ready', 'version': '1.2.0', 'collector': WAITING})
         self.app.bootstrap.assert_called_once_with()
         native.assert_not_called()
 

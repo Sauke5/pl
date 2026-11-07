@@ -81,6 +81,7 @@ func NetMapRequestErrorCode(status int, body []byte) string {
 		"inventory_profile_busy": 409, "inventory_target_busy": 409, "inventory_profile_in_use": 409,
 		"inventory_address_exists": 409, "inventory_busy": 409, "inventory_network_in_use": 409, "inventory_preview_running": 409,
 		"inventory_profile_missing": 404, "inventory_target_missing": 404, "inventory_interrupted": 503,
+		"inventory_invalid_port": 400, "inventory_host_key_required": 422, "inventory_dependency_missing": 503,
 	}
 	// Collector codes are also used while validating a saved profile (400) or
 	// testing a real connection (422). No arbitrary exception text is accepted.

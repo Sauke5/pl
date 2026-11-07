@@ -8,11 +8,13 @@ import importlib.util
 import ipaddress
 import json
 from pathlib import Path
+import sys
 import unittest
 from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'apps/netmap-stack'))
 spec = importlib.util.spec_from_file_location('pl_inventory_netbox', ROOT / 'apps/netmap-stack/inventory_netbox.py')
 writer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(writer)
@@ -203,6 +205,42 @@ class InventorySyncTests(unittest.TestCase):
         self.target = {'id': 'b210573a-8369-41ef-8d56-4b7499126aab', 'kind': 'linux',
                        'address': '192.0.2.10', 'name': 'fixture target'}
         self.observed = snapshot()
+
+    def test_neighbors_keep_per_source_time_and_never_write_cables(self):
+        target = {**self.target, 'kind': 'network'}
+        self.observed.update(kind='network', neighbors=[
+            {'protocol': 'arp', 'address': '192.0.2.15', 'mac': '02-00-00-00-00-0F',
+             'local_port': 'br-lan', 'remote_port': 'discarded'},
+            {'protocol': 'lldp', 'mac': '02:00:00:00:00:10', 'local_port': 'eth1', 'remote_port': 'Gi1/0/1'},
+        ], capabilities={'neighbors': True, 'neighbors_arp': True, 'neighbors_lldp': True})
+        first = writer.sync_snapshot(self.api, target, self.observed)
+        self.assertEqual(first['state'], 'succeeded')
+        row, = self.api.rows[DEVICE]
+        old = {n['protocol']: n for n in row['custom_fields'][META]['observed']['neighbors']}
+        self.assertEqual(old['arp']['mac'], '02:00:00:00:00:0f')
+        self.assertNotIn('remote_port', old['arp'])
+        self.assertEqual(old['lldp']['remote_port'], 'Gi1/0/1')
+        self.assertEqual(self.api.rows[IFACE][0]['custom_fields'][META]['observed']['addresses'],
+                         self.observed['interfaces'][0]['addresses'])
+        self.observed.update(observed_at='2026-11-06T10:10:00Z', neighbors=[
+            {'protocol': 'dhcp', 'address': '192.0.2.15', 'mac': '02:00:00:00:00:0f', 'hostname': 'client'},
+        ], capabilities={'neighbors': True, 'neighbors_dhcp': True})
+        self.assertEqual(writer.sync_snapshot(self.api, target, self.observed)['object_id'], first['object_id'])
+        rows = {n['protocol']: n for n in row['custom_fields'][META]['observed']['neighbors']}
+        self.assertEqual(set(rows), {'arp', 'dhcp', 'lldp'})
+        self.assertEqual(rows['arp']['observed_at'].replace('+00:00', 'Z'), old['arp']['observed_at'])
+        self.assertEqual(rows['dhcp']['observed_at'], '2026-11-06T10:10:00Z')
+        self.observed.update(observed_at='2026-11-06T10:20:00Z', neighbors=[],
+                             capabilities={'neighbors': True, 'neighbors_arp': True})
+        writer.sync_snapshot(self.api, target, self.observed)
+        self.assertEqual({n['protocol'] for n in row['custom_fields'][META]['observed']['neighbors']}, {'dhcp', 'lldp'})
+        self.assertFalse(any('cables' in path for _, path, _ in self.api.writes))
+
+    def test_neighbor_payload_must_not_include_raw_config_or_secret_fields(self):
+        self.observed['neighbors'] = [{'protocol': 'arp', 'address': '192.0.2.1', 'password': 'private'}]
+        with self.assertRaisesRegex(ValueError, '^inventory_invalid_snapshot$'):
+            writer.sync_snapshot(self.api, self.target, self.observed)
+        self.assertEqual(self.api.writes, [])
 
     def sync(self):
         return writer.sync_snapshot(self.api, self.target, self.observed)

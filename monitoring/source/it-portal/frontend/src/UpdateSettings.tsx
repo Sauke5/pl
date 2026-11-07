@@ -8,7 +8,11 @@ import { Badge, ErrorBox, Panel } from "./components/common";
 import { withSettingsNavigation } from "./settings/navigation";
 import { ReleaseNotesArticle, type ReleaseNotes } from "./ReleaseNotes";
 import "./upgrade-experience.css";
-import { startUpdateBatch, useUpdateBatch } from "./UpdateBatch";
+import {
+  clearUpdateBatch,
+  startUpdateBatch,
+  useUpdateBatch,
+} from "./UpdateBatch";
 import {
   rememberUpgrade,
   requestUpgradeStatus,
@@ -420,7 +424,7 @@ export function UpdateSettings() {
               disabled={
                 busy ||
                 running ||
-                !!batch ||
+                !!batch?.error ||
                 value.operation?.phase === "recovery_required"
               }
               onClick={() => setAllConfirm(true)}
@@ -428,6 +432,19 @@ export function UpdateSettings() {
               Обновить всё
             </Button>
           )}
+        {batch && (batchRunning || batch.error) && (
+          <Button
+            variant="secondary"
+            title={
+              batchRunning
+                ? "Текущий шаг завершится. Остальные обновления будут отменены."
+                : undefined
+            }
+            onClick={() => void clearUpdateBatch(batch.id).catch(setError)}
+          >
+            {batch.error ? "Очистить очередь" : "Остановить очередь"}
+          </Button>
+        )}
         <Button
           variant="secondary"
           disabled={busy || running}

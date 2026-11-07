@@ -110,12 +110,13 @@ class NetMapController:
         version = bundle['adapter'].get('labels', {}).get('org.opencontainers.image.version')
         if not isinstance(version, str) or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version):
             raise ValueError('Invalid NetMap bundle version')
-        # The additive 1.0.0 -> 1.1.0 inventory release preserves the exact
-        # PostgreSQL/Valkey images. Their immutable descriptors retain 1.0.0
-        # labels; neither relabeling nor a generic mixed-version bundle is valid.
-        preserved_storage = (version == '1.1.0'
+        # Supported upgrades retain the installed PostgreSQL/Valkey images
+        # with their original descriptors and pinned upstream versions.
+        storage_version = bundle['database'].get('labels', {}).get('org.opencontainers.image.version')
+        permitted_storage = {'1.1.0': ('1.0.0',), '1.2.0': ('1.0.0', '1.1.0')}
+        preserved_storage = (storage_version in permitted_storage.get(version, ())
             and all(image.get('labels', {}).get('org.opencontainers.image.version')
-                    == ('1.0.0' if role in ('database', 'cache') else '1.1.0')
+                    == (storage_version if role in ('database', 'cache') else version)
                     for role, image in bundle.items())
             and bundle['database'].get('labels', {}).get('pl.upstream.version') == '18.6'
             and bundle['cache'].get('labels', {}).get('pl.upstream.version') == '9.1'
@@ -127,7 +128,7 @@ class NetMapController:
                     or image.get('recipe') != 'deploy/images/netmap.Dockerfile' or labels.get('pl.module.id') != 'netmap'
                     or labels.get('pl.module.role') != role or labels.get('pl.module.config.version') != '1'
                     or labels.get('pl.build.variant') != ('source-build' if role == 'adapter' else 'upstream-pinned')
-                    or labels.get('org.opencontainers.image.version') != ('1.0.0' if preserved_storage and role in ('database', 'cache') else version)
+                    or labels.get('org.opencontainers.image.version') != (storage_version if preserved_storage and role in ('database', 'cache') else version)
                     or (role != 'adapter' and (not isinstance(labels.get('pl.upstream.version'), str)
                         or not re.fullmatch(r'[0-9]+\.[0-9]+(?:\.[0-9]+)?', labels['pl.upstream.version'])))):
                 raise ValueError('Invalid NetMap component image')

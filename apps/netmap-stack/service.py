@@ -29,6 +29,8 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from gateway import GatewayVerifier, GatewayError
 from inventory_jobs import InventoryJobs, InventoryError
+from inventory_topology import (address as map_address, append_observations, inventory_metadata,
+                                map_asset_facts, map_port, primary_addresses)
 
 
 REQUEST_ERRORS = {
@@ -64,7 +66,7 @@ MAX_BODY = 3 * 1024 * 1024
 MAX_RESPONSE = 32 * 1024 * 1024
 GRAPH_OBSERVATION_LIMIT = 4096
 GRAPH_REPORT_LIMIT = 8192
-NETMAP_VERSION = '1.1.0'
+NETMAP_VERSION = '1.2.0'
 NATIVE = {'netbox': ('netbox', 8080), 'gitea': ('gitea', 3000), 'oxidized': ('oxidized', 8888)}
 
 def canonical_network(value):
@@ -725,11 +727,10 @@ class Application:
             cidr = ipaddress.ip_network(selected['cidr'])
             def member(device):
                 fields = device.get('custom_fields') or {}
-                address = fields.get('collector_ip') or (device.get('primary_ip') or {}).get('address', '').split('/')[0]
-                try:
-                    return fields.get('pl_source') == 'network:' + selected['id'] or ipaddress.ip_address(address) in cidr
-                except ValueError:
-                    return False
+                if fields.get('pl_source') == 'network:' + selected['id']:
+                    return True
+                addresses = [map_address(fields.get('collector_ip'))] + [item.split('/')[0] for item in primary_addresses(device)]
+                return any(ipaddress.ip_address(item) in cidr for item in addresses if item)
             scope_seed_ids = {device['id'] for device in devices if member(device)}
             support = set(scope_seed_ids)
             neighbors = {}
@@ -750,41 +751,61 @@ class Application:
             devices = [device for device in devices if device['id'] in support]
         device_ids = {device['id'] for device in devices}
         interfaces = self.netbox.all('/dcim/interfaces/')
-        nodes, edges, ports = [], [], {}
+        nodes, edges, ports, inventories = [], [], {}, {}
         for port in interfaces:
             device = (port.get('device') or {}).get('id')
-            ports.setdefault(device, []).append({'id': str(port['id']), 'name': port['name'], 'type': port.get('type'), 'enabled': port.get('enabled')})
+            if device in device_ids:
+                ports.setdefault(device, []).append(map_port(port))
         for device in devices:
             fields = device.get('custom_fields') or {}
-            nodes.append({'id': 'device:' + str(device['id']), 'name': device['name'], 'kind': 'unknown' if (device.get('role') or {}).get('slug') == 'pl-network' else __import__('equipment_types').inventory_kind(role_name=(device.get('role') or {}).get('name', ''), role_slug=(device.get('role') or {}).get('slug', '')),
-                'management_ip': fields.get('collector_ip') or (device.get('primary_ip') or {}).get('address', '').split('/')[0],
-                'netbox_url': '/netmap/netbox/dcim/devices/' + str(device['id']) + '/', 'ports': ports.get(device['id'], []),
+            node_id = 'device:' + str(device['id'])
+            inventory = inventory_metadata(device)
+            if inventory[1].get('neighbors'):
+                inventories[node_id] = inventory
+            role = device.get('role') or {}
+            slug = role.get('slug', '')
+            generic_network = slug == 'pl-network' or slug == 'pl-inventory' and inventory[1].get('kind') == 'network'
+            kind = 'unknown' if generic_network else __import__('equipment_types').inventory_kind(role_name=role.get('name', ''), role_slug=slug)
+            primary = primary_addresses(device)
+            address = map_address(fields.get('collector_ip')) or (primary[0].split('/')[0] if primary else '')
+            device_ports = ports.get(device['id'], [])
+            facts, addresses = map_asset_facts(device, device_ports, address)
+            nodes.append({'id': node_id, 'name': device['name'], 'kind': kind, 'management_ip': address,
+                'netbox_url': '/netmap/netbox/dcim/devices/' + str(device['id']) + '/', 'ports': device_ports,
+                'addresses': addresses, 'last_seen': facts.get('observed_at'),
                 'site': device.get('site'),
                 'config_url': '/netmap/oxidized/node/fetch/device-' + str(device['id']) if fields.get('oxidized_model') else '',
                 'config_history_url': '/netmap/gitea/pl-collector/device-configs/commits/branch/master/device-' + str(device['id']) if fields.get('oxidized_model') else '',
-                'details': {'source': fields.get('pl_source'), 'netbox_id': device['id'], 'support_only': bool(selected and device['id'] not in scope_seed_ids)}})
+                'details': {**facts, 'source': fields.get('pl_source'), 'netbox_id': device['id'],
+                            'support_only': bool(selected and device['id'] not in scope_seed_ids)}})
         virtual_ports = {}
         for port in self.netbox.all('/virtualization/interfaces/'):
             owner = (port.get('virtual_machine') or {}).get('id')
-            virtual_ports.setdefault(owner, []).append({'id': 'vm-interface:' + str(port['id']), 'name': port['name'],
-                'type': 'virtual', 'enabled': port.get('enabled')})
+            virtual_ports.setdefault(owner, []).append(map_port(port, virtual=True))
         for machine in self.netbox.all('/virtualization/virtual-machines/'):
             fields = machine.get('custom_fields') or {}
             metadata = fields.get('pl_inventory')
             observed = metadata.get('observed') if isinstance(metadata, dict) else None
             observed = observed if isinstance(observed, dict) else {}
-            address = observed.get('collector_ip') or (machine.get('primary_ip4') or machine.get('primary_ip6') or {}).get('address', '').split('/')[0]
+            primary = primary_addresses(machine)
+            address = map_address(observed.get('collector_ip')) or (primary[0].split('/')[0] if primary else '')
             if selected:
                 try:
                     if ipaddress.ip_address(address) not in ipaddress.ip_network(selected['cidr']):
                         continue
                 except ValueError:
                     continue
-            nodes.append({'id': 'vm:' + str(machine['id']), 'name': machine['name'], 'kind': 'vm',
+            node_id = 'vm:' + str(machine['id'])
+            inventory = inventory_metadata(machine)
+            if inventory[1].get('neighbors'):
+                inventories[node_id] = inventory
+            machine_ports = virtual_ports.get(machine['id'], [])
+            facts, addresses = map_asset_facts(machine, machine_ports, address)
+            nodes.append({'id': node_id, 'name': machine['name'], 'kind': 'vm',
                 'management_ip': address, 'netbox_url': '/netmap/netbox/virtualization/virtual-machines/' + str(machine['id']) + '/',
-                'ports': virtual_ports.get(machine['id'], []), 'site': machine.get('site'),
+                'ports': machine_ports, 'addresses': addresses, 'site': machine.get('site'), 'last_seen': facts.get('observed_at'),
                 'config_url': '', 'config_history_url': '',
-                'details': {'source': fields.get('pl_inventory_source'), 'netbox_vm_id': machine['id'], 'support_only': False}})
+                'details': {**facts, 'source': fields.get('pl_inventory_source'), 'netbox_vm_id': machine['id'], 'support_only': False}})
         networks = {item['id']: item for item in self.store.networks()}
         inventory_by_ip = {}
         for item in nodes:
@@ -860,6 +881,8 @@ class Application:
             edges.append({'id': 'cable:' + str(cable['id']), 'source': 'device:' + str(da), 'target': 'device:' + str(db),
                 'source_port': left.get('name'), 'target_port': right.get('name'), 'kind': 'physical', 'status': 'documented',
                 'details': {'relationship': {'authority': 'netbox', 'cable_id': cable['id'], 'assurance': 'registered'}}})
+        if inventories and append_observations(nodes, edges, inventories, now, selected=selected):
+            warnings.append('Показана часть наблюдений оборудования. Выберите сеть, чтобы сузить данные.')
         return {'schema_version': 1, 'generated_at': now, 'site': {'id': 'network-' + selected['id'] if selected else 'network', 'name': selected['name'] if selected else 'Сеть', 'slug': 'network-' + selected['id'] if selected else 'network'},
             'nodes': nodes, 'edges': edges, 'sources': [{'id': 'netbox', 'status': 'ok', 'last_success': now}],
             'warnings': warnings, 'coverage': {}, 'rack_items': []}
@@ -1188,7 +1211,10 @@ class Application:
         try:
             # Credential preview has no native writes. Only its reservation is
             # serialized; bounded network IO must not hold the mutation lanes.
-            result = self.inventory.test_profile(path.split('/')[4], body)
+            if path == '/api/inventory/ssh-host-key':
+                result = self.inventory.ssh_host_key(body)
+            else:
+                result = self.inventory.test_profile(path.split('/')[4], body)
         except InventoryError as exc:
             with self.store.connect() as db:
                 db.execute('UPDATE requests SET response=? WHERE id=?', (json.dumps({'error': exc.code, '_status': exc.status}), operation))
@@ -1202,11 +1228,13 @@ class Application:
         return result
 
     def mutation(self, path, body, claims, method='POST'):
-        if method == 'POST' and re.fullmatch(r'/api/inventory/profiles/[a-f0-9-]{36}/test', path):
+        if method == 'POST' and (path == '/api/inventory/ssh-host-key' or re.fullmatch(r'/api/inventory/profiles/[a-f0-9-]{36}/test', path)):
             return self._inventory_preview(path, body, claims)
         operation = claims['idempotency_key']
         fingerprint = hashlib.sha256((method + ' ' + path).encode() + b'\n' + json_bytes(body)).hexdigest() if method != 'POST' else hashlib.sha256(path.encode() + b'\n' + json_bytes(body)).hexdigest()
         with self.mutation_lock:
+            if method == 'POST' and path == '/api/inventory/enroll':
+                return self.inventory.enroll(body, operation, claims['sub'], fingerprint)
             with self.store.connect() as db:
                 previous = db.execute('SELECT digest,response FROM requests WHERE id=?', (operation,)).fetchone()
                 if previous:
@@ -1367,7 +1395,8 @@ def make_handler(application, map_handler):
                 if path.startswith('/api/inventory/'):
                     if parsed.query:
                         raise ValueError('Invalid inventory query')
-                    view = {'/api/inventory/profiles': application.inventory.profiles,
+                    view = {'/api/inventory/capabilities': application.inventory.capabilities,
+                            '/api/inventory/profiles': application.inventory.profiles,
                             '/api/inventory/targets': application.inventory.targets,
                             '/api/inventory/jobs': application.inventory.jobs}.get(path)
                     if not view:
