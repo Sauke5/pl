@@ -113,7 +113,9 @@ class NetMapController:
         # Supported upgrades retain the installed PostgreSQL/Valkey images
         # with their original descriptors and pinned upstream versions.
         storage_version = bundle['database'].get('labels', {}).get('org.opencontainers.image.version')
-        permitted_storage = {'1.1.0': ('1.0.0',), '1.2.0': ('1.0.0', '1.1.0')}
+        permitted_storage = {
+            '1.1.0': ('1.0.0',), '1.2.0': ('1.0.0', '1.1.0'), '1.2.1': ('1.0.0', '1.1.0', '1.2.0'),
+        }
         preserved_storage = (storage_version in permitted_storage.get(version, ())
             and all(image.get('labels', {}).get('org.opencontainers.image.version')
                     == (storage_version if role in ('database', 'cache') else version)

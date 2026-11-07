@@ -568,6 +568,17 @@ class _Sync:
         self.remember('interfaces', existing['id'])
         return path, 'virtualization.vminterface' if vm else 'dcim.interface', existing
 
+    def sibling_mac(self, path, object_type, interface, row, address):
+        fields = row.get('custom_fields') or {}
+        key, suffix = fields.get(KEY), ':' + address
+        if (fields.get(SOURCE) != self.source or _ref(row.get('assigned_object_type')) != object_type
+                or not isinstance(key, str) or not key.startswith('mac:') or not key.endswith(suffix)):
+            return False
+        sibling = self.owned(path, 'interface:' + key[len('mac:'):-len(suffix)])
+        parent, parent_id = self.interface_parents[(path, interface['id'])]
+        return (sibling is not None and sibling['id'] != interface['id']
+                and sibling['id'] == row.get('assigned_object_id') and _ref(sibling.get(parent)) == parent_id)
+
     def mac(self, path, object_type, interface, observed):
         raw = observed.get('mac_address', '')
         if not raw:
@@ -583,7 +594,9 @@ class _Sync:
         key = 'mac:' + observed['key'] + ':' + address
         current = self.owned('/dcim/mac-addresses/', key)
         rows = self.client.all('/dcim/mac-addresses/', mac_address=address)
-        if any(v['id'] != (current or {}).get('id') for v in rows):
+        # A bridge and its port can report the same address on one device.
+        if any(row['id'] != (current or {}).get('id') and not self.sibling_mac(path, object_type, interface, row, address)
+               for row in rows):
             raise InventoryConflict('inventory_unowned_mac_conflict')
         desired = {'mac_address': address, 'assigned_object_type': object_type, 'assigned_object_id': interface['id']}
         value = (self.update('/dcim/mac-addresses/', current, key, desired, {'mac_address': address}) if current

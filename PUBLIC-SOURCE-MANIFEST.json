@@ -16460,8 +16460,8 @@
     },
     {
       "path": "apps/netmap-stack/inventory_netbox.py",
-      "sha256": "d687a448c2a66ceb4687e2d93b22ee52ad0e478704197943c0fdb8c7f9638a53",
-      "size": 48771
+      "sha256": "1b18f6c510d1652cb34f0613040763778856cd534a7bbcfbe5804629238ec315",
+      "size": 49679
     },
     {
       "path": "apps/netmap-stack/inventory_topology.py",
@@ -16495,7 +16495,7 @@
     },
     {
       "path": "apps/netmap-stack/service.py",
-      "sha256": "eb5b955d5636135102fd69c2f4b0a05779f7cecca55f24c3e2dcea2875f73327",
+      "sha256": "7fcd49a4cffc124d95f871bd9f84ab75052ff431722a1be769820e7f91bc84dd",
       "size": 93411
     },
     {
@@ -16924,6 +16924,11 @@
       "size": 4295
     },
     {
+      "path": "docs/releases/0.8.1.json",
+      "sha256": "e9bee7212f57614edbaaae01c4a7806566da2ecd056237240ab80d247ef92817",
+      "size": 4298
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -17085,13 +17090,13 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "0bea431a5a5ce04c0145c2a42eb6619ecba3eaabe271a397f19de360073a71ad",
-      "size": 40624
+      "sha256": "9e0382e8c902cfc59c347cdc80156d612b33097d2d9c4f7c12eb83fb37c9d423",
+      "size": 40695
     },
     {
       "path": "installer/netmap-controller.py",
-      "sha256": "ed865bf1eb3c516f0e9f3f1c19e2eefdaaaad4a0a0ccc9c16ea7c063e5d1152a",
-      "size": 49043
+      "sha256": "6def23fc6ef13059da4af4c913cac129bb38f198fe63b5dc54069803244e947b",
+      "size": 49104
     },
     {
       "path": "installer/netmap-standalone-package.py",
@@ -17315,8 +17320,8 @@
     },
     {
       "path": "installer/tests/test_inventory_netbox.py",
-      "sha256": "a0fe0969c6cdf3f627ba8732f3c7fc6da6870c6df4a072dd3be236dcf16e2fd2",
-      "size": 53107
+      "sha256": "8f51aca00dd5e416572fa0399ed4711e71f2e6f75213f00e93a9c555493beb4a",
+      "size": 54558
     },
     {
       "path": "installer/tests/test_maintenance.py",
@@ -17380,8 +17385,8 @@
     },
     {
       "path": "installer/tests/test_netmap_collector_idle.py",
-      "sha256": "01c4dfb53534fa6089654c6a7114d1b37666bc8f09447907a37154cb7386a1e8",
-      "size": 13561
+      "sha256": "0d76c438ef9219dcf959b955dfbbcc806820f18455cc2b5da243180ac4478bdf",
+      "size": 13576
     },
     {
       "path": "installer/tests/test_netmap_controller.py",
@@ -17420,8 +17425,8 @@
     },
     {
       "path": "installer/tests/test_netmap_instance_descriptor.py",
-      "sha256": "b9691d7a70f7523338063fa437bb4472f7d88c7a5b77275575830f76e165a422",
-      "size": 3679
+      "sha256": "0bb318337ce2bfb0b9ce39b309911962654f77ed41202e1ddb8c73d5a0545795",
+      "size": 3694
     },
     {
       "path": "installer/tests/test_netmap_netbox_bootstrap.py",
@@ -17745,12 +17750,12 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.Dockerfile",
-      "sha256": "76c3b9b432975e0db293ee5eab4a31ecddac8f1ac56b5a7f542b97dbaae81c49",
+      "sha256": "8c978e14dce1da454dc319165d8c78c46941a929995c86d6c04d4639a2d47cb7",
       "size": 4387
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.sources.json",
-      "sha256": "368045a2a5b44fe225f0c61c9c056a3f49f483a174b0ecde0acf02f857d42fa3",
+      "sha256": "da93c9d4acc264a933dab27a452da74ed9da8a0828476c761a8d3a40767bf0b8",
       "size": 4667
     },
     {

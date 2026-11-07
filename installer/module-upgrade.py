@@ -34,7 +34,10 @@ STORAGE = {'forms': {'mongo', 'keydb'}, 'doska': {'database'},
 IMAGE_FIELDS = {'id', 'architecture', 'ref', 'recipe', 'labels'}
 IMAGE_DEFAULTS = ('User', 'Env', 'Entrypoint', 'Cmd', 'WorkingDir', 'ExposedPorts', 'Volumes', 'Healthcheck', 'StopSignal')
 LEGACY_FINGERPRINT_CORES = {'0.5.0-rc.1', '0.5.1', '0.5.2'}
-NETMAP_TRANSITIONS = (('1.0.0', '1.1.0'), ('1.0.0', '1.2.0'), ('1.1.0', '1.2.0'))
+NETMAP_TRANSITIONS = (
+    ('1.0.0', '1.1.0'), ('1.0.0', '1.2.0'), ('1.1.0', '1.2.0'),
+    ('1.0.0', '1.2.1'), ('1.1.0', '1.2.1'), ('1.2.0', '1.2.1'),
+)
 
 
 class UnsupportedTransition(ValueError):

@@ -511,6 +511,32 @@ class InventorySyncTests(unittest.TestCase):
                 self.assertEqual(row['assigned_object_id'], 2)
                 self.assertIn('inventory_mac_assignment_changed' if path == MAC else 'inventory_ip_assignment_changed', report['warnings'])
 
+    def test_shared_mac_on_the_same_device_is_assigned_to_each_observed_interface(self):
+        address = self.observed['interfaces'][0]['mac_address']
+        self.observed['interfaces'][1].update(mac_address=address, type='virtual')
+        for interfaces in (self.observed['interfaces'], list(reversed(self.observed['interfaces']))):
+            self.observed['interfaces'] = interfaces
+            report = self.sync()
+            self.assertEqual(report['state'], 'succeeded', report)
+            rows = self.api.rows[MAC]
+            self.assertEqual(len(rows), 2)
+            for interface in self.api.rows[IFACE]:
+                mac = next(row for row in rows if row['id'] == interface['primary_mac_address'])
+                self.assertEqual(mac['assigned_object_id'], interface['id'])
+                self.assertEqual(mac['mac_address'], address.upper())
+
+    def test_manual_duplicate_mac_on_the_same_device_remains_a_conflict(self):
+        self.sync()
+        first, second = self.api.rows[MAC]
+        second['mac_address'] = first['mac_address']
+        second['custom_fields'] = {}
+        self.observed['interfaces'][1]['mac_address'] = first['mac_address']
+        report = self.sync()
+        self.assertEqual(report['state'], 'partial', report)
+        self.assertIn('inventory_unowned_mac_conflict', report['warnings'])
+        self.assertEqual(len(self.api.rows[MAC]), 2)
+        self.assertEqual(second['custom_fields'], {})
+
     def test_attachment_changed_between_list_and_fresh_get_is_not_adopted(self):
         device, _ = self.seed_snmp()
         def change_binding(path, row):
