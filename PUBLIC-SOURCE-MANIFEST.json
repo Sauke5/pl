@@ -16495,7 +16495,7 @@
     },
     {
       "path": "apps/netmap-stack/service.py",
-      "sha256": "d4ff149e423d9bc4f962461dce10c341a0a77c6a6a6fb827d07da34b8dbf6380",
+      "sha256": "738037e328bbc5e1eee92649dc59f9660f483dc0cb15e01157d0586045b95815",
       "size": 94023
     },
     {
@@ -16525,13 +16525,13 @@
     },
     {
       "path": "apps/netmap/source-provenance.json",
-      "sha256": "b2e600fc73444faac3c2cdf4e9417fcc692d679794c3b0c28ec6081f94c44b65",
+      "sha256": "662f11ee9fb77f4455cfcdcaf299fde3b5f5f120a8142002a85a9032542c3070",
       "size": 8328
     },
     {
       "path": "apps/netmap/web/app.js",
-      "sha256": "c882f3c873d401cada8c20b5ea2b8d182cfbbef3aa3d16da1680d76bc74bb244",
-      "size": 104462
+      "sha256": "60adb1e67011c331cef20b39ee6efd8fdb116691bb0c4ba8de7bb96f2f9b53e7",
+      "size": 107697
     },
     {
       "path": "apps/netmap/web/build-layout.cjs",
@@ -16939,6 +16939,11 @@
       "size": 791
     },
     {
+      "path": "docs/releases/0.8.4.json",
+      "sha256": "cd28396ec3ea41a3b8a692d568a052241871e91e99f2475c3c144503704817f0",
+      "size": 913
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -17100,13 +17105,13 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "c972a222774942eb561160011ed28a55d6be01301f47eea2467aad2bcf2e65b1",
-      "size": 40779
+      "sha256": "f4bbffa7be4ed321671d00d091093be7e73cd5230a5555a4301d69b79ac85950",
+      "size": 40883
     },
     {
       "path": "installer/netmap-controller.py",
-      "sha256": "3673bb2adbfcef42bc2b96a680db9b651c06f68565f4b8887a47b9fb91648a2c",
-      "size": 49163
+      "sha256": "f0adaa7c60fb8218313a3577e83299740e77a64905d858e0573200a3cc5d12da",
+      "size": 49231
     },
     {
       "path": "installer/netmap-standalone-package.py",
@@ -17760,12 +17765,12 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.Dockerfile",
-      "sha256": "3bdbd5f98e1a7594f98d26be3ed61ee8420a7aac5dcfa0473883e9ef461cef01",
+      "sha256": "36dd24cdd15c5c3a356d749e41a1cd0310e158c0678efa1a027649a8572cc661",
       "size": 4387
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.sources.json",
-      "sha256": "3382d144d0e329075827cdbc79c95574ffbb4d2067024e2caa8a793f7ca4079f",
+      "sha256": "703831050b4533892c0469b29ac9a9b27e373da1a38ea51a96b8528a4a5860c5",
       "size": 4667
     },
     {

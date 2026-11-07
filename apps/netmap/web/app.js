@@ -67,7 +67,50 @@
   function edgeSummary(edge) { return [edgeKindLabel(edge), edgeConfidenceLabel(edge).toLowerCase(), edge.kind==='tunnel'||['stale','inactive','missing','documented'].includes(edge.status)?edgeStatusLabel(edge).toLowerCase():''].filter(Boolean).join(' · '); }
   function sourceUrl(scope) { return scopeDefinitions.get(scope)?.api || './api/sites/' + scope; }
   function projectScope(data, scope) {
-    return data;
+    if (scope !== 'network' && !/^network-[a-f0-9]{16}$/.test(scope)) return data;
+    const linked = new Set(data.edges.flatMap(edge => [edge.source, edge.target]));
+    const ownersByAddress = new Map();
+    for (const node of data.nodes) {
+      if (!node.netbox_url && !node.id.startsWith('neighbor:')) continue;
+      const ips = new Set([node.management_ip, ...nodeAddresses(node).map(item => item.address)]
+        .filter(value => typeof value === 'string' && value).map(value => value.split('/')[0]));
+      for (const ip of ips) {
+        if (!ownersByAddress.has(ip)) ownersByAddress.set(ip, []);
+        ownersByAddress.get(ip).push(node);
+      }
+    }
+
+    // Combine presentation of bare reachability checks. Keep the source graph
+    // available to discovery and leave inventoried devices and edges intact.
+    const addressAliases = new Map(), checks = new Map();
+    for (const node of data.nodes) {
+      const ip = node.management_ip, details = node.details;
+      const networkId = /^network:([a-f0-9]{16})$/.exec(details.source)?.[1];
+      if (!networkId || !ip || node.id !== `observed:${networkId}:${ip}` ||
+          (scope !== 'network' && scope !== `network-${networkId}`) ||
+          node.name !== ip || linked.has(node.id) || details.reports?.length || details.mac ||
+          !Array.isArray(details.observation_methods) || !details.observation_methods.length) continue;
+
+      const owners = (ownersByAddress.get(ip) || []).filter(owner =>
+        !/^network:/.test(owner.details.source) || owner.details.source === details.source);
+      if (owners.length !== 1) continue;
+      const [owner] = owners;
+      if (owner.id.startsWith('neighbor:') && !owner.details.reports?.some(report =>
+        report.address === ip && (report.state === 'reported' ||
+          Date.parse(report.observed_at) >= Date.parse(details.last_seen)))) continue;
+
+      addressAliases.set(node.id, owner.id);
+      if (!checks.has(owner.id)) checks.set(owner.id, new Map());
+      const addresses = checks.get(owner.id), previous = addresses.get(ip);
+      if (!previous || Date.parse(details.last_seen) > Date.parse(previous.last_seen) ||
+          details.last_seen === previous.last_seen && details.observation_state === 'observed') {
+        addresses.set(ip, {ip, methods: details.observation_methods, state: details.observation_state, last_seen: details.last_seen});
+      }
+    }
+    if (!addressAliases.size) return data;
+    const nodes = data.nodes.filter(node => !addressAliases.has(node.id)).map(node =>
+      checks.has(node.id) ? {...node, addressChecks: [...checks.get(node.id).values()]} : node);
+    return {...data, nodes, addressAliases};
   }
   function ruPlural(count, one, few, many) { const n=Math.abs(count)%100, last=n%10; return n>=11 && n<=14 ? many : last===1 ? one : last>=2 && last<=4 ? few : many; }
   function edgeStatusLabel(edge) { if (edge.kind === 'physical' && edge.status === 'documented' && edge.details?.relationship?.authority === 'netbox') return 'Зарегистрирована в NetBox'; if (edge.kind === 'routed' && edge.status === 'documented') return 'Настроено на AR'; return edge.kind === 'tunnel' && edge.status === 'documented' ? 'Есть конфигурация туннеля' : statusLabel(edge.status); }
@@ -262,7 +305,7 @@
         if (initialDevice && state.nodes.has(initialDevice)) state.selected = initialDevice;
         initialDevice = null;
       }
-      if (state.selected && !state.nodes.has(state.selected)) state.selected = null;
+      if (state.selected && !state.nodes.has(state.selected)) state.selected = next.addressAliases?.get(state.selected) || null;
       // Topology is the default in every scope. An explicit rack-tab choice
       // stays active through refreshes, but does not carry into another scope.
       renderAll(first || oldSignature !== next.nodes.map(n => n.id).sort().join('|'));
@@ -848,6 +891,15 @@
         if(report.expires_at) observed.append(row('Срок записи',date(report.expires_at)));
       }
       root.append(observed);
+    }
+    if(node?.addressChecks?.length) {
+      const checked = section('Проверка адресов');
+      for (const check of node.addressChecks) {
+        const methods = check.methods.map(method => method.toUpperCase().replace(':', ' ')).join(', ');
+        const result = check.state === 'observed' ? 'Ответ получен' : 'Последний ответ устарел';
+        checked.append(row(check.ip, [result, methods, date(check.last_seen)].filter(Boolean).join(' · ')));
+      }
+      root.append(checked);
     }
     if(node?.details?.direct_poll) {
       const availability=section('Доступность и путь'),poll=node.details.direct_poll;

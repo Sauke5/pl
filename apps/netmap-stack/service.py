@@ -66,7 +66,7 @@ MAX_BODY = 3 * 1024 * 1024
 MAX_RESPONSE = 32 * 1024 * 1024
 GRAPH_OBSERVATION_LIMIT = 4096
 GRAPH_REPORT_LIMIT = 8192
-NETMAP_VERSION = '1.2.2'
+NETMAP_VERSION = '1.2.3'
 NATIVE = {'netbox': ('netbox', 8080), 'gitea': ('gitea', 3000), 'oxidized': ('oxidized', 8888)}
 
 def canonical_network(value):
