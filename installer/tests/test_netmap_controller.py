@@ -72,6 +72,67 @@ class NetworkContracts(unittest.TestCase):
                 self.assertEqual(edge['details']['relationship']['authority'], 'netbox')
         app.netbox.request.assert_not_called()
 
+    def test_vm_placement_uses_native_device_and_keeps_guest_scope(self):
+        app = service.Application.__new__(service.Application)
+        network = {'id': 'a' * 16, 'name': 'Guest network', 'cidr': '192.0.2.0/29'}
+        app.store = types.SimpleNamespace(networks=lambda: [network],
+            observations=lambda network=None, limit=None: [], reports=lambda network=None, limit=None: [])
+        stamp = service.datetime.now(service.timezone.utc).isoformat()
+        devices = [
+            {'id': 1, 'name': 'Hypervisor', 'primary_ip4': {'address': '198.51.100.10/24'}, 'custom_fields': {
+                'pl_inventory_source': 'inventory:b210573a-8369-41ef-8d56-4b7499126aab',
+                'pl_inventory': {'schema': 1, 'observed_at': stamp, 'observed': {'neighbors': [
+                    {'protocol': 'arp', 'address': '192.0.2.6', 'mac': '02:00:00:00:00:06'}]}}}},
+            {'id': 2, 'name': 'Host uplink', 'primary_ip4': {'address': '198.51.100.20/24'}},
+            {'id': 3, 'name': 'Local host', 'primary_ip4': {'address': '192.0.2.1/29'}},
+        ]
+        cable = {'id': 7, 'a_terminations': [{'object': {'name': 'eth0', 'device': {'id': 1}}}],
+                 'b_terminations': [{'object': {'name': 'eth1', 'device': {'id': 2}}}]}
+        machines = [
+            {'id': 21, 'name': 'Pinned guest', 'primary_ip4': {'address': '192.0.2.2/29'}, 'device': {'id': 1}},
+            {'id': 22, 'name': 'Cluster-only guest', 'primary_ip4': {'address': '192.0.2.3/29'},
+             'device': None, 'cluster': {'id': 5}},
+            {'id': 23, 'name': 'Missing host', 'primary_ip4': {'address': '192.0.2.4/29'}, 'device': {'id': 99}},
+            {'id': 24, 'name': 'Outside guest', 'primary_ip4': {'address': '198.51.100.30/24'}, 'device': {'id': 1}},
+            {'id': 25, 'name': 'Local guest', 'primary_ip4': {'address': '192.0.2.5/29'}, 'device': {'id': 3}},
+        ]
+        app.netbox = Mock()
+        app.netbox.all.side_effect = lambda path: {
+            '/dcim/devices/': devices, '/dcim/interfaces/': [], '/dcim/cables/': [cable],
+            '/virtualization/interfaces/': [], '/virtualization/virtual-machines/': machines,
+        }[path]
+
+        scoped = app.graph('/api/sites/network-' + network['id'])
+        nodes = {node['id']: node for node in scoped['nodes']}
+        self.assertEqual(set(nodes), {'device:1', 'device:3', 'vm:21', 'vm:22', 'vm:23', 'vm:25'})
+        self.assertTrue(nodes['device:1']['details']['support_only'])
+        self.assertFalse(nodes['device:3']['details']['support_only'])
+        self.assertEqual(nodes['vm:21']['parent_id'], 'device:1')
+        self.assertEqual(nodes['vm:25']['parent_id'], 'device:3')
+        self.assertIsNone(nodes['vm:22'].get('parent_id'))
+        self.assertIsNone(nodes['vm:23'].get('parent_id'))
+        self.assertEqual(nodes['vm:21']['management_ip'], '192.0.2.2')
+        expected = {'id': 'vm-host:21', 'source': 'device:1', 'target': 'vm:21', 'kind': 'virtual',
+                    'status': 'documented', 'details': {'relationship': {'authority': 'netbox', 'assurance': 'hosting'}}}
+        edges = {edge['id']: edge for edge in scoped['edges']}
+        self.assertEqual(set(edges), {'vm-host:21', 'vm-host:25'})
+        self.assertEqual(edges['vm-host:21'], expected)
+
+        aggregate = app.graph('/api/sites/network')
+        self.assertIn('vm:24', {node['id'] for node in aggregate['nodes']})
+        edges = {edge['id']: edge for edge in aggregate['edges']}
+        self.assertEqual(edges['vm-host:21'], expected)
+        self.assertEqual(edges['vm-host:24']['target'], 'vm:24')
+        self.assertEqual(edges['cable:7']['kind'], 'physical')
+
+        # Even when both remote hosts are needed as VM context, their cable
+        # belongs to the aggregate topology rather than the guest subnet.
+        machines.append({'id': 26, 'name': 'Second pinned guest', 'primary_ip4': {'address': '192.0.2.6/29'},
+                         'device': {'id': 2}})
+        scoped = app.graph('/api/sites/network-' + network['id'])
+        self.assertEqual({edge['id'] for edge in scoped['edges']}, {'vm-host:21', 'vm-host:25', 'vm-host:26'})
+        app.netbox.request.assert_not_called()
+
     def test_gitea_initial_receipt_is_finite_owned_and_never_a_collector_token(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

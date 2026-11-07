@@ -25,8 +25,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "893b3d080022d87e8990cd44747f4a87c7097e1650f98489bb7e96e020eed6f9",
-      "size": 8819
+      "sha256": "1a9b3fb06eb6600a238bb01f50f8c5cf97f5e29f4653966c78e1f22273d8872d",
+      "size": 3924
     },
     {
       "path": "apps/doska/LICENSE",
@@ -16495,8 +16495,8 @@
     },
     {
       "path": "apps/netmap-stack/service.py",
-      "sha256": "738037e328bbc5e1eee92649dc59f9660f483dc0cb15e01157d0586045b95815",
-      "size": 94023
+      "sha256": "b5b18979f64dd212d300d5c136cbaeaeed3bc8a722a75793777eaf439c09c240",
+      "size": 95151
     },
     {
       "path": "apps/netmap/address_inventory.py",
@@ -16525,13 +16525,13 @@
     },
     {
       "path": "apps/netmap/source-provenance.json",
-      "sha256": "662f11ee9fb77f4455cfcdcaf299fde3b5f5f120a8142002a85a9032542c3070",
+      "sha256": "e9f35b3e973297ec53cac2bf6cd7a08744a2c35c775fc1584ae762dd59987bc0",
       "size": 8328
     },
     {
       "path": "apps/netmap/web/app.js",
-      "sha256": "60adb1e67011c331cef20b39ee6efd8fdb116691bb0c4ba8de7bb96f2f9b53e7",
-      "size": 107697
+      "sha256": "44e243ad1e55f508ed873be2008d1ea90b4238098cfa32a1ceee85df00959c13",
+      "size": 109452
     },
     {
       "path": "apps/netmap/web/build-layout.cjs",
@@ -16944,24 +16944,29 @@
       "size": 913
     },
     {
+      "path": "docs/releases/0.8.5.json",
+      "sha256": "0156a295e7b82aa1c68d9b5785d1f5f22cbd042983bf112542225ed4e9ca01be",
+      "size": 699
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
     },
     {
       "path": "installer/README.package.ru.md",
-      "sha256": "85c212078effbb2c5dadf60ff1048a0e7d09a3ca96c3a50daec5c7c1fc7546d8",
-      "size": 8419
+      "sha256": "b03d241efb61d2f63643d3087995e6df15f20a8a90ba00f5001b7c2848f5bc3f",
+      "size": 9460
     },
     {
       "path": "installer/README.public.ru.md",
-      "sha256": "fe97d62ee6ea9f40055d763428d7fa9c6c56de6923e2b24783e530d8d8624526",
-      "size": 14779
+      "sha256": "ba887fe817bafb476472523e9c119cbfec59ef5a1f464c031a793233d3c72ff8",
+      "size": 12203
     },
     {
       "path": "installer/README.ru.md",
-      "sha256": "fe97d62ee6ea9f40055d763428d7fa9c6c56de6923e2b24783e530d8d8624526",
-      "size": 14779
+      "sha256": "ba887fe817bafb476472523e9c119cbfec59ef5a1f464c031a793233d3c72ff8",
+      "size": 12203
     },
     {
       "path": "installer/alertmanager-controller.py",
@@ -16984,6 +16989,11 @@
       "size": 3427
     },
     {
+      "path": "installer/core-modules.ru.md",
+      "sha256": "0b3d2c22a6534e0296f48fc3a9d414a520d80f99dfa33e929ba31d5d4589c21e",
+      "size": 14729
+    },
+    {
       "path": "installer/delivery-proxy.py",
       "sha256": "f4b301c05da4c2fa868455138095484b078deb25388471f5df4dc2a53f24aa6d",
       "size": 25230
@@ -16995,8 +17005,8 @@
     },
     {
       "path": "installer/delivery.ru.md",
-      "sha256": "3b66208badcd5de71608eda00651c8fe4cdf192c1f621f9e73d90998e9971339",
-      "size": 16505
+      "sha256": "aa3406a3cd5cb1f2bc76713ef07834236461faaa478ce05de11727c77902a878",
+      "size": 20428
     },
     {
       "path": "installer/disaster-recovery.py",
@@ -17105,13 +17115,13 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "f4bbffa7be4ed321671d00d091093be7e73cd5230a5555a4301d69b79ac85950",
-      "size": 40883
+      "sha256": "08692e40e8571543d75d9e169f9adeaf5867bc5f209bf1906fd38a226db758de",
+      "size": 41007
     },
     {
       "path": "installer/netmap-controller.py",
-      "sha256": "f0adaa7c60fb8218313a3577e83299740e77a64905d858e0573200a3cc5d12da",
-      "size": 49231
+      "sha256": "9b455654f9900abf9b6bff7db11995953efb660534ef4ce52b8ed6c9732c118a",
+      "size": 49308
     },
     {
       "path": "installer/netmap-standalone-package.py",
@@ -17139,9 +17149,14 @@
       "size": 37170
     },
     {
+      "path": "installer/platform-guide.ru.md",
+      "sha256": "b6fa9fa9f9a261b475b75cd24c3c70c9af81ad1ac4985d4b8a149c9351e38199",
+      "size": 5629
+    },
+    {
       "path": "installer/public-export.py",
-      "sha256": "45ac3e5396b049c1fd11ee5ae593a83b365a1109edf5171b6ddff887e78cb203",
-      "size": 40117
+      "sha256": "f964cbb7d3fa8e5b059c8c2749752608c23e2aacda64e5e99602a825f84bf2b9",
+      "size": 35268
     },
     {
       "path": "installer/release-catalog.py",
@@ -17405,8 +17420,8 @@
     },
     {
       "path": "installer/tests/test_netmap_controller.py",
-      "sha256": "85ef92279daa39a7e7807cff562e90a759648e867ba9a5c4993b3433ac111982",
-      "size": 54698
+      "sha256": "6bae67bf8f8f6d1630a2d4351b471b0b99b14452657af01e15b3587bd8733c7f",
+      "size": 58887
     },
     {
       "path": "installer/tests/test_netmap_device_access.py",
@@ -17765,12 +17780,12 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.Dockerfile",
-      "sha256": "36dd24cdd15c5c3a356d749e41a1cd0310e158c0678efa1a027649a8572cc661",
+      "sha256": "162608d43abdf0b25288db6e4f0b0533fa1bcee434d8a2e85635221bfc9e15e4",
       "size": 4387
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/netmap.sources.json",
-      "sha256": "703831050b4533892c0469b29ac9a9b27e373da1a38ea51a96b8528a4a5860c5",
+      "sha256": "2003ef613e4e15820a2b89d732959dee291fcc95eb19e0898db7b3283e58b696",
       "size": 4667
     },
     {

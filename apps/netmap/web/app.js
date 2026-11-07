@@ -58,6 +58,10 @@
   }
   function statusClass(value) { return Object.hasOwn(STATUS, value) ? value : 'unknown'; }
   function factualNote(value) { return !/не подтверж|не определ|предполож|неизвест|не провер|требует подтверждения|unverified|unconfirmed|unknown/i.test(String(value)); }
+  function vmPlacement(edge) {
+    const relationship = edge.details?.relationship;
+    return edge.kind === 'virtual' && relationship?.authority === 'netbox' && relationship.assurance === 'hosting';
+  }
   function edgeKindLabel(edge) { return {routed:'Логическая маршрутизация',tunnel:'Туннель',virtual:'Виртуальная',observed:'Наблюдение',physical:'Физическая',lag:'Агрегированная'}[edge.kind] || ''; }
   function edgeConfidenceLabel(edge) { return {confirmed:'',inferred:'',observed:'',documented:'Из конфигурации'}[edge.confidence] || ''; }
   function tunnelEndpointRows(edge, side, label) {
@@ -556,9 +560,10 @@
     state.visibleEdges.forEach((edge, i) => {
       const related = state.selected && (edge.source === state.selected || edge.target === state.selected);
       const edgeKind = ['physical','virtual','lag','observed','tunnel','aggregation','routed'].includes(edge.kind) ? edge.kind : 'observed';
-      const group = svg('g', { class: `edge ${edgeKind} ${edge.kind === 'routed' && edge.details?.virtual_gateway ? 'vm-gateway' : ''} ${edge.confidence === 'inferred' ? 'inferred' : ''} ${['stale','missing','inactive','down'].includes(edge.status) ? edge.status : ''} ${related || edge.id === state.selectedEdge ? 'highlight' : ''} ${edge.id === state.selectedEdge ? 'selected-edge' : ''} ${edge.details?.relationship?.conflicts?.length ? 'conflict' : ''} ${near && !related ? 'dimmed' : ''}`, 'data-edge': edge.id, tabindex:'0', role:'button', 'aria-label':`Связь ${edge.source_port || ''} — ${edge.target_port || ''}` });
+      const placement = vmPlacement(edge);
+      const group = svg('g', { class: `edge ${edgeKind} ${edge.kind === 'routed' && edge.details?.virtual_gateway ? 'vm-gateway' : ''} ${edge.confidence === 'inferred' ? 'inferred' : ''} ${['stale','missing','inactive','down'].includes(edge.status) ? edge.status : ''} ${related || edge.id === state.selectedEdge ? 'highlight' : ''} ${edge.id === state.selectedEdge ? 'selected-edge' : ''} ${edge.details?.relationship?.conflicts?.length ? 'conflict' : ''} ${near && !related ? 'dimmed' : ''}`, 'data-edge': edge.id, tabindex:'0', role:'button', 'aria-label': placement ? 'Размещение ВМ' : `Связь ${edge.source_port || ''} — ${edge.target_port || ''}` });
       group.append(svg('path', { class: 'edge-path' }), svg('path', { class: 'edge-hit' }));
-      const label = svg('g', { class: 'edge-label' }); label.append(svg('text', { 'text-anchor': 'middle' }, edge.label || (edge.kind === 'aggregation' ? 'Группа подключений' : `${edge.source_port || '—'} ↔ ${edge.target_port || '—'}`))); group.append(label);
+      const label = svg('g', { class: 'edge-label' }); label.append(svg('text', { 'text-anchor': 'middle' }, edge.label || (placement ? 'Размещение ВМ' : edge.kind === 'aggregation' ? 'Группа подключений' : `${edge.source_port || '—'} ↔ ${edge.target_port || '—'}`))); group.append(label);
       group.addEventListener('pointerenter', ev => showEdgeTooltip(edge, ev));
       group.addEventListener('pointermove', ev => moveTooltip(ev));
       group.addEventListener('pointerleave', () => { $('graph-tooltip').hidden = true; });
@@ -676,6 +681,12 @@
   function showEdgeTooltip(edge, ev) {
     if (edge._officeGroup) { $('graph-tooltip').textContent='Группа подключений · раскрыть';$('graph-tooltip').hidden=false;moveTooltip(ev);return; }
     const a = state.nodes.get(edge.source), b = state.nodes.get(edge.target);
+    if (vmPlacement(edge)) {
+      $('graph-tooltip').textContent = `${b?.name || edge.target}\nХост ВМ · ${a?.name || edge.source}\nNetBox`;
+      $('graph-tooltip').hidden = false;
+      moveTooltip(ev);
+      return;
+    }
     const registered = edge.details?.relationship?.authority === 'netbox';
     const latest = registered ? [...(edge.details.relationship.observations || [])].filter(o=>o.observed_at).sort((a,b)=>Date.parse(b.observed_at)-Date.parse(a.observed_at))[0] : null;
     const timestamp = registered && edge.status==='documented' ? (latest ? latest.protocol+' · '+date(latest.observed_at) : '') : edge.last_seen ? (edge.status==='documented'?edge.last_seen:date(edge.last_seen)) : '';
@@ -833,6 +844,17 @@
     requestAnimationFrame(positionInspector);
     root.replaceChildren();
     if (edge) {
+      if (vmPlacement(edge)) {
+        root.append(detailHeader('Размещение ВМ', 'Хост виртуальной машины'));
+        const placement = section('Привязка в NetBox');
+        for (const [label, id] of [['Хост ВМ', edge.source], ['Виртуальная машина', edge.target]]) {
+          const asset = state.nodes.get(id);
+          placement.append(row(label, asset?.name || id));
+          if (asset) placement.append(action('Открыть ' + asset.name, () => selectNode(id)));
+        }
+        root.append(placement);
+        return;
+      }
       root.append(detailHeader('Соединение', 'Данные связи', edge.status, edgeStatusLabel(edge)));
       const info = section('Конечные точки');
       for (const [label,id,port] of [['A',edge.source,edge.source_port],['B',edge.target,edge.target_port]]) {
@@ -969,7 +991,8 @@
         if (confirmedPlacement?.member) {
           info.append(row('Размещение',`${confirmedPlacement.item.face === 'rear' ? 'Задняя' : 'Передняя'} полка U${confirmedPlacement.item.position}`));
         }
-        if (node.parent_id && state.nodes.has(node.parent_id)) info.append(row('Родитель',state.nodes.get(node.parent_id).name));
+        const parent = state.nodes.get(node.parent_id);
+        if (parent) info.append(row(node.details.netbox_vm_id && parent.details?.netbox_id ? 'Хост ВМ' : 'Родитель', parent.name));
       }
       root.append(info);
     }
@@ -1059,6 +1082,11 @@
     const historyUrl = safeLink(node.config_history_url);
     if (historyUrl) buttons.append(element('a',{class:'button',href:historyUrl,target:'_blank',rel:'noopener noreferrer'},'История · Gitea ↗'));
     const url = safeLink(node.netbox_url); if(url) buttons.append(element('a',{class:'button',href:url,target:'_blank',rel:'noopener noreferrer'},'Открыть NetBox ↗'));
+    const vmId = node.details?.netbox_vm_id;
+    if (node.kind === 'vm' && Number.isSafeInteger(vmId) && vmId > 0) {
+      buttons.append(element('a',{class:'button',href:`/netmap/netbox/virtualization/virtual-machines/${vmId}/edit/`,target:'_blank',rel:'noopener noreferrer'},
+        node.parent_id ? 'Изменить хост в NetBox ↗' : 'Назначить хост в NetBox ↗'));
+    }
     const vms = children(node.id,'vm');
     if (vms.length) buttons.append(action(`Показать ВМ · ${vms.length}`,()=>openVMGroup(node.id)));
     if (buttons.childElementCount) { actions.append(buttons);root.append(actions); }
@@ -1074,7 +1102,9 @@
     for (const e of edges) {
       const other = state.nodes.get(e.source===node.id?e.target:e.source), item=element('div',{class:'link-item'});
       const button=element('button',{},other?.name||'Неопознанная конечная точка'); button.addEventListener('click',()=>{if(other)selectNode(other.id);});
-      item.append(button,element('small',{},`${e.source===node.id?e.source_port||'—':e.target_port||'—'} ↔ ${e.source===node.id?e.target_port||'—':e.source_port||'—'}`),element('small',{},edgeSummary(e)));
+      item.append(button);
+      if (vmPlacement(e)) item.append(element('small',{},'Размещение ВМ · NetBox'));
+      else item.append(element('small',{},`${e.source===node.id?e.source_port||'—':e.target_port||'—'} ↔ ${e.source===node.id?e.target_port||'—':e.source_port||'—'}`),element('small',{},edgeSummary(e)));
       if(e.last_seen && e.status!=='documented')item.append(element('small',{},`${e.kind==='observed' && e.status==='stale'?'Последнее известное направление':'Наблюдение'}: ${date(e.last_seen)} · ${observationAge(e.last_seen)}`));
       const sourceNode=state.nodes.get(e.source),targetNode=state.nodes.get(e.target);
       for(const [owner,port] of [[sourceNode,e.source_port],[targetNode,e.target_port]])for(const fact of portFacts(owner,port))item.append(element('small',{},`${owner.name} · ${port}: ${fact}`));

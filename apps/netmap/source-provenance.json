@@ -47,7 +47,7 @@
     },
     "web/app.js": {
       "source_sha256": "d25b5f7d26fbca62cf4c603897d5674d64ea94e06068687018dc664ff64aabcb",
-      "packaged_sha256": "60adb1e67011c331cef20b39ee6efd8fdb116691bb0c4ba8de7bb96f2f9b53e7",
+      "packaged_sha256": "44e243ad1e55f508ed873be2008d1ea90b4238098cfa32a1ceee85df00959c13",
       "adapted": true
     },
     "web/index.html": {

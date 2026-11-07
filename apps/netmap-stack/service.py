@@ -66,7 +66,7 @@ MAX_BODY = 3 * 1024 * 1024
 MAX_RESPONSE = 32 * 1024 * 1024
 GRAPH_OBSERVATION_LIMIT = 4096
 GRAPH_REPORT_LIMIT = 8192
-NETMAP_VERSION = '1.2.3'
+NETMAP_VERSION = '1.2.4'
 NATIVE = {'netbox': ('netbox', 8080), 'gitea': ('gitea', 3000), 'oxidized': ('oxidized', 8888)}
 
 def canonical_network(value):
@@ -719,13 +719,27 @@ class Application:
         devices = self.netbox.all('/dcim/devices/')
         cables = self.netbox.all('/dcim/cables/')
         selected = None
-        scope_seed_ids = set()
+        scope_seed_ids, placement_context_ids = set(), set()
         match = re.fullmatch(r'/api/sites/network-([a-f0-9]{16})', path)
         if match:
             selected = next((item for item in self.store.networks() if item['id'] == match[1]), None)
             if not selected:
                 raise ValueError('Unknown network scope')
-            cidr = ipaddress.ip_network(selected['cidr'])
+        cidr = ipaddress.ip_network(selected['cidr']) if selected else None
+        machines = []
+        for machine in self.netbox.all('/virtualization/virtual-machines/'):
+            fields = machine.get('custom_fields') or {}
+            metadata = fields.get('pl_inventory')
+            observed = metadata.get('observed') if isinstance(metadata, dict) else None
+            observed = observed if isinstance(observed, dict) else {}
+            primary = primary_addresses(machine)
+            address = map_address(observed.get('collector_ip')) or (primary[0].split('/')[0] if primary else '')
+            if cidr and (not address or ipaddress.ip_address(address) not in cidr):
+                continue
+            host = machine.get('device')
+            host_id = host.get('id') if isinstance(host, dict) else host
+            machines.append((machine, address, host_id if type(host_id) is int and host_id > 0 else None))
+        if selected:
             def member(device):
                 fields = device.get('custom_fields') or {}
                 if fields.get('pl_source') == 'network:' + selected['id']:
@@ -749,8 +763,12 @@ class Application:
                 for neighbor in neighbors.get(device_id, set()) - support:
                     support.add(neighbor)
                     pending.append(neighbor)
+            # A VM host outside this network adds context without expanding its cable tree.
+            placement_context_ids = {host_id for _, _, host_id in machines if host_id is not None} - support
+            support.update(placement_context_ids)
             devices = [device for device in devices if device['id'] in support]
         device_ids = {device['id'] for device in devices}
+        cable_device_ids = device_ids - placement_context_ids
         interfaces = self.netbox.all('/dcim/interfaces/')
         nodes, edges, ports, inventories = [], [], {}, {}
         for port in interfaces:
@@ -783,30 +801,27 @@ class Application:
         for port in self.netbox.all('/virtualization/interfaces/'):
             owner = (port.get('virtual_machine') or {}).get('id')
             virtual_ports.setdefault(owner, []).append(map_port(port, virtual=True))
-        for machine in self.netbox.all('/virtualization/virtual-machines/'):
+        placement_edges = []
+        for machine, address, host_id in machines:
             fields = machine.get('custom_fields') or {}
-            metadata = fields.get('pl_inventory')
-            observed = metadata.get('observed') if isinstance(metadata, dict) else None
-            observed = observed if isinstance(observed, dict) else {}
-            primary = primary_addresses(machine)
-            address = map_address(observed.get('collector_ip')) or (primary[0].split('/')[0] if primary else '')
-            if selected:
-                try:
-                    if ipaddress.ip_address(address) not in ipaddress.ip_network(selected['cidr']):
-                        continue
-                except ValueError:
-                    continue
             node_id = 'vm:' + str(machine['id'])
             inventory = inventory_metadata(machine)
             if inventory[1].get('neighbors'):
                 inventories[node_id] = inventory
             machine_ports = virtual_ports.get(machine['id'], [])
             facts, addresses = map_asset_facts(machine, machine_ports, address)
-            nodes.append({'id': node_id, 'name': machine['name'], 'kind': 'vm',
+            node = {'id': node_id, 'name': machine['name'], 'kind': 'vm',
                 'management_ip': address, 'netbox_url': '/netmap/netbox/virtualization/virtual-machines/' + str(machine['id']) + '/',
                 'ports': machine_ports, 'addresses': addresses, 'site': machine.get('site'), 'last_seen': facts.get('observed_at'),
                 'config_url': '', 'config_history_url': '',
-                'details': {**facts, 'source': fields.get('pl_inventory_source'), 'netbox_vm_id': machine['id'], 'support_only': False}})
+                'details': {**facts, 'source': fields.get('pl_inventory_source'), 'netbox_vm_id': machine['id'], 'support_only': False}}
+            if host_id in device_ids:
+                host_node_id = 'device:' + str(host_id)
+                node['parent_id'] = host_node_id
+                placement_edges.append({'id': 'vm-host:' + str(machine['id']), 'source': host_node_id, 'target': node_id,
+                    'kind': 'virtual', 'status': 'documented',
+                    'details': {'relationship': {'authority': 'netbox', 'assurance': 'hosting'}}})
+            nodes.append(node)
         networks = {item['id']: item for item in self.store.networks()}
         inventory_by_ip = {}
         for item in nodes:
@@ -877,13 +892,14 @@ class Application:
                 continue
             left, right = a[0].get('object') or {}, b[0].get('object') or {}
             da, db = (left.get('device') or {}).get('id'), (right.get('device') or {}).get('id')
-            if da not in device_ids or db not in device_ids:
+            if da not in cable_device_ids or db not in cable_device_ids:
                 continue
             edges.append({'id': 'cable:' + str(cable['id']), 'source': 'device:' + str(da), 'target': 'device:' + str(db),
                 'source_port': left.get('name'), 'target_port': right.get('name'), 'kind': 'physical', 'status': 'documented',
                 'details': {'relationship': {'authority': 'netbox', 'cable_id': cable['id'], 'assurance': 'registered'}}})
         if inventories and append_observations(nodes, edges, inventories, now, selected=selected):
             warnings.append('Показана часть наблюдений оборудования. Выберите сеть, чтобы сузить данные.')
+        edges.extend(placement_edges)
         return {'schema_version': 1, 'generated_at': now, 'site': {'id': 'network-' + selected['id'] if selected else 'network', 'name': selected['name'] if selected else 'Сеть', 'slug': 'network-' + selected['id'] if selected else 'network'},
             'nodes': nodes, 'edges': edges, 'sources': [{'id': 'netbox', 'status': 'ok', 'last_success': now}],
             'warnings': warnings, 'coverage': {}, 'rack_items': []}
