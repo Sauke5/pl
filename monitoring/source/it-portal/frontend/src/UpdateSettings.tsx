@@ -103,6 +103,12 @@ export function useDelivery(enabled = true) {
         : 60000,
   });
 }
+export async function checkDeliveryCatalog() {
+  const value = await api<Delivery>("/delivery/check", "POST", {});
+  await queryClient.cancelQueries({ queryKey: ["/delivery"], exact: true });
+  queryClient.setQueryData(["/delivery"], value);
+  await queryClient.invalidateQueries({ queryKey: ["/modules/catalog"] });
+}
 const dismissedReleaseKey = "pl.release-dismissed";
 export function ReleaseBanner({ enabled }: { enabled: boolean }) {
   const status = useDelivery(enabled);
@@ -251,11 +257,7 @@ export function UpdateSettings() {
     setBusy(true);
     setError(undefined);
     try {
-      queryClient.setQueryData(
-        ["/delivery"],
-        await api<Delivery>("/delivery/check", "POST", {}),
-      );
-      await queryClient.invalidateQueries({ queryKey: ["/modules/catalog"] });
+      await checkDeliveryCatalog();
     } catch (e) {
       setError(e);
     } finally {

@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const id = "22222222-2222-4222-8222-222222222222";
 const base = `/modules/${id}/xray/configuration`;
+const statusPath = `/modules/${id}/xray/status`;
 type Draft = {
   revision: number;
   ref: string;
@@ -33,16 +34,19 @@ async function fixture(
     failed?: boolean;
     catalog?: boolean;
     statusOutbound?: Draft["outbound"] | null;
+    statusUnavailable?: boolean;
+    applied?: Draft;
+    draft?: Draft;
   } = {},
 ) {
-  let draft: Draft = {
+  let draft: Draft = options.draft || {
     revision: 0,
     ref: "",
     inbounds: [],
     outbound: { mode: "direct" },
     routing: "proxy_all",
   };
-  let applied: Draft | null = null;
+  let applied: Draft | null = options.applied || null;
   let retried = false;
   let installed = !options.catalog;
   let enabled = true;
@@ -62,6 +66,8 @@ async function fixture(
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname.replace("/api/v1", "");
+    if (path === statusPath && options.statusUnavailable)
+      return route.fulfill({ status: 503, json: { code: "xray_unavailable" } });
     if (
       request.method() !== "GET" &&
       (path.startsWith(base) ||
@@ -181,7 +187,7 @@ async function fixture(
         last_error: "",
         rolled_back: false,
       },
-      [`/modules/${id}/xray/status`]: {
+      [statusPath]: {
         state: "running",
         version: "CI-pinned",
         inbounds: applied?.inbounds || [],
@@ -209,6 +215,11 @@ async function fixture(
     options.catalog ? "/#module-catalog" : `/#modules?instance=${id}&view=xray`,
   );
   return writes;
+}
+async function openEditor(page: Page) {
+  await page
+    .getByRole("button", { name: "Редактировать конфигурацию", exact: true })
+    .click();
 }
 async function addInbound(page: Page, protocol = "socks", index = 1) {
   await page
@@ -245,6 +256,220 @@ async function saveValidateApply(page: Page) {
     .getByRole("button", { name: "Применить конфигурацию", exact: true })
     .click();
 }
+test("Xray traffic keeps configured order through polling and manual refresh", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await fixture(page);
+  await expect(
+    page.getByRole("heading", { name: "Трафик по выходам" }),
+  ).toBeVisible();
+
+  const outbound = ["proxy", "direct", "block", "a-out", "z-out"];
+  const inbound = ["pl-downloads-socks", "pl-downloads-http", "a-in", "z-in"];
+  const counters = [
+    ...outbound.map((tag) => `outbound>>>${tag}>>>traffic>>>uplink`),
+    ...inbound.map((tag) => `inbound>>>${tag}>>>traffic>>>uplink`),
+    "a-other",
+    "z-other",
+  ];
+  const releasePoll = Promise.withResolvers<void>();
+  let requests = 0;
+  await page.route(`**/api/v1${statusPath}`, async (route) => {
+    const request = ++requests;
+    if (request === 2) await releasePoll.promise;
+    if (request === 4)
+      return route.fulfill({ status: 503, json: { code: "xray_unavailable" } });
+    return route.fulfill({
+      json: {
+        state: "running",
+        version: "CI-pinned",
+        inbounds: [
+          {
+            tag: inbound[0],
+            protocol: "socks",
+            listen: "127.0.0.1",
+            port: 1080,
+          },
+          {
+            tag: inbound[1],
+            protocol: "http",
+            listen: "127.0.0.1",
+            port: 1081,
+          },
+        ],
+        outbound: { mode: "direct" },
+        routing: "proxy_all",
+        counters: (request % 2 ? counters : [...counters].reverse()).map(
+          (name) => ({
+            name,
+            value: 1000 * request,
+          }),
+        ),
+      },
+    });
+  });
+  const refresh = page.getByRole("button", {
+    name: "Обновить состояние",
+    exact: true,
+  });
+  const tables = page.locator(".xray-traffic-table");
+  const outboundTags = tables.nth(0).locator("tbody code");
+  const inboundTags = tables.nth(1).locator("tbody code");
+  const details = page.locator(".xray-other-counters");
+  const extraCounters = details.locator("dt");
+  const proxyRow = tables
+    .nth(0)
+    .getByRole("row")
+    .filter({
+      has: page.getByText("proxy", { exact: true }),
+    });
+  await refresh.click();
+  await expect(proxyRow).toContainText("1 000 байт");
+  await expect(outboundTags).toHaveText(outbound);
+  await expect(inboundTags).toHaveText(inbound);
+  await details.locator("summary").click();
+  await expect(extraCounters).toHaveText(["a-other", "z-other"]);
+
+  const polling = page.waitForRequest(`**/api/v1${statusPath}`);
+  await page.clock.fastForward(15_000);
+  await polling;
+  try {
+    await page.clock.runFor(50);
+    await expect(refresh).toBeEnabled();
+    await expect(proxyRow).toContainText("1 000 байт");
+    await refresh.click();
+    await expect(refresh).toBeDisabled();
+    expect(requests).toBe(2);
+  } finally {
+    releasePoll.resolve();
+  }
+  await expect(proxyRow).toContainText("2 000 байт");
+  await expect(outboundTags).toHaveText(outbound);
+  await expect(inboundTags).toHaveText(inbound);
+  await expect(extraCounters).toHaveText(["a-other", "z-other"]);
+
+  await refresh.click();
+  await expect(proxyRow).toContainText("3 000 байт");
+  await expect(refresh).toBeEnabled();
+  expect(requests).toBe(3);
+
+  await page.clock.fastForward(15_000);
+  const stale = page.getByText(/Показаны последние полученные счётчики/);
+  await expect(stale).toBeVisible();
+  await expect(proxyRow).toContainText("3 000 байт");
+  await expect(refresh).toBeEnabled();
+  await refresh.click();
+  await expect(proxyRow).toContainText("5 000 байт");
+  await expect(stale).toHaveCount(0);
+});
+
+test("Xray shows the applied configuration and preserves an edited draft", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const applied: Draft = {
+    revision: 7,
+    ref: "applied-ref",
+    inbounds: [
+      {
+        tag: "active-socks",
+        protocol: "socks",
+        listen: "127.0.0.1",
+        port: 1080,
+        auth: "none",
+        username: "",
+      },
+    ],
+    outbound: {
+      mode: "imported",
+      protocol: "vless",
+      server: "live.example",
+      port: 443,
+    },
+    routing: "private_direct",
+  };
+  const draft: Draft = {
+    ...applied,
+    revision: 8,
+    ref: "draft-ref",
+    inbounds: [{ ...applied.inbounds[0], tag: "saved-socks", port: 1081 }],
+    outbound: { mode: "direct" },
+    routing: "proxy_all",
+  };
+  const writes = await fixture(page, { applied, draft });
+  const card = page.locator(".xray-config-card");
+  await expect(
+    card.getByRole("heading", { name: "Действующая конфигурация" }),
+  ).toBeVisible();
+  await expect(
+    card.getByText("Применена версия 7", { exact: true }),
+  ).toBeVisible();
+  await expect(card.getByText("Работает", { exact: true })).toBeVisible();
+  await expect(card.getByText("Xray CI-pinned", { exact: true })).toBeVisible();
+  await expect(card).toContainText("active-socks");
+  await expect(card).toContainText("live.example:443");
+  await expect(card).toContainText("Частные сети — напрямую");
+  await expect(card).toContainText(
+    "Есть неприменённые изменения · Черновик v8",
+  );
+  await expect(card.getByLabel("Tag inbound 1")).toHaveCount(0);
+
+  await openEditor(page);
+  const tag = card.getByLabel("Tag inbound 1");
+  await expect(tag).toHaveValue("saved-socks");
+  await tag.fill("unsaved-socks");
+  await card
+    .getByRole("button", { name: "К действующей конфигурации", exact: true })
+    .click();
+  await expect(card).toContainText(
+    "Есть несохранённые изменения · Черновик v8",
+  );
+  await expect(card).toContainText("active-socks");
+  await expect(tag).toHaveCount(0);
+  await openEditor(page);
+  await expect(tag).toHaveValue("unsaved-socks");
+  await expect(
+    card.getByRole("button", { name: "Применить", exact: true }),
+  ).toBeDisabled();
+
+  let failRead = true;
+  await page.route(`**/api/v1${base}`, (route) =>
+    failRead
+      ? route.fulfill({
+          status: 503,
+          json: { message: "Конфигурация недоступна" },
+        })
+      : route.fallback(),
+  );
+  await page.clock.fastForward(60_000);
+  const readError = page
+    .getByRole("alert")
+    .filter({ hasText: "Конфигурация недоступна" });
+  await expect(readError).toBeVisible();
+  failRead = false;
+  await readError
+    .getByRole("button", { name: "Повторить", exact: true })
+    .click();
+  await expect(readError).toHaveCount(0);
+  await expect(tag).toHaveValue("unsaved-socks");
+  expect(writes).toHaveLength(0);
+});
+
+test("Xray shows the initial status failure and still opens the editor", async ({
+  page,
+}) => {
+  await fixture(page, { statusUnavailable: true });
+  await expect(
+    page.locator(".xray-status-card").getByRole("alert"),
+  ).toBeVisible();
+  await expect(page.locator(".xray-traffic-grid")).toHaveCount(0);
+  await openEditor(page);
+  await expect(
+    page.getByRole("button", { name: "Добавить inbound", exact: true }),
+  ).toBeEnabled();
+});
+
 for (const scenario of [
   { name: "direct", outbound: { mode: "direct" }, label: "Прямой выход" },
   {
@@ -271,24 +496,14 @@ for (const scenario of [
     });
     await expect(row).toContainText(scenario.label);
     await expect(row).toContainText("2 048 байт");
+    await openEditor(page);
     for (const draftMode of ["imported", "direct"]) {
       await page
-        .getByRole("combobox", { name: /^Режим outbound/ })
+        .getByRole("combobox", { name: /^Шаблон исходящего подключения/ })
         .selectOption(draftMode);
       await expect(row).toContainText(scenario.label);
     }
     expect(writes).toHaveLength(0);
-
-    await page.route(`**/api/v1/modules/${id}/xray/status`, (route) =>
-      route.fulfill({ status: 503, json: { code: "upstream_unavailable" } }),
-    );
-    await page
-      .getByRole("button", { name: "Обновить состояние", exact: true })
-      .click();
-    await expect(
-      page.locator(".xray-status-card").getByRole("alert"),
-    ).toBeVisible();
-    await expect(page.locator(".xray-traffic-grid")).toHaveCount(0);
   });
 }
 for (const theme of ["dark", "light"]) {
@@ -299,6 +514,7 @@ for (const theme of ["dark", "light"]) {
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;
     }, theme);
+    await openEditor(page);
     const socks = await addInbound(page);
     await socks
       .getByRole("combobox", { name: /^Авторизация inbound 1/ })
@@ -309,7 +525,7 @@ for (const theme of ["dark", "light"]) {
       .fill("fixture-inbound-password");
     await addInbound(page, "http", 2);
     await page
-      .getByRole("combobox", { name: /^Режим outbound/ })
+      .getByRole("combobox", { name: /^Шаблон исходящего подключения/ })
       .selectOption("imported");
     const link = page.getByLabel("Ссылка подключения outbound", {
       exact: true,
@@ -352,6 +568,7 @@ test("Xray accepts unauthenticated LAN and rejects duplicate bind", async ({
   page,
 }) => {
   const writes = await fixture(page);
+  await openEditor(page);
   const inbound = await addInbound(page);
   await inbound
     .getByLabel("IPv4 inbound 1", { exact: true })
@@ -381,6 +598,7 @@ test("Xray disabling authentication clears hidden credentials", async ({
   page,
 }) => {
   const writes = await fixture(page);
+  await openEditor(page);
   const inbound = await addInbound(page);
   const auth = inbound.getByRole("combobox", {
     name: /^Авторизация inbound 1/,
@@ -410,6 +628,7 @@ test("Xray revision conflict preserves edits and blocks apply", async ({
   page,
 }) => {
   await fixture(page, { conflict: true });
+  await openEditor(page);
   await addInbound(page);
   await page
     .getByRole("button", { name: "Сохранить черновик", exact: true })
@@ -426,6 +645,7 @@ test("Xray server import rejection does not enable validation or apply", async (
   page,
 }) => {
   await fixture(page, { reject: true });
+  await openEditor(page);
   await addInbound(page);
   await page
     .getByRole("button", { name: "Сохранить черновик", exact: true })
@@ -443,6 +663,15 @@ test("Xray read-only configuration cannot mutate", async ({ page }) => {
     page.getByText("Настройки доступны только для чтения."),
   ).toBeVisible();
   await expect(
+    page.getByRole("button", {
+      name: "Редактировать конфигурацию",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Открыть черновик", exact: true })
+    .click();
+  await expect(
     page.getByRole("button", { name: "Добавить inbound", exact: true }),
   ).toBeDisabled();
   await expect(
@@ -452,6 +681,7 @@ test("Xray read-only configuration cannot mutate", async ({ page }) => {
 });
 test("Xray retries the same failed persistent job", async ({ page }) => {
   const writes = await fixture(page, { failed: true });
+  await openEditor(page);
   await addInbound(page);
   await saveValidateApply(page);
   await page
@@ -482,7 +712,17 @@ test("Xray installs from backend catalogue and opens its configuration", async (
     .getByRole("link", { name: "Управлять прокси", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Конфигурация Xray", exact: true }),
+    page.getByRole("heading", {
+      name: "Действующая конфигурация",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await openEditor(page);
+  await expect(
+    page.getByRole("heading", {
+      name: "Редактор конфигурации Xray",
+      exact: true,
+    }),
   ).toBeVisible();
   expect(writes.find((write) => write.path === "/modules")?.data).toMatchObject(
     { module_id: "xray", mode: "local" },
@@ -532,6 +772,7 @@ test("Xray rejects invalid and reserved tags before PUT, accepts dotted tag", as
   page,
 }) => {
   const writes = await fixture(page);
+  await openEditor(page);
   const inbound = await addInbound(page);
   const tag = inbound.getByLabel("Tag inbound 1", { exact: true });
   const save = page.getByRole("button", {
@@ -574,6 +815,7 @@ test("Xray validation announces one global result without an inline duplicate", 
   page,
 }) => {
   const writes = await fixture(page);
+  await openEditor(page);
   await addInbound(page);
   await page
     .getByRole("button", { name: "Сохранить черновик", exact: true })
@@ -610,6 +852,7 @@ test("Xray repeats the same manual validation error after its toast is closed", 
   page,
 }) => {
   const writes = await fixture(page);
+  await openEditor(page);
   const inbound = await addInbound(page);
   const tag = inbound.getByLabel("Tag inbound 1", { exact: true });
   await tag.fill("api");

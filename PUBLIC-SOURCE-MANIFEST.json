@@ -16920,8 +16920,8 @@
     },
     {
       "path": "docs/releases/0.8.0.json",
-      "sha256": "8b7c76e6cda7c0c72b1de9fa8cff88f4eee514915fca81efe4eb0f1faa1ffadc",
-      "size": 2611
+      "sha256": "f1c8c095306fa6fa3779c5627fa52e730f8ea590b07ee3cde33245436cf99d34",
+      "size": 4295
     },
     {
       "path": "installer/LICENSES.txt",
@@ -18015,8 +18015,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AlertmanagerModule.tsx",
-      "sha256": "468aafec76ecf951ddfdc8b4204798abe0a7246ffcd5478e88e3025a2c03f080",
-      "size": 83608
+      "sha256": "c49ab0eb57024101c8b4d4c4e10740fe226c652db7710c2ac8d6163d4c5dca07",
+      "size": 93809
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/App.tsx",
@@ -18145,8 +18145,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Modules.tsx",
-      "sha256": "e516b63935927c615b66cd6684f710c39c3c64042de048eea9fe7ae32df72daf",
-      "size": 87909
+      "sha256": "11ceac608ec14807bb7841dfc270b6f89d64cbdca1d85acf03979f5f58b7bc69",
+      "size": 97731
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Monitoring.tsx",
@@ -18190,13 +18190,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/PrometheusConfig.tsx",
-      "sha256": "2dce99e40db88edf8ca84a74acd3c08773625ddd6e44f63ece2b4befad28e7ab",
-      "size": 39619
+      "sha256": "e4daa4e5d01b5eb080185d1e3b076a4e9a023e68d88c32cc759af4757e54ceff",
+      "size": 46217
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/PrometheusModule.tsx",
-      "sha256": "43ab73ecea98981c8081dfbadf13ccd463148c91cedfc4599d14a7c6bf307d4f",
-      "size": 19130
+      "sha256": "3eafb869827514d08108b6becdc7a91f88f3924d876f2daed4442d3e1fee5010",
+      "size": 20223
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/PrometheusOptions.tsx",
@@ -18285,8 +18285,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpdateSettings.tsx",
-      "sha256": "7d88733a9db95c10bf71f3a807e48196248b70fbbfcdec06138183d150db904e",
-      "size": 26612
+      "sha256": "8e05ab7e7fadf377d9daf7b355d4605e48f7c1439e0f0ea32e3ef045b460e9e0",
+      "size": 26764
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/UpgradeExperience.tsx",
@@ -18330,8 +18330,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/XrayModule.tsx",
-      "sha256": "b77e59b502bfba218ecb5559e724ab024f642f3f3c8d06762c5202a09eb49afc",
-      "size": 46736
+      "sha256": "32552904ccf0c2b00953153e5d308537ad92264b47a7d4531001a9a5d372aace",
+      "size": 50495
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/action-notifications.css",
@@ -18340,8 +18340,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/alertmanager-module.css",
-      "sha256": "066add1acb8f618eb6707cf6d8bf81b313532c8f3324aa9faa750e898a860d01",
-      "size": 9458
+      "sha256": "6991b94dea6df59b9b9311677788fce94934d66b8a6926c44f01252421f54144",
+      "size": 9028
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/alertmanager.css",
@@ -18485,8 +18485,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/modules.css",
-      "sha256": "de8aa6cdb15520319a08768b8d17ccccd6ed6d1a831ac294d59497cbf4198a60",
-      "size": 12110
+      "sha256": "460c9ca921703400bd50cf032024f8cca67d04150ea2c8c2513d64b87ece1d48",
+      "size": 13105
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/monitoring-workspace.css",
@@ -18510,8 +18510,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/prometheus-config-layout.css",
-      "sha256": "41a91b4e37f0f2b6e8c7f5b044a88f5d54059197fbc090a49ba6d00a64d4edc6",
-      "size": 4575
+      "sha256": "b08cf2725d502dcac6a568f866543b890094c5a1b706414c7fa8f1e0625146ba",
+      "size": 5345
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/prometheus-monitor-layout.css",
@@ -18655,8 +18655,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/xray-module.css",
-      "sha256": "bc4171351d8da1a974608a4c7e301e654d269a8b59c0a8c4195a5c6bdf53fd74",
-      "size": 5337
+      "sha256": "e88e28ef71d3dfea978a9a1e5715285a553d7046bbba1d7009ebe0975505631f",
+      "size": 5181
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/xray.css",
@@ -18675,8 +18675,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/alertmanager-configuration.spec.ts",
-      "sha256": "737cc42054b45a99f44b7beda1e19436dc6f532df7f772752221ac3c88227c05",
-      "size": 49487
+      "sha256": "3b141b4a7c512a47dbe79da650f00e56ce20bfce515ae7d68fa5f1ab6babf816",
+      "size": 55742
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/auth-pages.spec.ts",
@@ -18814,6 +18814,11 @@
       "size": 35561
     },
     {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/module-catalog-install.spec.ts",
+      "sha256": "6a69c3e9efcb7c6e4927a6aa8153fc526046bdb810d66379272602f3ae893b6f",
+      "size": 9128
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/module-initial-login.spec.ts",
       "sha256": "c4e09032b0a18c71386b503b91fc2db805650feab95e180a110183e69e8c3768",
       "size": 15700
@@ -18855,13 +18860,13 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/prometheus-configuration.spec.ts",
-      "sha256": "5c7e88afeec0956f6532f41795ad2c951238a7d34956725c0d522f45e058a75b",
-      "size": 10991
+      "sha256": "c6ff8aaa8a369a724c996bc266d72b9555ff212198a085da107ccca231b21984",
+      "size": 18542
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/proxy-control.spec.ts",
-      "sha256": "5247ce728195d9350bc04852145cb2055c2e0c23610f8c758c391e2030f2e4b6",
-      "size": 9072
+      "sha256": "3e0a11b1d932d077761694572cca82a0ad259efdf2beb028747a2aef00efd5ee",
+      "size": 9367
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/quick-tools.spec.ts",
@@ -18950,8 +18955,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/xray-configuration.spec.ts",
-      "sha256": "2e363f3ead69d239eb06046393359dee6e314bdff5f3b77d70e00d756748778d",
-      "size": 22378
+      "sha256": "3e50c454c3095de4f6fbe645a291e7aaa3ec348ea3eb225341705623b0a8addb",
+      "size": 30346
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/fixtures/relationsExchange.ts",

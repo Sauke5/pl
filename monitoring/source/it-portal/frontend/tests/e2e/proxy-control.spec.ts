@@ -34,6 +34,9 @@ for (const theme of ["dark", "light"]) {
     await page.clock.runFor(1000);
     await expect(page.locator(".help-coach")).toHaveCount(0);
     await page
+      .getByRole("button", { name: "Редактировать конфигурацию", exact: true })
+      .click();
+    await page
       .getByRole("button", { name: "Добавить inbound", exact: true })
       .click();
     await expect(page.locator(".xray-inbound")).toHaveCount(1);
@@ -81,7 +84,7 @@ for (const theme of ["dark", "light"]) {
       page.getByRole("heading", { name: "Xray", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Прокси", exact: true }),
+      page.getByRole("link", { name: "Прокси", exact: true }),
     ).toHaveAttribute("aria-current", "page");
     await expect(page.getByText("Работает", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Текущая схема Xray")).toContainText(
@@ -130,7 +133,7 @@ for (const [name, items] of [
       page.getByText("Локальный Xray не установлен", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Прокси", exact: true }),
+      page.getByRole("link", { name: "Прокси", exact: true }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Открыть каталог модулей" }),
@@ -145,7 +148,7 @@ test("Disabled local Xray retains navigation and reports its actual state", asyn
   const f = await localProxyFixture(page, [localInstance(localID, "disabled")]);
   await page.goto("/#proxy");
   await expect(
-    page.getByRole("button", { name: "Прокси", exact: true }),
+    page.getByRole("link", { name: "Прокси", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Отключён", { exact: true })).toBeVisible();
   expectNoLegacyCalls(f.calls);
@@ -190,7 +193,10 @@ test("Proxy saves imported outbound and routing through the owned module API wit
   const f = await localProxyFixture(page);
   await page.goto("/#proxy");
   await page
-    .getByRole("combobox", { name: /^Режим outbound/ })
+    .getByRole("button", { name: "Редактировать конфигурацию", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: /^Шаблон исходящего подключения/ })
     .selectOption("imported");
   await page
     .getByLabel("Ссылка подключения outbound", { exact: true })
@@ -247,7 +253,7 @@ test("Removing local Xray removes its navigation on the next module read", async
     page.getByText("Локальный Xray не установлен", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Прокси", exact: true }),
+    page.getByRole("link", { name: "Прокси", exact: true }),
   ).toHaveCount(0);
   expectNoLegacyCalls(f.calls);
 });

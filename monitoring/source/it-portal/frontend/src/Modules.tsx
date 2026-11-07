@@ -24,7 +24,7 @@ import {
   Route,
   Search,
 } from "lucide-react";
-import { APIError, api, date, queryClient } from "./api";
+import { APIError, api, date, errorText, queryClient } from "./api";
 import type { Job } from "./types";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
@@ -40,6 +40,7 @@ import NetMapModule from "./NetMapModule";
 import MailcowModule from "./MailcowModule";
 import ModuleInitialLogin, { supportsInitialLogin } from "./ModuleInitialLogin";
 import { SFTPGo } from "./SFTPGo";
+import { checkDeliveryCatalog, useDelivery } from "./UpdateSettings";
 
 type ModuleMode = "local" | "external";
 type ModuleDescriptor = {
@@ -78,6 +79,19 @@ type ModuleCatalog = {
   managed_credentials_available?: boolean;
 };
 type ModuleAction = "enable" | "disable" | "refresh" | "remove";
+
+function createModule(
+  payload: { module_id: string; name: string; mode: ModuleMode },
+  key: string,
+) {
+  return api<ModuleOperation>(
+    "/modules",
+    "POST",
+    { ...payload, idempotency_key: key },
+    {},
+    AbortSignal.timeout(20000),
+  );
+}
 
 const activeJob = (status?: string) =>
   status === "queued" || status === "running";
@@ -352,6 +366,7 @@ export default function Modules({
     descriptor: ModuleDescriptor;
     mode: ModuleMode;
   }>();
+  const [installChoices, setInstallChoices] = useState<ModuleDescriptor[]>();
   const [notice, setNotice] = useState("");
   function setupHandled() {
     const route = new URLSearchParams(location.hash.split("?")[1] || "");
@@ -379,6 +394,21 @@ export default function Modules({
   }, [instances.data]);
   const localAvailable = catalog.data?.local_available === true;
   const installed = instances.data?.items || [];
+  const localOffers = (catalog.data?.items || []).filter((descriptor) =>
+    descriptor.modes.includes("local"),
+  );
+  const newLocalModules =
+    localAvailable && instances.isSuccess
+      ? localOffers.filter(
+          (descriptor) =>
+            !installed.some(
+              (item) =>
+                item.module_id === descriptor.id &&
+                (item.mode === "local" ||
+                  ["bookstack", "netmap"].includes(descriptor.id)),
+            ),
+        )
+      : [];
   const visibleInstances = installed
     .filter((instance) => {
       const health = moduleHealth(instance);
@@ -533,7 +563,27 @@ export default function Modules({
       </div>
       <ActionFeedback notice={notice} />
       {isCatalog ? (
-        <Panel title="Доступные модули" icon={<Download size={20} />}>
+        <Panel
+          title="Доступные модули"
+          icon={<Download size={20} />}
+          action={
+            newLocalModules.length > 1 &&
+            !catalog.error && (
+              <Button
+                variant="default"
+                onClick={() => setInstallChoices(newLocalModules)}
+              >
+                <Download size={16} /> Установить несколько
+              </Button>
+            )
+          }
+        >
+          {catalog.data && !catalog.error && (
+            <ModuleCatalogSource
+              localAvailable={localAvailable}
+              hasLocalOffers={localOffers.length > 0}
+            />
+          )}
           {!catalog.error && instances.error && (
             <ErrorBox
               error={moduleError(instances.error)}
@@ -564,9 +614,12 @@ export default function Modules({
                       <h3>{descriptor.name}</h3>
                     </div>
                     <div className="module-definition-meta">
-                      <span className="tag">
-                        {descriptor.version || "Версия из пакета"}
-                      </span>
+                      {(descriptor.version ||
+                        descriptor.modes.includes("local")) && (
+                        <span className="tag">
+                          {descriptor.version || "Версия из пакета"}
+                        </span>
+                      )}
                       {installed > 0 && (
                         <span className="module-catalog-state is-installed">
                           {installed === 1
@@ -609,11 +662,8 @@ export default function Modules({
                         </Button>
                       )}
                     </div>
-                    {descriptor.modes.includes("local") && !localAvailable && (
-                      <p className="module-hint">
-                        Для установки на хост нужен подключённый host
-                        controller.
-                      </p>
+                    {!descriptor.modes.length && (
+                      <span className="module-hint">Пакет недоступен</span>
                     )}
                   </div>
                 </article>
@@ -782,6 +832,18 @@ export default function Modules({
           ) : null}
         </section>
       )}
+      {installChoices && (
+        <AddModules
+          choices={installChoices}
+          onClose={() => setInstallChoices(undefined)}
+          onQueued={(names) => {
+            setNotice(
+              `Созданы задания на установку ${names.join(", ")}. Ход установки виден в подключённых модулях.`,
+            );
+            setInstallChoices(undefined);
+          }}
+        />
+      )}
       {adding && (
         <AddModule
           key={`${adding.descriptor.id}:${adding.mode}`}
@@ -810,6 +872,237 @@ export default function Modules({
         />
       )}
     </div>
+  );
+}
+
+function ModuleCatalogSource({
+  localAvailable,
+  hasLocalOffers,
+}: {
+  localAvailable: boolean;
+  hasLocalOffers: boolean;
+}) {
+  const delivery = useDelivery(localAvailable);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<unknown>();
+  const deliveryUnavailable =
+    delivery.error instanceof APIError &&
+    (delivery.error.status === 404 ||
+      (hasLocalOffers && delivery.error.code === "delivery_unavailable"));
+  const canCheck = localAvailable && !deliveryUnavailable;
+  const failed = !!(
+    checkError ||
+    delivery.data?.error ||
+    (canCheck && delivery.error)
+  );
+
+  async function check() {
+    setChecking(true);
+    setCheckError(undefined);
+    try {
+      await checkDeliveryCatalog();
+    } catch (error) {
+      setCheckError(error);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  if (localAvailable && hasLocalOffers && !failed && !checking) return null;
+  let title = "Каталог установки ещё не загружен";
+  if (!localAvailable) title = "Установка на сервере PL недоступна";
+  else if (!canCheck) title = "На этой установке нет доступных пакетов";
+  else if (checking) title = "Проверяем каталог установки…";
+  else if (failed) title = "Не удалось проверить каталог установки";
+  else if (delivery.data?.latest_version)
+    title = "Нет пакетов для этого сервера";
+  return (
+    <section className="module-catalog-source" aria-label="Каталог установки">
+      <div aria-live="polite">
+        <strong>{title}</strong>
+        <p className="muted">
+          {!canCheck
+            ? "Подключение уже работающих сервисов доступно из карточек ниже."
+            : hasLocalOffers
+              ? "Доступны пакеты из сохранённого каталога."
+              : "Проверьте каталог. Если для доступа к GitHub нужен прокси, настройте его и повторите проверку."}
+        </p>
+        {checkError !== undefined && (
+          <p className="module-install-error" role="alert">
+            {errorText(checkError)}
+          </p>
+        )}
+      </div>
+      {canCheck && (
+        <div className="actions">
+          <Button disabled={checking} onClick={() => void check()}>
+            <RefreshCw size={15} /> Проверить каталог
+          </Button>
+          <a
+            className="button button-secondary"
+            href="#settings?section=delivery"
+          >
+            Настроить прокси для GitHub
+          </a>
+        </div>
+      )}
+    </section>
+  );
+}
+
+type InstallSubmission = {
+  status: "queued" | "existing" | "failed";
+  message?: string;
+};
+
+function AddModules({
+  choices,
+  onClose,
+  onQueued,
+}: {
+  choices: ModuleDescriptor[];
+  onClose: () => void;
+  onQueued: (names: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [results, setResults] = useState(new Map<string, InstallSubmission>());
+  const [busy, setBusy] = useState(false);
+  const keys = useRef(new Map<string, string>());
+  const pending = choices.filter(
+    (module) =>
+      selected.includes(module.id) &&
+      !["queued", "existing"].includes(results.get(module.id)?.status || ""),
+  );
+
+  async function install() {
+    if (busy || !pending.length) return;
+    setBusy(true);
+    const next = new Map(results);
+    for (const module of pending) {
+      try {
+        const key = keys.current.get(module.id) || crypto.randomUUID();
+        keys.current.set(module.id, key);
+        const result = await createModule(
+          { module_id: module.id, name: module.name, mode: "local" },
+          key,
+        );
+        queryClient.setQueryData([`/jobs/${result.job.id}`], result.job);
+        next.set(module.id, { status: "queued" });
+      } catch (error) {
+        if (error instanceof APIError && error.code === "module_exists") {
+          next.set(module.id, { status: "existing" });
+        } else {
+          next.set(module.id, {
+            status: "failed",
+            message:
+              error instanceof TypeError
+                ? "Связь с PL прервалась. Повторите отправку после восстановления связи."
+                : errorText(moduleError(error)),
+          });
+          if (
+            !(error instanceof APIError) ||
+            error.status >= 500 ||
+            error.status === 401 ||
+            error.status === 403
+          )
+            break;
+        }
+      }
+      setResults(new Map(next));
+    }
+    setResults(next);
+    setBusy(false);
+    void refreshModules();
+    if (selected.every((id) => next.get(id)?.status === "queued")) {
+      onQueued(
+        choices
+          .filter((module) => next.get(module.id)?.status === "queued")
+          .map((module) => module.name),
+      );
+    }
+  }
+
+  return (
+    <Dialog
+      title="Установить несколько модулей"
+      description="Выберите модули. PL поставит их в очередь, а ход установки будет виден в подключённых модулях."
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void install();
+        }}
+      >
+        <fieldset className="module-install-choices" disabled={busy}>
+          <legend>Модули для установки</legend>
+          {choices.map((module) => {
+            const result = results.get(module.id);
+            return (
+              <div className="module-install-choice" key={module.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(module.id)}
+                    disabled={
+                      result?.status === "queued" ||
+                      result?.status === "existing"
+                    }
+                    onChange={(event) =>
+                      setSelected((current) =>
+                        event.target.checked
+                          ? [...current, module.id]
+                          : current.filter((id) => id !== module.id),
+                      )
+                    }
+                  />
+                  <strong>{module.name}</strong>
+                  {module.version && (
+                    <span className="tag">{module.version}</span>
+                  )}
+                </label>
+                {result && (
+                  <p
+                    className={
+                      result.status === "failed"
+                        ? "module-install-error"
+                        : "muted"
+                    }
+                  >
+                    {result.status === "queued"
+                      ? "Задание создано"
+                      : result.status === "existing"
+                        ? "Модуль уже добавлен"
+                        : result.message}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </fieldset>
+        <div className="actions dialog-actions">
+          {results.size > 0 && !busy && (
+            <a
+              className="button button-secondary"
+              href="#modules"
+              onClick={onClose}
+            >
+              К подключённым модулям
+            </a>
+          )}
+          <Button
+            type="submit"
+            variant="default"
+            disabled={busy || !pending.length}
+          >
+            <Download size={16} />{" "}
+            {busy ? "Ставим в очередь…" : "Запустить установку"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
@@ -1695,13 +1988,7 @@ function AddModule({
         : JSON.stringify(payload);
       if (request.current?.serialized !== serialized)
         request.current = { serialized, key: crypto.randomUUID() };
-      const result = await api<ModuleOperation>(
-        "/modules",
-        "POST",
-        { ...payload, idempotency_key: request.current.key },
-        {},
-        AbortSignal.timeout(20000),
-      );
+      const result = await createModule(payload, request.current.key);
       setAPIKey("");
       request.current = undefined;
       queryClient.setQueryData([`/jobs/${result.job.id}`], result.job);

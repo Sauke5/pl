@@ -1,5 +1,5 @@
 import { ActionFeedback } from "./ActionNotifications";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Info, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, APIError, queryClient } from "./api";
@@ -92,6 +92,8 @@ type Configuration = {
   };
   receivers: Receiver[];
 };
+type Editor =
+  { kind: "receiver"; index: number; adding?: boolean } | { kind: "delivery" };
 type State = {
   editable: boolean;
   draft: Configuration;
@@ -168,7 +170,79 @@ function readableDuration(value: string) {
     unitDisplay: "long",
   }).format(Number(match[1]));
 }
-function AppliedConfiguration({ value }: { value: Configuration }) {
+const deliveryFields = [
+  [
+    "group_wait",
+    "Перед первым оповещением",
+    "Сколько ждать после появления новой группы событий.",
+  ],
+  [
+    "group_interval",
+    "Между изменениями в группе",
+    "Как часто сообщать о новых событиях и восстановлениях в уже открытой группе.",
+  ],
+  [
+    "repeat_interval",
+    "Повтор уведомления",
+    "Через сколько напомнить о проблеме, которая ещё продолжается.",
+  ],
+] as const;
+
+function DurationField({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const inputID = useId();
+  const suffix = value.match(/[smh]$/)?.[0];
+  const amount = suffix ? value.slice(0, -1) : value;
+  const unit = suffix || "s";
+  return (
+    <div className="field pl-ui-field">
+      <label htmlFor={inputID}>{label}</label>
+      <div className="am-duration-input">
+        <input
+          id={inputID}
+          aria-describedby={`${inputID}-hint`}
+          inputMode="numeric"
+          value={amount}
+          onChange={(event) => onChange(event.target.value + unit)}
+        />
+        <select
+          aria-label={`Единица времени — ${label}`}
+          value={unit}
+          onChange={(event) => onChange(amount + event.target.value)}
+        >
+          <option value="s">Секунды</option>
+          <option value="m">Минуты</option>
+          <option value="h">Часы</option>
+        </select>
+      </div>
+      <small id={`${inputID}-hint`}>{hint}</small>
+    </div>
+  );
+}
+
+function AppliedConfiguration({
+  value,
+  actions,
+}: {
+  value: Configuration;
+  actions?: {
+    writable: boolean;
+    draftNames: Set<string>;
+    canAdd: boolean;
+    add: () => void;
+    edit: (name: string) => void;
+    delivery: () => void;
+  };
+}) {
   return (
     <div className="am-applied-summary">
       <section aria-label="Действующие получатели">
@@ -177,15 +251,41 @@ function AppliedConfiguration({ value }: { value: Configuration }) {
             Получатели{" "}
             <span className="am-receiver-count">{value.receivers.length}</span>
           </h3>
+          {actions && (
+            <Button
+              variant="default"
+              disabled={!actions.canAdd}
+              onClick={actions.add}
+            >
+              <Plus size={16} aria-hidden="true" /> Добавить получателя
+            </Button>
+          )}
         </div>
         {value.receivers.length ? (
           <ul className="am-summary-receivers">
             {value.receivers.map((item) => (
               <li key={item.name}>
                 <div className="am-summary-receiver-heading">
-                  <strong>{item.name}</strong>
-                  <span>{channelNames[item.kind] || item.kind}</span>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span className="am-receiver-channel">
+                      {channelNames[item.kind] || item.kind}
+                    </span>
+                  </div>
+                  {actions?.draftNames.has(item.name) && (
+                    <Button
+                      size="sm"
+                      disabled={!actions.writable}
+                      aria-label={`Редактировать получателя ${item.name}`}
+                      onClick={() => actions.edit(item.name)}
+                    >
+                      <Pencil size={15} aria-hidden="true" /> Редактировать
+                    </Button>
+                  )}
                 </div>
+                {value.route.receiver === item.name && (
+                  <span className="am-receiver-route">Канал доставки</span>
+                )}
                 {item.kind === "email" && item.smtp && (
                   <p>
                     {item.smtp.to.join(", ")}
@@ -209,29 +309,38 @@ function AppliedConfiguration({ value }: { value: Configuration }) {
           </ul>
         ) : (
           <p className="notice">
-            Уведомления выключены: получатели не добавлены.
+            Уведомления выключены. Добавьте получателя, чтобы настроить
+            отправку.
           </p>
         )}
       </section>
       <section aria-label="Действующие интервалы уведомлений">
-        <h3>Отправка уведомлений</h3>
+        <div className="am-section-heading">
+          <h3>Отправка уведомлений</h3>
+          {actions && (
+            <Button disabled={!actions.writable} onClick={actions.delivery}>
+              Настроить отправку
+            </Button>
+          )}
+        </div>
         <dl className="am-summary-routing">
           <div>
-            <dt>Получатель по умолчанию</dt>
-            <dd>{value.route.receiver || "Не выбран"}</dd>
+            <dt>Канал доставки</dt>
+            <dd>
+              {value.route.receiver || "Не выбран"}
+              {value.route.receiver && (
+                <p className="muted">
+                  Все обычные оповещения отправляются в этот канал.
+                </p>
+              )}
+            </dd>
           </div>
-          <div>
-            <dt>Первое уведомление</dt>
-            <dd>{readableDuration(value.route.group_wait)}</dd>
-          </div>
-          <div>
-            <dt>Объединение событий</dt>
-            <dd>{readableDuration(value.route.group_interval)}</dd>
-          </div>
-          <div>
-            <dt>Повтор уведомления</dt>
-            <dd>{readableDuration(value.route.repeat_interval)}</dd>
-          </div>
+          {deliveryFields.map(([field, label]) => (
+            <div key={field}>
+              <dt>{label}</dt>
+              <dd>{readableDuration(value.route[field])}</dd>
+            </div>
+          ))}
         </dl>
       </section>
     </div>
@@ -669,7 +778,10 @@ export default function AlertmanagerModule({
     retry: false,
   });
   const [draft, setDraft] = useState<Configuration>();
-  const [editing, setEditing] = useState(false);
+  const [editor, setEditor] = useState<Editor>();
+  const lastEditor = useRef<{ view: Editor; receiver?: string } | undefined>(
+    undefined,
+  );
   const [awaitingApplied, setAwaitingApplied] = useState("");
   const [emailTests, setEmailTests] = useState<
     Record<string, EmailControlTest | undefined>
@@ -737,9 +849,7 @@ export default function AlertmanagerModule({
         trackedJob.current = "";
         setAwaitingApplied("");
         setNoticeKind("info");
-        setNotice(
-          "Применение конфигурации Alertmanager отменено. Успешное применение не подтверждено.",
-        );
+        setNotice("Применение конфигурации Alertmanager отменено.");
       }
     }
     void state.refetch();
@@ -751,7 +861,10 @@ export default function AlertmanagerModule({
     setError(undefined);
     setNoticeKind("success");
     setNotice("Конфигурация Alertmanager применена.");
-    if (!dirty && draft?.ref === awaitingApplied) setEditing(false);
+    if (!dirty && draft?.ref === awaitingApplied) {
+      lastEditor.current = undefined;
+      setEditor(undefined);
+    }
   }, [awaitingApplied, state.data?.applied?.ref, dirty, draft?.ref]);
   useEffect(() => {
     if (!dirty) return;
@@ -791,20 +904,49 @@ export default function AlertmanagerModule({
     setError(undefined);
     setNotice("");
   }
-  function startEditing(addReceiver = false) {
-    const value =
-      dirty && draft
-        ? draft
-        : structuredClone(state.data?.draft || draft || initial());
-    if (!dirty) setSaved(content(value));
-    setEditing(true);
+  function startEditing(next: Editor) {
+    const value = currentDraft;
+    if (next.kind === "receiver" && !value.receivers[next.index]) return;
+    setDraft(editor || dirty ? value : structuredClone(value));
+    if (!dirty && !editor) setSaved(content(value));
+    setEditor(next);
     setError(undefined);
     setNotice("");
-    if (!addReceiver) {
-      setDraft(value);
+  }
+  function closeEditor() {
+    if (editor)
+      lastEditor.current = {
+        view: editor,
+        receiver:
+          editor.kind === "receiver"
+            ? configuration.receivers[editor.index]?.name
+            : undefined,
+      };
+    setEditor(undefined);
+  }
+  function continueEditing() {
+    const previous = lastEditor.current;
+    if (previous?.view.kind === "delivery") {
+      startEditing(previous.view);
       return;
     }
+    const index = previous
+      ? dirty
+        ? previous.view.index
+        : currentDraft.receivers.findIndex(
+            (item) => item.name === previous.receiver,
+          )
+      : currentDraft.receivers.length - 1;
+    startEditing(
+      index < 0
+        ? { kind: "delivery" }
+        : { kind: "receiver", index, adding: dirty && previous?.view.adding },
+    );
+  }
+  function addReceiver() {
+    const value = currentDraft;
     if (value.receivers.length >= 32) return;
+    if (!dirty) setSaved(content(value));
     let number = 1;
     while (value.receivers.some((item) => item.name === `receiver_${number}`))
       number++;
@@ -816,6 +958,11 @@ export default function AlertmanagerModule({
         { name, kind: "webhook", proxy: direct() },
       ],
       route: { ...value.route, receiver: value.route.receiver || name },
+    });
+    setEditor({
+      kind: "receiver",
+      index: value.receivers.length,
+      adding: true,
     });
   }
   function receiver(index: number, patch: Partial<Receiver>) {
@@ -857,7 +1004,7 @@ export default function AlertmanagerModule({
       value.receivers.length &&
       !value.receivers.some((item) => item.name === route.receiver)
     )
-      throw new Error("Выберите получателя по умолчанию.");
+      throw new Error("Выберите канал доставки в настройках отправки.");
     for (const item of value.receivers) {
       if (item.proxy.clear_ca && item.proxy.ca_pem)
         throw new Error(
@@ -1084,11 +1231,11 @@ export default function AlertmanagerModule({
         setDraft(structuredClone(result.draft));
         setSaved(content(result.draft));
         setValidated("");
+        if (editor?.kind === "receiver" && editor.adding)
+          setEditor({ kind: "receiver", index: editor.index });
         requestKey.current = undefined;
         await state.refetch();
-        setNotice(
-          "Черновик сохранён. Endpoint, токены, SMTP- и proxy-пароли, CA не возвращаются в форму.",
-        );
+        setNotice("Черновик сохранён. Проверьте настройки перед применением.");
       } else if (kind === "validate") {
         const result = await api<{ valid: boolean }>(
           `${base}/validate`,
@@ -1100,9 +1247,7 @@ export default function AlertmanagerModule({
         if (!result.valid)
           throw new Error("Alertmanager отклонил конфигурацию.");
         setValidated(draft.ref);
-        setNotice(
-          "Конфигурация прошла проверку amtool. Работающий сервис не изменён.",
-        );
+        setNotice("Конфигурация проверена. Её можно применить.");
       } else {
         if (requestKey.current?.revision !== draft.revision)
           requestKey.current = {
@@ -1132,7 +1277,7 @@ export default function AlertmanagerModule({
               : typeof job.data?.parameters?.configuration_ref === "string"
                 ? job.data.parameters.configuration_ref
                 : trackedRef.current;
-        setEditing(true);
+        if (!editor) setEditor({ kind: "delivery" });
         setAwaitingApplied("");
         setNoticeKind("info");
         setJobID(result.job.id);
@@ -1160,6 +1305,13 @@ export default function AlertmanagerModule({
         setDraft(value);
         setSaved(content(value));
         setValidated("");
+        if (editor?.kind === "receiver") {
+          const name = configuration.receivers[editor.index]?.name;
+          const index = value.receivers.findIndex((item) => item.name === name);
+          setEditor(
+            index < 0 ? { kind: "delivery" } : { kind: "receiver", index },
+          );
+        }
         setDiscard(false);
       }
     } catch (failure) {
@@ -1170,14 +1322,10 @@ export default function AlertmanagerModule({
   }
   const configuration = draft || initial();
   const applied = state.data?.applied;
-  const showEditor = editing || !applied;
-  const currentDraft = dirty
-    ? configuration
-    : state.data?.draft || configuration;
+  const currentDraft =
+    editor || dirty ? configuration : state.data?.draft || configuration;
   const hasUnapplied =
-    !!applied &&
-    !!state.data?.draft?.ref &&
-    state.data.draft.ref !== applied.ref;
+    !!state.data?.draft?.ref && state.data.draft.ref !== applied?.ref;
   return (
     <div className="modules-page alertmanager-page am-notification-layout">
       <div className="page-title">
@@ -1195,7 +1343,10 @@ export default function AlertmanagerModule({
       <ActionFeedback notice={notice} error={error} noticeKind={noticeKind} />
 
       {state.error && (
-        <ErrorBox error={explain(state.error)} retry={() => void reload()} />
+        <ErrorBox
+          error={explain(state.error)}
+          retry={() => void state.refetch()}
+        />
       )}
       {state.isPending ? (
         <p role="status">Загружаем настройки уведомлений…</p>
@@ -1203,16 +1354,24 @@ export default function AlertmanagerModule({
         state.data && (
           <Panel
             title={
-              showEditor
-                ? "Конфигурация уведомлений"
-                : "Действующая конфигурация"
+              editor?.kind === "delivery"
+                ? "Отправка уведомлений"
+                : editor?.kind === "receiver"
+                  ? editor.adding
+                    ? "Новый получатель"
+                    : "Редактирование получателя"
+                  : applied
+                    ? "Действующая конфигурация"
+                    : "Настройка уведомлений"
             }
             className="am-config-card"
             action={
               <span className="am-draft-version">
-                {showEditor
+                {editor
                   ? `Черновик · версия ${configuration.revision}`
-                  : `Применена версия ${applied?.revision}`}
+                  : applied
+                    ? `Применена версия ${applied.revision}`
+                    : "Начальная настройка"}
               </span>
             }
           >
@@ -1227,9 +1386,32 @@ export default function AlertmanagerModule({
             {state.data.last_error && (
               <ErrorBox error={new Error(state.data.last_error)} />
             )}
-            {!showEditor && applied && (
+            {!editor && (
               <>
-                <AppliedConfiguration value={applied} />
+                <AppliedConfiguration
+                  value={applied || initial()}
+                  actions={
+                    editable
+                      ? {
+                          writable,
+                          canAdd:
+                            writable && currentDraft.receivers.length < 32,
+                          draftNames: new Set(
+                            currentDraft.receivers.map((item) => item.name),
+                          ),
+                          add: addReceiver,
+                          edit: (name) =>
+                            startEditing({
+                              kind: "receiver",
+                              index: currentDraft.receivers.findIndex(
+                                (item) => item.name === name,
+                              ),
+                            }),
+                          delivery: () => startEditing({ kind: "delivery" }),
+                        }
+                      : undefined
+                  }
+                />
                 {(dirty || hasUnapplied) && (
                   <div className="am-pending-draft" role="status">
                     <div>
@@ -1241,635 +1423,669 @@ export default function AlertmanagerModule({
                       <p>Черновик · версия {currentDraft.revision}</p>
                     </div>
                     {editable && (
-                      <Button disabled={locked} onClick={() => startEditing()}>
+                      <Button disabled={locked} onClick={continueEditing}>
                         Продолжить редактирование
                       </Button>
                     )}
                   </div>
                 )}
-                {editable && (
-                  <div className="am-summary-actions">
-                    <Button disabled={!writable} onClick={() => startEditing()}>
-                      <Pencil size={16} aria-hidden="true" />
-                      Редактировать
-                    </Button>
-                    <Button
-                      variant="default"
-                      disabled={
-                        !writable || currentDraft.receivers.length >= 32
-                      }
-                      onClick={() => startEditing(true)}
-                    >
-                      <Plus size={16} aria-hidden="true" />
-                      Добавить получателя
-                    </Button>
-                  </div>
-                )}
               </>
             )}
-            {showEditor && (
+            {editor && (
               <>
                 <div className="am-editor-heading">
                   <p className="am-config-description muted">
-                    Получатели, доставка и интервалы уведомлений
+                    {editor.kind === "delivery"
+                      ? "Выберите, куда отправлять обычные оповещения и как часто их повторять."
+                      : "Настройте канал, адрес доставки и вид сообщения."}
                   </p>
-                  {applied && (
-                    <Button disabled={locked} onClick={() => setEditing(false)}>
-                      К действующей конфигурации
-                    </Button>
-                  )}
+                  <Button disabled={locked} onClick={closeEditor}>
+                    {applied
+                      ? "К действующей конфигурации"
+                      : "К обзору уведомлений"}
+                  </Button>
                 </div>
                 {configuration.receivers.length === 0 && (
                   <p className="notice">
                     {applied?.receivers.length
                       ? "В черновике нет получателей. После применения уведомления будут выключены."
-                      : "Уведомления выключены: получатели не добавлены."}
+                      : "Уведомления выключены. Добавьте получателя, чтобы настроить отправку."}
                   </p>
                 )}
-                <div className="am-editor-columns">
-                  <fieldset
-                    disabled={!writable}
-                    className="am-fieldset am-section-card am-receivers-card"
+                <div className="am-editor-content">
+                  <div
+                    className="am-editor-navigation"
+                    aria-label="Разделы черновика"
                   >
-                    <legend className="am-visually-hidden">Получатели</legend>
-                    <div className="am-section-heading">
-                      <h3>
-                        Получатели{" "}
-                        <span className="am-receiver-count">
-                          {configuration.receivers.length}
-                        </span>
-                      </h3>
+                    {configuration.receivers.length > 0 && (
+                      <Field label="Получатель в черновике">
+                        <select
+                          aria-label="Получатель в черновике"
+                          disabled={locked}
+                          value={
+                            editor.kind === "receiver"
+                              ? String(editor.index)
+                              : ""
+                          }
+                          onChange={(event) =>
+                            startEditing({
+                              kind: "receiver",
+                              index: Number(event.target.value),
+                            })
+                          }
+                        >
+                          <option value="" disabled>
+                            Выберите получателя
+                          </option>
+                          {configuration.receivers.map((item, index) => (
+                            <option key={index} value={index}>
+                              {item.name || `Получатель ${index + 1}`} ·{" "}
+                              {channelNames[item.kind]}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    )}
+                    <div className="actions">
+                      {editor.kind === "receiver" && (
+                        <Button
+                          disabled={locked}
+                          onClick={() => startEditing({ kind: "delivery" })}
+                        >
+                          Настроить отправку
+                        </Button>
+                      )}
                       <Button
                         disabled={
                           !writable || configuration.receivers.length >= 32
                         }
-                        onClick={() => startEditing(true)}
+                        onClick={addReceiver}
                       >
                         <Plus size={16} aria-hidden="true" /> Добавить
                         получателя
                       </Button>
                     </div>
-                    {configuration.receivers.map((item, index) => (
-                      <section
-                        className="am-receiver"
-                        aria-label={`Получатель ${index + 1}`}
-                        key={index}
-                      >
-                        <div className="am-fields">
-                          <Field label="Название получателя">
-                            <input
-                              aria-label={`Название получателя ${index + 1}`}
-                              value={item.name}
-                              maxLength={64}
-                              onChange={(event) => {
-                                const name = event.target.value;
-                                change({
-                                  ...configuration,
-                                  route: {
-                                    ...configuration.route,
-                                    receiver:
-                                      configuration.route.receiver === item.name
-                                        ? name
-                                        : configuration.route.receiver,
-                                  },
-                                  receivers: configuration.receivers.map(
-                                    (value, i) =>
-                                      i === index ? { ...value, name } : value,
-                                  ),
-                                });
-                              }}
-                            />
-                          </Field>
-                          <Field label="Канал">
-                            <select
-                              aria-label={`Канал получателя ${index + 1}`}
-                              value={item.kind}
-                              onChange={(event) =>
-                                receiver(index, {
-                                  kind: event.target.value as Receiver["kind"],
-                                  endpoint: "",
-                                  token: "",
-                                  endpoint_set: false,
-                                  token_set: false,
-                                  chat_id: undefined,
-                                  message: undefined,
-                                  clear_message: undefined,
-                                  smtp:
-                                    event.target.value === "email"
-                                      ? smtpDefaults()
-                                      : undefined,
-                                  proxy: direct(),
-                                })
-                              }
+                  </div>
+                  {editor.kind === "receiver" && (
+                    <fieldset
+                      disabled={!writable}
+                      className="am-fieldset am-section-card am-receivers-card"
+                    >
+                      <legend className="am-visually-hidden">
+                        Настройки получателя
+                      </legend>
+                      {configuration.receivers.map(
+                        (item, index) =>
+                          editor.index === index && (
+                            <section
+                              className="am-receiver"
+                              aria-label={`Получатель ${index + 1}`}
+                              key={index}
                             >
-                              <option value="webhook">Webhook</option>
-                              <option value="telegram">Telegram</option>
-                              <option value="slack">Slack</option>
-                              <option value="discord">Discord</option>
-                              <option value="email">Email · SMTP</option>
-                              <option value="msteamsv2">
-                                Microsoft Teams · Workflows v2
-                              </option>
-                              <option value="pagerduty">
-                                PagerDuty · Events API v2
-                              </option>
-                            </select>
-                          </Field>
-                        </div>
-                        {item.kind !== "email" && (
-                          <Field
-                            label={
-                              item.kind === "telegram"
-                                ? "Telegram API endpoint"
-                                : item.kind === "pagerduty"
-                                  ? "PagerDuty Events API endpoint"
-                                  : item.kind === "msteamsv2"
-                                    ? "Teams Workflow webhook URL"
-                                    : "HTTPS endpoint"
-                            }
-                            hint={
-                              item.endpoint_set
-                                ? "Endpoint сохранён. Пустое поле сохранит его только при прежнем имени и канале."
-                                : item.kind === "telegram"
-                                  ? "Пустое поле использует стандартный Telegram API."
-                                  : item.kind === "pagerduty"
-                                    ? "Пустое поле использует https://events.pagerduty.com/v2/enqueue. При замене endpoint введите routing key заново."
-                                    : item.kind === "msteamsv2"
-                                      ? "HTTPS webhook потока Teams Workflows, принимающего Adaptive Cards. После сохранения URL скрыт."
-                                      : "Укажите полный HTTPS URL. После сохранения адрес не отображается."
-                            }
-                          >
-                            <input
-                              aria-label={`Endpoint получателя ${index + 1}`}
-                              type="password"
-                              autoComplete="new-password"
-                              value={item.endpoint || ""}
-                              onChange={(event) =>
-                                receiver(index, {
-                                  endpoint: event.target.value,
-                                })
-                              }
-                            />
-                          </Field>
-                        )}
-                        {item.kind === "email" && (
-                          <div className="am-fields">
-                            <Field
-                              label="SMTP сервер"
-                              hint="Имя или IP с портом, например smtp.example:587. SMTP подключается напрямую; HTTP proxy не применяется."
-                            >
-                              <input
-                                aria-label={`SMTP сервер ${index + 1}`}
-                                value={item.smtp?.smarthost || ""}
-                                placeholder="smtp.example:587"
-                                maxLength={320}
-                                onChange={(event) =>
-                                  smtp(index, { smarthost: event.target.value })
-                                }
-                              />
-                            </Field>
-                            <Field label="Защита SMTP">
-                              <select
-                                aria-label={`Защита SMTP ${index + 1}`}
-                                value={item.smtp?.tls_mode || "starttls"}
-                                onChange={(event) =>
-                                  smtp(index, {
-                                    tls_mode: event.target
-                                      .value as SMTPSettings["tls_mode"],
-                                  })
-                                }
-                              >
-                                <option value="starttls">
-                                  STARTTLS · обычно порт 587
-                                </option>
-                                <option value="implicit">
-                                  TLS · обычно порт 465
-                                </option>
-                              </select>
-                            </Field>
-                            <Field
-                              label="Отправитель"
-                              hint="Только email-адрес, без имени и заголовков."
-                            >
-                              <input
-                                aria-label={`Отправитель SMTP ${index + 1}`}
-                                type="email"
-                                value={item.smtp?.from || ""}
-                                maxLength={254}
-                                onChange={(event) =>
-                                  smtp(index, { from: event.target.value })
-                                }
-                              />
-                            </Field>
-                            <Field
-                              label="Получатели"
-                              hint="От 1 до 32 адресов, по одному на строку."
-                            >
-                              <textarea
-                                aria-label={`Получатели SMTP ${index + 1}`}
-                                rows={3}
-                                value={(item.smtp?.to || []).join("\n")}
-                                onChange={(event) =>
-                                  smtp(index, {
-                                    to: event.target.value.split("\n"),
-                                  })
-                                }
-                              />
-                            </Field>
-                            <Field
-                              label="Логин SMTP"
-                              hint="Оставьте пустым, если SMTP сервер не требует авторизации."
-                            >
-                              <input
-                                aria-label={`Логин SMTP ${index + 1}`}
-                                autoComplete="off"
-                                value={item.smtp?.username || ""}
-                                maxLength={128}
-                                onChange={(event) =>
-                                  smtp(index, {
-                                    username: event.target.value,
-                                    ...(!event.target.value
-                                      ? { password: "" }
-                                      : {}),
-                                  })
-                                }
-                              />
-                            </Field>
-                            <Field
-                              label="Пароль SMTP"
-                              hint={
-                                item.smtp?.password_set
-                                  ? "Пароль сохранён. Пустое поле сохранит его при прежнем имени получателя, SMTP сервере, режиме TLS и логине."
-                                  : "Пароль приложения или учётной записи SMTP. После сохранения не отображается."
-                              }
-                            >
-                              <input
-                                aria-label={`Пароль SMTP ${index + 1}`}
-                                type="password"
-                                autoComplete="new-password"
-                                value={item.smtp?.password || ""}
-                                maxLength={1024}
-                                onChange={(event) =>
-                                  smtp(index, { password: event.target.value })
-                                }
-                              />
-                            </Field>
-                          </div>
-                        )}
-                        {item.kind === "email" && (
-                          <EmailMessageEditor
-                            instanceID={instance.id}
-                            value={item.smtp?.message || messageDefaults()}
-                            onChange={(message) => smtp(index, { message })}
-                            applied={state.data.applied?.receivers.find(
-                              (r) => r.name === item.name && r.kind === "email",
-                            )}
-                            appliedRef={state.data.applied?.ref}
-                            test={
-                              emailTests[`${applied?.ref || ""}:${item.name}`]
-                            }
-                            onTestChange={(test) =>
-                              setEmailTests((current) => ({
-                                ...current,
-                                [`${applied?.ref || ""}:${item.name}`]: test,
-                              }))
-                            }
-                            disabled={
-                              !writable || instance.desired_state !== "enabled"
-                            }
-                          />
-                        )}
-                        {item.kind !== "email" && (
-                          <NotificationMessageEditor
-                            instanceID={instance.id}
-                            index={index + 1}
-                            kind={item.kind}
-                            value={item.message}
-                            onChange={(message) =>
-                              receiver(index, {
-                                message,
-                                clear_message: !message,
-                              })
-                            }
-                            disabled={
-                              !writable || instance.desired_state !== "enabled"
-                            }
-                          />
-                        )}
-                        {item.kind === "pagerduty" && (
-                          <Field
-                            label="Routing key PagerDuty"
-                            hint={
-                              item.token_set
-                                ? "Ключ сохранён. Пустое поле сохранит его при прежних имени, канале и endpoint."
-                                : "Integration key для Events API v2; не REST API token. После сохранения скрыт."
-                            }
-                          >
-                            <input
-                              aria-label={`Routing key PagerDuty ${index + 1}`}
-                              type="password"
-                              autoComplete="new-password"
-                              maxLength={4096}
-                              value={item.token || ""}
-                              onChange={(event) =>
-                                receiver(index, { token: event.target.value })
-                              }
-                            />
-                          </Field>
-                        )}
-                        {item.kind === "telegram" && (
-                          <div className="am-fields">
-                            <Field
-                              label="Токен бота"
-                              hint={
-                                item.token_set
-                                  ? "Токен сохранён; пустое поле сохранит его при прежнем имени, канале и API endpoint."
-                                  : "Нужен токен нового Telegram-бота."
-                              }
-                            >
-                              <input
-                                aria-label={`Токен Telegram ${index + 1}`}
-                                type="password"
-                                autoComplete="new-password"
-                                value={item.token || ""}
-                                onChange={(event) =>
-                                  receiver(index, { token: event.target.value })
-                                }
-                              />
-                            </Field>
-                            <Field label="Chat ID">
-                              <input
-                                aria-label={`Telegram chat ID ${index + 1}`}
-                                type="number"
-                                step="1"
-                                value={item.chat_id ?? ""}
-                                onChange={(event) =>
-                                  receiver(index, {
-                                    chat_id: event.target.value
-                                      ? Number(event.target.value)
-                                      : undefined,
-                                  })
-                                }
-                              />
-                            </Field>
-                          </div>
-                        )}
-                        {item.kind !== "email" && (
-                          <Field label="Доставка">
-                            <select
-                              aria-label={`Доставка получателя ${index + 1}`}
-                              value={item.proxy.mode}
-                              onChange={(event) =>
-                                receiver(index, {
-                                  proxy:
-                                    event.target.value === "direct"
-                                      ? {
-                                          ...direct(),
-                                          ca_set: item.proxy.ca_set,
-                                          ca_pem: item.proxy.ca_pem,
-                                          clear_ca: item.proxy.clear_ca,
-                                        }
-                                      : {
-                                          ...direct(),
-                                          mode: "http",
-                                          ca_set: item.proxy.ca_set,
-                                          ca_pem: item.proxy.ca_pem,
-                                          clear_ca: item.proxy.clear_ca,
-                                        },
-                                })
-                              }
-                            >
-                              <option value="direct">Напрямую</option>
-                              <option value="http">Через HTTP proxy</option>
-                            </select>
-                          </Field>
-                        )}
-                        {item.kind !== "email" &&
-                          item.proxy.mode === "http" && (
-                            <div className="am-proxy">
-                              <h3>Proxy для этого получателя</h3>
-                              <Field
-                                label="Адрес proxy"
-                                hint="Обычный HTTP proxy с явным портом. 127.0.0.1 означает сам контейнер Alertmanager, а не хост. Логин и пароль задаются отдельно."
-                              >
-                                <input
-                                  aria-label={`HTTP proxy URL ${index + 1}`}
-                                  placeholder="http://proxy.example:3128"
-                                  value={item.proxy.url}
-                                  onChange={(event) =>
-                                    proxy(index, { url: event.target.value })
-                                  }
-                                />
-                              </Field>
                               <div className="am-fields">
-                                <Field label="Логин proxy">
+                                <Field
+                                  label="Название получателя"
+                                  hint="Например office-mail или noc.telegram. Можно использовать латинские буквы, цифры, точки, дефисы и подчёркивания."
+                                >
                                   <input
-                                    aria-label={`Логин proxy ${index + 1}`}
-                                    autoComplete="off"
-                                    value={item.proxy.username}
-                                    onChange={(event) =>
-                                      proxy(index, {
-                                        username: event.target.value,
-                                      })
-                                    }
+                                    aria-label={`Название получателя ${index + 1}`}
+                                    value={item.name}
+                                    maxLength={64}
+                                    onChange={(event) => {
+                                      const name = event.target.value;
+                                      change({
+                                        ...configuration,
+                                        route: {
+                                          ...configuration.route,
+                                          receiver:
+                                            configuration.route.receiver ===
+                                            item.name
+                                              ? name
+                                              : configuration.route.receiver,
+                                        },
+                                        receivers: configuration.receivers.map(
+                                          (value, i) =>
+                                            i === index
+                                              ? { ...value, name }
+                                              : value,
+                                        ),
+                                      });
+                                    }}
                                   />
                                 </Field>
+                                <Field label="Канал">
+                                  <select
+                                    aria-label={`Канал получателя ${index + 1}`}
+                                    value={item.kind}
+                                    onChange={(event) =>
+                                      receiver(index, {
+                                        kind: event.target
+                                          .value as Receiver["kind"],
+                                        endpoint: "",
+                                        token: "",
+                                        endpoint_set: false,
+                                        token_set: false,
+                                        chat_id: undefined,
+                                        message: undefined,
+                                        clear_message: undefined,
+                                        smtp:
+                                          event.target.value === "email"
+                                            ? smtpDefaults()
+                                            : undefined,
+                                        proxy: direct(),
+                                      })
+                                    }
+                                  >
+                                    <option value="webhook">Webhook</option>
+                                    <option value="telegram">Telegram</option>
+                                    <option value="slack">Slack</option>
+                                    <option value="discord">Discord</option>
+                                    <option value="email">Email · SMTP</option>
+                                    <option value="msteamsv2">
+                                      Microsoft Teams · Workflows v2
+                                    </option>
+                                    <option value="pagerduty">
+                                      PagerDuty · Events API v2
+                                    </option>
+                                  </select>
+                                </Field>
+                              </div>
+                              {item.kind !== "email" && (
                                 <Field
-                                  label="Пароль proxy"
+                                  label={
+                                    item.kind === "telegram"
+                                      ? "Telegram API endpoint"
+                                      : item.kind === "pagerduty"
+                                        ? "PagerDuty Events API endpoint"
+                                        : item.kind === "msteamsv2"
+                                          ? "Teams Workflow webhook URL"
+                                          : "HTTPS endpoint"
+                                  }
                                   hint={
-                                    item.proxy.password_set
-                                      ? "Пароль сохранён; пустое поле сохранит его при прежних адресе proxy и логине."
-                                      : "Для Basic auth задайте логин и пароль."
+                                    item.endpoint_set
+                                      ? "Endpoint сохранён. Пустое поле сохранит его только при прежнем имени и канале."
+                                      : item.kind === "telegram"
+                                        ? "Пустое поле использует стандартный Telegram API."
+                                        : item.kind === "pagerduty"
+                                          ? "Пустое поле использует https://events.pagerduty.com/v2/enqueue. При замене endpoint введите routing key заново."
+                                          : item.kind === "msteamsv2"
+                                            ? "HTTPS webhook потока Teams Workflows, принимающего Adaptive Cards. После сохранения URL скрыт."
+                                            : "Укажите полный HTTPS URL. После сохранения адрес не отображается."
                                   }
                                 >
                                   <input
-                                    aria-label={`Пароль proxy ${index + 1}`}
+                                    aria-label={`Endpoint получателя ${index + 1}`}
                                     type="password"
                                     autoComplete="new-password"
-                                    value={item.proxy.password || ""}
+                                    value={item.endpoint || ""}
                                     onChange={(event) =>
-                                      proxy(index, {
-                                        password: event.target.value,
+                                      receiver(index, {
+                                        endpoint: event.target.value,
                                       })
                                     }
                                   />
                                 </Field>
-                              </div>
+                              )}
+                              {item.kind === "email" && (
+                                <div className="am-fields">
+                                  <Field
+                                    label="SMTP сервер"
+                                    hint="Имя или IP с портом, например smtp.example:587. SMTP подключается напрямую; HTTP proxy не применяется."
+                                  >
+                                    <input
+                                      aria-label={`SMTP сервер ${index + 1}`}
+                                      value={item.smtp?.smarthost || ""}
+                                      placeholder="smtp.example:587"
+                                      maxLength={320}
+                                      onChange={(event) =>
+                                        smtp(index, {
+                                          smarthost: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label="Защита SMTP">
+                                    <select
+                                      aria-label={`Защита SMTP ${index + 1}`}
+                                      value={item.smtp?.tls_mode || "starttls"}
+                                      onChange={(event) =>
+                                        smtp(index, {
+                                          tls_mode: event.target
+                                            .value as SMTPSettings["tls_mode"],
+                                        })
+                                      }
+                                    >
+                                      <option value="starttls">
+                                        STARTTLS · обычно порт 587
+                                      </option>
+                                      <option value="implicit">
+                                        TLS · обычно порт 465
+                                      </option>
+                                    </select>
+                                  </Field>
+                                  <Field
+                                    label="Отправитель"
+                                    hint="Только email-адрес, без имени и заголовков."
+                                  >
+                                    <input
+                                      aria-label={`Отправитель SMTP ${index + 1}`}
+                                      type="email"
+                                      value={item.smtp?.from || ""}
+                                      maxLength={254}
+                                      onChange={(event) =>
+                                        smtp(index, {
+                                          from: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field
+                                    label="Получатели"
+                                    hint="От 1 до 32 адресов, по одному на строку."
+                                  >
+                                    <textarea
+                                      aria-label={`Получатели SMTP ${index + 1}`}
+                                      rows={3}
+                                      value={(item.smtp?.to || []).join("\n")}
+                                      onChange={(event) =>
+                                        smtp(index, {
+                                          to: event.target.value.split("\n"),
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field
+                                    label="Логин SMTP"
+                                    hint="Оставьте пустым, если SMTP сервер не требует авторизации."
+                                  >
+                                    <input
+                                      aria-label={`Логин SMTP ${index + 1}`}
+                                      autoComplete="off"
+                                      value={item.smtp?.username || ""}
+                                      maxLength={128}
+                                      onChange={(event) =>
+                                        smtp(index, {
+                                          username: event.target.value,
+                                          ...(!event.target.value
+                                            ? { password: "" }
+                                            : {}),
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field
+                                    label="Пароль SMTP"
+                                    hint={
+                                      item.smtp?.password_set
+                                        ? "Пароль сохранён. Пустое поле сохранит его при прежнем имени получателя, SMTP сервере, режиме TLS и логине."
+                                        : "Пароль приложения или учётной записи SMTP. После сохранения не отображается."
+                                    }
+                                  >
+                                    <input
+                                      aria-label={`Пароль SMTP ${index + 1}`}
+                                      type="password"
+                                      autoComplete="new-password"
+                                      value={item.smtp?.password || ""}
+                                      maxLength={1024}
+                                      onChange={(event) =>
+                                        smtp(index, {
+                                          password: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                </div>
+                              )}
+                              {item.kind === "email" && (
+                                <EmailMessageEditor
+                                  instanceID={instance.id}
+                                  value={
+                                    item.smtp?.message || messageDefaults()
+                                  }
+                                  onChange={(message) =>
+                                    smtp(index, { message })
+                                  }
+                                  applied={state.data.applied?.receivers.find(
+                                    (r) =>
+                                      r.name === item.name &&
+                                      r.kind === "email",
+                                  )}
+                                  appliedRef={state.data.applied?.ref}
+                                  test={
+                                    emailTests[
+                                      `${applied?.ref || ""}:${item.name}`
+                                    ]
+                                  }
+                                  onTestChange={(test) =>
+                                    setEmailTests((current) => ({
+                                      ...current,
+                                      [`${applied?.ref || ""}:${item.name}`]:
+                                        test,
+                                    }))
+                                  }
+                                  disabled={
+                                    !writable ||
+                                    instance.desired_state !== "enabled"
+                                  }
+                                />
+                              )}
+                              {item.kind !== "email" && (
+                                <NotificationMessageEditor
+                                  instanceID={instance.id}
+                                  index={index + 1}
+                                  kind={item.kind}
+                                  value={item.message}
+                                  onChange={(message) =>
+                                    receiver(index, {
+                                      message,
+                                      clear_message: !message,
+                                    })
+                                  }
+                                  disabled={
+                                    !writable ||
+                                    instance.desired_state !== "enabled"
+                                  }
+                                />
+                              )}
+                              {item.kind === "pagerduty" && (
+                                <Field
+                                  label="Routing key PagerDuty"
+                                  hint={
+                                    item.token_set
+                                      ? "Ключ сохранён. Пустое поле сохранит его при прежних имени, канале и endpoint."
+                                      : "Integration key для Events API v2; не REST API token. После сохранения скрыт."
+                                  }
+                                >
+                                  <input
+                                    aria-label={`Routing key PagerDuty ${index + 1}`}
+                                    type="password"
+                                    autoComplete="new-password"
+                                    maxLength={4096}
+                                    value={item.token || ""}
+                                    onChange={(event) =>
+                                      receiver(index, {
+                                        token: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </Field>
+                              )}
+                              {item.kind === "telegram" && (
+                                <div className="am-fields">
+                                  <Field
+                                    label="Токен бота"
+                                    hint={
+                                      item.token_set
+                                        ? "Токен сохранён; пустое поле сохранит его при прежнем имени, канале и API endpoint."
+                                        : "Нужен токен нового Telegram-бота."
+                                    }
+                                  >
+                                    <input
+                                      aria-label={`Токен Telegram ${index + 1}`}
+                                      type="password"
+                                      autoComplete="new-password"
+                                      value={item.token || ""}
+                                      onChange={(event) =>
+                                        receiver(index, {
+                                          token: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label="Chat ID">
+                                    <input
+                                      aria-label={`Telegram chat ID ${index + 1}`}
+                                      type="number"
+                                      step="1"
+                                      value={item.chat_id ?? ""}
+                                      onChange={(event) =>
+                                        receiver(index, {
+                                          chat_id: event.target.value
+                                            ? Number(event.target.value)
+                                            : undefined,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                </div>
+                              )}
+                              {item.kind !== "email" && (
+                                <Field label="Доставка">
+                                  <select
+                                    aria-label={`Доставка получателя ${index + 1}`}
+                                    value={item.proxy.mode}
+                                    onChange={(event) =>
+                                      receiver(index, {
+                                        proxy:
+                                          event.target.value === "direct"
+                                            ? {
+                                                ...direct(),
+                                                ca_set: item.proxy.ca_set,
+                                                ca_pem: item.proxy.ca_pem,
+                                                clear_ca: item.proxy.clear_ca,
+                                              }
+                                            : {
+                                                ...direct(),
+                                                mode: "http",
+                                                ca_set: item.proxy.ca_set,
+                                                ca_pem: item.proxy.ca_pem,
+                                                clear_ca: item.proxy.clear_ca,
+                                              },
+                                      })
+                                    }
+                                  >
+                                    <option value="direct">Напрямую</option>
+                                    <option value="http">
+                                      Через HTTP proxy
+                                    </option>
+                                  </select>
+                                </Field>
+                              )}
+                              {item.kind !== "email" &&
+                                item.proxy.mode === "http" && (
+                                  <div className="am-proxy">
+                                    <h3>Proxy для этого получателя</h3>
+                                    <Field
+                                      label="Адрес proxy"
+                                      hint="Обычный HTTP proxy с явным портом. 127.0.0.1 означает сам контейнер Alertmanager, а не хост. Логин и пароль задаются отдельно."
+                                    >
+                                      <input
+                                        aria-label={`HTTP proxy URL ${index + 1}`}
+                                        placeholder="http://proxy.example:3128"
+                                        value={item.proxy.url}
+                                        onChange={(event) =>
+                                          proxy(index, {
+                                            url: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </Field>
+                                    <div className="am-fields">
+                                      <Field label="Логин proxy">
+                                        <input
+                                          aria-label={`Логин proxy ${index + 1}`}
+                                          autoComplete="off"
+                                          value={item.proxy.username}
+                                          onChange={(event) =>
+                                            proxy(index, {
+                                              username: event.target.value,
+                                            })
+                                          }
+                                        />
+                                      </Field>
+                                      <Field
+                                        label="Пароль proxy"
+                                        hint={
+                                          item.proxy.password_set
+                                            ? "Пароль сохранён; пустое поле сохранит его при прежних адресе proxy и логине."
+                                            : "Для Basic auth задайте логин и пароль."
+                                        }
+                                      >
+                                        <input
+                                          aria-label={`Пароль proxy ${index + 1}`}
+                                          type="password"
+                                          autoComplete="new-password"
+                                          value={item.proxy.password || ""}
+                                          onChange={(event) =>
+                                            proxy(index, {
+                                              password: event.target.value,
+                                            })
+                                          }
+                                        />
+                                      </Field>
+                                    </div>
+                                    <Field
+                                      label="Исключения proxy"
+                                      hint="По одному имени хоста, IP или CIDR на строку."
+                                    >
+                                      <textarea
+                                        aria-label={`No proxy ${index + 1}`}
+                                        rows={3}
+                                        value={item.proxy.no_proxy.join("\n")}
+                                        onChange={(event) =>
+                                          proxy(index, {
+                                            no_proxy:
+                                              event.target.value.split("\n"),
+                                          })
+                                        }
+                                      />
+                                    </Field>
+                                  </div>
+                                )}
                               <Field
-                                label="Исключения proxy"
-                                hint="По одному имени хоста, IP или CIDR на строку."
+                                label={
+                                  item.kind === "email"
+                                    ? "CA SMTP сервера"
+                                    : "CA получателя"
+                                }
+                                hint={
+                                  item.proxy.ca_set
+                                    ? "CA сохранён; пустое поле сохранит сертификат при прежнем имени и канале, включая прямую доставку."
+                                    : item.kind === "email"
+                                      ? "Необязательно: доверенный CA SMTP сервера. Проверка сертификата и TLS обязательны."
+                                      : "Необязательно: доверенный CA HTTPS получателя. Применяется напрямую и через proxy. Проверка сертификата всегда включена."
+                                }
                               >
                                 <textarea
-                                  aria-label={`No proxy ${index + 1}`}
-                                  rows={3}
-                                  value={item.proxy.no_proxy.join("\n")}
+                                  aria-label={`CA получателя ${index + 1}`}
+                                  autoComplete="off"
+                                  rows={4}
+                                  value={item.proxy.ca_pem || ""}
                                   onChange={(event) =>
                                     proxy(index, {
-                                      no_proxy: event.target.value.split("\n"),
+                                      ca_pem: event.target.value,
+                                      clear_ca: false,
                                     })
                                   }
                                 />
                               </Field>
-                            </div>
-                          )}
+                              {item.proxy.ca_set && (
+                                <label className="checkbox-label">
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Использовать системные CA получателя ${index + 1}`}
+                                    checked={item.proxy.clear_ca === true}
+                                    onChange={(event) =>
+                                      proxy(index, {
+                                        clear_ca: event.target.checked,
+                                        ...(event.target.checked
+                                          ? { ca_pem: "" }
+                                          : {}),
+                                      })
+                                    }
+                                  />
+                                  Использовать системные CA · удалить
+                                  сохранённый сертификат
+                                </label>
+                              )}
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  const receivers =
+                                    configuration.receivers.filter(
+                                      (_, i) => i !== index,
+                                    );
+                                  change({
+                                    ...configuration,
+                                    receivers,
+                                    route: {
+                                      ...configuration.route,
+                                      receiver:
+                                        configuration.route.receiver ===
+                                        item.name
+                                          ? receivers[0]?.name || ""
+                                          : configuration.route.receiver,
+                                    },
+                                  });
+                                  setEditor({ kind: "delivery" });
+                                }}
+                              >
+                                <Trash2 size={15} aria-hidden="true" /> Удалить
+                                получателя {index + 1}
+                              </Button>
+                            </section>
+                          ),
+                      )}
+                    </fieldset>
+                  )}
+                  {editor.kind === "delivery" && (
+                    <fieldset
+                      disabled={!writable}
+                      className="am-fieldset am-section-card am-routing-card"
+                    >
+                      <legend className="am-visually-hidden">
+                        Канал и интервалы доставки
+                      </legend>
+                      <div className="am-fields am-routing-fields">
                         <Field
-                          label={
-                            item.kind === "email"
-                              ? "CA SMTP сервера"
-                              : "CA получателя"
-                          }
-                          hint={
-                            item.proxy.ca_set
-                              ? "CA сохранён; пустое поле сохранит сертификат при прежнем имени и канале, включая прямую доставку."
-                              : item.kind === "email"
-                                ? "Необязательно: доверенный CA SMTP сервера. Проверка сертификата и TLS обязательны."
-                                : "Необязательно: доверенный CA HTTPS получателя. Применяется напрямую и через proxy. Проверка сертификата всегда включена."
-                          }
+                          label="Канал доставки"
+                          hint="Все обычные оповещения отправляются в этот канал."
                         >
-                          <textarea
-                            aria-label={`CA получателя ${index + 1}`}
-                            autoComplete="off"
-                            rows={4}
-                            value={item.proxy.ca_pem || ""}
-                            onChange={(event) =>
-                              proxy(index, {
-                                ca_pem: event.target.value,
-                                clear_ca: false,
-                              })
+                          <select
+                            aria-label="Канал доставки"
+                            value={configuration.route.receiver}
+                            disabled={
+                              !writable || !configuration.receivers.length
                             }
-                          />
-                        </Field>
-                        {item.proxy.ca_set && (
-                          <label className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              aria-label={`Использовать системные CA получателя ${index + 1}`}
-                              checked={item.proxy.clear_ca === true}
-                              onChange={(event) =>
-                                proxy(index, {
-                                  clear_ca: event.target.checked,
-                                  ...(event.target.checked
-                                    ? { ca_pem: "" }
-                                    : {}),
-                                })
-                              }
-                            />
-                            Использовать системные CA · удалить сохранённый
-                            сертификат
-                          </label>
-                        )}
-                        <Button
-                          variant="destructive"
-                          onClick={() => {
-                            const receivers = configuration.receivers.filter(
-                              (_, i) => i !== index,
-                            );
-                            change({
-                              ...configuration,
-                              receivers,
-                              route: {
-                                ...configuration.route,
-                                receiver:
-                                  configuration.route.receiver === item.name
-                                    ? receivers[0]?.name || ""
-                                    : configuration.route.receiver,
-                              },
-                            });
-                          }}
-                        >
-                          <Trash2 size={15} aria-hidden="true" /> Удалить
-                          получателя {index + 1}
-                        </Button>
-                      </section>
-                    ))}
-                  </fieldset>
-                  <fieldset
-                    disabled={!writable}
-                    className="am-fieldset am-section-card am-routing-card"
-                  >
-                    <legend className="am-visually-hidden">
-                      Группировка и повтор
-                    </legend>
-                    <div className="am-routing-heading">
-                      <h3>Группировка и повтор</h3>
-                      <p className="muted">
-                        Кому и когда отправлять уведомления
-                      </p>
-                    </div>
-                    <div className="am-fields am-routing-fields">
-                      <Field label="Получатель по умолчанию">
-                        <select
-                          aria-label="Получатель по умолчанию"
-                          value={configuration.route.receiver}
-                          disabled={
-                            !writable || !configuration.receivers.length
-                          }
-                          onChange={(event) =>
-                            change({
-                              ...configuration,
-                              route: {
-                                ...configuration.route,
-                                receiver: event.target.value,
-                              },
-                            })
-                          }
-                        >
-                          <option value="">Не выбран</option>
-                          {configuration.receivers.map((item, index) => (
-                            <option key={index} value={item.name}>
-                              {item.name || `Получатель ${index + 1}`}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      {(
-                        [
-                          [
-                            "group_wait",
-                            "Ожидание группы",
-                            "Задержка перед первым уведомлением новой группы.",
-                          ],
-                          [
-                            "group_interval",
-                            "Интервал группы",
-                            "Интервал уведомлений об изменениях в группе.",
-                          ],
-                          [
-                            "repeat_interval",
-                            "Повтор уведомления",
-                            "Повтор активных алертов, если изменений нет.",
-                          ],
-                        ] as const
-                      ).map(([field, label, hint]) => (
-                        <Field key={field} label={label} hint={hint}>
-                          <input
-                            aria-label={label}
-                            value={configuration.route[field]}
                             onChange={(event) =>
                               change({
                                 ...configuration,
                                 route: {
                                   ...configuration.route,
-                                  [field]: event.target.value,
+                                  receiver: event.target.value,
+                                },
+                              })
+                            }
+                          >
+                            <option value="">Не выбран</option>
+                            {configuration.receivers.map((item, index) => (
+                              <option key={index} value={item.name}>
+                                {item.name || `Получатель ${index + 1}`} ·{" "}
+                                {channelNames[item.kind]}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        {deliveryFields.map(([field, label, hint]) => (
+                          <DurationField
+                            key={field}
+                            label={label}
+                            hint={hint}
+                            value={configuration.route[field]}
+                            onChange={(value) =>
+                              change({
+                                ...configuration,
+                                route: {
+                                  ...configuration.route,
+                                  [field]: value,
                                 },
                               })
                             }
                           />
-                        </Field>
-                      ))}
-                    </div>
-                    <div className="am-units-note">
-                      <Info size={18} aria-hidden="true" />
-                      <div>
-                        <strong>Единицы времени</strong>
-                        <p>s — секунды · m — минуты · h — часы</p>
+                        ))}
                       </div>
-                    </div>
-                    <p className="muted am-delivery-note">
-                      Трафик каждого получателя идёт напрямую либо через
-                      выбранный для него proxy.
-                    </p>
-                  </fieldset>
+                    </fieldset>
+                  )}
                 </div>
                 <div className="am-config-footer">
                   <div className="am-applied-state" role="status">
@@ -1927,16 +2143,12 @@ export default function AlertmanagerModule({
                     </Button>
                   </div>
                 </div>
-                <p className="muted am-gateway-note">
-                  Управление идёт через PL; собственный API Alertmanager не
-                  публикуется в LAN.
-                </p>
               </>
             )}
             {job.error && (
               <ErrorBox error={job.error} retry={() => void job.refetch()} />
             )}
-            {job.data && (showEditor || job.data.status !== "succeeded") && (
+            {job.data && (editor || job.data.status !== "succeeded") && (
               <div className="module-job" role="status">
                 <p>
                   Применение конфигурации · <Badge value={job.data.status} />
@@ -1966,9 +2178,8 @@ export default function AlertmanagerModule({
           }}
         >
           <p>
-            Будет применена версия {configuration.revision}. При ошибке host
-            controller восстановит прежнюю конфигурацию. Секреты передаются в
-            root-private план и не входят в задание.
+            Будет применена версия {configuration.revision}. При ошибке
+            Платформа восстановит прежние настройки.
           </p>
           <div className="dialog-footer">
             <Button disabled={!!busy} onClick={() => setConfirm(false)}>

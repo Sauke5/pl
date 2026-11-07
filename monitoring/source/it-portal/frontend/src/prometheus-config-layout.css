@@ -21,7 +21,7 @@
 }
 .prometheus-config-page .prom-config-common,
 .prometheus-config-page .prom-config-protected,
-.prometheus-config-page .prom-config-jobs-column > .panel {
+.prometheus-config-page .prom-config-jobs-column {
   padding: clamp(1rem, 1.6vw, 1.4rem);
   border: 1px solid var(--border);
   border-radius: 0.85rem;
@@ -45,6 +45,7 @@
   font-family: var(--font-mono, monospace);
 }
 .prometheus-config-page .prom-protected-heading,
+.prometheus-config-page .prom-config-section-heading,
 .prometheus-config-page .prom-targets-heading {
   display: flex;
   align-items: center;
@@ -64,13 +65,44 @@
   font-size: 0.75rem;
   color: var(--muted);
 }
-.prometheus-config-page .prom-config-jobs-column {
-  min-width: 0;
-}
-.prometheus-config-page .prom-config-jobs-column > .panel {
+.prometheus-config-page .prom-config-section-heading h3,
+.prometheus-config-page .prom-draft-jobs h3 {
   margin: 0;
+  font-size: 1.05rem;
 }
-.prometheus-config-page .prom-config-jobs-column > .panel > .panel-heading,
+.prometheus-config-page .prom-applied-settings > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+.prometheus-config-page .prom-applied-settings dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.prometheus-config-page .prom-applied-jobs {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 1rem 0 0;
+  list-style: none;
+}
+.prometheus-config-page .prom-applied-jobs li {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  overflow-wrap: anywhere;
+}
+.prometheus-config-page .prom-applied-addresses {
+  margin: 0.45rem 0 0;
+  font-family: var(--font-mono, monospace);
+}
+.prometheus-config-page .prom-draft-jobs {
+  margin-bottom: 1rem;
+}
+.prometheus-config-page .prom-draft-jobs .actions {
+  flex-wrap: wrap;
+}
 .prometheus-config-page .prom-config-job > .module-instance-heading {
   flex-wrap: wrap;
   gap: 0.75rem;

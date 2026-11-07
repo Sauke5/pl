@@ -7,6 +7,7 @@ import {
   Check,
   FileCode,
   LockKeyhole,
+  Pencil,
   Plus,
   Save,
   Settings,
@@ -54,6 +55,15 @@ const content = (value: Configuration) =>
   JSON.stringify({ ...value, revision: 0 });
 const inProgress = (job?: Job) =>
   !!job && ["queued", "running"].includes(job.status);
+function jobRevision(job: Job) {
+  const configuration = job.parameters?.configuration;
+  return configuration &&
+    typeof configuration === "object" &&
+    "revision" in configuration &&
+    typeof configuration.revision === "number"
+    ? configuration.revision
+    : undefined;
+}
 const jobStatus: Record<string, string> = {
   queued: "В очереди",
   running: "Применяется",
@@ -78,6 +88,8 @@ export default function PrometheusConfig({
     refetchInterval: false,
   });
   const [draft, setDraft] = useState<Configuration>();
+  const [editor, setEditor] = useState<number | "global">();
+  const draftEditor = useRef<HTMLDivElement>(null);
   const [savedContent, setSavedContent] = useState("");
   const [validation, setValidation] = useState<{
     result: Validation;
@@ -88,6 +100,7 @@ export default function PrometheusConfig({
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState<"success" | "info">("success");
   const [jobID, setJobID] = useState("");
+  const [awaitingRevision, setAwaitingRevision] = useState<number>();
   const [confirmApply, setConfirmApply] = useState(false);
   const [leave, setLeave] = useState("");
   const deferredLeave = useRef<(() => void) | undefined>(undefined);
@@ -99,8 +112,22 @@ export default function PrometheusConfig({
     undefined,
   );
   const handledJob = useRef("");
-  const trackedJob = useRef("");
+  const trackedJob = useRef<{ id: string; revision?: number } | undefined>(
+    undefined,
+  );
   const rowKeys = useRef(new WeakMap<object, string>());
+  const applied = state.data?.applied;
+  const appliedNames = new Set(applied?.jobs.map((item) => item.name));
+  const draftJobIndices = new Map(
+    draft?.jobs.map((item, index) => [item.name, index]),
+  );
+  const draftOnlyJobs = (draft?.jobs || [])
+    .map((item, index) => ({ item, index }))
+    .filter(
+      ({ item, index }) =>
+        !appliedNames.has(item.name) ||
+        draftJobIndices.get(item.name) !== index,
+    );
   const labelsInvalid = Object.values(invalidLabels).some(Boolean);
   const dirty = labelsInvalid || (!!draft && content(draft) !== savedContent);
   const editable =
@@ -116,8 +143,20 @@ export default function PrometheusConfig({
     refetchInterval: (query) =>
       !query.state.data || inProgress(query.state.data) ? 2000 : false,
   });
-  const locked = !!busy || inProgress(job.data) || (!!jobID && !job.data);
+  const applying = inProgress(job.data);
+  const locked = !!busy || applying || (!!jobID && !job.data);
   const writable = editable && !locked;
+  const unapplied = !!draft && draft.revision !== applied?.revision;
+  const showDraft =
+    editor !== undefined ||
+    dirty ||
+    unapplied ||
+    !!busy ||
+    applying ||
+    !!job.error ||
+    job.data?.status === "failed" ||
+    !!state.data?.last_error ||
+    state.data?.rolled_back;
   const valid =
     !labelsInvalid &&
     !!draft &&
@@ -132,17 +171,22 @@ export default function PrometheusConfig({
     }
   }, [state.data, draft]);
   useEffect(() => {
+    if (editor !== undefined) draftEditor.current?.focus();
+  }, [editor]);
+  useEffect(() => {
     if (!job.data || inProgress(job.data) || handledJob.current === job.data.id)
       return;
     handledJob.current = job.data.id;
-    if (trackedJob.current === job.data.id) {
+    if (trackedJob.current?.id === job.data.id) {
       if (job.data.status === "succeeded") {
-        trackedJob.current = "";
+        setAwaitingRevision(
+          jobRevision(job.data) ?? trackedJob.current.revision,
+        );
+        trackedJob.current = undefined;
         setError(undefined);
         setNoticeKind("success");
         setNotice("Конфигурация Prometheus применена.");
       } else if (job.data.status === "failed") {
-        trackedJob.current = "";
         setNotice("");
         setError(
           new Error(
@@ -151,7 +195,7 @@ export default function PrometheusConfig({
           ),
         );
       } else if (job.data.status === "canceled") {
-        trackedJob.current = "";
+        trackedJob.current = undefined;
         setNoticeKind("info");
         setNotice(
           "Применение конфигурации Prometheus отменено. Успешное применение не подтверждено.",
@@ -162,6 +206,25 @@ export default function PrometheusConfig({
       requestKey.current = undefined;
     void state.refetch();
   }, [job.data, state.refetch]);
+  useEffect(() => {
+    if (
+      awaitingRevision === undefined ||
+      !state.isSuccess ||
+      applied?.revision !== awaitingRevision
+    )
+      return;
+    setAwaitingRevision(undefined);
+    if (!dirty && draft?.revision === awaitingRevision) {
+      setEditor(undefined);
+      setValidation(undefined);
+    }
+  }, [
+    awaitingRevision,
+    state.isSuccess,
+    applied?.revision,
+    dirty,
+    draft?.revision,
+  ]);
   useEffect(() => {
     if (!dirty) return;
     function unload(event: BeforeUnloadEvent) {
@@ -207,6 +270,25 @@ export default function PrometheusConfig({
     setDraft(next);
     setNotice("");
     setError(undefined);
+  }
+  function addJob() {
+    if (!draft) return;
+    change({
+      ...draft,
+      jobs: [
+        ...draft.jobs,
+        {
+          name: "",
+          enabled: true,
+          scrape_interval: draft.global.scrape_interval,
+          scrape_timeout: draft.global.scrape_timeout,
+          metrics_path: "/metrics",
+          scheme: "http",
+          targets: [{ address: "", labels: {} }],
+        },
+      ],
+    });
+    setEditor(draft.jobs.length);
   }
   function changeJob(index: number, update: Partial<ScrapeJob>) {
     if (!draft) return;
@@ -305,7 +387,8 @@ export default function PrometheusConfig({
         idempotency_key: key,
       });
       handledJob.current = "";
-      trackedJob.current = result.job.id;
+      trackedJob.current = { id: result.job.id, revision: draft.revision };
+      setAwaitingRevision(undefined);
       setJobID(result.job.id);
     } catch (failure) {
       if (failure instanceof APIError && failure.status < 500)
@@ -321,12 +404,21 @@ export default function PrometheusConfig({
     setBusy("retry");
     setNoticeKind("success");
     setError(undefined);
+    const previousRevision =
+      jobRevision(job.data) ??
+      (trackedJob.current?.id === job.data.id
+        ? trackedJob.current.revision
+        : undefined);
     try {
       const result = await api<{ job: Job }>(`${base}/retry`, "POST", {
         job_id: job.data.id,
       });
       handledJob.current = "";
-      trackedJob.current = result.job.id;
+      trackedJob.current = {
+        id: result.job.id,
+        revision: jobRevision(result.job) ?? previousRevision,
+      };
+      setAwaitingRevision(undefined);
       await job.refetch();
       await state.refetch();
     } catch (failure) {
@@ -346,6 +438,7 @@ export default function PrometheusConfig({
     setError(undefined);
     setInvalidLabels({});
     setEditorEpoch((value) => value + 1);
+    setEditor(undefined);
   }
 
   return (
@@ -398,26 +491,180 @@ export default function PrometheusConfig({
         <>
           <Panel
             className="prom-configuration-card"
-            title="Конфигурация сбора"
+            title="Действующая конфигурация"
             icon={<Settings size={20} />}
             action={
-              <div className="prom-config-status">
-                <Badge value={state.data.applied ? "ok" : "unknown"}>
-                  {state.data.applied
-                    ? `Активная версия: ${state.data.applied.revision}`
-                    : "Конфигурация ещё не применена"}
-                </Badge>
-                <Badge value={dirty ? "warning" : "unknown"}>
-                  Черновик · версия {draft.revision}
-                  {dirty ? " · Есть изменения" : " · Без изменений"}
-                </Badge>
-                {valid && <Badge value="ok">Проверка пройдена</Badge>}
-              </div>
+              applied && (
+                <Badge value="ok">Применена версия {applied.revision}</Badge>
+              )
             }
           >
             <div className="prom-config-columns">
               <div className="prom-config-sidebar">
                 <section className="prom-config-common">
+                  <h3>Общие параметры</h3>
+                  {applied && (
+                    <dl className="prom-applied-settings">
+                      <div>
+                        <dt>Интервал сбора</dt>
+                        <dd>{applied.global.scrape_interval}</dd>
+                      </div>
+                      <div>
+                        <dt>Timeout</dt>
+                        <dd>{applied.global.scrape_timeout}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  {editable && (
+                    <Button
+                      size="sm"
+                      disabled={!writable}
+                      onClick={() => setEditor("global")}
+                    >
+                      <Pencil size={15} aria-hidden="true" /> Редактировать
+                      общие параметры
+                    </Button>
+                  )}
+                </section>
+                <section
+                  className="prom-config-protected"
+                  aria-label="Собственные метрики Prometheus"
+                >
+                  <div className="prom-protected-heading">
+                    <h3>
+                      <LockKeyhole size={20} aria-hidden="true" />
+                      Метрики Prometheus
+                    </h3>
+                    <span>Системный job</span>
+                  </div>
+                  <Field label="Системный job">
+                    <input readOnly value="prometheus" />
+                  </Field>
+                  <Field label="Системный target">
+                    <input readOnly value="127.0.0.1:9090" />
+                  </Field>
+                  <p className="module-hint">
+                    Защищённый job собирает метрики самого Prometheus.
+                  </p>
+                </section>
+              </div>
+              <section
+                className="prom-config-jobs-column"
+                aria-label="Применённые задания"
+              >
+                <div className="prom-config-section-heading">
+                  <h3>Задания сбора · {applied?.jobs.length ?? 0}</h3>
+                  {editable && (
+                    <Button
+                      variant="default"
+                      disabled={!writable || draft.jobs.length >= 64}
+                      onClick={addJob}
+                    >
+                      <Plus size={16} aria-hidden="true" /> Добавить задание
+                    </Button>
+                  )}
+                </div>
+                {applied?.jobs.length ? (
+                  <ul className="prom-applied-jobs">
+                    {applied.jobs.map((item) => {
+                      const index = draftJobIndices.get(item.name);
+                      return (
+                        <li key={item.name}>
+                          <div className="prom-config-section-heading">
+                            <div>
+                              <strong>{item.name}</strong>{" "}
+                              <Badge value={item.enabled ? "ok" : "unknown"}>
+                                {item.enabled ? "Включено" : "Отключено"}
+                              </Badge>
+                            </div>
+                            {editable && index !== undefined && (
+                              <Button
+                                size="sm"
+                                disabled={!writable}
+                                aria-label={`Редактировать задание ${item.name}`}
+                                onClick={() => setEditor(index)}
+                              >
+                                <Pencil size={15} aria-hidden="true" />{" "}
+                                Редактировать
+                              </Button>
+                            )}
+                          </div>
+                          <p className="module-hint">
+                            {item.scheme.toUpperCase()} {item.metrics_path} ·
+                            интервал {item.scrape_interval} · timeout{" "}
+                            {item.scrape_timeout}
+                          </p>
+                          <p className="prom-applied-addresses">
+                            {item.targets
+                              .map((target) => target.address)
+                              .join(", ")}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <Empty title="Дополнительных заданий пока нет" />
+                )}
+              </section>
+            </div>
+          </Panel>
+          {showDraft && (
+            <Panel
+              className="prom-configuration-card"
+              title={
+                editor === "global"
+                  ? "Общие параметры черновика"
+                  : typeof editor === "number"
+                    ? "Настройки задания"
+                    : "Черновик конфигурации"
+              }
+              icon={<Settings size={20} />}
+              action={
+                <div className="prom-config-status">
+                  <Badge value={dirty ? "warning" : "unknown"}>
+                    Черновик · версия {draft.revision}
+                    {dirty ? " · Есть изменения" : " · Без изменений"}
+                  </Badge>
+                  {valid && <Badge value="ok">Проверка пройдена</Badge>}
+                  {editor !== undefined && (
+                    <Button onClick={() => setEditor(undefined)}>
+                      К действующей конфигурации
+                    </Button>
+                  )}
+                </div>
+              }
+            >
+              {draftOnlyJobs.length > 0 && (
+                <section
+                  className="prom-draft-jobs"
+                  aria-label="Задания в черновике"
+                >
+                  <h3>Задания в черновике</h3>
+                  <div className="actions">
+                    {draftOnlyJobs.map(({ item, index }) => (
+                      <Button
+                        key={rowKey(item)}
+                        size="sm"
+                        disabled={!writable}
+                        onClick={() => setEditor(index)}
+                      >
+                        <Pencil size={15} aria-hidden="true" />{" "}
+                        {item.name || `Новое задание ${index + 1}`}
+                      </Button>
+                    ))}
+                  </div>
+                </section>
+              )}
+              <div
+                ref={draftEditor}
+                tabIndex={-1}
+                hidden={editor === undefined}
+              >
+                <section
+                  className="prom-config-common"
+                  hidden={editor !== "global"}
+                >
                   <h3>Общие параметры</h3>
                   <p className="module-hint">Параметры сбора по умолчанию</p>
                   <fieldset className="module-fields" disabled={!writable}>
@@ -461,396 +708,336 @@ export default function PrometheusConfig({
                     </div>
                   </fieldset>
                 </section>
-                <section
-                  className="prom-config-protected"
-                  aria-label="Собственные метрики Prometheus"
-                >
-                  <div className="prom-protected-heading">
-                    <h3>
-                      <LockKeyhole size={20} aria-hidden="true" />
-                      Метрики Prometheus
-                    </h3>
-                    <span>Системный job</span>
-                  </div>
-                  <Field label="Системный job">
-                    <input readOnly value="prometheus" />
-                  </Field>
-                  <Field label="Системный target">
-                    <input readOnly value="127.0.0.1:9090" />
-                  </Field>
-                  <p className="module-hint">
-                    Сбор внутри контейнера. Защищённый job сохраняется
-                    автоматически и не редактируется.
-                  </p>
-                </section>
-              </div>
-              <div className="prom-config-jobs-column">
-                <Panel
-                  title={`Jobs · ${draft.jobs.length}`}
-                  icon={<Settings size={20} />}
-                  action={
-                    editable ? (
-                      <Button
-                        size="sm"
-                        disabled={!writable || draft.jobs.length >= 64}
-                        onClick={() =>
-                          change({
-                            ...draft,
-                            jobs: [
-                              ...draft.jobs,
-                              {
-                                name: "",
-                                enabled: true,
-                                scrape_interval: draft.global.scrape_interval,
-                                scrape_timeout: draft.global.scrape_timeout,
-                                metrics_path: "/metrics",
-                                scheme: "http",
-                                targets: [{ address: "", labels: {} }],
-                              },
-                            ],
-                          })
-                        }
-                      >
-                        <Plus size={15} /> Добавить job
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  {!draft.jobs.length && (
-                    <Empty
-                      title="Дополнительных jobs нет"
-                      detail="Добавьте job и адреса экспортеров, с которых нужно собирать метрики."
-                    />
-                  )}
-                  {draft.jobs.map((item, index) => (
-                    <section
-                      className="prom-config-job"
-                      key={`${editorEpoch}:${rowKey(item)}`}
-                      aria-label={`Job ${index + 1}`}
-                    >
-                      <div className="module-instance-heading">
-                        <h3>{item.name || `Новый job ${index + 1}`}</h3>
-                        {editable && (
-                          <Button
-                            size="sm"
-                            disabled={!writable}
-                            onClick={() =>
-                              change({
-                                ...draft,
-                                jobs: draft.jobs.filter((_, i) => i !== index),
+                {draft.jobs.map((item, index) => (
+                  <section
+                    className="prom-config-job"
+                    key={`${editorEpoch}:${rowKey(item)}`}
+                    aria-label={`Job ${index + 1}`}
+                    hidden={editor !== index}
+                  >
+                    <div className="module-instance-heading">
+                      <h3>{item.name || `Новый job ${index + 1}`}</h3>
+                      {editable && (
+                        <Button
+                          size="sm"
+                          disabled={!writable}
+                          onClick={() => {
+                            change({
+                              ...draft,
+                              jobs: draft.jobs.filter((_, i) => i !== index),
+                            });
+                            setEditor(undefined);
+                          }}
+                        >
+                          <Trash2 size={15} /> Удалить job
+                        </Button>
+                      )}
+                    </div>
+                    <fieldset className="module-fields" disabled={!writable}>
+                      <div className="prom-config-grid">
+                        <Field label="Имя job">
+                          <input
+                            value={item.name}
+                            maxLength={128}
+                            placeholder="node_exporter"
+                            onChange={(event) =>
+                              changeJob(index, { name: event.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="Сбор">
+                          <select
+                            value={item.enabled ? "enabled" : "disabled"}
+                            onChange={(event) =>
+                              changeJob(index, {
+                                enabled: event.target.value === "enabled",
                               })
                             }
                           >
-                            <Trash2 size={15} /> Удалить job
+                            <option value="enabled">Включён</option>
+                            <option value="disabled">Отключён</option>
+                          </select>
+                        </Field>
+                        <Field label="Интервал сбора">
+                          <input
+                            value={item.scrape_interval}
+                            maxLength={16}
+                            onChange={(event) =>
+                              changeJob(index, {
+                                scrape_interval: event.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Timeout">
+                          <input
+                            value={item.scrape_timeout}
+                            maxLength={16}
+                            onChange={(event) =>
+                              changeJob(index, {
+                                scrape_timeout: event.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Протокол">
+                          <select
+                            value={item.scheme}
+                            onChange={(event) =>
+                              changeJob(index, {
+                                scheme: event.target.value as "http" | "https",
+                              })
+                            }
+                          >
+                            <option value="http">HTTP</option>
+                            <option value="https">HTTPS</option>
+                          </select>
+                        </Field>
+                        <Field label="Путь метрик">
+                          <input
+                            value={item.metrics_path}
+                            maxLength={256}
+                            placeholder="/metrics"
+                            onChange={(event) =>
+                              changeJob(index, {
+                                metrics_path: event.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                      </div>
+                      <div className="prom-targets-heading">
+                        <h4>Targets · {item.targets.length}</h4>{" "}
+                        {editable && (
+                          <Button
+                            size="sm"
+                            disabled={
+                              draft.jobs.reduce(
+                                (sum, value) => sum + value.targets.length,
+                                0,
+                              ) >= 512
+                            }
+                            onClick={() =>
+                              changeJob(index, {
+                                targets: [
+                                  ...item.targets,
+                                  { address: "", labels: {} },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus size={15} /> Добавить target
                           </Button>
                         )}
                       </div>
-                      <fieldset className="module-fields" disabled={!writable}>
-                        <div className="prom-config-grid">
-                          <Field label="Имя job">
-                            <input
-                              value={item.name}
-                              maxLength={128}
-                              placeholder="node_exporter"
-                              onChange={(event) =>
-                                changeJob(index, { name: event.target.value })
-                              }
-                            />
-                          </Field>
-                          <Field label="Сбор">
-                            <select
-                              value={item.enabled ? "enabled" : "disabled"}
-                              onChange={(event) =>
-                                changeJob(index, {
-                                  enabled: event.target.value === "enabled",
-                                })
-                              }
+                      {item.targets.map((target, targetIndex) => (
+                        <div
+                          className="prom-config-target"
+                          key={rowKey(target)}
+                        >
+                          <div className="prom-config-target-address">
+                            <Field
+                              label={`Адрес target ${targetIndex + 1}`}
+                              hint="Имя хоста или IP и порт; без http:// и пути."
                             >
-                              <option value="enabled">Включён</option>
-                              <option value="disabled">Отключён</option>
-                            </select>
-                          </Field>
-                          <Field label="Интервал сбора">
-                            <input
-                              value={item.scrape_interval}
-                              maxLength={16}
-                              onChange={(event) =>
-                                changeJob(index, {
-                                  scrape_interval: event.target.value,
-                                })
-                              }
-                            />
-                          </Field>
-                          <Field label="Timeout">
-                            <input
-                              value={item.scrape_timeout}
-                              maxLength={16}
-                              onChange={(event) =>
-                                changeJob(index, {
-                                  scrape_timeout: event.target.value,
-                                })
-                              }
-                            />
-                          </Field>
-                          <Field label="Протокол">
-                            <select
-                              value={item.scheme}
-                              onChange={(event) =>
-                                changeJob(index, {
-                                  scheme: event.target.value as
-                                    "http" | "https",
-                                })
-                              }
-                            >
-                              <option value="http">HTTP</option>
-                              <option value="https">HTTPS</option>
-                            </select>
-                          </Field>
-                          <Field label="Путь метрик">
-                            <input
-                              value={item.metrics_path}
-                              maxLength={256}
-                              placeholder="/metrics"
-                              onChange={(event) =>
-                                changeJob(index, {
-                                  metrics_path: event.target.value,
-                                })
-                              }
-                            />
-                          </Field>
-                        </div>
-                        <div className="prom-targets-heading">
-                          <h4>Targets · {item.targets.length}</h4>{" "}
-                          {editable && (
-                            <Button
-                              size="sm"
-                              disabled={
-                                draft.jobs.reduce(
-                                  (sum, value) => sum + value.targets.length,
-                                  0,
-                                ) >= 512
-                              }
-                              onClick={() =>
-                                changeJob(index, {
-                                  targets: [
-                                    ...item.targets,
-                                    { address: "", labels: {} },
-                                  ],
-                                })
-                              }
-                            >
-                              <Plus size={15} /> Добавить target
-                            </Button>
-                          )}
-                        </div>
-                        {item.targets.map((target, targetIndex) => (
-                          <div
-                            className="prom-config-target"
-                            key={rowKey(target)}
-                          >
-                            <div className="prom-config-target-address">
-                              <Field
-                                label={`Адрес target ${targetIndex + 1}`}
-                                hint="Имя хоста или IP и порт; без http:// и пути."
+                              <input
+                                value={target.address}
+                                maxLength={300}
+                                placeholder="server.example:9100"
+                                onChange={(event) =>
+                                  changeTarget(index, targetIndex, {
+                                    address: event.target.value,
+                                  })
+                                }
+                              />
+                            </Field>
+                            {editable && (
+                              <Button
+                                size="sm"
+                                aria-label={`Удалить target ${targetIndex + 1}`}
+                                onClick={() =>
+                                  changeJob(index, {
+                                    targets: item.targets.filter(
+                                      (_, i) => i !== targetIndex,
+                                    ),
+                                  })
+                                }
                               >
-                                <input
-                                  value={target.address}
-                                  maxLength={300}
-                                  placeholder="server.example:9100"
-                                  onChange={(event) =>
-                                    changeTarget(index, targetIndex, {
-                                      address: event.target.value,
-                                    })
-                                  }
-                                />
-                              </Field>
-                              {editable && (
-                                <Button
-                                  size="sm"
-                                  aria-label={`Удалить target ${targetIndex + 1}`}
-                                  onClick={() =>
-                                    changeJob(index, {
-                                      targets: item.targets.filter(
-                                        (_, i) => i !== targetIndex,
-                                      ),
-                                    })
-                                  }
-                                >
-                                  <Trash2 size={15} />
-                                </Button>
-                              )}
-                            </div>
-                            <TargetLabels
-                              labels={target.labels}
-                              editable={editable}
-                              onValidity={(key, invalid) =>
-                                setInvalidLabels((current) => ({
-                                  ...current,
-                                  [key]: invalid,
-                                }))
-                              }
-                              onChange={(labels) =>
-                                changeTarget(index, targetIndex, { labels })
-                              }
-                            />
+                                <Trash2 size={15} />
+                              </Button>
+                            )}
                           </div>
-                        ))}
-                      </fieldset>
-                    </section>
-                  ))}
-                </Panel>
+                          <TargetLabels
+                            labels={target.labels}
+                            editable={editable}
+                            onValidity={(key, invalid) =>
+                              setInvalidLabels((current) => ({
+                                ...current,
+                                [key]: invalid,
+                              }))
+                            }
+                            onChange={(labels) =>
+                              changeTarget(index, targetIndex, { labels })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </fieldset>
+                  </section>
+                ))}
               </div>
-            </div>
-            <div className="prom-config-footer">
-              <div className="prom-config-footer-state">
-                <strong>
-                  {state.data.applied
-                    ? `Применена версия ${state.data.applied.revision}`
-                    : "Конфигурация ещё не применена"}
-                </strong>
-                <span className="module-hint">
-                  {dirty
-                    ? "Есть несохранённые изменения"
-                    : "Нет несохранённых изменений"}
-                </span>
-              </div>
-
-              <div className="actions prom-config-toolbar">
-                <Button
-                  disabled={locked}
-                  onClick={() => {
-                    void state.refetch().then((result) => {
-                      if (result.data?.draft) {
-                        setDraft(structuredClone(result.data.draft));
-                        setJobID(result.data.last_job_id || "");
-                        setSavedContent(content(result.data.draft));
-                        setValidation(undefined);
-                        setError(undefined);
-                        setInvalidLabels({});
-                        setEditorEpoch((value) => value + 1);
-                      }
-                    });
-                  }}
-                  title={
-                    dirty
-                      ? "Отменить изменения и загрузить сохранённый черновик"
-                      : "Загрузить сохранённый черновик"
-                  }
-                >
-                  {dirty ? "Сбросить изменения" : "Загрузить черновик"}
-                </Button>
-                {editable && (
-                  <>
-                    <Button
-                      disabled={!writable || !dirty || labelsInvalid}
-                      onClick={() => void save()}
-                    >
-                      <Save size={15} />
-                      {busy === "save" ? "Сохраняем…" : "Сохранить черновик"}
-                    </Button>
-                    <Button
-                      disabled={
-                        !writable ||
-                        labelsInvalid ||
-                        instance.desired_state !== "enabled"
-                      }
-                      onClick={() => void validate()}
-                    >
-                      <Check size={15} />
-                      {busy === "validate"
-                        ? "Проверяем…"
-                        : "Проверить конфигурацию"}
-                    </Button>
-                    <Button
-                      variant="default"
-                      disabled={
-                        !writable ||
-                        dirty ||
-                        !valid ||
-                        instance.desired_state !== "enabled" ||
-                        draft.revision === state.data.applied?.revision ||
-                        (job.data?.status === "failed" &&
-                          !state.data.rolled_back)
-                      }
-                      onClick={() => setConfirmApply(true)}
-                    >
-                      Применить
-                    </Button>
-                  </>
-                )}
-              </div>
-              {editable && !valid && (
-                <p className="module-hint">
-                  Перед применением сохраните черновик и выполните проверку
-                  конфигурации.
-                </p>
-              )}
-              {jobID && (
-                <div className="module-job" aria-live="polite">
-                  <div className="module-job-heading">
-                    <strong>Применение конфигурации</strong>
-                    <Badge
-                      value={
-                        job.data?.status === "succeeded"
-                          ? "ok"
-                          : job.data?.status === "failed"
-                            ? "error"
-                            : "unknown"
-                      }
-                    >
-                      {job.data
-                        ? jobStatus[job.data.status] || job.data.status
-                        : "Получаем состояние…"}
-                    </Badge>
-                  </div>
-                  <small>
-                    Операция {jobID}
-                    {job.data?.finished_at
-                      ? ` · ${date(job.data.finished_at)}`
-                      : ""}
-                  </small>
-                  {job.error && (
-                    <ErrorBox
-                      error={job.error}
-                      retry={() => void job.refetch()}
-                    />
+              <div className="prom-config-footer">
+                <div className="prom-config-footer-state">
+                  {unapplied && (
+                    <strong>Сохранённый черновик ожидает применения</strong>
                   )}
-                  {job.data?.error && (
-                    <ErrorBox error={new Error(job.data.error)} />
+                  <span className="module-hint">
+                    {dirty
+                      ? "Есть несохранённые изменения"
+                      : "Нет несохранённых изменений"}
+                  </span>
+                </div>
+
+                <div className="actions prom-config-toolbar">
+                  <Button
+                    disabled={locked}
+                    onClick={() => {
+                      void state.refetch().then((result) => {
+                        if (result.data?.draft) {
+                          setDraft(structuredClone(result.data.draft));
+                          setJobID(result.data.last_job_id || "");
+                          setSavedContent(content(result.data.draft));
+                          setValidation(undefined);
+                          setError(undefined);
+                          setInvalidLabels({});
+                          setEditorEpoch((value) => value + 1);
+                          setEditor(undefined);
+                        }
+                      });
+                    }}
+                    title={
+                      dirty
+                        ? "Отменить изменения и загрузить сохранённый черновик"
+                        : "Загрузить сохранённый черновик"
+                    }
+                  >
+                    {dirty ? "Сбросить изменения" : "Загрузить черновик"}
+                  </Button>
+                  {editable && (
+                    <>
+                      <Button
+                        disabled={!writable || !dirty || labelsInvalid}
+                        onClick={() => void save()}
+                      >
+                        <Save size={15} />
+                        {busy === "save" ? "Сохраняем…" : "Сохранить черновик"}
+                      </Button>
+                      <Button
+                        disabled={
+                          !writable ||
+                          labelsInvalid ||
+                          instance.desired_state !== "enabled"
+                        }
+                        onClick={() => void validate()}
+                      >
+                        <Check size={15} />
+                        {busy === "validate"
+                          ? "Проверяем…"
+                          : "Проверить конфигурацию"}
+                      </Button>
+                      <Button
+                        variant="default"
+                        disabled={
+                          !writable ||
+                          dirty ||
+                          !valid ||
+                          instance.desired_state !== "enabled" ||
+                          draft.revision === state.data.applied?.revision ||
+                          (job.data?.status === "failed" &&
+                            !state.data.rolled_back)
+                        }
+                        onClick={() => setConfirmApply(true)}
+                      >
+                        Применить
+                      </Button>
+                    </>
                   )}
                 </div>
-              )}
-              {job.data?.status === "failed" &&
-                !state.data.rolled_back &&
-                editable && (
-                  <Button disabled={locked} onClick={() => void retryApply()}>
-                    Повторить применение
-                  </Button>
+                {editable && !valid && (
+                  <p className="module-hint">
+                    Перед применением сохраните черновик и выполните проверку
+                    конфигурации.
+                  </p>
                 )}
-              {state.data.rolled_back && (
-                <p className="notice compact" role="status">
-                  Применение не удалось. Предыдущая конфигурация восстановлена;
-                  сбор продолжается с ней.
-                </p>
-              )}
-              {state.data.last_error && !state.data.rolled_back && (
-                <p className="notice compact" role="status">
-                  Применение завершилось ошибкой. Восстановление предыдущей
-                  конфигурации не подтверждено; проверьте состояние Prometheus.
-                </p>
-              )}
-              {state.data.last_error && (
-                <ErrorBox error={new Error(state.data.last_error)} />
-              )}
+                {jobID && (
+                  <div className="module-job" aria-live="polite">
+                    <div className="module-job-heading">
+                      <strong>Применение конфигурации</strong>
+                      <Badge
+                        value={
+                          job.data?.status === "succeeded"
+                            ? "ok"
+                            : job.data?.status === "failed"
+                              ? "error"
+                              : "unknown"
+                        }
+                      >
+                        {job.data
+                          ? jobStatus[job.data.status] || job.data.status
+                          : "Получаем состояние…"}
+                      </Badge>
+                    </div>
+                    <small>
+                      Операция {jobID}
+                      {job.data?.finished_at
+                        ? ` · ${date(job.data.finished_at)}`
+                        : ""}
+                    </small>
+                    {job.error && (
+                      <ErrorBox
+                        error={job.error}
+                        retry={() => void job.refetch()}
+                      />
+                    )}
+                    {job.data?.error && (
+                      <ErrorBox error={new Error(job.data.error)} />
+                    )}
+                  </div>
+                )}
+                {job.data?.status === "failed" &&
+                  !state.data.rolled_back &&
+                  editable && (
+                    <Button disabled={locked} onClick={() => void retryApply()}>
+                      Повторить применение
+                    </Button>
+                  )}
+                {state.data.rolled_back && (
+                  <p className="notice compact" role="status">
+                    Применение не удалось. Предыдущая конфигурация
+                    восстановлена; сбор продолжается с ней.
+                  </p>
+                )}
+                {state.data.last_error && !state.data.rolled_back && (
+                  <p className="notice compact" role="status">
+                    Применение завершилось ошибкой. Восстановление предыдущей
+                    конфигурации не подтверждено; проверьте состояние
+                    Prometheus.
+                  </p>
+                )}
+                {state.data.last_error && (
+                  <ErrorBox error={new Error(state.data.last_error)} />
+                )}
 
-              <p className="module-hint prom-config-explanation">
-                Job задаёт правила сбора, target — адрес экспортера. Сохранение
-                создаёт черновик. Применение меняет конфигурацию Prometheus; при
-                ошибке загрузки controller восстанавливает предыдущую.
-              </p>
-            </div>
-          </Panel>
-          {validation && (
+                <p className="module-hint prom-config-explanation">
+                  Job задаёт правила сбора, target — адрес экспортера.
+                  Сохранение создаёт черновик. Применение меняет конфигурацию
+                  Prometheus; при ошибке загрузки controller восстанавливает
+                  предыдущую.
+                </p>
+              </div>
+            </Panel>
+          )}
+          {showDraft && validation && (
             <Panel title="YAML после проверки" icon={<FileCode size={20} />}>
               <p className="module-hint">
                 {valid

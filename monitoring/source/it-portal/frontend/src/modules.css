@@ -3,6 +3,58 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
+.module-catalog-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+.module-catalog-source > div:first-child {
+  flex: 1 1 300px;
+}
+.module-catalog-source .actions {
+  flex-wrap: wrap;
+}
+.module-catalog-source p {
+  margin: 4px 0 0;
+}
+.module-install-choices {
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.module-install-choices legend {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+.module-install-choice {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.module-install-choice label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.module-install-choice .tag {
+  margin-inline-start: auto;
+}
+.module-install-choice p {
+  margin: 6px 0 0;
+}
+.module-install-error {
+  color: var(--danger);
+}
 .module-definition {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);

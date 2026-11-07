@@ -6,9 +6,6 @@
   gap: 1rem;
   flex-wrap: wrap;
 }
-.xray-module .xray-card-description {
-  margin: 0 0 1.5rem;
-}
 .xray-status-actions,
 .xray-connection {
   display: flex;
@@ -22,22 +19,16 @@
   align-items: center;
   gap: 0.65rem;
 }
-.xray-revisions {
-  display: grid;
-  gap: 0.5rem;
-  text-align: right;
+.xray-applied-revision {
+  margin: 0 0 1rem;
 }
-.xray-revisions > span {
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.45rem 0.75rem;
-  color: var(--muted);
+.xray-draft-summary {
+  margin: 1rem 0 0;
 }
 .xray-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
-  margin: 1.5rem 0;
 }
 .xray-summary,
 .xray-module .xray-surface {
@@ -50,14 +41,14 @@
 .xray-summary {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.75rem;
+  padding: 1rem;
   overflow-wrap: anywhere;
 }
 .xray-summary > svg {
-  flex: 0 0 30px;
-  height: 30px;
+  flex: 0 0 20px;
   color: var(--muted);
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
 }
 .xray-module .xray-summary h3,
 .xray-module .xray-surface h3 {
@@ -77,6 +68,8 @@
 }
 .xray-traffic-table {
   width: 100%;
+  min-width: 34rem;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
   font-variant-numeric: tabular-nums;
@@ -90,8 +83,11 @@
   color: var(--muted);
   font-weight: 500;
 }
-.xray-traffic-table td:not(:first-child) {
-  white-space: nowrap;
+.xray-traffic-table th:not(:first-child) {
+  width: 29%;
+}
+.xray-traffic-table td {
+  overflow-wrap: anywhere;
 }
 .xray-traffic-table code,
 .xray-protocol {
@@ -229,9 +225,6 @@
   .xray-traffic-grid,
   .xray-config-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .xray-revisions {
-    text-align: left;
   }
   .xray-inbound-empty {
     min-height: 180px;

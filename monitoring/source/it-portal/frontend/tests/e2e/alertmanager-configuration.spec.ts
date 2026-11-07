@@ -65,6 +65,7 @@ async function fixture(
     applied?: boolean;
     unapplied?: boolean;
     unconfirmed?: boolean;
+    readDraft?: () => Configuration;
   } = {},
 ) {
   let draft: Configuration = {
@@ -244,7 +245,7 @@ async function fixture(
       },
       [base]: {
         editable: true,
-        draft,
+        draft: options.readDraft?.() ?? draft,
         applied,
         last_job_id: "",
         last_error: "",
@@ -274,6 +275,19 @@ async function addWebhook(page: Page) {
     .getByLabel("Endpoint получателя 1", { exact: true })
     .fill("https://notify.example/hooks/fixture-private-endpoint");
 }
+async function editReceiver(page: Page, receiver = "receiver_1") {
+  await page
+    .getByRole("button", {
+      name: `Редактировать получателя ${receiver}`,
+      exact: true,
+    })
+    .click();
+}
+async function openDelivery(page: Page) {
+  await page
+    .getByRole("button", { name: "Настроить отправку", exact: true })
+    .click();
+}
 async function save(page: Page, revision: number) {
   await page
     .getByRole("button", { name: "Сохранить черновик", exact: true })
@@ -287,7 +301,9 @@ async function apply(page: Page) {
     .getByRole("button", { name: "Проверить конфигурацию", exact: true })
     .click();
   await expect(
-    page.getByText(/Конфигурация прошла проверку amtool/),
+    page.getByText("Конфигурация проверена. Её можно применить.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Применить", exact: true }).click();
   await page
@@ -321,12 +337,19 @@ test("Alertmanager applied summary keeps a newer saved draft separate", async ({
     page.getByText("Черновик · версия 5", { exact: true }),
   ).toBeVisible();
   await expect(
+    page.getByLabel("Название получателя 1", { exact: true }),
+  ).toHaveValue("ops-main");
+  await openDelivery(page);
+  await expect(
     page.getByLabel("Повтор уведомления", { exact: true }),
-  ).toHaveValue("6h");
+  ).toHaveValue("6");
+  await expect(
+    page.getByLabel("Единица времени — Повтор уведомления", { exact: true }),
+  ).toHaveValue("h");
   expect(writes).toHaveLength(0);
 });
 
-test("Alertmanager appends a receiver and returns to confirmed applied summary", async ({
+test("Alertmanager edits one receiver at a time and keeps the delivery channel when adding another", async ({
   page,
 }) => {
   const writes = await fixture(page, { applied: true });
@@ -336,22 +359,81 @@ test("Alertmanager appends a receiver and returns to confirmed applied summary",
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Редактировать", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Все обычные оповещения отправляются в этот канал.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await editReceiver(page, "ops-main");
+  await expect(
+    page.getByRole("heading", {
+      name: "Редактирование получателя",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Название получателя 1", { exact: true }),
+  ).toHaveValue("ops-main");
+  await expect(
+    page.getByLabel("Название получателя 2", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel("Повтор уведомления", { exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "К действующей конфигурации", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Добавить получателя", exact: true })
     .click();
   await expect(
+    page.getByRole("heading", { name: "Новый получатель", exact: true }),
+  ).toBeVisible();
+  await expect(
     page.getByLabel("Название получателя 1", { exact: true }),
-  ).toHaveValue("ops-main");
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel("Название получателя 2", { exact: true }),
+  ).toHaveValue("receiver_1");
+  await expect(
+    page.getByLabel("Канал получателя 2", { exact: true }),
+  ).toHaveValue("webhook");
+  await expect(page.getByLabel("Канал доставки", { exact: true })).toHaveCount(
+    0,
+  );
   await page
     .getByLabel("Endpoint получателя 2", { exact: true })
     .fill("https://notify.example/hooks/second");
+  await openDelivery(page);
+  await expect(
+    page.getByRole("heading", { name: "Отправка уведомлений", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Канал доставки", { exact: true })).toHaveValue(
+    "ops-main",
+  );
+  await expect(
+    page.getByText("Все обычные оповещения отправляются в этот канал.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Название получателя 2", { exact: true }),
+  ).toHaveCount(0);
   await save(page, 5);
   await expect(
     page.getByText("Есть неприменённые изменения", { exact: true }),
   ).toBeVisible();
   const sent = writes.find((write) => write.path === base)?.data
     .configuration as Configuration;
+  expect(sent.route.receiver).toBe("ops-main");
   expect(sent.receivers).toHaveLength(2);
+  expect(sent.receivers[1]).toMatchObject({
+    name: "receiver_1",
+    endpoint: "https://notify.example/hooks/second",
+  });
   expect(sent.receivers[0]).toMatchObject({
     name: "ops-main",
     kind: "telegram",
@@ -390,16 +472,91 @@ test("Alertmanager appends a receiver and returns to confirmed applied summary",
   await expect(
     receivers.getByText("receiver_1", { exact: true }),
   ).toBeVisible();
+  await editReceiver(page, "ops-main");
+  await expect(
+    page.getByLabel("Название получателя 1", { exact: true }),
+  ).toHaveValue("ops-main");
+  await expect(
+    page.getByLabel("Название получателя 2", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("Alertmanager keeps the selected receiver when a saved draft is replaced", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const receivers: Receiver[] = ["ops-main", "ops-backup"].map((name) => ({
+    name,
+    kind: "telegram",
+    token_set: true,
+    endpoint_set: true,
+    chat_id: -100123456,
+    proxy: { mode: "direct", url: "", username: "", no_proxy: [] },
+  }));
+  const original: Configuration = {
+    revision: 5,
+    ref: "77777777-7777-4777-8777-000000000005",
+    route: {
+      receiver: "ops-main",
+      group_wait: "30s",
+      group_interval: "5m",
+      repeat_interval: "4h",
+    },
+    receivers,
+  };
+  let serverDraft = original;
+  const writes = await fixture(page, {
+    applied: true,
+    readDraft: () => serverDraft,
+  });
+  const firstName = page.getByLabel("Название получателя 1", { exact: true });
+  const secondName = page.getByLabel("Название получателя 2", { exact: true });
+  await editReceiver(page, "ops-main");
+  await page
+    .getByLabel("Получатель в черновике", { exact: true })
+    .selectOption({ label: "ops-backup · Telegram" });
+  await expect(secondName).toHaveValue("ops-backup");
+
+  serverDraft = {
+    ...original,
+    revision: 6,
+    ref: "77777777-7777-4777-8777-000000000006",
+    route: { ...original.route, receiver: "ops-backup" },
+    receivers: [receivers[1]],
+  };
+  await page
+    .getByRole("button", { name: "Обновить черновик", exact: true })
+    .click();
+  await expect(
+    page.getByText("Черновик · версия 6", { exact: true }),
+  ).toBeVisible();
+  await expect(firstName).toHaveValue("ops-backup");
+
+  await page
+    .getByRole("button", { name: "К действующей конфигурации", exact: true })
+    .click();
+  serverDraft = {
+    ...original,
+    revision: 7,
+    ref: "77777777-7777-4777-8777-000000000007",
+  };
+  await page.clock.fastForward(60_000);
+  await expect(
+    page.getByText("Черновик · версия 7", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Продолжить редактирование", exact: true })
+    .click();
+  await expect(secondName).toHaveValue("ops-backup");
+  expect(writes).toHaveLength(0);
 });
 
 test("Alertmanager succeeded job does not hide an unconfirmed draft", async ({
   page,
 }) => {
   await fixture(page, { applied: true, unconfirmed: true });
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
-  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await openDelivery(page);
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6");
   await save(page, 5);
   await apply(page);
   await expect(
@@ -407,7 +564,7 @@ test("Alertmanager succeeded job does not hide an unconfirmed draft", async ({
   ).toBeVisible();
   await expect(
     page.getByLabel("Повтор уведомления", { exact: true }),
-  ).toHaveValue("6h");
+  ).toHaveValue("6");
   await expect(
     page.getByRole("heading", {
       name: "Действующая конфигурация",
@@ -420,10 +577,8 @@ test("Alertmanager summary preserves unsaved fields and the leave guard", async 
   page,
 }) => {
   const writes = await fixture(page, { applied: true });
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
-  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await openDelivery(page);
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6");
   await page
     .getByRole("button", { name: "К действующей конфигурации", exact: true })
     .click();
@@ -440,7 +595,7 @@ test("Alertmanager summary preserves unsaved fields and the leave guard", async 
     .click();
   await expect(
     page.getByLabel("Повтор уведомления", { exact: true }),
-  ).toHaveValue("6h");
+  ).toHaveValue("6");
   expect(writes).toHaveLength(0);
 });
 
@@ -448,10 +603,8 @@ test("Alertmanager failed apply retains the editor and prior applied summary", a
   page,
 }) => {
   await fixture(page, { applied: true, failed: true });
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
-  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await openDelivery(page);
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6");
   await save(page, 5);
   await apply(page);
   await expect(
@@ -462,7 +615,7 @@ test("Alertmanager failed apply retains the editor and prior applied summary", a
   ).toBeVisible();
   await expect(
     page.getByLabel("Повтор уведомления", { exact: true }),
-  ).toHaveValue("6h");
+  ).toHaveValue("6");
   await page
     .getByRole("button", { name: "К действующей конфигурации", exact: true })
     .click();
@@ -580,16 +733,17 @@ for (const theme of ["dark", "light"]) {
     expect(
       writes.find((write) => write.path.endsWith("/validate"))?.data,
     ).toEqual({ configuration_ref: "77777777-7777-4777-8777-000000000001" });
-    await page
-      .getByRole("button", { name: "Редактировать", exact: true })
-      .click();
-    await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+    await openDelivery(page);
+    await page.getByLabel("Повтор уведомления", { exact: true }).fill("6");
     await save(page, 2);
     const second = writes.filter((write) => write.path === base)[1].data
       .configuration as Configuration;
     expect(second.receivers[0].token).toBeUndefined();
     expect(second.receivers[0].proxy.password).toBeUndefined();
     expect(second.receivers[0].proxy.ca_pem).toBeUndefined();
+    await page
+      .getByLabel("Получатель в черновике", { exact: true })
+      .selectOption("0");
     await expect(
       page.getByText(
         "Токен сохранён; пустое поле сохранит его при прежнем имени, канале и API endpoint.",
@@ -635,11 +789,18 @@ test("installed Alertmanager opens from Notifications sidebar and survives reloa
 test("Alertmanager default has notifications disabled", async ({ page }) => {
   const writes = await fixture(page);
   await expect(
-    page.getByText("Уведомления выключены: получатели не добавлены."),
+    page.getByRole("heading", { name: "Настройка уведомлений", exact: true }),
   ).toBeVisible();
+  await expect(page.getByText(/^Уведомления выключены/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Добавить получателя", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByLabel("Название получателя 1", { exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Применить", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   expect(writes).toHaveLength(0);
 });
 test("Alertmanager forbidden config exposes no editable receiver fields", async ({
@@ -751,13 +912,22 @@ test("Alertmanager revision conflict leaves entered endpoint available for corre
   ).toBeDisabled();
 });
 
-test("Alertmanager rejects noncanonical durations before PUT", async ({
+test("Alertmanager validates intervals and saves the selected time units", async ({
   page,
 }) => {
   const writes = await fixture(page);
   await addWebhook(page);
-  const interval = page.getByLabel("Интервал группы", { exact: true });
-  for (const value of ["1h30m", "01m", "-1s", "169h"]) {
+  await openDelivery(page);
+  const intervalLabel = "Между изменениями в группе";
+  const interval = page.getByLabel(intervalLabel, { exact: true });
+  const unit = page.getByLabel(`Единица времени — ${intervalLabel}`, {
+    exact: true,
+  });
+  for (const [value, timeUnit] of [
+    ["0", "s"],
+    ["169", "h"],
+  ]) {
+    await unit.selectOption(timeUnit);
     await interval.fill(value);
     await page
       .getByRole("button", { name: "Сохранить черновик", exact: true })
@@ -769,10 +939,21 @@ test("Alertmanager rejects noncanonical durations before PUT", async ({
       .click();
     await expect(page.getByRole("alert")).toHaveCount(0);
   }
-  await interval.fill("10m");
+  await unit.selectOption("m");
+  await interval.fill("10");
+  const waitLabel = "Перед первым оповещением";
+  await page.getByLabel(waitLabel, { exact: true }).fill("0");
+  await page
+    .getByLabel(`Единица времени — ${waitLabel}`, { exact: true })
+    .selectOption("s");
+  const repeatLabel = "Повтор уведомления";
+  await page.getByLabel(repeatLabel, { exact: true }).fill("2");
+  await page
+    .getByLabel(`Единица времени — ${repeatLabel}`, { exact: true })
+    .selectOption("h");
   await save(page, 1);
   expect(writes[0].data.configuration).toMatchObject({
-    route: { group_interval: "10m" },
+    route: { group_wait: "0s", group_interval: "10m", repeat_interval: "2h" },
   });
 });
 
@@ -896,7 +1077,8 @@ test("Alertmanager explicitly removes a saved receiver CA", async ({
   await expect(
     page.getByText(/CA сохранён; пустое поле сохранит сертификат/),
   ).toHaveCount(0);
-  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+  await openDelivery(page);
+  await page.getByLabel("Повтор уведомления", { exact: true }).fill("6");
   await save(page, 3);
   expect(
     (writes[2].data.configuration as Configuration).receivers[0].proxy.clear_ca,
@@ -979,9 +1161,7 @@ for (const tlsMode of ["starttls", "implicit"]) {
     ).toHaveValue("alerts@example.invalid");
     await apply(page);
     // A benign edit retains the private password without putting it back in the request.
-    await page
-      .getByRole("button", { name: "Редактировать", exact: true })
-      .click();
+    await editReceiver(page);
     await page
       .getByLabel("Получатели SMTP 1", { exact: true })
       .fill("ops@example.invalid");
@@ -1034,9 +1214,7 @@ test("Alertmanager Teams Workflows v2 endpoint is write-only and configuration a
     page.getByLabel("Endpoint получателя 1", { exact: true }),
   ).toHaveValue("");
   await apply(page);
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
+  await editReceiver(page);
   await expect(
     page.getByLabel("Endpoint получателя 1", { exact: true }),
   ).toBeEnabled();
@@ -1082,9 +1260,7 @@ test("Alertmanager PagerDuty Events v2 routing key is write-only and bound to en
     page.getByLabel("Routing key PagerDuty 1", { exact: true }),
   ).toHaveValue("");
   await apply(page);
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
+  await editReceiver(page);
   await expect(
     page.getByLabel("Endpoint получателя 1", { exact: true }),
   ).toBeEnabled();
@@ -1183,9 +1359,7 @@ test("Alertmanager email message persists and control sends bind to the applied 
     show_labels: true,
   });
   await apply(page);
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
+  await editReceiver(page);
   const fire = page.getByRole("button", {
     name: "Отправить контрольную тревогу",
     exact: true,
@@ -1196,9 +1370,7 @@ test("Alertmanager email message persists and control sends bind to the applied 
   await page
     .getByRole("button", { name: "К действующей конфигурации", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Редактировать", exact: true })
-    .click();
+  await editReceiver(page);
   const resolve = page.getByRole("button", {
     name: "Отправить восстановление",
     exact: true,
@@ -1351,22 +1523,24 @@ for (const kind of [
       "Оформление PL",
     );
     await page.reload();
-    await page
-      .getByRole("button", { name: "Редактировать", exact: true })
-      .click();
+    await editReceiver(page);
     await expect(
       page.getByLabel("Название уведомления 1", { exact: true }),
     ).toHaveValue(message.title);
     await expect(
       page.getByLabel("Endpoint получателя 1", { exact: true }),
     ).toHaveValue("");
-    await page.getByLabel("Повтор уведомления", { exact: true }).fill("6h");
+    await openDelivery(page);
+    await page.getByLabel("Повтор уведомления", { exact: true }).fill("6");
     await save(page, 2);
     const saved = writes.filter((write) => write.path === base).at(-1)!.data
       .configuration as Configuration;
     expect(saved.receivers[0].message).toEqual(message);
     expect(saved.receivers[0]).not.toHaveProperty("token");
     expect(saved.receivers[0]).not.toHaveProperty("endpoint");
+    await page
+      .getByLabel("Получатель в черновике", { exact: true })
+      .selectOption("0");
     await page
       .getByLabel("Формат сообщения 1", { exact: true })
       .selectOption("standard");

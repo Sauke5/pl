@@ -10,6 +10,7 @@ import {
   ArrowLeftRight,
   Database,
   GitFork,
+  Pencil,
   Plus,
   RefreshCw,
   Activity,
@@ -54,7 +55,7 @@ type Status = {
   state: string;
   version: string;
   inbounds: Pick<Inbound, "tag" | "protocol" | "listen" | "port">[];
-  outbound: Outbound;
+  outbound: Outbound | null;
   routing: string;
   counters: { name: string; value: number }[];
 };
@@ -78,7 +79,13 @@ const messages: Record<string, string> = {
   forbidden: "Для настройки Xray нужны права администратора.",
 };
 type TrafficRow = { tag: string; sent?: number; received?: number };
-function trafficRows(counters: Status["counters"], kind: string) {
+// The host controller emits these outbounds in this order.
+const outboundOrder = ["proxy", "direct", "block"];
+function trafficRows(
+  counters: Status["counters"],
+  kind: "inbound" | "outbound",
+  tagOrder: readonly string[],
+) {
   const rows = new Map<string, TrafficRow>();
   for (const counter of counters || []) {
     const [category, tag, metric, direction, extra] = counter.name.split(">>>");
@@ -95,7 +102,12 @@ function trafficRows(counters: Status["counters"], kind: string) {
     else row.received = counter.value;
     rows.set(tag, row);
   }
-  return [...rows.values()];
+  const rank = new Map(tagOrder.map((tag, index) => [tag, index]));
+  return [...rows.values()].sort(
+    (a, b) =>
+      (rank.get(a.tag) ?? rank.size) - (rank.get(b.tag) ?? rank.size) ||
+      a.tag.localeCompare(b.tag, "en"),
+  );
 }
 function bytes(value?: number) {
   return value === undefined
@@ -156,7 +168,7 @@ function routingLabel(routing: string) {
       ? "Весь трафик через выбранный выход"
       : "Нет данных";
 }
-function ConnectionSummary({ outbound }: { outbound?: Outbound }) {
+function ConnectionSummary({ outbound }: { outbound?: Outbound | null }) {
   return (
     <>
       {outbound?.mode === "imported" ? (
@@ -175,6 +187,52 @@ function ConnectionSummary({ outbound }: { outbound?: Outbound }) {
         <span>Нет данных</span>
       )}
     </>
+  );
+}
+function ConfigurationSummary({
+  value,
+}: {
+  value: Pick<Status, "inbounds" | "outbound" | "routing">;
+}) {
+  return (
+    <section className="xray-summary-grid" aria-label="Текущая схема Xray">
+      <section className="xray-summary">
+        <GitFork size={20} aria-hidden="true" />
+        <div>
+          <h3>Входящие подключения</h3>
+          {value.inbounds?.length ? (
+            value.inbounds.map((item) => (
+              <p key={item.tag}>
+                <strong>{item.tag}</strong> · {item.protocol.toUpperCase()}
+                <br />
+                {item.listen}:{item.port}
+              </p>
+            ))
+          ) : (
+            <p className="muted">Подключений пока нет</p>
+          )}
+        </div>
+      </section>
+      <section className="xray-summary">
+        <Database size={20} aria-hidden="true" />
+        <div>
+          <h3>Исходящее подключение</h3>
+          <div className="xray-connection">
+            <ConnectionSummary outbound={value.outbound} />
+          </div>
+        </div>
+      </section>
+      <section className="xray-summary">
+        <ArrowLeftRight size={20} aria-hidden="true" />
+        <div>
+          <h3>Маршрутизация</h3>
+          <strong>{routingLabel(value.routing)}</strong>
+          {value.routing === "private_direct" && (
+            <p className="muted">Остальной трафик — через выбранный выход</p>
+          )}
+        </div>
+      </section>
+    </section>
   );
 }
 function explain(error: unknown) {
@@ -205,6 +263,8 @@ export default function XrayModule({ instance }: { instance: Instance }) {
     refetchInterval: 15000,
   });
   const [draft, setDraft] = useState<XrayConfiguration>();
+  const [editing, setEditing] = useState(false);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
   const [saved, setSaved] = useState("");
   const [validated, setValidated] = useState("");
   const [busy, setBusy] = useState("");
@@ -406,6 +466,7 @@ export default function XrayModule({ instance }: { instance: Instance }) {
         // Only the redacted server model survives a successful save. Never cache request credentials.
         if (!result.draft?.ref)
           throw new Error("Сервер не вернул сохранённый план Xray.");
+        queryClient.setQueryData([`${base}/configuration`], result);
         setDraft(structuredClone(result.draft));
         setSaved(serialize(result.draft));
         setValidated("");
@@ -476,25 +537,58 @@ export default function XrayModule({ instance }: { instance: Instance }) {
       setBusy("");
     }
   }
+  async function refreshStatus() {
+    setRefreshingStatus(true);
+    try {
+      await status.refetch({ cancelRefetch: false });
+    } finally {
+      setRefreshingStatus(false);
+    }
+  }
+  function openEditor() {
+    const serverDraft = state.data?.draft;
+    if (!dirty && serverDraft && serverDraft.ref !== draft?.ref) {
+      const value = structuredClone(serverDraft);
+      setDraft(value);
+      setSaved(serialize(value));
+      setValidated("");
+    }
+    setEditing(true);
+  }
   const configuration = draft || initial();
-  const live = status.data;
-  const appliedRevision = state.data?.applied?.revision;
-  const outboundTraffic = trafficRows(live?.counters || [], "outbound");
+  const observed = status.data;
+  const live = status.error ? undefined : observed;
+  const applied = state.data?.applied;
+  const appliedRevision = applied?.revision;
+  const appliedConfiguration = applied || observed;
+  const serverDraft = state.data?.draft;
+  const hasUnapplied = !!serverDraft?.ref && serverDraft.ref !== applied?.ref;
+  const outboundTraffic = trafficRows(
+    observed?.counters || [],
+    "outbound",
+    outboundOrder,
+  );
   const serviceOutboundTraffic = outboundTraffic.filter(
     (row) => row.tag === "api",
   );
   const clientOutboundTraffic = outboundTraffic.filter(
     (row) => row.tag !== "api",
   );
-  const inboundTraffic = trafficRows(live?.counters || [], "inbound");
+  const inboundTraffic = trafficRows(
+    observed?.counters || [],
+    "inbound",
+    observed?.inbounds?.map((item) => item.tag) || [],
+  );
   const serviceTraffic = inboundTraffic.filter((row) => row.tag === "api");
   const clientTraffic = inboundTraffic.filter((row) => row.tag !== "api");
-  const otherCounters = (live?.counters || []).filter(
-    (counter) =>
-      !/^(inbound|outbound)>>>[^>]+>>>traffic>>>(uplink|downlink)$/.test(
-        counter.name,
-      ),
-  );
+  const otherCounters = (observed?.counters || [])
+    .filter(
+      (counter) =>
+        !/^(inbound|outbound)>>>[^>]+>>>traffic>>>(uplink|downlink)$/.test(
+          counter.name,
+        ),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "en"));
   return (
     <div className="modules-page xray-page xray-module">
       <div className="page-title">
@@ -509,7 +603,10 @@ export default function XrayModule({ instance }: { instance: Instance }) {
       <ActionFeedback notice={notice} error={error} noticeKind={noticeKind} />
 
       {state.error && (
-        <ErrorBox error={explain(state.error)} retry={() => void reload()} />
+        <ErrorBox
+          error={explain(state.error)}
+          retry={() => void state.refetch()}
+        />
       )}
       {state.isPending ? (
         <p role="status">Загружаем конфигурацию…</p>
@@ -520,200 +617,59 @@ export default function XrayModule({ instance }: { instance: Instance }) {
               <p className="notice">Настройки доступны только для чтения.</p>
             )}
             <Panel
-              className="xray-status-card"
-              title="Состояние и трафик"
+              className="xray-config-card"
+              title={
+                editing
+                  ? "Редактор конфигурации Xray"
+                  : "Действующая конфигурация"
+              }
               action={
                 <div className="xray-status-actions">
-                  {live && !status.error && (
+                  {editing ? (
                     <>
-                      <Badge
-                        value={live.state === "running" ? "ok" : live.state}
-                      >
-                        {live.state === "running"
-                          ? "Работает"
-                          : live.state === "disabled"
-                            ? "Отключён"
-                            : `Состояние: ${live.state}`}
-                      </Badge>
-                      <span>Xray {live.version || "—"}</span>
+                      <span className="muted">
+                        Черновик v{configuration.revision} ·{" "}
+                        {dirty ? "Есть изменения" : "Без изменений"}
+                      </span>
+                      <Button onClick={() => setEditing(false)}>
+                        К действующей конфигурации
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {live ? (
+                        <>
+                          <Badge
+                            value={live.state === "running" ? "ok" : live.state}
+                          >
+                            {live.state === "running"
+                              ? "Работает"
+                              : live.state === "disabled"
+                                ? "Отключён"
+                                : live.state}
+                          </Badge>
+                          {live.version && (
+                            <span className="muted">Xray {live.version}</span>
+                          )}
+                        </>
+                      ) : (
+                        <Badge value="unknown">
+                          {status.isPending
+                            ? "Запрашиваем статус…"
+                            : "Статус недоступен"}
+                        </Badge>
+                      )}
+                      <Button disabled={!draft} onClick={openEditor}>
+                        {editable && <Pencil size={16} aria-hidden="true" />}
+                        {editable
+                          ? "Редактировать конфигурацию"
+                          : "Открыть черновик"}
+                      </Button>
                     </>
                   )}
-                  <Button
-                    disabled={status.isFetching}
-                    onClick={() => void status.refetch()}
-                  >
-                    <RefreshCw size={16} aria-hidden="true" />
-                    Обновить состояние
-                  </Button>
                 </div>
               }
             >
-              <p className="muted xray-card-description">
-                Текущая работа сервиса и статистика подключений
-              </p>
-              {status.error ? (
-                <ErrorBox error={explain(status.error)} />
-              ) : status.isPending ? (
-                <p role="status">Получаем состояние Xray…</p>
-              ) : (
-                live && (
-                  <>
-                    <div
-                      className="xray-summary-grid"
-                      aria-label="Текущая схема Xray"
-                    >
-                      <section className="xray-summary">
-                        <GitFork aria-hidden="true" />
-                        <div>
-                          <h3>Входящие подключения</h3>
-                          {live.inbounds?.length ? (
-                            live.inbounds.map((item) => (
-                              <p key={item.tag}>
-                                <strong>{item.tag}</strong> ·{" "}
-                                {item.protocol.toUpperCase()}
-                                <br />
-                                {item.listen}:{item.port}
-                              </p>
-                            ))
-                          ) : (
-                            <>
-                              <strong>Не настроены</strong>
-                              <p className="muted">
-                                Добавьте подключение в настройках ниже
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </section>
-                      <section className="xray-summary">
-                        <ArrowLeftRight aria-hidden="true" />
-                        <div>
-                          <h3>Маршрутизация</h3>
-                          <strong>{routingLabel(live.routing)}</strong>
-                          {live.routing === "private_direct" && (
-                            <p className="muted">
-                              Остальной трафик — через выбранный выход
-                            </p>
-                          )}
-                        </div>
-                      </section>
-                      <section className="xray-summary">
-                        <Database aria-hidden="true" />
-                        <div>
-                          <h3>Исходящее подключение</h3>
-                          <div className="xray-connection">
-                            <ConnectionSummary outbound={live.outbound} />
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-                    <div className="xray-traffic-grid">
-                      <section className="xray-surface">
-                        <h3>
-                          <Activity size={20} />
-                          Трафик по выходам
-                        </h3>
-                        <TrafficTable
-                          rows={clientOutboundTraffic}
-                          outboundMode={live.outbound?.mode}
-                          empty="Счётчики исходящего трафика пока не получены."
-                        />
-                        {!!clientTraffic.length && (
-                          <>
-                            <h4>Трафик входящих подключений</h4>
-                            <TrafficTable rows={clientTraffic} empty="" />
-                          </>
-                        )}
-                      </section>
-                      <section className="xray-surface">
-                        <h3>
-                          <Database size={20} />
-                          Служебный трафик
-                        </h3>
-                        <p className="muted">API · входящее подключение</p>
-                        {serviceTraffic.length ? (
-                          serviceTraffic.map((row) => (
-                            <dl className="xray-service-stats" key={row.tag}>
-                              <div>
-                                <dt>Отправлено</dt>
-                                <dd>{bytes(row.sent)}</dd>
-                              </div>
-                              <div>
-                                <dt>Получено</dt>
-                                <dd>{bytes(row.received)}</dd>
-                              </div>
-                            </dl>
-                          ))
-                        ) : (
-                          <p className="muted">
-                            Счётчики API пока не получены.
-                          </p>
-                        )}
-                        {!!serviceOutboundTraffic.length && (
-                          <>
-                            <p className="muted">API · исходящее подключение</p>
-                            {serviceOutboundTraffic.map((row) => (
-                              <dl className="xray-service-stats" key={row.tag}>
-                                <div>
-                                  <dt>Отправлено</dt>
-                                  <dd>{bytes(row.sent)}</dd>
-                                </div>
-                                <div>
-                                  <dt>Получено</dt>
-                                  <dd>{bytes(row.received)}</dd>
-                                </div>
-                              </dl>
-                            ))}
-                          </>
-                        )}
-                        <p className="muted">Трафик управления Xray</p>
-                      </section>
-                    </div>
-                    {!!otherCounters.length && (
-                      <details className="xray-other-counters">
-                        <summary>
-                          Другие счётчики · {otherCounters.length}
-                        </summary>
-                        <dl className="detail-grid">
-                          {otherCounters.map((counter) => (
-                            <div key={counter.name}>
-                              <dt>{counter.name}</dt>
-                              <dd>
-                                {Number(counter.value).toLocaleString("ru-RU")}
-                              </dd>
-                            </div>
-                          ))}
-                        </dl>
-                      </details>
-                    )}
-                  </>
-                )
-              )}
-            </Panel>
-            <Panel
-              className="xray-config-card"
-              title="Конфигурация Xray"
-              action={
-                <div className="xray-revisions">
-                  <strong>
-                    {appliedRevision !== undefined
-                      ? `Активная версия: ${appliedRevision}`
-                      : "Активная версия не применена"}
-                  </strong>
-                  <span>
-                    Черновик v{configuration.revision} ·{" "}
-                    {dirty ? "Есть изменения" : "Без изменений"}
-                  </span>
-                </div>
-              }
-            >
-              <p className="muted">
-                {state.data.applied
-                  ? `Применена версия ${state.data.applied.revision}`
-                  : "Пользовательская конфигурация ещё не применена"}
-                . Управление идёт через PL. Только выбранные proxy-порты
-                публикуются на хосте.
-              </p>
               {state.data.rolled_back && (
                 <p className="notice">
                   Предыдущая конфигурация восстановлена после ошибки применения.
@@ -722,365 +678,393 @@ export default function XrayModule({ instance }: { instance: Instance }) {
               {state.data.last_error && (
                 <ErrorBox error={new Error(state.data.last_error)} />
               )}
-              <div className="xray-config-grid">
-                <fieldset
-                  disabled={!writable}
-                  className="xray-fieldset xray-surface xray-inbounds-editor"
-                >
-                  <legend>
-                    <span className="xray-inbound-heading">
-                      <span>
-                        <span>Входящие подключения</span>
-                        <span className="muted xray-inbound-caption">
-                          Адреса и порты для подключения к Xray
+              {editing ? (
+                <>
+                  <div className="xray-config-grid">
+                    <fieldset
+                      disabled={!writable}
+                      className="xray-fieldset xray-surface xray-inbounds-editor"
+                    >
+                      <legend>
+                        <span className="xray-inbound-heading">
+                          <span>
+                            <span>Входящие подключения</span>
+                            <span className="muted xray-inbound-caption">
+                              Адреса и порты для подключения к Xray
+                            </span>
+                          </span>
+                          <Button
+                            disabled={
+                              !writable || configuration.inbounds.length >= 16
+                            }
+                            onClick={() => {
+                              let tag = "proxy_1",
+                                number = 1;
+                              while (
+                                configuration.inbounds.some(
+                                  (item) => item.tag === tag,
+                                )
+                              )
+                                tag = `proxy_${++number}`;
+                              let port = 1080;
+                              while (
+                                configuration.inbounds.some(
+                                  (item) =>
+                                    item.listen === "127.0.0.1" &&
+                                    item.port === port,
+                                )
+                              )
+                                port++;
+                              change({
+                                ...configuration,
+                                inbounds: [
+                                  ...configuration.inbounds,
+                                  {
+                                    tag,
+                                    protocol: "socks",
+                                    listen: "127.0.0.1",
+                                    port,
+                                    auth: "none",
+                                    username: "",
+                                  },
+                                ],
+                              });
+                            }}
+                          >
+                            <Plus size={16} aria-hidden="true" /> Добавить
+                            inbound
+                          </Button>
                         </span>
-                      </span>
-                      <Button
-                        disabled={
-                          !writable || configuration.inbounds.length >= 16
-                        }
-                        onClick={() => {
-                          let tag = "proxy_1",
-                            number = 1;
-                          while (
-                            configuration.inbounds.some(
-                              (item) => item.tag === tag,
-                            )
-                          )
-                            tag = `proxy_${++number}`;
-                          let port = 1080;
-                          while (
-                            configuration.inbounds.some(
-                              (item) =>
-                                item.listen === "127.0.0.1" &&
-                                item.port === port,
-                            )
-                          )
-                            port++;
-                          change({
-                            ...configuration,
-                            inbounds: [
-                              ...configuration.inbounds,
-                              {
-                                tag,
-                                protocol: "socks",
-                                listen: "127.0.0.1",
-                                port,
-                                auth: "none",
-                                username: "",
-                              },
-                            ],
-                          });
-                        }}
-                      >
-                        <Plus size={16} aria-hidden="true" /> Добавить inbound
-                      </Button>
-                    </span>
-                  </legend>
-                  {!configuration.inbounds.length && (
-                    <div className="xray-inbound-empty">
-                      <GitFork size={52} aria-hidden="true" />
-                      <strong>Подключения не добавлены</strong>
-                      <p className="muted">
-                        Добавьте входящее подключение,
-                        <br />
-                        чтобы принимать трафик.
-                      </p>
-                    </div>
-                  )}
-                  {configuration.inbounds.map((item, index) => (
-                    <section
-                      className="xray-inbound"
-                      aria-label={`Inbound ${index + 1}`}
-                      key={index}
-                    >
-                      <div className="xray-fields">
-                        <Field label={`Tag inbound ${index + 1}`}>
-                          <input
-                            required
-                            value={item.tag}
-                            maxLength={64}
-                            onChange={(event) =>
-                              inbound(index, { tag: event.target.value })
-                            }
-                          />
-                        </Field>
-                        <Field label={`Протокол inbound ${index + 1}`}>
-                          <select
-                            value={item.protocol}
-                            onChange={(event) =>
-                              inbound(index, {
-                                protocol: event.target
-                                  .value as Inbound["protocol"],
-                              })
-                            }
-                          >
-                            <option value="socks">SOCKS5 TCP</option>
-                            <option value="http">HTTP CONNECT</option>
-                          </select>
-                        </Field>
-                        <Field label={`IPv4 inbound ${index + 1}`}>
-                          <input
-                            value={item.listen}
-                            onChange={(event) =>
-                              inbound(index, { listen: event.target.value })
-                            }
-                          />
-                        </Field>
-                        <Field label={`Порт inbound ${index + 1}`}>
-                          <input
-                            type="number"
-                            min={1024}
-                            max={65535}
-                            value={item.port || ""}
-                            onChange={(event) =>
-                              inbound(index, {
-                                port: Number(event.target.value),
-                              })
-                            }
-                          />
-                        </Field>
-                        <Field label={`Авторизация inbound ${index + 1}`}>
-                          <select
-                            value={item.auth}
-                            onChange={(event) =>
-                              inbound(index, {
-                                auth: event.target.value as Inbound["auth"],
-                                username:
-                                  event.target.value === "none"
-                                    ? ""
-                                    : item.username,
-                                password: "",
-                              })
-                            }
-                          >
-                            <option value="none">Без пароля</option>
-                            <option value="password">Логин и пароль</option>
-                          </select>
-                        </Field>
-                        {item.auth === "password" && (
-                          <>
-                            <Field label={`Логин inbound ${index + 1}`}>
-                              <input
-                                autoComplete="off"
-                                value={item.username}
-                                onChange={(event) =>
-                                  inbound(index, {
-                                    username: event.target.value,
-                                  })
-                                }
-                              />
-                            </Field>
-                            <Field
-                              label={`Пароль inbound ${index + 1}`}
-                              hint={
-                                item.password_set
-                                  ? "Пустое поле сохраняет пароль при прежних tag и логине."
-                                  : "Задайте пароль нового пользователя."
-                              }
-                            >
-                              <input
-                                type="password"
-                                aria-label={`Пароль inbound ${index + 1}`}
-                                autoComplete="new-password"
-                                value={item.password || ""}
-                                onChange={(event) =>
-                                  inbound(index, {
-                                    password: event.target.value,
-                                  })
-                                }
-                              />
-                            </Field>
-                          </>
-                        )}
-                      </div>
-                      <Button
-                        variant="destructive"
-                        onClick={() =>
-                          change({
-                            ...configuration,
-                            inbounds: configuration.inbounds.filter(
-                              (_, i) => i !== index,
-                            ),
-                          })
-                        }
-                      >
-                        Удалить inbound {index + 1}
-                      </Button>
-                    </section>
-                  ))}
-
-                  <p className="muted">
-                    127.0.0.1 доступен только с хоста. Для LAN выберите частный
-                    IPv4 этого хоста. Авторизация опциональна. Адрес должен
-                    принадлежать хосту, порт — быть свободным. Поддерживается
-                    TCP.
-                  </p>
-                </fieldset>
-                <fieldset
-                  disabled={!writable}
-                  className="xray-fieldset xray-surface xray-outbound-editor"
-                >
-                  <legend>Исходящее подключение</legend>
-                  <p className="muted">Сервер для выхода в сеть</p>
-                  {configuration.outbound.mode === "imported" &&
-                    configuration.outbound.protocol && (
-                      <div className="xray-saved-connection">
-                        <Database size={28} aria-hidden="true" />
-                        <div>
-                          <p className="muted">Сохранённое подключение</p>
-                          <div className="xray-connection">
-                            <ConnectionSummary
-                              outbound={configuration.outbound}
-                            />
-                          </div>
+                      </legend>
+                      {!configuration.inbounds.length && (
+                        <div className="xray-inbound-empty">
+                          <GitFork size={52} aria-hidden="true" />
+                          <strong>Подключения не добавлены</strong>
+                          <p className="muted">
+                            Добавьте входящее подключение,
+                            <br />
+                            чтобы принимать трафик.
+                          </p>
                         </div>
-                      </div>
-                    )}
-                  <Field label="Режим outbound">
-                    <select
-                      value={configuration.outbound.mode}
-                      onChange={(event) =>
-                        change({
-                          ...configuration,
-                          outbound:
-                            event.target.value === "direct"
-                              ? { mode: "direct" }
-                              : { mode: "imported" },
-                        })
-                      }
+                      )}
+                      {configuration.inbounds.map((item, index) => (
+                        <section
+                          className="xray-inbound"
+                          aria-label={`Inbound ${index + 1}`}
+                          key={index}
+                        >
+                          <div className="xray-fields">
+                            <Field label={`Tag inbound ${index + 1}`}>
+                              <input
+                                required
+                                value={item.tag}
+                                maxLength={64}
+                                onChange={(event) =>
+                                  inbound(index, { tag: event.target.value })
+                                }
+                              />
+                            </Field>
+                            <Field label={`Протокол inbound ${index + 1}`}>
+                              <select
+                                value={item.protocol}
+                                onChange={(event) =>
+                                  inbound(index, {
+                                    protocol: event.target
+                                      .value as Inbound["protocol"],
+                                  })
+                                }
+                              >
+                                <option value="socks">SOCKS5 TCP</option>
+                                <option value="http">HTTP CONNECT</option>
+                              </select>
+                            </Field>
+                            <Field label={`IPv4 inbound ${index + 1}`}>
+                              <input
+                                value={item.listen}
+                                onChange={(event) =>
+                                  inbound(index, { listen: event.target.value })
+                                }
+                              />
+                            </Field>
+                            <Field label={`Порт inbound ${index + 1}`}>
+                              <input
+                                type="number"
+                                min={1024}
+                                max={65535}
+                                value={item.port || ""}
+                                onChange={(event) =>
+                                  inbound(index, {
+                                    port: Number(event.target.value),
+                                  })
+                                }
+                              />
+                            </Field>
+                            <Field label={`Авторизация inbound ${index + 1}`}>
+                              <select
+                                value={item.auth}
+                                onChange={(event) =>
+                                  inbound(index, {
+                                    auth: event.target.value as Inbound["auth"],
+                                    username:
+                                      event.target.value === "none"
+                                        ? ""
+                                        : item.username,
+                                    password: "",
+                                  })
+                                }
+                              >
+                                <option value="none">Без пароля</option>
+                                <option value="password">Логин и пароль</option>
+                              </select>
+                            </Field>
+                            {item.auth === "password" && (
+                              <>
+                                <Field label={`Логин inbound ${index + 1}`}>
+                                  <input
+                                    autoComplete="off"
+                                    value={item.username}
+                                    onChange={(event) =>
+                                      inbound(index, {
+                                        username: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </Field>
+                                <Field
+                                  label={`Пароль inbound ${index + 1}`}
+                                  hint={
+                                    item.password_set
+                                      ? "Пустое поле сохраняет пароль при прежних tag и логине."
+                                      : "Задайте пароль нового пользователя."
+                                  }
+                                >
+                                  <input
+                                    type="password"
+                                    aria-label={`Пароль inbound ${index + 1}`}
+                                    autoComplete="new-password"
+                                    value={item.password || ""}
+                                    onChange={(event) =>
+                                      inbound(index, {
+                                        password: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </Field>
+                              </>
+                            )}
+                          </div>
+                          <Button
+                            variant="destructive"
+                            onClick={() =>
+                              change({
+                                ...configuration,
+                                inbounds: configuration.inbounds.filter(
+                                  (_, i) => i !== index,
+                                ),
+                              })
+                            }
+                          >
+                            Удалить inbound {index + 1}
+                          </Button>
+                        </section>
+                      ))}
+
+                      <p className="muted">
+                        127.0.0.1 доступен только с хоста. Для LAN выберите
+                        частный IPv4 этого хоста. Авторизация опциональна. Адрес
+                        должен принадлежать хосту, порт — быть свободным.
+                        Поддерживается TCP.
+                      </p>
+                    </fieldset>
+                    <fieldset
+                      disabled={!writable}
+                      className="xray-fieldset xray-surface xray-outbound-editor"
                     >
-                      <option value="direct">Прямой выход</option>
-                      <option value="imported">Импорт по ссылке</option>
-                    </select>
-                  </Field>
-                  {configuration.outbound.mode === "imported" && (
-                    <>
-                      <Field
-                        label="Ссылка подключения outbound"
-                        hint="Connection URI, а не subscription URL. TLS verification обязательна; неподдерживаемые параметры будут отклонены."
-                      >
-                        <input
-                          type="password"
-                          aria-label="Ссылка подключения outbound"
-                          autoComplete="new-password"
-                          value={configuration.outbound.link || ""}
+                      <legend>Исходящее подключение</legend>
+                      <p className="muted">Сервер для выхода в сеть</p>
+                      {configuration.outbound.mode === "imported" &&
+                        configuration.outbound.protocol && (
+                          <div className="xray-saved-connection">
+                            <Database size={28} aria-hidden="true" />
+                            <div>
+                              <p className="muted">Сохранённое подключение</p>
+                              <div className="xray-connection">
+                                <ConnectionSummary
+                                  outbound={configuration.outbound}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      <Field label="Шаблон исходящего подключения">
+                        <select
+                          value={configuration.outbound.mode}
                           onChange={(event) =>
                             change({
                               ...configuration,
-                              outbound: {
-                                ...configuration.outbound,
-                                link: event.target.value,
-                              },
+                              outbound:
+                                event.target.value === "direct"
+                                  ? { mode: "direct" }
+                                  : { mode: "imported" },
                             })
                           }
-                          placeholder={
-                            configuration.outbound.protocol
-                              ? "Подключение сохранено. Вставьте новую ссылку для замены"
-                              : "vless://… или trojan://…"
-                          }
-                        />
+                        >
+                          <option value="direct">Прямой выход</option>
+                          <option value="imported">Прокси по ссылке</option>
+                        </select>
                       </Field>
-                      <p className="muted">
-                        После сохранения здесь останется только протокол и адрес
-                        сервера. Исходная ссылка повторно не отображается.
-                      </p>
-                    </>
+                      {configuration.outbound.mode === "imported" && (
+                        <>
+                          <Field
+                            label="Ссылка подключения outbound"
+                            hint="Connection URI, а не subscription URL. TLS verification обязательна; неподдерживаемые параметры будут отклонены."
+                          >
+                            <input
+                              type="password"
+                              aria-label="Ссылка подключения outbound"
+                              autoComplete="new-password"
+                              value={configuration.outbound.link || ""}
+                              onChange={(event) =>
+                                change({
+                                  ...configuration,
+                                  outbound: {
+                                    ...configuration.outbound,
+                                    link: event.target.value,
+                                  },
+                                })
+                              }
+                              placeholder={
+                                configuration.outbound.protocol
+                                  ? "Подключение сохранено. Вставьте новую ссылку для замены"
+                                  : "vless://… или trojan://…"
+                              }
+                            />
+                          </Field>
+                          <p className="muted">
+                            После сохранения здесь останется только протокол и
+                            адрес сервера. Исходная ссылка повторно не
+                            отображается.
+                          </p>
+                        </>
+                      )}
+                    </fieldset>
+                  </div>
+                  <fieldset
+                    disabled={!writable}
+                    className="xray-fieldset xray-surface xray-routing-editor"
+                  >
+                    <legend>Маршрутизация</legend>
+                    <div>
+                      <p className="muted">Правила выхода в сеть</p>
+                    </div>
+                    <Field label="Базовая маршрутизация">
+                      <select
+                        value={configuration.routing}
+                        onChange={(event) =>
+                          change({
+                            ...configuration,
+                            routing: event.target
+                              .value as XrayConfiguration["routing"],
+                          })
+                        }
+                      >
+                        <option value="proxy_all">
+                          Весь трафик через выбранный выход
+                        </option>
+                        <option value="private_direct">
+                          Частные сети напрямую, остальное через выбранный выход
+                        </option>
+                      </select>
+                    </Field>
+                  </fieldset>
+                  <div className="xray-config-footer">
+                    <div className="xray-draft-state">
+                      <strong>
+                        {appliedRevision !== undefined
+                          ? `Применена версия ${appliedRevision}`
+                          : "Конфигурация ещё не применена"}
+                      </strong>
+                      <span className="muted">
+                        {dirty
+                          ? "Есть несохранённые изменения"
+                          : "Нет несохранённых изменений"}
+                        {!dirty &&
+                        appliedRevision !== undefined &&
+                        configuration.revision !== appliedRevision
+                          ? " · Черновик отличается от активной версии"
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="actions">
+                      <Button
+                        disabled={locked}
+                        onClick={() => {
+                          if (dirty) {
+                            if (
+                              !window.confirm(
+                                "Отбросить несохранённые изменения и загрузить черновик сервера?",
+                              )
+                            )
+                              return;
+                          }
+                          void reload();
+                        }}
+                      >
+                        Обновить черновик
+                      </Button>
+                      <Button
+                        disabled={!writable || !dirty}
+                        onClick={() => void run("save")}
+                      >
+                        {busy === "save" ? "Сохраняем…" : "Сохранить черновик"}
+                      </Button>
+                      <Button
+                        disabled={!writable || dirty || !configuration.ref}
+                        onClick={() => void run("validate")}
+                      >
+                        {busy === "validate"
+                          ? "Проверяем…"
+                          : "Проверить конфигурацию"}
+                      </Button>
+                      <Button
+                        variant="default"
+                        disabled={
+                          !writable ||
+                          dirty ||
+                          !validated ||
+                          validated !== configuration.ref ||
+                          instance.desired_state === "disabled"
+                        }
+                        onClick={() => setConfirm(true)}
+                      >
+                        Применить
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="xray-applied-revision">
+                    <strong>
+                      {applied
+                        ? `Применена версия ${applied.revision}`
+                        : "Версия появится после первого применения"}
+                    </strong>
+                  </p>
+                  {appliedConfiguration && (
+                    <ConfigurationSummary value={appliedConfiguration} />
                   )}
-                </fieldset>
-              </div>
-              <fieldset
-                disabled={!writable}
-                className="xray-fieldset xray-surface xray-routing-editor"
-              >
-                <legend>Маршрутизация</legend>
-                <div>
-                  <p className="muted">Правила выхода в сеть</p>
-                </div>
-                <Field label="Базовая маршрутизация">
-                  <select
-                    value={configuration.routing}
-                    onChange={(event) =>
-                      change({
-                        ...configuration,
-                        routing: event.target
-                          .value as XrayConfiguration["routing"],
-                      })
-                    }
-                  >
-                    <option value="proxy_all">
-                      Весь трафик через выбранный выход
-                    </option>
-                    <option value="private_direct">
-                      Частные сети напрямую, остальное через выбранный выход
-                    </option>
-                  </select>
-                </Field>
-              </fieldset>
-              <div className="xray-config-footer">
-                <div className="xray-draft-state">
-                  <strong>
-                    {appliedRevision !== undefined
-                      ? `Применена версия ${appliedRevision}`
-                      : "Конфигурация ещё не применена"}
-                  </strong>
-                  <span className="muted">
-                    {dirty
-                      ? "Есть несохранённые изменения"
-                      : "Нет несохранённых изменений"}
-                    {!dirty &&
-                    appliedRevision !== undefined &&
-                    configuration.revision !== appliedRevision
-                      ? " · Черновик отличается от активной версии"
-                      : ""}
-                  </span>
-                </div>
-                <div className="actions">
-                  <Button
-                    disabled={locked}
-                    onClick={() => {
-                      if (dirty) {
-                        if (
-                          !window.confirm(
-                            "Отбросить несохранённые изменения и загрузить черновик сервера?",
-                          )
-                        )
-                          return;
-                      }
-                      void reload();
-                    }}
-                  >
-                    Обновить черновик
-                  </Button>
-                  <Button
-                    disabled={!writable || !dirty}
-                    onClick={() => void run("save")}
-                  >
-                    {busy === "save" ? "Сохраняем…" : "Сохранить черновик"}
-                  </Button>
-                  <Button
-                    disabled={!writable || dirty || !configuration.ref}
-                    onClick={() => void run("validate")}
-                  >
-                    {busy === "validate"
-                      ? "Проверяем…"
-                      : "Проверить конфигурацию"}
-                  </Button>
-                  <Button
-                    variant="default"
-                    disabled={
-                      !writable ||
-                      dirty ||
-                      !validated ||
-                      validated !== configuration.ref ||
-                      instance.desired_state === "disabled"
-                    }
-                    onClick={() => setConfirm(true)}
-                  >
-                    Применить
-                  </Button>
-                </div>
-              </div>
+                  {(dirty || hasUnapplied) && (
+                    <p className="muted xray-draft-summary">
+                      {dirty
+                        ? "Есть несохранённые изменения"
+                        : "Есть неприменённые изменения"}
+                      {" · Черновик v"}
+                      {dirty ? configuration.revision : serverDraft?.revision}
+                    </p>
+                  )}
+                </>
+              )}
               {job.error && (
                 <ErrorBox error={job.error} retry={() => void job.refetch()} />
               )}
@@ -1098,6 +1082,114 @@ export default function XrayModule({ instance }: { instance: Instance }) {
                     </Button>
                   )}
                 </div>
+              )}
+            </Panel>
+            <Panel
+              className="xray-status-card"
+              title="Состояние и трафик"
+              action={
+                <Button
+                  aria-busy={refreshingStatus}
+                  disabled={refreshingStatus}
+                  onClick={() => void refreshStatus()}
+                >
+                  <RefreshCw size={16} aria-hidden="true" />
+                  Обновить состояние
+                </Button>
+              }
+            >
+              {status.error &&
+                (observed ? (
+                  <p className="notice" role="status">
+                    Обновление не удалось. Показаны последние полученные
+                    счётчики.
+                  </p>
+                ) : (
+                  <ErrorBox error={explain(status.error)} />
+                ))}
+              {status.isPending && (
+                <p role="status">Получаем состояние Xray…</p>
+              )}
+              {observed && (
+                <>
+                  <div className="xray-traffic-grid">
+                    <section className="xray-surface">
+                      <h3>
+                        <Activity size={20} />
+                        Трафик по выходам
+                      </h3>
+                      <TrafficTable
+                        rows={clientOutboundTraffic}
+                        outboundMode={observed.outbound?.mode}
+                        empty="Счётчики исходящего трафика пока не получены."
+                      />
+                      {!!clientTraffic.length && (
+                        <>
+                          <h4>Трафик входящих подключений</h4>
+                          <TrafficTable rows={clientTraffic} empty="" />
+                        </>
+                      )}
+                    </section>
+                    <section className="xray-surface">
+                      <h3>
+                        <Database size={20} />
+                        Служебный трафик
+                      </h3>
+                      <p className="muted">API · входящее подключение</p>
+                      {serviceTraffic.length ? (
+                        serviceTraffic.map((row) => (
+                          <dl className="xray-service-stats" key={row.tag}>
+                            <div>
+                              <dt>Отправлено</dt>
+                              <dd>{bytes(row.sent)}</dd>
+                            </div>
+                            <div>
+                              <dt>Получено</dt>
+                              <dd>{bytes(row.received)}</dd>
+                            </div>
+                          </dl>
+                        ))
+                      ) : (
+                        <p className="muted">Счётчики API пока не получены.</p>
+                      )}
+                      {!!serviceOutboundTraffic.length && (
+                        <>
+                          <p className="muted">API · исходящее подключение</p>
+                          {serviceOutboundTraffic.map((row) => (
+                            <dl className="xray-service-stats" key={row.tag}>
+                              <div>
+                                <dt>Отправлено</dt>
+                                <dd>{bytes(row.sent)}</dd>
+                              </div>
+                              <div>
+                                <dt>Получено</dt>
+                                <dd>{bytes(row.received)}</dd>
+                              </div>
+                            </dl>
+                          ))}
+                        </>
+                      )}
+                      <p className="muted">Трафик управления Xray</p>
+                    </section>
+                  </div>
+                  {!!otherCounters.length && (
+                    <details className="xray-other-counters">
+                      <summary>
+                        Другие счётчики · {otherCounters.length}
+                      </summary>
+                      <dl className="detail-grid">
+                        {otherCounters.map((counter) => (
+                          <div key={counter.name}>
+                            <dt>{counter.name}</dt>
+                            <dd>
+                              {Number(counter.value).toLocaleString("ru-RU")}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </details>
+                  )}
+                </>
               )}
             </Panel>
           </>

@@ -32,6 +32,32 @@ const record = (value: unknown): RecordValue =>
     : {};
 const text = (value: unknown, limit = 500) =>
   typeof value === "string" ? value.slice(0, limit) : "—";
+const targetOrder = new Intl.Collator("ru", { numeric: true });
+function targetRows(values: unknown[]) {
+  return values
+    .map((value) => {
+      const target = record(value);
+      const targetLabels = record(target.labels);
+      const job = text(targetLabels.job, 256);
+      const address = text(targetLabels.instance, 256);
+      const url = text(target.scrapeUrl, 2048);
+      const identity = JSON.stringify([
+        target.scrapePool,
+        target.scrapeUrl,
+        Object.keys(targetLabels)
+          .sort()
+          .map((name) => [name, targetLabels[name]]),
+      ]);
+      return { target, job, address, url, identity };
+    })
+    .sort(
+      (a, b) =>
+        targetOrder.compare(a.job, b.job) ||
+        targetOrder.compare(a.address, b.address) ||
+        targetOrder.compare(a.url, b.url) ||
+        (a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0),
+    );
+}
 function timestamp(value: unknown) {
   const parsed = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(parsed) && !String(value).startsWith("0001-")
@@ -181,12 +207,21 @@ export default function PrometheusModule({
         const active = record(payload.data).activeTargets;
         if (!Array.isArray(active))
           throw new Error("Prometheus вернул некорректный список целей сбора.");
-        return active;
+        return targetRows(active);
       }),
     enabled: enabled && active,
     retry: false,
     refetchInterval: enabled && active ? 30000 : false,
   });
+  const [refreshingTargets, setRefreshingTargets] = useState(false);
+  async function refreshTargets() {
+    setRefreshingTargets(true);
+    try {
+      await targets.refetch({ cancelRefetch: false });
+    } finally {
+      setRefreshingTargets(false);
+    }
+  }
   const [expression, setExpression] = useState("up");
   const [submitted, setSubmitted] = useState<{
     expression: string;
@@ -224,10 +259,9 @@ export default function PrometheusModule({
   }, [active, enabled, submitted, query.refetch]);
   const targetCount = targets.data?.length || 0;
   const upCount =
-    targets.data?.filter((value) => record(value).health === "up").length || 0;
+    targets.data?.filter(({ target }) => target.health === "up").length || 0;
   const downCount =
-    targets.data?.filter((value) => record(value).health === "down").length ||
-    0;
+    targets.data?.filter(({ target }) => target.health === "down").length || 0;
   const unknownCount = targetCount - upCount - downCount;
   // Scrape intervals differ by job. Only the existing snapshot freshness policy
   // is applied here; an old lastScrape alone does not invent a target outage.
@@ -279,8 +313,9 @@ export default function PrometheusModule({
         action={
           <Button
             size="sm"
-            disabled={!enabled || targets.isFetching}
-            onClick={() => void targets.refetch()}
+            aria-busy={refreshingTargets}
+            disabled={!enabled || refreshingTargets}
+            onClick={() => void refreshTargets()}
           >
             <RefreshCw size={15} /> Обновить цели
           </Button>
@@ -340,19 +375,18 @@ export default function PrometheusModule({
                   </tr>
                 </thead>
                 <tbody>
-                  {targets.data.slice(0, ROW_LIMIT).map((value, index) => {
-                    const target = record(value),
-                      targetLabels = record(target.labels);
+                  {targets.data.slice(0, ROW_LIMIT).map((row) => {
+                    const { target, job, address, url, identity } = row;
                     const scrapeError = text(target.lastError, 1000);
                     const hasError =
                       typeof target.lastError === "string" &&
                       target.lastError.trim() !== "";
                     return (
-                      <tr key={index}>
+                      <tr key={identity}>
                         <td>
-                          <strong>{text(targetLabels.instance, 256)}</strong>
-                          <small>{text(targetLabels.job, 256)}</small>
-                          <code>{text(target.scrapeUrl, 2048)}</code>
+                          <strong>{address}</strong>
+                          <small>{job}</small>
+                          <code>{url}</code>
                         </td>
                         <td>
                           <Badge
