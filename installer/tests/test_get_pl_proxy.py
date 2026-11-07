@@ -15,6 +15,7 @@ import threading
 import time
 import subprocess
 import tarfile
+import tempfile
 import types
 import unittest
 from unittest.mock import patch
@@ -309,6 +310,21 @@ class BootstrapProxyTests(unittest.TestCase):
         with patch.dict(self.module.os.environ, {'LC_ALL': 'ru_RU.UTF-8', 'LANG': 'ru_RU.UTF-8', 'PL_FIXTURE_VALUE': 'preserved'}):
             self.run_bootstrap(['--proxy-file', str(self.profile_path)], installer_environment=inspect_environment)
 
+    def test_missing_openssl_is_installed_through_selected_apt_proxy(self):
+        commands = []
+        environment = dict(os.environ)
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'apt.conf'
+            self.module.write_apt_proxy_config(config, self.profile)
+            with patch.object(self.module.shutil, 'which', return_value=None), \
+                 patch.object(self.module.platform, 'freedesktop_os_release', return_value={'ID': 'ubuntu'}), \
+                 patch.object(self.module.subprocess, 'run', side_effect=lambda argv, **kwargs: commands.append(argv)):
+                self.module.ensure_openssl(config, environment)
+            self.assertEqual(commands, [
+                ['apt-get', '-c', str(config), 'update'],
+                ['apt-get', '-c', str(config), 'install', '-y', '--no-install-recommends', 'openssl', 'ca-certificates'],
+            ])
+
     def test_signed_catalog_and_whole_artifact_cross_connect_then_private_profile_reaches_installer(self):
         installed, output = self.run_bootstrap(['--proxy-file', str(self.profile_path)])
         self.assertEqual(len(installed), 1)
@@ -317,7 +333,7 @@ class BootstrapProxyTests(unittest.TestCase):
         self.assertEqual([entry['path'] for entry in self.origin.observations], ['/catalog', '/package'])
         self.assertEqual(len(self.proxy.observations), 2)
         self.assertNotIn('fixture-password', output)
-        self.assertIn('apt', output)
+        self.assertIn('запросов APT', output)
         self.assertIn('настройках доставки', output)
 
     def test_socks_signed_bootstrap_and_legacy_installer_download_share_live_adapter(self):
@@ -336,15 +352,30 @@ class BootstrapProxyTests(unittest.TestCase):
             install.download('https://download.docker.com:' + str(self.origin.server_port) + '/linux/debian/gpg',
                              target, proxy=http_profile)
             self.assertEqual(target.read_bytes(), b'fixture Docker signing key')
-        with patch.dict(os.environ, {'SSL_CERT_FILE': profile['ca_file']}):
+        config_paths = []
+        def inspect_apt(environment):
+            config = Path(environment['PL_INSTALL_APT_CONFIG'])
+            config_paths.append(config)
+            self.assertEqual(str(config), environment['APT_CONFIG'])
+            self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+            endpoint = self.module.urllib.parse.urlsplit(profile['url'])
+            credential = ':'.join(self.module.urllib.parse.quote(profile[key], safe='') for key in ('username', 'password'))
+            for transport in ('http', 'https'):
+                self.assertIn(f'Acquire::{transport}::Proxy "socks5h://{credential}@{endpoint.netloc}/";', config.read_text())
+            self.assertNotIn('no_proxy', environment)
+            self.assertNotIn('NO_PROXY', environment)
+        with patch.dict(os.environ, {'SSL_CERT_FILE': profile['ca_file'], 'no_proxy': '*', 'NO_PROXY': '*'}):
             installed, output = self.run_bootstrap(['--proxy', profile['url'], '--proxy-user',
-                profile['username'] + ':' + profile['password']], installer_download=installer_download)
+                profile['username'] + ':' + profile['password']], installer_download=installer_download,
+                installer_environment=inspect_apt)
         self.assertNotIn(profile['username'], output)
         self.assertNotIn(profile['password'], output)
         self.assertEqual(len(installed), 1)
         self.assertEqual(server.observations, [('origin.test', self.origin.server_port)] * 2
                          + [('download.docker.com', self.origin.server_port)])
         self.assertFalse(Path(installed[0][0][-1]).exists())
+        self.assertEqual(len(config_paths), 1)
+        self.assertFalse(config_paths[0].exists())
         self.assertNotEqual(installed[0][1]['password'], profile['password'])
 
     def test_inline_http_credentials_reach_real_connect_and_verified_installer(self):

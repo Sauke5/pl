@@ -45,3 +45,19 @@
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
+
+.runtime-log-export-form {
+  display: grid;
+  gap: 16px;
+}
+.runtime-log-export-form .field,
+.runtime-log-export-form p {
+  margin: 0;
+}
+.runtime-log-export-form [role="status"]:empty {
+  position: absolute;
+}
+.runtime-log-export-form .actions {
+  justify-content: flex-end;
+  margin: 0;
+}

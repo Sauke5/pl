@@ -682,10 +682,20 @@ for (const width of [1920]) {
   }
 }
 
-test("module operations show instance action actor result and service refresh control", async ({
+test("module operations show details and close a recovered refresh after a live update", async ({
   page,
 }) => {
   const state = await mockJournal(page);
+  await page.addInitScript(() => {
+    window.EventSource = class extends EventSource {
+      constructor(url: string | URL, options?: EventSourceInit) {
+        super(url, options);
+        window.addEventListener("test:operation-change", () =>
+          this.dispatchEvent(new Event("change")),
+        );
+      }
+    };
+  });
   const operation = {
     id: "module-job",
     kind: "module",
@@ -710,19 +720,28 @@ test("module operations show instance action actor result and service refresh co
       },
     },
   };
+  const failure = {
+    ...operation,
+    id: "module-job-failed",
+    created_at: new Date(+now - 60000).toISOString(),
+    status: "failed",
+    error: "Автоматическая проверка не завершилась",
+    result: {},
+  };
+  let recovered = false;
   const requests: URL[] = [];
   await page.route("**/api/v1/operations?*", (route) => {
     const url = new URL(route.request().url());
     requests.push(url);
+    const filtered = url.searchParams.get("exclude_service_refresh") === "true";
     return route.fulfill({
-      json:
-        url.searchParams.get("exclude_service_refresh") === "true"
-          ? []
-          : [operation],
+      json: recovered ? (filtered ? [] : [operation, failure]) : [failure],
     });
   });
-  await page.route("**/api/v1/jobs/module-job", (route) =>
-    route.fulfill({ json: operation }),
+  await page.route("**/api/v1/jobs/module-job*", (route) =>
+    route.fulfill({
+      json: route.request().url().endsWith(failure.id) ? failure : operation,
+    }),
   );
   await page.goto("/#events");
   await expect.poll(() => state.requests.length).toBeGreaterThan(0);
@@ -739,25 +758,36 @@ test("module operations show instance action actor result and service refresh co
     )
     .toBe(false);
   await page.getByRole("button", { name: "Операции", exact: true }).click();
-  await expect(
-    page.getByText("Операций пока нет", { exact: true }),
-  ).toBeVisible();
   await expect
     .poll(() => requests.at(-1)?.searchParams.get("exclude_service_refresh"))
     .toBe("true");
+  const rows = page.locator(".workspace-operation-row");
+  const result = page.getByLabel("Результат операции");
+  await rows.click();
+  await expect(result).toContainText(failure.error);
+
+  recovered = true;
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("test:operation-change")),
+  );
+  await expect(rows).toHaveCount(0);
+  await expect(page.getByText("Операций пока нет", { exact: true })).toBeVisible();
+  await expect(result).toContainText("Выбери запись слева");
+  await expect(result).not.toContainText(failure.error);
+
   await page
-    .locator("label:visible")
-    .filter({ hasText: "Показывать успешные служебные обновления" })
-    .locator("input")
+    .getByRole("checkbox", { name: /Показывать историю фоновых проверок/ })
     .check();
-  const row = page.locator(".workspace-operation-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.getByText("Ошибка", { exact: true })).toBeVisible();
+  await expect(result).toContainText("Выбери запись слева");
+  const row = rows.filter({ has: page.getByText("Завершено", { exact: true }) });
   await expect(row).toContainText(
     "Обновление состояния модуля · Метрики стенда",
   );
   await expect(row).toContainText("Система · modules");
   await expect(row).not.toContainText("Цель не указана");
   await row.click();
-  const result = page.getByLabel("Результат операции");
   await expect(result).toContainText("Метрики стенда");
   await expect(result).toContainText("Версия: 3.11.0");
   await expect(result).toContainText("Состояние: Работает.");

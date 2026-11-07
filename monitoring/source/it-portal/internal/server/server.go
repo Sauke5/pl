@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log/slog"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -30,6 +28,7 @@ type Server struct {
 	Providers            *providers.Registry
 	oidcMu               sync.Mutex
 	localAuthMu          sync.Mutex
+	logExportMu          sync.Mutex
 	provider             *oidc.Provider
 	oidcClient           *http.Client
 	Hub                  *Hub
@@ -59,6 +58,7 @@ func respond(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func problem(w http.ResponseWriter, status int, code, message string) {
+	recordProblemCode(w, code)
 	respond(w, status, map[string]string{"error": code, "message": message})
 }
 func (s *Server) fail(w http.ResponseWriter, e error) {
@@ -72,7 +72,7 @@ func (s *Server) fail(w http.ResponseWriter, e error) {
 	case errors.Is(e, store.ErrInvalid):
 		problem(w, 400, "invalid_data", "Некорректные данные")
 	default:
-		slog.Error("request_failed", "error_type", fmt.Sprintf("%T", e))
+		recordRequestError(w, e)
 		problem(w, 500, "internal_error", "Не удалось выполнить запрос")
 	}
 }
@@ -310,15 +310,18 @@ func (s *Server) Handler() http.Handler {
 	a("GET /api/v1/stream", s.stream)
 	a("GET /api/v1/time", serverTime)
 	a("GET /api/v1/runtime", s.runtimeSettings)
+	if s.Config.PortableRelease {
+		a("POST /api/v1/runtime/log-export", s.runtimeLogExport)
+	}
 
 	protected := s.maintenanceGate(s.bootstrapPasswordGate(m))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return logHTTPRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
 		protected.ServeHTTP(w, r)
-	})
+	}))
 }
 func (s *Server) resources(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

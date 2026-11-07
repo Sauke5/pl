@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "disaster-recovery.py", "disaster-recovery.ru.md", "module-controller.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
+FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "disaster-recovery.py", "disaster-recovery.ru.md", "module-controller.py", "log-export.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
 REQUIRED = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt"}
 
 
@@ -108,7 +108,7 @@ def manifest(package: Path) -> dict:
     if m.get("architecture") != arch:
         raise ValueError("Package CPU architecture does not match this host")
     features = m.get("features", {})
-    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume"} or any(type(v) is not bool for v in features.values()):
+    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume", "log_export"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
     if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
         raise ValueError('Verified native resume requires the finite update and ICMP worker entrypoints')
@@ -125,6 +125,9 @@ def manifest(package: Path) -> dict:
     if features.get("icmp_probe") and (m.get("schema") != 2 or not isinstance(files, dict)
                                        or not {"icmp-probe.py", "icmp-install.py"} <= files.keys()):
         raise ValueError("ICMP feature requires its trusted host helper payload")
+    if features.get("log_export") and (m.get("schema") != 2 or not features.get("module_controller")
+                                       or not isinstance(files, dict) or "log-export.py" not in files):
+        raise ValueError("Log export requires its trusted host helper payload")
     if features.get("module_controller") and "module-controller.py" not in files:
         raise ValueError("Module controller payload required by package feature")
     if features.get("xray_module") and (m.get("schema") != 2 or not features.get("module_controller") or "xray-controller.py" not in files):
@@ -1097,6 +1100,10 @@ def compose_model(root: Path, m: dict, cfg: dict, install_id: str) -> dict:
                    "local-auth": {"external": True, "name": install_id + "-auth"}},
         "networks": {"backend": {"internal": True, "labels": {"pl.installation": install_id}},
                      "ingress": {"labels": {"pl.installation": install_id}}}}
+
+    if m.get("features", {}).get("log_export"):
+        for service in ("db", "api", "web"):
+            model["services"][service]["logging"] = {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}
 
     if m.get("features", {}).get("upgrade_status"):
         model["services"]["web"]["volumes"].append(mount("run/upgrade-status", "/run/pl-upgrade"))

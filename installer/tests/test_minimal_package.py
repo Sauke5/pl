@@ -106,6 +106,8 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertTrue(all(command[command.index("--platform") + 1] == "linux/amd64" for command in calls))
         self.assertTrue(manifest["features"]["on_demand_modules"])
         self.assertTrue(manifest["features"]["icmp_probe"])
+        self.assertTrue(manifest["features"]["log_export"])
+        self.assertIn("log-export.py", files)
         self.assertEqual(manifest["installation_counter_url"], package.INSTALLATION_COUNTER_URL)
         self.assertTrue({"delivery.py", "delivery-proxy.py", "installation-settings.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py", "icmp-probe.py", "icmp-install.py"} <= files)
         self.assertFalse(any(key.endswith("_module") for key in manifest["features"]))
@@ -121,7 +123,7 @@ class MinimalBuildTests(unittest.TestCase):
             invalid_manifests = [{"images": {**manifest["images"], "prometheus": manifest["images"]["db"]}},
                                  {"features": {**manifest["features"], "forms_module": True}}]
             invalid_manifests.extend({"files": {name: value for name, value in manifest["files"].items() if name != payload}}
-                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py"))
+                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py", "log-export.py"))
             for index, changed in enumerate(invalid_manifests):
                 invalid = {**manifest, **changed}
                 (extracted / "manifest.json").write_text(json.dumps(invalid))
@@ -131,6 +133,23 @@ class MinimalBuildTests(unittest.TestCase):
                 package.write_package_archive(invalid_archive, invalid, {name: extracted / name for name in invalid["files"]})
                 with self.assertRaises(wrapper.InstallError):
                     wrapper.verify_package(invalid_archive, "amd64")
+            previous = copy.deepcopy(manifest)
+            previous["features"].pop("log_export")
+            previous["files"].pop("log-export.py")
+            (extracted / "manifest.json").write_text(json.dumps(previous))
+            self.assertEqual(bootstrap.manifest(extracted), previous)
+            previous_archive = self.root / "previous.tar.gz"
+            package.write_package_archive(previous_archive, previous, {name: extracted / name for name in previous["files"]})
+            self.assertEqual(wrapper.verify_package(previous_archive, "amd64"), previous)
+        (self.root / ".pl-installation.json").write_text(json.dumps({"gid": 10001}))
+        cfg = {"public_url": "https://pl.example.test", "admin_user": "admin", "port": 443,
+               "bind_address": "127.0.0.1", "network_cidr": "172.30.100.0/24"}
+        model = bootstrap.compose_model(self.root, manifest, cfg, "pl-123456789abc")
+        previous_model = bootstrap.compose_model(self.root, previous, cfg, "pl-123456789abc")
+        for service in ("api", "web", "db"):
+            self.assertEqual(model["services"][service]["logging"],
+                             {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}})
+            self.assertNotIn("logging", previous_model["services"][service])
         saved = next(command for command in self.commands if command[:3] == ["docker", "image", "save"])
         self.assertEqual(len(saved[5:]), 3)
 

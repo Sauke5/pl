@@ -248,7 +248,8 @@ func (w *Worker) pollAcquired(parent context.Context, i model.Integration) error
 	defer persistCancel()
 	if applyErr := w.Store.ApplySnapshot(persistCtx, i, snapshot, e); applyErr != nil {
 		if !errors.Is(applyErr, store.ErrConflict) {
-			slog.Error("snapshot_save_failed")
+			state, errorType := finishErrorInfo(applyErr)
+			slog.Error("snapshot_save_failed", "integration_id", i.ID, "source_kind", i.Kind, "sqlstate", state, "error_type", errorType)
 		}
 		return applyErr
 	}
@@ -345,6 +346,9 @@ func (w *Worker) execute(ctx context.Context, j model.Job) {
 			j.Status = "unknown"
 			j.Error = "Результат операции неизвестен. Автоматический повтор запрещён; проверьте состояние в источнике."
 		}
+		slog.Warn("job_execution_failed", "job_id", j.ID, "kind", j.Kind, "status", j.Status,
+			"resource_id", j.ResourceID, "integration_id", j.IntegrationID, "error_type", fmt.Sprintf("%T", err),
+			"deadline_exceeded", errors.Is(err, context.DeadlineExceeded))
 	}
 	if j.Result == nil {
 		j.Result = map[string]any{}

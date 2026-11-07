@@ -24,7 +24,7 @@ TEXT_SUFFIXES = {".py", ".go", ".sql", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".j
 ASSET_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".webmanifest", ".tgz"}
 INSTALLER_FILES = {
     "package.py", "public-export.py", "release-catalog.py", "get-pl.sh", "install.sh", "bootstrap.py", "delivery.py", "delivery-proxy.py", "delivery.ru.md", "maintenance.py",
-    "module-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
+    "module-controller.py", "log-export.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
     "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py",
     "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py",
     "icmp-install.py", "icmp-probe.py", "nginx.conf", "release-signing-public.pem", "LICENSES.txt",
@@ -39,7 +39,7 @@ UNIT_TEST_NAMES = {
     "test_delivery.py", "test_delivery_concurrency.py", "test_delivery_proxy.py", "test_child_read_isolation.py", "test_doska_controller.py", "test_doska_stream_cancellation.py", "test_forms_controller.py", "test_forms_storage_metadata.py", "test_grafana_build.py", "test_grafana_controller.py",
     "test_grafana_package.py", "test_host_status.py", "test_icmp_install.py", "test_icmp_probe.py", "test_icmp_upgrade.py", "test_install_proxy.py",
     "test_installation_counter.py",
-    "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py", "test_controller_listen_backlog.py",
+    "test_install_sh.py", "test_integration_config.py", "test_maintenance.py", "test_minimal_package.py", "test_module_controller.py", "test_log_export.py", "test_controller_listen_backlog.py",
     "test_module_network.py", "test_module_proxy.py", "test_native_initial_login.py", "test_netmap_collector_idle.py",
     "test_netmap_controller.py", "test_netmap_access_profiles.py", "test_netmap_device_access.py", "test_netmap_device_gateway.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
     "test_netmap_instance_descriptor.py", "test_netmap_enrollment.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",

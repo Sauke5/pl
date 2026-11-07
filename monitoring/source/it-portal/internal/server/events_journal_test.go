@@ -118,3 +118,60 @@ func TestModuleOperationAPIContextAndServiceFilter(t *testing.T) {
 		}
 	}
 }
+
+func TestOperationsHideRecoveredAutomaticModuleFailures(t *testing.T) {
+	s := apiFixture(t)
+	admin := apiUser(t, s, "module-recovery-admin", true)
+	ctx := context.Background()
+	for _, id := range []string{"netmap-instance", "other-instance"} {
+		if _, err := s.Store.Pool.Exec(ctx, `INSERT INTO documents(kind,id,body) VALUES('module_instance',$1,jsonb_build_object('id',$1::text,'module_id','netmap'))`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	addFailure := func(key, actor, action, instance string, finishedAt time.Time) string {
+		t.Helper()
+		job, err := s.Store.Enqueue(ctx, model.Job{Kind: "module", Actor: actor, IdempotencyKey: key, Parameters: map[string]any{"instance_id": instance, "action": action}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.Store.Pool.Exec(ctx, `UPDATE jobs SET status='failed',finished_at=$2,body=body || jsonb_build_object('status','failed','finished_at',$2::timestamptz) WHERE id=$1`, job.ID, finishedAt); err != nil {
+			t.Fatal(err)
+		}
+		return job.ID
+	}
+	old := addFailure("old-refresh", "system:modules", "refresh", "netmap-instance", failedAt)
+	manual := addFailure("manual-refresh", "local-admin", "refresh", "netmap-instance", failedAt)
+	other := addFailure("other-refresh", "system:modules", "refresh", "other-instance", failedAt)
+	lifecycle := addFailure("system-install", "system:modules", "install", "netmap-instance", failedAt)
+	check := func(path string, want ...string) {
+		t.Helper()
+		rows := apiDecode[[]workspaceOperation](t, apiCall(s, admin, "GET", path, nil, nil), 200)
+		got := make(map[string]bool, len(rows))
+		for _, row := range rows {
+			got[row.ID] = true
+		}
+		if len(got) != len(want) {
+			t.Fatalf("%s returned %v, want %v", path, got, want)
+		}
+		for _, id := range want {
+			if !got[id] {
+				t.Fatalf("%s is missing operation %s", path, id)
+			}
+		}
+	}
+	const filtered = "/api/v1/operations?exclude_service_refresh=true"
+	check(filtered, old, manual, other, lifecycle)
+	recoveredAt := failedAt.Add(2 * time.Second)
+	if _, err := s.Store.Pool.Exec(ctx, `UPDATE documents SET body=body || jsonb_build_object('observed_state','running','last_success',$1::timestamptz) WHERE kind='module_instance' AND id='netmap-instance'`, recoveredAt); err != nil {
+		t.Fatal(err)
+	}
+	check(filtered, manual, other, lifecycle)
+	fresh := addFailure("fresh-refresh", "system:modules", "refresh", "netmap-instance", recoveredAt.Add(time.Second))
+	check(filtered, manual, other, lifecycle, fresh)
+	check("/api/v1/operations?exclude_service_refresh=false", old, manual, other, lifecycle, fresh)
+	detail := apiDecode[model.Job](t, apiCall(s, admin, "GET", "/api/v1/jobs/"+old, nil, nil), 200)
+	if detail.Status != "failed" {
+		t.Fatalf("historical result was changed: %+v", detail)
+	}
+}

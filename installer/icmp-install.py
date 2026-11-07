@@ -12,6 +12,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import socket
 import stat
@@ -22,6 +23,8 @@ import uuid
 
 IDENTITY = re.compile(r'pl-[0-9a-f]{12}\Z')
 SIMPLE_PATH = re.compile(r'/[A-Za-z0-9_./-]+\Z')
+UBUNTU_UNIVERSE_SOURCE = Path('/etc/apt/sources.list.d/pl-ubuntu-universe.sources')
+UBUNTU_ARCHIVE_KEYRING = Path('/usr/share/keyrings/ubuntu-archive-keyring.gpg')
 
 
 def _checked_dir(path, owner, *, mode=None):
@@ -645,17 +648,65 @@ def _transition(root, install_id, operation_id, expected, action, run, *, _host_
     _atomic(path, _json(value))
 
 
+def hping_candidate(run):
+    text = run(['apt-cache', 'policy', 'hping3'], timeout=10).decode()
+    match = re.search(r'^\s*Candidate:\s*([A-Za-z0-9.+:~_-]+)\s*$', text, re.M)
+    return match[1] if match else None
+
+
+def enable_ubuntu_universe(run, created):
+    release = platform.freedesktop_os_release()
+    if release.get('ID') != 'ubuntu':
+        return False
+    suite = release.get('VERSION_CODENAME', '')
+    arch = run(['dpkg', '--print-architecture'], timeout=10).decode().strip()
+    if not re.fullmatch(r'[a-z]+', suite) or arch not in ('amd64', 'arm64'):
+        raise ValueError('Cannot select the signed Ubuntu universe archive for this host.')
+    targets = run(['apt-get', 'indextargets', '--no-release-info', '--format',
+                   '$(RELEASE) $(COMPONENT) $(ARCHITECTURE)', 'Created-By: Packages'], timeout=10).decode().splitlines()
+    if f'{suite} universe {arch}' in targets:
+        return False
+    _checked_file(UBUNTU_ARCHIVE_KEYRING, 0, read=False)
+    if arch == 'amd64':
+        archives = (
+            ('https://archive.ubuntu.com/ubuntu', f'{suite} {suite}-updates'),
+            ('https://security.ubuntu.com/ubuntu', f'{suite}-security'),
+        )
+    else:
+        archives = (('https://ports.ubuntu.com/ubuntu-ports', f'{suite} {suite}-updates {suite}-security'),)
+    source = '\n'.join(
+        f'Types: deb\nURIs: {uri}\nSuites: {suites}\nComponents: universe\n'
+        f'Architectures: {arch}\nSigned-By: {UBUNTU_ARCHIVE_KEYRING}\n'
+        for uri, suites in archives
+    ).encode()
+    if UBUNTU_UNIVERSE_SOURCE.exists() or UBUNTU_UNIVERSE_SOURCE.is_symlink():
+        if _checked_file(UBUNTU_UNIVERSE_SOURCE, 0) != source:
+            raise ValueError('Existing PL Ubuntu universe source differs. Check the APT configuration.')
+    else:
+        _write_new(UBUNTU_UNIVERSE_SOURCE, source, 0o644, created)
+    return True
+
+
 def ensure_dependency(run):
     binary = Path('/usr/sbin/hping3')
     if not binary.exists() and not binary.is_symlink():
-        run(['apt-get', 'update'], timeout=300)
-        text = run(['apt-cache', 'policy', 'hping3']).decode()
-        match = re.search(r'^\s*Candidate:\s*([A-Za-z0-9.+:~_-]+)\s*$', text, re.M)
-        if not match or match.group(1) == '(none)':
-            raise ValueError('hping3 is unavailable from configured host repositories')
-        run(['apt-get', 'install', '-y', '--no-install-recommends', 'hping3=' + match.group(1)], timeout=600)
+        run(['apt-get', 'update'], timeout=150)
+        candidate = hping_candidate(run)
+        if candidate is None:
+            created = []
+            try:
+                if enable_ubuntu_universe(run, created):
+                    run(['apt-get', 'update'], timeout=150)
+                    candidate = hping_candidate(run)
+            finally:
+                if candidate is None:
+                    for source in created:
+                        source.unlink(missing_ok=True)
+        if candidate is None:
+            raise ValueError('APT cannot find hping3. Check the Ubuntu universe or Debian main repository for this release.')
+        run(['apt-get', 'install', '-y', '--no-install-recommends', 'hping3=' + candidate], timeout=600)
     _checked_file(binary, 0, executable=True, read=False)
-    version = run(['dpkg-query', '-W', '-f=${Version}', 'hping3']).decode().strip()
+    version = run(['dpkg-query', '-W', '-f=${Version}', 'hping3'], timeout=10).decode().strip()
     if not re.fullmatch(r'[A-Za-z0-9.+:~_-]+', version):
         raise ValueError('Invalid installed hping3 version')
     return version

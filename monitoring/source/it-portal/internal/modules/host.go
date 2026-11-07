@@ -50,22 +50,9 @@ func (c *HostController) HostStatus(ctx context.Context) (HostStatus, error) {
 	var result HostStatus
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	body := []byte("{}")
-	path := "/v1/host/status"
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	mac := hmac.New(sha256.New, c.key)
-	mac.Write([]byte(timestamp + "\nPOST\n" + path + "\n"))
-	mac.Write(body)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://module-controller"+path, bytes.NewReader(body))
+	response, err := c.hostRequest(ctx, "/v1/host/status", []byte("{}"))
 	if err != nil {
-		return result, errors.New("Диагностика хоста недоступна")
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Pl-Timestamp", timestamp)
-	request.Header.Set("X-Pl-Signature", hex.EncodeToString(mac.Sum(nil)))
-	response, err := c.client.Do(request)
-	if err != nil {
-		return result, controllerTransportError(ctx, err)
+		return result, err
 	}
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 16385))
@@ -81,4 +68,62 @@ func (c *HostController) HostStatus(ctx context.Context) (HostStatus, error) {
 		}
 	}
 	return result, nil
+}
+
+func (c *HostController) hostRequest(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, c.key)
+	mac.Write([]byte(timestamp + "\nPOST\n" + path + "\n"))
+	mac.Write(body)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://module-controller"+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, errors.New("Диагностика хоста недоступна")
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Pl-Timestamp", timestamp)
+	request.Header.Set("X-Pl-Signature", hex.EncodeToString(mac.Sum(nil)))
+	response, err := c.client.Do(request)
+	if err != nil {
+		return nil, controllerTransportError(ctx, err)
+	}
+	return response, nil
+}
+
+const MaxHostLogArchiveBytes = 24 << 20
+
+var ErrHostLogExportUnavailable = errors.New("host log export unavailable")
+var ErrHostLogExportBusy = errors.New("host log export busy")
+
+func (m *Manager) CopyHostLogArchive(ctx context.Context, since, until time.Time, dst io.Writer) (int64, error) {
+	if m != nil {
+		if controller, ok := m.Controller.(interface {
+			CopyHostLogArchive(context.Context, time.Time, time.Time, io.Writer) (int64, error)
+		}); ok {
+			return controller.CopyHostLogArchive(ctx, since, until, dst)
+		}
+	}
+	return 0, ErrHostLogExportUnavailable
+}
+
+func (c *HostController) CopyHostLogArchive(ctx context.Context, since, until time.Time, dst io.Writer) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 34*time.Second)
+	defer cancel()
+	body, _ := json.Marshal(map[string]int64{"since": since.Unix(), "until": until.Unix()})
+	response, err := c.hostRequest(ctx, "/v1/host/log-export", body)
+	if err != nil {
+		return 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusTooManyRequests {
+		return 0, ErrHostLogExportBusy
+	}
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "application/zip" ||
+		response.ContentLength <= 0 || response.ContentLength > MaxHostLogArchiveBytes {
+		return 0, ErrHostLogExportUnavailable
+	}
+	n, err := io.Copy(dst, io.LimitReader(response.Body, response.ContentLength+1))
+	if err != nil || n != response.ContentLength {
+		return 0, ErrHostLogExportUnavailable
+	}
+	return n, nil
 }

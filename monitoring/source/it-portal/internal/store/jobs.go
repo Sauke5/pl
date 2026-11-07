@@ -87,7 +87,16 @@ func (s *Store) Jobs(ctx context.Context) ([]model.Job, error) {
 func (s *Store) JobsForTimeline(ctx context.Context, excludeServiceRefresh bool) ([]model.Job, error) {
 	where := ""
 	if excludeServiceRefresh {
-		where = ` WHERE NOT (j.status='succeeded' AND (j.actor='system' OR j.actor LIKE 'system:%') AND (j.kind='refresh' OR (j.kind='module' AND COALESCE(j.body #>> '{parameters,action}','')='refresh')))`
+		// A later successful observation of this instance resolves a failed automatic refresh.
+		where = ` WHERE NOT COALESCE((j.actor='system' OR j.actor LIKE 'system:%') AND (
+ (j.kind='refresh' AND j.status='succeeded') OR
+ (j.kind='module' AND j.body #>> '{parameters,action}'='refresh' AND (
+  j.status='succeeded' OR (j.status='failed' AND CASE
+   WHEN pg_input_is_valid(m.body->>'last_success','timestamptz')
+   THEN (m.body->>'last_success')::timestamptz > j.finished_at
+   ELSE false
+  END)
+ ))),false)`
 	}
 	rows, e := s.Pool.Query(ctx, jobReadSQL+where+" ORDER BY j.created_at DESC LIMIT 200")
 	if e != nil {

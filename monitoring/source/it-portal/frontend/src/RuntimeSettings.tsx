@@ -5,6 +5,7 @@ import { APIError, api, refresh, useAPI, date } from "./api";
 import type { Settings } from "./types";
 import { Button } from "./components/ui/button";
 import { ErrorBox, Field, Panel } from "./components/common";
+import { RuntimeLogExport } from "./RuntimeLogExport";
 import "./runtime-settings.css";
 
 type Runtime = {
@@ -19,6 +20,7 @@ type Runtime = {
     observed_at: string;
   };
   host_error?: string;
+  log_export_hours?: number[];
   go_version: string;
   os: string;
   architecture: string;
@@ -239,6 +241,7 @@ export function SessionSettings() {
 
 export function RuntimeSettings() {
   const runtime = useAPI<Runtime>("/runtime");
+  const periods = runtime.data?.log_export_hours;
   return (
     <div className="runtime-settings">
       <Panel title="Состояние сервера" icon={<Server size={20} />}>
@@ -308,13 +311,18 @@ export function RuntimeSettings() {
         ) : (
           <p>Загрузка состояния…</p>
         )}
-        <Button
-          onClick={() => void runtime.refetch()}
-          disabled={runtime.isFetching}
-        >
-          <RefreshCw size={16} />
-          Обновить состояние
-        </Button>
+        <div className="actions">
+          <Button
+            onClick={() => void runtime.refetch()}
+            disabled={runtime.isFetching}
+          >
+            <RefreshCw size={16} />
+            Обновить состояние
+          </Button>
+          {periods && periods.length > 0 && (
+            <RuntimeLogExport periods={periods} />
+          )}
+        </div>
         <details className="runtime-process">
           <summary>Процесс API и ограничения проверок</summary>
           <p className="muted">

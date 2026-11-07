@@ -55,6 +55,7 @@ exec python3 - "$@" <<'PL_INSTALL_PY'
 import argparse
 import base64
 import hashlib
+import importlib.util
 import grp
 import json
 import ipaddress
@@ -81,8 +82,8 @@ MAX_PACKAGE = 8 * 1024**3
 MIN_DISK = 20 * 1024**3
 # A VM assigned 4 GiB exposes less MemTotal after kernel reservations.
 MIN_MEMORY_KIB = 3584 * 1024
-ALLOWED = {'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
-REQUIRED = ALLOWED - {'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
+ALLOWED = {'log-export.py', 'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
+REQUIRED = ALLOWED - {'log-export.py', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
 DOCKER_FINGERPRINT = '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
 
 
@@ -110,6 +111,9 @@ def validate_root_socket_paths(root):
 def run(args, capture=True):
     # apt-cache output is parsed below and must not follow the host language.
     environment = dict(os.environ, DEBIAN_FRONTEND='noninteractive', LC_ALL='C', LANG='C')
+    if args[:2] == ['apt-get', '-c']:
+        for key in ('no_proxy', 'NO_PROXY'):
+            environment.pop(key, None)
     result = subprocess.run(args, text=True, stdout=subprocess.PIPE if capture else None,
                             stderr=subprocess.PIPE if capture else None, check=False, env=environment,
                             stdin=subprocess.DEVNULL if capture else None)
@@ -117,6 +121,12 @@ def run(args, capture=True):
         # Tool output may contain repository credentials, passwords or expanded config.
         fail(f'Command failed ({result.returncode}): {Path(args[0]).name}')
     return result.stdout.strip() if capture else ''
+
+
+def apt_command(args, config):
+    if config and args[0] == 'apt-get':
+        return ['apt-get', '-c', str(config), *args[1:]]
+    return args
 
 
 def digest(path):
@@ -228,6 +238,34 @@ def download_bypasses_proxy(host, exceptions):
     return False
 
 
+def install_apt_config(directory, proxy):
+    if not proxy:
+        return None
+    inherited = os.environ.get('PL_INSTALL_APT_CONFIG')
+    if inherited:
+        path = Path(inherited)
+        info = path.lstat()
+        if (not path.is_absolute() or path != path.resolve() or not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600):
+            fail('Invalid private APT proxy configuration.')
+        return path
+    endpoint = urllib.parse.urlsplit(proxy['url'])
+    host = urllib.parse.quote(urllib.parse.unquote(endpoint.hostname), safe=':')
+    authority = f'[{host}]:{endpoint.port}' if ':' in host else f'{host}:{endpoint.port}'
+    if 'username' in proxy:
+        credentials = ':'.join(urllib.parse.quote(proxy[key], safe='') for key in ('username', 'password'))
+        authority = f'{credentials}@{authority}'
+    path = directory / 'apt.conf'
+    with open(path, 'x', opener=lambda name, flags: os.open(name, flags, 0o600)) as stream:
+        for transport in ('http', 'https'):
+            key = f'Acquire::{transport}::'
+            for name in ('Proxy', 'Proxy-Auto-Detect', 'ProxyAutoDetect'):
+                stream.write(f'#clear {key}{name};\n')
+            stream.write(f'{key}Proxy "http://{authority}/";\n')
+        stream.write('APT::Update::Error-Mode "any";\n')
+    return path
+
+
 class DownloadProxy(urllib.request.ProxyHandler):
     def __init__(self, profile):
         self.profile = profile
@@ -332,10 +370,6 @@ def preflight(root):
                                     text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if status.returncode == 0 and status.stdout.strip() == 'installed':
                 fail('Conflicting or incomplete container runtime exists; resolve it explicitly first.')
-        for source in [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.list'),
-                       *Path('/etc/apt/sources.list.d').glob('*.sources')]:
-            if source != APT_SOURCES and source.is_file() and 'download.docker.com' in source.read_text():
-                fail('An existing Docker apt repository is configured; install Docker explicitly or resolve the repository first.')
     return {'distribution': distro, 'codename': codename, 'architecture': arch, 'docker_present': bool(docker)}
 
 
@@ -366,7 +400,7 @@ def verify_package(package, arch):
             if manifest.get('schema') not in (1, 2) or manifest.get('product') not in ('PL', 'Pl') or manifest.get('architecture') != arch:
                 fail('Package schema, product or architecture mismatch.')
             features = manifest.get('features', {})
-            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades', 'verified_native_resume'} or any(type(value) is not bool for value in features.values()):
+            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades', 'verified_native_resume', 'log_export'} or any(type(value) is not bool for value in features.values()):
                 fail('Unsupported core package features.')
             if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
                 fail('Verified native resume requires the finite update and ICMP worker entrypoints.')
@@ -382,6 +416,8 @@ def verify_package(package, arch):
                 fail('Connector credentials require a schema-2 package.')
             if features.get('icmp_probe') and (manifest.get('schema') != 2 or not {'icmp-probe.py', 'icmp-install.py'} <= set(names)):
                 fail('ICMP feature requires its trusted host helper payload.')
+            if features.get('log_export') and (manifest.get('schema') != 2 or not features.get('module_controller') or 'log-export.py' not in names):
+                fail('Log export requires its trusted host helper payload.')
             if features.get('module_controller') and 'module-controller.py' not in names:
                 fail('Module controller feature requires its trusted payload.')
             if features.get('xray_module') and (manifest.get('schema') != 2 or not features.get('module_controller') or 'xray-controller.py' not in names):
@@ -494,68 +530,103 @@ def record_packages(root, packages):
     path.write_text(json.dumps(current, indent=2) + '\n')
 
 
-def ensure_openssl(root):
+def ensure_openssl(root, apt_config=None):
     if shutil.which('openssl'):
         return
-    run(['apt-get', 'update'])
+    run(apt_command(['apt-get', 'update'], apt_config))
     packages = pin_packages(['openssl'])
     record_packages(root, packages)
-    run(['apt-get', 'install', '-y', '--no-install-recommends', *packages])
+    run(apt_command(['apt-get', 'install', '-y', '--no-install-recommends', *packages], apt_config))
     if not shutil.which('openssl'):
         fail('OpenSSL CLI is still unavailable after apt installation.')
 
 
-def ensure_icmp_dependencies(root, manifest):
+def ensure_icmp_dependencies(root, release, manifest, apt_config=None):
     if not manifest.get('features', {}).get('icmp_probe'):
         return
     binary = Path('/usr/sbin/hping3')
     if not binary.is_file():
-        run(['apt-get', 'update'])
-        packages = pin_packages(['hping3'])
-        record_packages(root, packages)
-        run(['apt-get', 'install', '-y', '--no-install-recommends', *packages])
+        spec = importlib.util.spec_from_file_location('pl_icmp_dependency', release / 'icmp-install.py')
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        def run_icmp_command(args, timeout):
+            return helper._run(apt_command(args, apt_config), timeout=timeout)
+        try:
+            version = helper.ensure_dependency(run_icmp_command if apt_config else helper._run)
+        except ValueError as error:
+            fail(str(error))
+        record_packages(root, ['hping3=' + version])
     info = binary.stat()
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o6022 or not info.st_mode & 0o111:
         fail('ICMP requires a root-owned hping3 binary without unsafe permissions.')
 
 
-def install_docker(info, root, download_proxy=None):
-    if info['docker_present']:
-        return
-    run(['apt-get', 'update'])
-    prerequisites = pin_packages(['ca-certificates', 'curl', 'gnupg'])
-    run(['apt-get', 'install', '-y', '--no-install-recommends', *prerequisites])
+def docker_repository_configured(uri, info):
+    targets = run(['apt-get', 'indextargets', '--no-release-info', '--format',
+                   '$(REPO_URI) $(RELEASE) $(COMPONENT) $(ARCHITECTURE)', 'Created-By: Packages'])
+    sources = [line.split() for line in targets.splitlines() if line.strip()]
+    expected = [uri, info['codename'], 'stable', info['architecture']]
+    if any([entry[0].rstrip('/'), *entry[1:]] == expected for entry in sources):
+        return True
+    if any(urllib.parse.urlsplit(entry[0]).hostname == 'download.docker.com' for entry in sources):
+        fail('The enabled Docker APT source does not match this distribution, release, architecture and stable channel.')
+    return False
+
+
+def create_apt_file(path, data):
+    with tempfile.NamedTemporaryFile(dir=path.parent) as candidate:
+        candidate.write(data)
+        candidate.flush()
+        os.fchmod(candidate.fileno(), 0o644)
+        os.link(candidate.name, path)
+
+
+def ensure_docker_key(uri, download_proxy):
+    if APT_KEY.is_symlink() or (APT_KEY.exists() and not APT_KEY.is_file()):
+        fail('PL Docker signing key must be a regular file.')
     APT_KEY.parent.mkdir(mode=0o755, exist_ok=True)
-    source = ('Types: deb\nURIs: https://download.docker.com/linux/' + info['distribution'] +
-              '\nSuites: ' + info['codename'] + '\nComponents: stable\nArchitectures: ' +
-              info['architecture'] + '\nSigned-By: ' + str(APT_KEY) + '\n')
-    if APT_SOURCES.exists() and APT_SOURCES.read_text() != source:
-        fail('Existing PL Docker apt source differs; refusing to overwrite it.')
     with tempfile.TemporaryDirectory(prefix='pl-docker-key-') as directory:
-        key = Path(directory) / 'docker.asc'
-        key_url = 'https://download.docker.com/linux/' + info['distribution'] + '/gpg'
-        if download_proxy is None:
-            download(key_url, key, 1024 * 1024)
-        else:
-            download(key_url, key, 1024 * 1024, proxy=download_proxy)
+        key = APT_KEY if APT_KEY.exists() else Path(directory) / 'docker.asc'
+        if key != APT_KEY:
+            if download_proxy is None:
+                download(uri + '/gpg', key, 1024 * 1024)
+            else:
+                download(uri + '/gpg', key, 1024 * 1024, proxy=download_proxy)
         keys = run(['gpg', '--batch', '--no-options', '--homedir', directory,
                     '--show-keys', '--with-colons', str(key)])
-        fingerprints = [line.split(':')[9] for line in keys.splitlines() if line.startswith('fpr:')]
-        if not fingerprints or fingerprints[0] != DOCKER_FINGERPRINT:
+        records = [line.split(':') for line in keys.splitlines()]
+        fingerprints = [record[9] for record in records if record[0] == 'fpr' and len(record) > 9]
+        if sum(record[0] == 'pub' for record in records) != 1 or not fingerprints or fingerprints[0] != DOCKER_FINGERPRINT:
             fail('Docker signing key fingerprint mismatch.')
-        if APT_KEY.exists() and APT_KEY.read_bytes() != key.read_bytes():
-            fail('Existing PL Docker signing key differs; refusing to overwrite it.')
-        shutil.copyfile(key, APT_KEY)
-        APT_KEY.chmod(0o644)
-    APT_SOURCES.write_text(source)
-    APT_SOURCES.chmod(0o644)
-    run(['apt-get', 'update'])
+        if key != APT_KEY:
+            create_apt_file(APT_KEY, key.read_bytes())
+
+
+def install_docker(info, root, download_proxy=None, apt_config=None):
+    if info['docker_present']:
+        return
+    uri = 'https://download.docker.com/linux/' + info['distribution']
+    source = (f'Types: deb\nURIs: {uri}\nSuites: {info["codename"]}\nComponents: stable\n'
+              f'Architectures: {info["architecture"]}\nSigned-By: {APT_KEY}\n')
+    managed = APT_SOURCES.exists()
+    if APT_SOURCES.is_symlink() or (managed and (not APT_SOURCES.is_file() or APT_SOURCES.read_text() != source)):
+        fail('Existing PL Docker apt source differs; refusing to overwrite it.')
+    configured = docker_repository_configured(uri, info)
+    if managed:
+        ensure_docker_key(uri, download_proxy)
+    run(apt_command(['apt-get', 'update'], apt_config))
+    prerequisites = pin_packages(['ca-certificates', 'curl', 'gnupg'])
+    run(apt_command(['apt-get', 'install', '-y', '--no-install-recommends', *prerequisites], apt_config))
+    if not configured and not managed:
+        ensure_docker_key(uri, download_proxy)
+        create_apt_file(APT_SOURCES, source.encode())
+        run(apt_command(['apt-get', 'update'], apt_config))
     packages = pin_packages(['docker-ce', 'docker-ce-cli', 'containerd.io',
                              'docker-buildx-plugin', 'docker-compose-plugin'])
     if not re.match(r'docker-ce=(?:\d+:)?29\.', packages[0]):
         fail('Docker repository candidate is outside supported Engine 29.x.')
     record_packages(root, prerequisites + packages)
-    run(['apt-get', 'install', '-y', '--no-install-recommends', *packages])
+    run(apt_command(['apt-get', 'install', '-y', '--no-install-recommends', *packages], apt_config))
     run(['systemctl', 'enable', '--now', 'docker'])
     # Verify daemon, architecture and Compose after installing, before any payload starts.
     info.update(preflight(root))
@@ -629,7 +700,7 @@ def main(argv=None):
     package.add_argument('--package-url')
     parser.add_argument('--package-sha256')
     parser.add_argument('--download-proxy-file', type=Path,
-                        help='Private 0600 JSON HTTP CONNECT proxy for HTTPS bundle/key downloads only; apt and Docker daemon settings remain separate.')
+                        help='Private 0600 JSON HTTP proxy for HTTPS downloads and APT during installation.')
     parser.add_argument('--public-url')
     parser.add_argument('--bind-address')
     parser.add_argument('--module-network-cidr', help='Additional RFC1918 /16 through /26; default module pool holds 8 networks; initial installation only.')
@@ -703,6 +774,7 @@ def main(argv=None):
         return
     with tempfile.TemporaryDirectory(prefix='pl-install-') as temporary:
         private = Path(temporary)
+        apt_config = install_apt_config(private, download_proxy)
         archive = private / 'package.tar'
         if args.package_url:
             download(args.package_url, archive, proxy=download_proxy)
@@ -727,12 +799,9 @@ def main(argv=None):
         else:
             prepare_root(root)
         release = stage_release(archive, root, manifest, package_hash)
-        if download_proxy is None:
-            install_docker(info, root)
-        else:
-            install_docker(info, root, download_proxy=download_proxy)
-        ensure_openssl(root)
-        ensure_icmp_dependencies(root, manifest)
+        install_docker(info, root, download_proxy=download_proxy, apt_config=apt_config)
+        ensure_openssl(root, apt_config)
+        ensure_icmp_dependencies(root, release, manifest, apt_config)
         command = [sys.executable, str(release / 'bootstrap.py'), 'install', '--root', str(root),
                    '--package-dir', str(release), '--public-url', args.public_url]
         for option in ('bind_address', 'admin_user', 'tls_cert', 'tls_key', 'password_file', 'network_cidr', 'module_network_cidr', 'integration_config'):

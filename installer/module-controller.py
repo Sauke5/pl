@@ -246,6 +246,7 @@ class Controller:
         safe_directory(self.operations)
         self.env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root', 'LANG': 'C.UTF-8'}
         self._read_routes = {}
+        self._host_log_export_lock = threading.Lock()
 
     @contextmanager
     def instance_lock(self, instance, exclusive=False):
@@ -848,6 +849,17 @@ class Controller:
             self._xray_controller = module.XrayController(self)
         return self._xray_controller
 
+    def host_log_exporter(self):
+        if not hasattr(self, '_host_log_exporter'):
+            path = Path(__file__).with_name('log-export.py')
+            if path.is_symlink() or not path.is_file():
+                raise ValueError('Trusted log export helper is unavailable')
+            spec = importlib.util.spec_from_file_location('pl_log_export', path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            self._host_log_exporter = module
+        return self._host_log_exporter
+
     def host_status(self, body):
         if body != {}:
             raise ValueError('Host diagnostic arguments are not supported')
@@ -1239,7 +1251,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if getattr(self, '_response_started', False) and isinstance(error, (BrokenPipeError, ConnectionResetError)):
             return
         try:
-            sources = {'module-controller.py', 'delivery.py', 'module-network.py',
+            sources = {'module-controller.py', 'delivery.py', 'module-network.py', 'log-export.py',
                        *[kind + '-controller.py' for kind in ('doska', 'sftpgo', 'wayline', 'forms',
                            'grafana', 'netmap', 'bookstack', 'xray', 'alertmanager')]}
             frames, frame, examined = [], error.__traceback__, 0
@@ -1253,7 +1265,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             known = {'ValueError', 'OSError', 'KeyError', 'TypeError', 'TimeoutError', 'BrokenPipeError',
                      'ConnectionResetError', 'BlockingIOError', 'PermissionError', 'FileNotFoundError'}
             routes = {'/v1/doska/transport', '/v1/sftpgo/stream', '/v1/read', '/v1/operations',
-                      '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request'}
+                      '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request', '/v1/host/log-export'}
             record = {'event': 'controller_failure', 'time_ns': time.time_ns(),
                       'rpc': self.path if self.path in routes else 'other',
                       'error_type': type(error).__name__ if type(error).__name__ in known else 'ControllerError',
@@ -1275,7 +1287,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # native streams may outlive the request that stops the core API. They
         # are rejected while an upgrade is active and closed by quiescence.
         if (self.path.startswith(('/v1/delivery/', '/v1/installation/')) or self.path == '/v1/operations'
-                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream', '/v1/native/initial-login')
+                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream', '/v1/native/initial-login', '/v1/host/log-export')
                 or self.command == 'POST' and self.path in (
                     '/v1/read', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request')):
             self._handle_request()
@@ -1319,7 +1331,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ValueError('Transfer encoding refused')
             length = int(self.headers.get('Content-Length', '0'))
             # Forms embeds up to 3 MiB in base64 plus signed JSON metadata.
-            limit = (96 * 1024 if self.command == 'POST' and self.path.startswith('/v1/delivery/proxy/') else
+            limit = (256 if self.command == 'POST' and self.path == '/v1/host/log-export' else
+                     96 * 1024 if self.command == 'POST' and self.path.startswith('/v1/delivery/proxy/') else
                      384 * 1024 if self.command == 'POST' and self.path == '/v1/installation/configure' else
                      5 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/forms/request' else
                      24 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/netmap/request' else 1024 * 1024)
@@ -1339,6 +1352,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 result = getattr(self.server.controller.delivery(), self.path.rsplit('/', 1)[1].replace('-', '_'))(json.loads(raw))
             elif self.command == 'POST' and self.path in ('/v1/installation/status', '/v1/installation/configure'):
                 result = getattr(self.server.controller.delivery().installation_settings(), self.path.rsplit('/', 1)[1])(json.loads(raw))
+            elif self.command == 'POST' and self.path == '/v1/host/log-export':
+                self.handle_host_log_export(raw)
+                return
             elif self.command == 'POST' and self.path == '/v1/host/status':
                 result = self.server.controller.host_status(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/sftpgo/request':
@@ -1413,6 +1429,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     'xray_port_in_use', 'xray_bind_unavailable'}:
                 result['code'] = code
             self.reply(400, result)
+
+    def handle_host_log_export(self, raw):
+        controller = self.server.controller
+        lock = controller._host_log_export_lock
+        if not lock.acquire(blocking=False):
+            self.reply(429, {'error': 'host_log_export_busy'})
+            return
+        try:
+            exporter = controller.host_log_exporter()
+            try:
+                window = exporter.window(raw)
+            except (ValueError, RecursionError):
+                window = None
+            if window is not None:
+                with tempfile.TemporaryFile(mode='w+b') as output:
+                    length = exporter.write_archive(controller, output, *window)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/zip')
+                    self.send_header('Content-Length', str(length))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    shutil.copyfileobj(output, self.wfile, length=64 * 1024)
+                return
+        finally:
+            lock.release()
+        self.reply(400, {'error': 'host_log_export_invalid_window'})
 
     def handle_poll_request(self, payload):
         # These routes are authenticated above. Prometheus/Alertmanager expose

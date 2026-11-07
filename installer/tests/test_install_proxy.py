@@ -191,7 +191,7 @@ class ProfileTests(unittest.TestCase):
                 self.module.main(['--check', '--download-proxy-file', str(self.path)])
             preflight.assert_not_called(); prepare.assert_not_called()
 
-    def test_cli_passes_selected_profile_to_package_and_docker_key_download_only(self):
+    def test_cli_applies_selected_profile_to_downloads_and_package_installation(self):
         profile = {'url': 'http://proxy.example:3128', 'username': 'fixture-user', 'password': 'fixture-password'}
         self.profile(profile)
         calls = []
@@ -199,16 +199,26 @@ class ProfileTests(unittest.TestCase):
             self.assertTrue(proxy == profile, 'Selected proxy profile must reach the download helper')
             calls.append(('download', url))
             destination.write_bytes(b'fixture')
+        def inspect_docker(info, root, download_proxy, apt_config):
+            self.assertEqual(download_proxy, profile)
+            self.assertEqual(apt_config.stat().st_mode & 0o777, 0o600)
+            for transport in ('http', 'https'):
+                self.assertIn(f'Acquire::{transport}::Proxy "http://fixture-user:fixture-password@proxy.example:3128/";',
+                              apt_config.read_text())
         with patch.object(self.module, 'preflight', return_value={'distribution': 'ubuntu', 'codename': 'resolute', 'architecture': 'amd64'}), \
                 patch.object(self.module, 'download', side_effect=download), patch.object(self.module, 'verify_package', return_value={'version': 'test'}), \
                 patch.object(self.module, 'prepare_root'), patch.object(self.module, 'stage_release', return_value=self.root / 'release'), \
-                patch.object(self.module, 'install_docker') as docker, patch.object(self.module, 'ensure_openssl'), \
+                patch.object(self.module, 'install_docker', side_effect=inspect_docker) as docker, \
+                patch.object(self.module, 'ensure_openssl') as openssl, patch.object(self.module, 'ensure_icmp_dependencies') as icmp, \
                 patch.object(self.module, 'run') as run, contextlib.redirect_stdout(io.StringIO()) as output:
             self.module.main(['--root', str(self.root / 'install'), '--package-url', 'https://origin.test/package',
                               '--package-sha256', hashlib.sha256(b'fixture').hexdigest(), '--public-url', 'https://pl.example',
                               '--self-signed', '--download-proxy-file', str(self.path)])
             self.assertEqual(len(calls), 1)
-            self.assertTrue(docker.call_args.kwargs.get('download_proxy') == profile, 'Selected profile must reach Docker key preparation')
+            config = docker.call_args.kwargs['apt_config']
+            self.assertEqual(openssl.call_args.args[-1], config)
+            self.assertEqual(icmp.call_args.args[-1], config)
+            self.assertFalse(config.exists())
             diagnostics = repr(run.call_args_list) + output.getvalue()
             self.assertTrue('fixture-password' not in diagnostics and 'fixture-user' not in diagnostics,
                             'Credentials must not enter subprocess argv or user output')

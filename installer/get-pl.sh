@@ -2,14 +2,77 @@
 # PL bootstrap. The release catalog and complete payload are verified before execution.
 set -eu
 [ "$(id -u)" = 0 ] || { echo 'PL: запустите установку через sudo.' >&2; exit 1; }
-if ! command -v python3 >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
+bootstrap_python() (
     [ -f /etc/os-release ] || { echo 'PL: требуется Ubuntu или Debian.' >&2; exit 1; }
     . /etc/os-release
     case "${ID:-}" in ubuntu|debian) ;; *) echo 'PL: требуется Ubuntu или Debian.' >&2; exit 1;; esac
-    echo 'PL: Python/OpenSSL отсутствуют; системные зависимости устанавливаются через apt с прямым доступом. --proxy применяется к HTTPS загрузкам PL и ключа Docker.' >&2
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 openssl ca-certificates
-fi
+    proxy= credentials= profile=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --proxy=|--proxy-user=|--proxy-file=)
+                echo 'PL: укажите значение параметра прокси.' >&2; exit 1 ;;
+            --proxy|--proxy-user|--proxy-file)
+                option=$1
+                shift
+                [ "$#" -gt 0 ] && [ -n "$1" ] || { echo 'PL: укажите значение параметра прокси.' >&2; exit 1; }
+                case "$option" in --proxy) proxy=$1;; --proxy-user) credentials=$1;; --proxy-file) profile=$1;; esac ;;
+            --proxy=*) proxy=${1#*=} ;;
+            --proxy-user=*) credentials=${1#*=} ;;
+            --proxy-file=*) profile=${1#*=} ;;
+            --proxy-u*|--proxy-f*) echo 'PL: укажите параметр прокси полностью.' >&2; exit 1 ;;
+            --) break ;;
+        esac
+        shift
+    done
+    [ -z "$profile" ] || { echo 'PL: для чтения --proxy-file нужен Python 3. Используйте --proxy и при необходимости --proxy-user.' >&2; exit 1; }
+    [ -n "$proxy" ] || [ -z "$credentials" ] || { echo 'PL: --proxy-user требует --proxy.' >&2; exit 1; }
+    if [ -n "$proxy" ]; then
+        umask 077
+        directory=$(mktemp -d)
+        trap 'rm -f "$directory/apt.conf"; rmdir "$directory"' 0
+        trap 'exit 1' HUP INT TERM
+        # perl-base is part of the Debian and Ubuntu base system, even without Python.
+        if ! printf '%s\0%s\0' "$proxy" "$credentials" | perl -e '
+            local $/;
+            my ($url, $credentials) = split(/\x00/, <STDIN>, -1);
+            die unless $url !~ /[\x00-\x20\x7f]/;
+            my ($scheme, $userinfo, $host, $port) = $url =~ m{\A(http|socks5h?)://(?:([^/]+)@)?(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9][A-Za-z0-9.-]*):([0-9]{1,5})/?\z};
+            die unless defined $port && $port > 0 && $port <= 65535;
+            if (defined $userinfo || length $credentials) {
+                die if defined $userinfo && length $credentials;
+                my ($user, $password) = split(/:/, $userinfo // $credentials, 2);
+                die unless defined $password && length $user && length $password;
+                for ($user, $password) {
+                    s/%([0-9a-fA-F]{2})/chr(hex($1))/eg if defined $userinfo;
+                    die if /[\x00-\x1f\x7f]/ || ($scheme ne "http" && length > 255);
+                }
+                die if $scheme eq "http" && $user =~ /:/;
+                for ($user, $password) { s/([^A-Za-z0-9_.~-])/sprintf("%%%02X", ord($1))/eg; }
+                $host = "$user:$password\@$host";
+            }
+            $scheme = "socks5h" if $scheme eq "socks5";
+            for my $transport ("http", "https") {
+                print "#clear Acquire::${transport}::Proxy;\n";
+                print "#clear Acquire::${transport}::Proxy-Auto-Detect;\n";
+                print "#clear Acquire::${transport}::ProxyAutoDetect;\n";
+                print "Acquire::${transport}::Proxy \"$scheme://$host:$port/\";\n";
+            }
+            print "APT::Update::Error-Mode \"any\";\n";
+        ' >"$directory/apt.conf" 2>/dev/null; then
+            echo 'PL: проверьте адрес, порт, логин и пароль прокси.' >&2; exit 1
+        fi
+        unset no_proxy NO_PROXY
+        set -- -c "$directory/apt.conf"
+        if ! apt-get "$@" update >/dev/null 2>&1 ||
+           ! DEBIAN_FRONTEND=noninteractive apt-get "$@" install -y --no-install-recommends python3 openssl ca-certificates >/dev/null 2>&1; then
+            echo 'PL: не удалось установить Python и OpenSSL через прокси. Проверьте доступ к репозиториям APT.' >&2; exit 1
+        fi
+    else
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 openssl ca-certificates
+    fi
+)
+if ! command -v python3 >/dev/null 2>&1; then bootstrap_python "$@"; fi
 exec python3 - "$@" <<'PL_BOOTSTRAP_PY'
 import argparse
 import base64
@@ -24,6 +87,7 @@ import platform
 import re
 import secrets
 import select
+import shutil
 import socket
 import ssl
 import stat
@@ -321,6 +385,37 @@ def write_proxy_profile(path, value):
         json.dump(value, stream)
 
 
+def write_apt_proxy_config(path, profile):
+    endpoint = urllib.parse.urlsplit(profile['url'])
+    scheme = 'socks5h' if endpoint.scheme == 'socks5' else endpoint.scheme
+    host = urllib.parse.quote(urllib.parse.unquote(endpoint.hostname), safe=':')
+    authority = f'[{host}]:{endpoint.port}' if ':' in host else f'{host}:{endpoint.port}'
+    if 'username' in profile:
+        credentials = ':'.join(urllib.parse.quote(profile[key], safe='') for key in ('username', 'password'))
+        authority = f'{credentials}@{authority}'
+    with open(path, 'x', opener=lambda name, flags: os.open(name, flags, 0o600)) as stream:
+        for transport in ('http', 'https'):
+            key = f'Acquire::{transport}::'
+            for name in ('Proxy', 'Proxy-Auto-Detect', 'ProxyAutoDetect'):
+                stream.write(f'#clear {key}{name};\n')
+            stream.write(f'{key}Proxy "{scheme}://{authority}/";\n')
+        stream.write('APT::Update::Error-Mode "any";\n')
+
+
+def ensure_openssl(apt_config, environment):
+    if shutil.which('openssl'):
+        return
+    if platform.freedesktop_os_release().get('ID') not in ('ubuntu', 'debian'):
+        raise ValueError('PL: требуется Ubuntu или Debian.')
+    apt = ['apt-get', '-c', str(apt_config)] if apt_config else ['apt-get']
+    try:
+        subprocess.run([*apt, 'update'], check=True, env=environment, capture_output=bool(apt_config))
+        subprocess.run([*apt, 'install', '-y', '--no-install-recommends', 'openssl', 'ca-certificates'],
+                       check=True, env=dict(environment, DEBIAN_FRONTEND='noninteractive'), capture_output=bool(apt_config))
+    except subprocess.CalledProcessError:
+        raise ValueError('Не удалось установить OpenSSL. Проверьте доступ APT к репозиториям.') from None
+
+
 def build_download_opener(proxy=None):
     context = ssl.create_default_context(cafile=proxy.get('ca_file') if proxy else None)
     context.set_alpn_protocols(['http/1.1'])
@@ -392,13 +487,24 @@ def main(argv=None):
             if args.proxy:
                 raise ValueError('Проверьте адрес, порт, логин и пароль прокси.') from None
             raise
+        # Older bundles read APT_CONFIG. New ones also pass the same file with
+        # -c to give this invocation precedence over system proxy rules.
+        environment = dict(os.environ, LC_ALL='C', LANG='C')
+        apt_config = None
+        if proxy:
+            apt_config = directory / 'apt.conf'
+            write_apt_proxy_config(apt_config, proxy)
+            environment.update(APT_CONFIG=str(apt_config), PL_INSTALL_APT_CONFIG=str(apt_config))
+            for key in ('no_proxy', 'NO_PROXY'):
+                environment.pop(key, None)
+        ensure_openssl(apt_config, environment)
         if proxy and urllib.parse.urlsplit(proxy['url']).scheme in ('socks5', 'socks5h'):
             proxy = stack.enter_context(socks_adapter(proxy))
             proxy_file = directory / 'installer-proxy.json'
             write_proxy_profile(proxy_file, proxy)
         download_options = {'proxy': proxy} if proxy else {}
         if proxy:
-            print('Прокси используется для HTTPS загрузок поставки и ключа Docker. apt использует прямой доступ.', flush=True)
+            print('Прокси используется для загрузок PL, ключа Docker и запросов APT во время установки.', flush=True)
         catalog_file = directory / 'catalog.json'
         download(CATALOG, catalog_file, 1024 * 1024, **download_options)
         envelope = json.loads(catalog_file.read_bytes())
@@ -448,7 +554,7 @@ def main(argv=None):
         if proxy_file:
             command += ['--download-proxy-file', str(proxy_file)]
         # Existing signed installers parse apt-cache output in English.
-        subprocess.run(command, check=True, env=dict(os.environ, LC_ALL='C', LANG='C'))
+        subprocess.run(command, check=True, env=environment)
         if proxy:
             print('Для будущих загрузок GitHub сохраните прокси в настройках доставки PL. Bootstrap профиль не сохраняется.')
         print('PL: ' + public_url + '\nФайл первоначального пароля: '

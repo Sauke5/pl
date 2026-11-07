@@ -4,12 +4,13 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import stat
 import subprocess
 import tarfile
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'install.sh'
@@ -236,6 +237,16 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(self.module.InstallError, 'upgrade it explicitly'):
                 self.module.preflight(self.root)
 
+    def test_compatible_engine_and_compose_skip_docker_install(self):
+        with self.host(), patch.object(self.module, 'download') as download:
+            info = self.module.preflight(self.root)
+            checked = list(self.calls)
+            self.module.install_docker(info, self.root)
+        self.assertTrue(info['docker_present'])
+        self.assertEqual(self.calls, checked)
+        self.assertFalse(self.root.exists())
+        download.assert_not_called()
+
     def test_resource_and_os_preflight(self):
         for arguments in ({'memory': 1024}, {'free': 1024}, {'distro': 'mint'}, {'compose': '2.23.0'}):
             with self.subTest(arguments=arguments), self.host(**arguments):
@@ -383,15 +394,22 @@ class InstallerTests(unittest.TestCase):
             if args[:2] == ['apt-cache', 'policy']:
                 return '  Candidate: 5:29.8.2-1'
             if args[0] == 'gpg':
-                return 'fpr:::::::::' + self.module.DOCKER_FINGERPRINT + ':'
+                return 'pub:::::::::\nfpr:::::::::' + self.module.DOCKER_FINGERPRINT + ':'
             return ''
 
+        def download_key(url, path, limit, *, proxy):
+            path.write_text('PUBLIC KEY')
+
         info = {'distribution': 'ubuntu', 'codename': 'resolute', 'architecture': 'amd64', 'docker_present': False}
+        proxy = {'url': 'http://127.0.0.1:12345'}
         with patch.object(self.module, 'APT_SOURCES', source), patch.object(self.module, 'APT_KEY', key), \
                 patch.object(self.module, 'run', side_effect=run), \
-                patch.object(self.module, 'download', side_effect=lambda url, path, limit: path.write_text('PUBLIC KEY')), \
+                patch.object(self.module, 'download', side_effect=download_key) as download, \
                 patch.object(self.module, 'preflight', return_value=dict(info, docker_present=True)):
-            self.module.install_docker(info, self.root)
+            self.module.install_docker(info, self.root, download_proxy=proxy)
+        download.assert_called_once()
+        self.assertEqual(download.call_args.args[0], 'https://download.docker.com/linux/ubuntu/gpg')
+        self.assertEqual(download.call_args.kwargs, {'proxy': proxy})
         self.assertIn('Signed-By: ' + str(key), source.read_text())
         apt_installs = [cmd for cmd in calls if cmd[:2] == ['apt-get', 'install']]
         self.assertEqual(len(apt_installs), 2)
@@ -399,6 +417,62 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(['systemctl', 'enable', '--now', 'docker'], calls)
         self.assertEqual(len(json.loads((self.root / 'host-packages.json').read_text())['packages']), 8)
         self.assertTrue(info['docker_present'])
+
+    def test_docker_install_reuses_an_enabled_compatible_repository(self):
+        self.root.mkdir()
+        for managed in (False, True):
+            with self.subTest(managed=managed), tempfile.TemporaryDirectory(dir=self.base) as directory:
+                source, key = Path(directory) / 'pl-docker.sources', Path(directory) / 'pl-docker.asc'
+                source_text = (
+                    'Types: deb\nURIs: https://download.docker.com/linux/ubuntu\nSuites: resolute\n'
+                    f'Components: stable\nArchitectures: amd64\nSigned-By: {key}\n'
+                )
+                if managed:
+                    source.write_text(source_text)
+                    key.write_text('SAVED PUBLIC KEY')
+                calls = []
+
+                def run(args, **kwargs):
+                    calls.append(args)
+                    if args[:2] == ['apt-get', 'indextargets']:
+                        return 'https://download.docker.com/linux/ubuntu/ resolute stable amd64'
+                    if args[:2] == ['apt-cache', 'policy']:
+                        return 'Candidate: 5:29.8.2-1'
+                    if args[0] == 'gpg':
+                        return 'pub:::::::::\nfpr:::::::::' + self.module.DOCKER_FINGERPRINT + ':'
+                    return ''
+
+                info = {'distribution': 'ubuntu', 'codename': 'resolute',
+                        'architecture': 'amd64', 'docker_present': False}
+                with patch.object(self.module, 'APT_SOURCES', source), patch.object(self.module, 'APT_KEY', key), \
+                        patch.object(self.module, 'run', side_effect=run), patch.object(self.module, 'download') as download, \
+                        patch.object(self.module, 'preflight', return_value=dict(info, docker_present=True)):
+                    self.module.install_docker(info, self.root)
+                download.assert_not_called()
+                self.assertEqual(calls.count(['apt-get', 'update']), 1)
+                self.assertEqual(sum(command[0] == 'gpg' for command in calls), int(managed))
+                self.assertIn(['systemctl', 'enable', '--now', 'docker'], calls)
+                self.assertTrue(info['docker_present'])
+                if managed:
+                    self.assertEqual(source.read_text(), source_text)
+                    self.assertEqual(key.read_text(), 'SAVED PUBLIC KEY')
+                else:
+                    self.assertFalse(source.exists())
+                    self.assertFalse(key.exists())
+
+    def test_incompatible_docker_repository_stops_before_apt_install(self):
+        source, key = self.base / 'pl-docker.sources', self.base / 'pl-docker.asc'
+        info = {'distribution': 'ubuntu', 'codename': 'resolute', 'architecture': 'amd64', 'docker_present': False}
+        target = 'https://download.docker.com/linux/ubuntu/ noble stable amd64'
+        with patch.object(self.module, 'APT_SOURCES', source), patch.object(self.module, 'APT_KEY', key), \
+                patch.object(self.module, 'run', return_value=target) as run, patch.object(self.module, 'download') as download:
+            with self.assertRaisesRegex(self.module.InstallError, 'enabled Docker APT source'):
+                self.module.install_docker(info, self.root)
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0][:2], ['apt-get', 'indextargets'])
+        download.assert_not_called()
+        self.assertFalse(source.exists())
+        self.assertFalse(key.exists())
 
     def test_wrong_docker_key_prevents_repository_install(self):
         self.root.mkdir()
@@ -411,7 +485,7 @@ class InstallerTests(unittest.TestCase):
             if args[0] == 'apt-cache':
                 return 'Candidate: 1.0'
             if args[0] == 'gpg':
-                return 'fpr:::::::::BAD:'
+                return 'pub:::::::::\nfpr:::::::::BAD:'
             return ''
 
         info = {'distribution': 'ubuntu', 'codename': 'resolute', 'architecture': 'amd64', 'docker_present': False}
@@ -423,6 +497,22 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(source.exists())
         self.assertFalse(key.exists())
         self.assertFalse(any('docker-ce' in ' '.join(cmd) for cmd in calls))
+
+    def test_fresh_install_uses_the_staged_icmp_dependency_helper(self):
+        release = self.root / 'releases/0.1.0'
+        release.mkdir(parents=True)
+        (release / 'icmp-install.py').write_text(
+            'def _run():\n    return "3.a2.ds2-10.1build1"\n'
+            'def ensure_dependency(run):\n    return run()\n'
+        )
+        binary = Mock(spec=Path)
+        binary.is_file.return_value = False
+        binary.stat.return_value = types.SimpleNamespace(st_mode=stat.S_IFREG | 0o755, st_uid=0)
+        with patch.object(self.module, 'Path', return_value=binary), patch.object(self.module, 'run') as run:
+            self.module.ensure_icmp_dependencies(self.root, release, {'features': {'icmp_probe': True}})
+        run.assert_not_called()
+        packages = json.loads((self.root / 'host-packages.json').read_text())
+        self.assertEqual(packages['packages'], ['hping3=3.a2.ds2-10.1build1'])
 
 
 if __name__ == '__main__':

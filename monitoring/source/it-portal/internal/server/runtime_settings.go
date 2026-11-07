@@ -73,6 +73,9 @@ func (s *Server) runtimeSettings(w http.ResponseWriter, r *http.Request) {
 		"allowed_cidrs":            s.Config.CIDRs, "allowed_ports": s.Config.Ports,
 		"demo": s.Config.Demo, "oidc_configured": s.Config.Issuer != "", "executor_configured": s.Config.ExecutorURL != "",
 	}
+	if s.Config.PortableRelease {
+		response["log_export_hours"] = logExportHours
+	}
 	if s.Modules == nil {
 		response["host_error"] = "Диагностика хоста недоступна: host controller не подключён"
 	} else if host, err := s.Modules.HostStatus(r.Context()); err != nil {

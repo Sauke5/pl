@@ -483,6 +483,95 @@ class ProvisionerTests(unittest.TestCase):
         self.assertNotIn('http_proxy', process.call_args.kwargs['env'])
         self.assertIs(process.call_args.kwargs['stdin'], h.subprocess.DEVNULL)
 
+    def test_missing_hping_candidate_enables_signed_ubuntu_universe(self):
+        version = '3.a2.ds2-10.1build1'
+        cases = {
+            'amd64': [
+                ('https://archive.ubuntu.com/ubuntu', 'resolute resolute-updates'),
+                ('https://security.ubuntu.com/ubuntu', 'resolute-security'),
+            ],
+            'arm64': [('https://ports.ubuntu.com/ubuntu-ports', 'resolute resolute-updates resolute-security')],
+        }
+        for architecture, archives in cases.items():
+            with self.subTest(architecture=architecture), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                binary, keyring, source = base / 'hping3', base / 'ubuntu.gpg', base / 'pl-ubuntu-universe.sources'
+                keyring.write_bytes(b'archive signing key')
+                keyring.chmod(0o644)
+                expected_source = '\n'.join(
+                    f'Types: deb\nURIs: {uri}\nSuites: {suites}\nComponents: universe\n'
+                    f'Architectures: {architecture}\nSigned-By: {keyring}\n'
+                    for uri, suites in archives
+                )
+                commands = []
+                indexes_have_universe = False
+
+                def run(command, **kwargs):
+                    nonlocal indexes_have_universe
+                    commands.append(command)
+                    if command == ['apt-get', 'update']:
+                        indexes_have_universe = source.is_file()
+                        if indexes_have_universe:
+                            self.assertEqual(source.read_text(), expected_source)
+                        return b''
+                    if command == ['apt-cache', 'policy', 'hping3']:
+                        return ('  Candidate: ' + (version if indexes_have_universe else '(none)')).encode()
+                    if command == ['dpkg', '--print-architecture']:
+                        return architecture.encode()
+                    if command[:2] == ['apt-get', 'indextargets']:
+                        return f'resolute main {architecture}\n'.encode()
+                    if command[:2] == ['apt-get', 'install']:
+                        self.assertTrue(indexes_have_universe)
+                        binary.write_bytes(b'hping3')
+                        binary.chmod(0o755)
+                        return b''
+                    if command[:2] == ['dpkg-query', '-W']:
+                        return version.encode()
+                    raise AssertionError(command)
+
+                real_checked_file = h._checked_file
+                with patch.object(h, 'Path', return_value=binary), \
+                        patch.object(h, 'UBUNTU_ARCHIVE_KEYRING', keyring), \
+                        patch.object(h, 'UBUNTU_UNIVERSE_SOURCE', source), \
+                        patch.object(h.platform, 'freedesktop_os_release',
+                                     return_value={'ID': 'ubuntu', 'VERSION_CODENAME': 'resolute'}), \
+                        patch.object(h, '_checked_file', side_effect=lambda path, owner, **kw:
+                                     real_checked_file(path, os.getuid(), **kw)):
+                    self.assertEqual(h.ensure_dependency(run), version)
+                self.assertEqual(commands.count(['apt-get', 'update']), 2)
+                self.assertEqual(commands[-2], ['apt-get', 'install', '-y', '--no-install-recommends', f'hping3={version}'])
+
+    def test_unavailable_hping_leaves_debian_and_already_enabled_universe_unchanged(self):
+        for release, results in (
+            ({'ID': 'debian', 'VERSION_CODENAME': 'bookworm'}, [b'', b'Candidate: (none)']),
+            ({'ID': 'ubuntu', 'VERSION_CODENAME': 'resolute'},
+             [b'', b'Candidate: (none)', b'amd64', b'resolute universe amd64\n']),
+        ):
+            with self.subTest(distribution=release['ID']), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory) / 'pl-ubuntu-universe.sources'
+                binary = Path(directory) / 'hping3'
+                run = Mock(side_effect=results)
+                with patch.object(h, 'Path', return_value=binary), patch.object(h, 'UBUNTU_UNIVERSE_SOURCE', source), \
+                        patch.object(h.platform, 'freedesktop_os_release', return_value=release):
+                    with self.assertRaisesRegex(ValueError, 'APT cannot find hping3'):
+                        h.ensure_dependency(run)
+                self.assertFalse(source.exists())
+                self.assertEqual(run.call_count, len(results))
+                self.assertEqual([call.args[0] for call in run.call_args_list].count(['apt-get', 'update']), 1)
+
+    def test_failed_universe_refresh_removes_only_the_new_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            binary, source = base / 'hping3', base / 'pl-ubuntu-universe.sources'
+            release = {'ID': 'ubuntu', 'VERSION_CODENAME': 'resolute'}
+            run = Mock(side_effect=[b'', b'Candidate: (none)', b'amd64', b'', ValueError('APT refresh failed')])
+            with patch.object(h, 'Path', return_value=binary), patch.object(h, '_checked_file'), \
+                    patch.object(h, 'UBUNTU_UNIVERSE_SOURCE', source), \
+                    patch.object(h.platform, 'freedesktop_os_release', return_value=release):
+                with self.assertRaisesRegex(ValueError, 'APT refresh failed'):
+                    h.ensure_dependency(run)
+            self.assertFalse(source.exists())
+
     def test_transient_provisioner_is_separate_and_recovery_refuses_an_active_external_writer(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve(); (root / 'state').mkdir(mode=0o700)

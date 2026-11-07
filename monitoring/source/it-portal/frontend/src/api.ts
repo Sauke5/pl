@@ -32,13 +32,13 @@ export class APIError extends Error {
     this.fieldErrors = fieldErrors;
   }
 }
-export async function api<T>(
+export async function apiResponse(
   path: string,
   method = "GET",
   body?: unknown,
   headers: Record<string, string> = {},
   signal?: AbortSignal,
-): Promise<T> {
+): Promise<Response> {
   const response = await fetch(
     path.startsWith("/auth/") || path.startsWith("/doska/api/doska/")
       ? path
@@ -100,6 +100,16 @@ export async function api<T>(
     }
     throw new APIError(message, response.status, code, details, fieldErrors);
   }
+  return response;
+}
+export async function api<T>(
+  path: string,
+  method = "GET",
+  body?: unknown,
+  headers: Record<string, string> = {},
+  signal?: AbortSignal,
+): Promise<T> {
+  const response = await apiResponse(path, method, body, headers, signal);
   if (response.status === 204) return undefined as T;
   const result = (await response.json()) as T;
   if (path === "/session") csrf = (result as Session).csrf_token || "";

@@ -237,7 +237,9 @@ export function OperationsTimeline({
   });
   const resources = useAPI<Resource[]>("/resources");
   const integrations = useAPI<Integration[]>("/integrations");
-  const [selected, setSelected] = useState<WorkspaceOperation>();
+  const [selectedId, setSelectedId] = useState<string>();
+  const selected = operations.data?.find((item) => item.id === selectedId);
+  if (selectedId && operations.data && !selected) setSelectedId(undefined);
   const result = useAPI<Job>(
     `/jobs/${selected?.id || ""}`,
     active && !!selected,
@@ -275,9 +277,10 @@ export function OperationsTimeline({
           checked={showServiceRefresh}
           onChange={(event) => setShowServiceRefresh(event.target.checked)}
         />
-        <span>Показывать успешные служебные обновления</span>
+        <span>Показывать историю фоновых проверок</span>
         <small>
-          Ручные операции, ошибки и незавершённые задания показываются всегда.
+          Включая успешные проверки и ошибки, после которых опрос модуля прошёл
+          успешно.
         </small>
       </label>
       <div className="workspace-operations-grid">
@@ -296,8 +299,8 @@ export function OperationsTimeline({
                 <button
                   className="workspace-operation-row"
                   key={item.id}
-                  aria-pressed={selected?.id === item.id}
-                  onClick={() => setSelected(item)}
+                  aria-pressed={selectedId === item.id}
+                  onClick={() => setSelectedId(item.id)}
                 >
                   {item.status === "succeeded" ? (
                     <CircleCheck size={18} />
@@ -342,7 +345,7 @@ export function OperationsTimeline({
                   size="icon"
                   variant="ghost"
                   aria-label="Сбросить выбор операции"
-                  onClick={() => setSelected(undefined)}
+                  onClick={() => setSelectedId(undefined)}
                 >
                   <X size={18} />
                 </Button>
