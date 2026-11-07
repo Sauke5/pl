@@ -421,7 +421,9 @@ func (g *netmapHandler) serve(w http.ResponseWriter, r *http.Request, id string,
 		return
 	}
 	route, ok := netmapMatchRoute(r)
-	if !ok || mapped && (route.native != "" || route.scope != "netmap:admin") || r.Header.Get("Upgrade") != "" || r.Header.Get("Content-Encoding") != "" || len(r.TransferEncoding) > 0 {
+	// netmapMatchRoute accepts only valid network IDs for this snapshot path.
+	allowedMappedScope := route.scope == "netmap:admin" || strings.HasPrefix(r.URL.Path, "/netmap/api/sites/network-")
+	if !ok || mapped && (route.native != "" || !allowedMappedScope) || r.Header.Get("Upgrade") != "" || r.Header.Get("Content-Encoding") != "" || len(r.TransferEncoding) > 0 {
 		problem(w, 404, "netmap_route", "Маршрут сетевого модуля недоступен")
 		return
 	}

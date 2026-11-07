@@ -189,6 +189,40 @@ func TestNetmapExpiredSessionRedirectsOnlyKnownDocuments(t *testing.T) {
 	}
 }
 
+func TestNetmapMappedNetworkSnapshot(t *testing.T) {
+	const scope = "sites/network-1234567890abcdef"
+	const prefix = "/api/v1/modules/" + netmapGatewayID + "/netmap/"
+	const snapshot = `{"nodes":[{"id":"observed:1234567890abcdef:192.0.2.1"}]}`
+	g := netmapFixture(t, func(r *http.Request, _ []byte) *http.Response {
+		claims := decodeDirectoryAssertion(t, r, bytes.Repeat([]byte{7}, 32))
+		if r.Method != http.MethodGet || r.URL.Path != "/netmap/api/"+scope || len(claims.Scopes) != 1 || claims.Scopes[0] != "netmap:read" {
+			t.Fatalf("unexpected snapshot request %s %s %v", r.Method, r.URL.Path, claims.Scopes)
+		}
+		return netmapResponse("application/json", snapshot)
+	})
+	if w := netmapCall(g, http.MethodGet, prefix+scope, "", nil, true); w.Code != 200 || w.Body.String() != snapshot {
+		t.Fatalf("snapshot request returned %d %s", w.Code, w.Body.String())
+	}
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodPost, scope},
+		{http.MethodGet, scope + "0"},
+		{http.MethodGet, "sites/network"},
+		{http.MethodGet, "topology"},
+	} {
+		if w := netmapCall(g, tc.method, prefix+tc.path, "", nil, true); w.Code != 404 {
+			t.Errorf("%s %s returned %d", tc.method, tc.path, w.Code)
+		}
+	}
+	g.session = func(*http.Request) (session, error) {
+		value := netmapSession()
+		value.User.Admin = false
+		return value, nil
+	}
+	if w := netmapCall(g, http.MethodGet, prefix+scope, "", nil, true); w.Code != 403 {
+		t.Fatalf("viewer snapshot request returned %d", w.Code)
+	}
+}
+
 func TestNetmapMappedManagementUsesCurrentPlCSRFAndRewrittenSignature(t *testing.T) {
 	calls := 0
 	g := netmapFixture(t, func(r *http.Request, body []byte) *http.Response {

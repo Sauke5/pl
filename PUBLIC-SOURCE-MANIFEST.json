@@ -16934,6 +16934,11 @@
       "size": 3014
     },
     {
+      "path": "docs/releases/0.8.3.json",
+      "sha256": "7809c3ba1548fa085380889a30a57b0442863b8efd5854e8a3a923794da1babc",
+      "size": 791
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -20500,13 +20505,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/netmap_gateway.go",
-      "sha256": "13bba68494c78e45ae4bf7bb7f425a28d678e6bc2b85f89cda4371d230dcc483",
-      "size": 27319
+      "sha256": "542e70350063af9134e441ad26919fd615cc99c94f12e1ed80f3eef77b303163",
+      "size": 27501
     },
     {
       "path": "monitoring/source/it-portal/internal/server/netmap_gateway_test.go",
-      "sha256": "bf44346b329880f8a34a5a61e3c354633df5791aae1fcd4508383bcbae7f11bc",
-      "size": 27987
+      "sha256": "6b153a5d8138d96075d4e247bce3db33011d9f250dcee6a2d4945f2ca99d0b43",
+      "size": 29469
     },
     {
       "path": "monitoring/source/it-portal/internal/server/netmap_inventory_test.go",
