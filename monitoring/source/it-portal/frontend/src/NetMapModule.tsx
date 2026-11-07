@@ -4,13 +4,13 @@ import {
   ChevronDown,
   ExternalLink,
   Info,
-  Map,
+  Map as MapIcon,
   Play,
   RefreshCw,
   Trash2,
 } from "lucide-react";
 import { ActionFeedback } from "./ActionNotifications";
-import { api, queryClient, useAPI } from "./api";
+import { APIError, api, errorText, queryClient, useAPI } from "./api";
 import { Badge, Empty, ErrorBox, Field, Panel } from "./components/common";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
@@ -43,11 +43,25 @@ type Poll = {
   result?: Record<string, unknown>;
 };
 type Items<T> = { items: T[] };
+type EnrollmentTarget = { address: string; networkID: string; name?: string };
+type DiscoveryGraph = {
+  nodes: {
+    id: string;
+    name: string;
+    management_ip: string;
+    details?: {
+      source?: string;
+      netbox_id?: number;
+      observation_state?: string;
+    };
+  }[];
+};
 type Networks = Items<Network> & {
   capabilities?: {
     device_access?: number;
     ordered_snmp_profiles?: number;
     inventory?: number;
+    network_create_only?: number;
   };
 };
 const netMapSections = [
@@ -488,6 +502,12 @@ function DeviceAccess({
 }
 const running = (state: string) =>
   ["queued", "pending", "running"].includes(state);
+
+function confirmPollStart(value: { id: string; state: string }) {
+  if (!value?.id || !running(value.state))
+    throw new Error("NetMap не подтвердил запуск проверки. Обновите историю.");
+}
+
 const pollLabels: Record<string, string> = {
   queued: "В очереди",
   pending: "Ожидает запуска",
@@ -512,6 +532,174 @@ const resultColumns = [
 ] as const;
 const mapLink = (network: Network) =>
   `/netmap/?scope=${encodeURIComponent("network-" + network.id)}`;
+
+function DiscoveredDevices({
+  base,
+  network,
+  poll,
+  onAccess,
+}: {
+  base: string;
+  network: Network;
+  poll?: Poll;
+  onAccess: (target: EnrollmentTarget) => void;
+}) {
+  const path = `${base}/sites/network-${network.id}`;
+  const graph = useAPI<DiscoveryGraph>(path);
+  const capabilities = useAPI<{
+    guided_enrollment?: boolean;
+    ssh_host_key?: boolean;
+  }>(base + "/inventory/capabilities");
+  const canSetAccess = !!(
+    capabilities.data?.guided_enrollment && capabilities.data.ssh_host_key
+  );
+  const targets = useAPI<Items<{ address: string }>>(
+    base + "/inventory/targets",
+    canSetAccess,
+  );
+  const [search, setSearch] = useState("");
+  const [limit, setLimit] = useState(50);
+  const searching = !!poll && running(poll.state);
+  const finishedPoll = poll && !searching ? poll.id : undefined;
+  const previousPoll = useRef(finishedPoll);
+  useEffect(() => {
+    if (finishedPoll && previousPoll.current !== finishedPoll)
+      void queryClient.invalidateQueries({ queryKey: [path] });
+    previousPoll.current = finishedPoll;
+  }, [finishedPoll, path]);
+
+  const found = new Map<string, { name: string; source: string }>();
+  for (const node of Array.isArray(graph.data?.nodes) ? graph.data.nodes : []) {
+    const address = node?.management_ip;
+    if (typeof address !== "string" || !address || address.length > 45)
+      continue;
+    const observed = node.id === `observed:${network.id}:${address}`;
+    const managed =
+      node.details?.source === `network:${network.id}` &&
+      !!node.details.netbox_id;
+    if (!managed && (!observed || found.has(address))) continue;
+    const source = managed
+      ? "В NetBox"
+      : node.details?.observation_state === "stale"
+        ? "Ранее найдено"
+        : node.details?.observation_state === "reported"
+          ? "Импортировано"
+          : "Ответил на проверку";
+    const name = typeof node.name === "string" ? node.name : "";
+    found.set(address, { name: name === address ? "" : name, source });
+  }
+  const configured = new Set(
+    (Array.isArray(targets.data?.items) ? targets.data.items : []).map(
+      (target) => target.address,
+    ),
+  );
+  const term = search.trim().toLocaleLowerCase();
+  const matches = [...found].filter(([address, { name }]) =>
+    `${address} ${name}`.toLocaleLowerCase().includes(term),
+  );
+
+  return (
+    <Panel title="Найденные устройства" className="netmap-history">
+      <p className="module-hint">
+        Настройте доступ к нужному устройству, чтобы NetMap мог прочитать его
+        интерфейсы и сведения о соседях.
+      </p>
+      {!capabilities.isPending && !canSetAccess && (
+        <p className="module-hint">
+          Мастер подключения доступен после обновления NetMap.{" "}
+          <a href="#settings?section=updates">Открыть обновления</a>
+        </p>
+      )}
+      {canSetAccess && targets.error && (
+        <ErrorBox error={targets.error} retry={() => void targets.refetch()} />
+      )}
+      {searching && (
+        <p role="status">Ищем устройства. Список обновится после проверки.</p>
+      )}
+      {graph.error && (
+        <ErrorBox error={graph.error} retry={() => void graph.refetch()} />
+      )}
+      {graph.isPending && !graph.error && !searching && (
+        <p role="status">Загружаем найденные адреса…</p>
+      )}
+      {graph.data && !Array.isArray(graph.data.nodes) && (
+        <ErrorBox
+          error={new Error("NetMap вернул некорректный список адресов.")}
+        />
+      )}
+      {graph.data &&
+        Array.isArray(graph.data.nodes) &&
+        !found.size &&
+        !searching && <p>Найденных устройств пока нет.</p>}
+      {(found.size > 50 || search) && (
+        <Field label="Поиск по адресу или имени">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setLimit(50);
+            }}
+          />
+        </Field>
+      )}
+      {term && !matches.length && <p>По этому запросу ничего не найдено.</p>}
+      {matches.length > 0 && (
+        <div className="netmap-history-scroll">
+          <table aria-label="Найденные устройства">
+            <thead>
+              <tr>
+                <th>Адрес</th>
+                <th>Имя</th>
+                <th>Источник</th>
+                <th>Доступ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matches.slice(0, limit).map(([address, { name, source }]) => (
+                <tr key={address}>
+                  <td>
+                    <code>{address}</code>
+                  </td>
+                  <td>{name || "—"}</td>
+                  <td>{source}</td>
+                  <td>
+                    {canSetAccess ? (
+                      <Button
+                        size="sm"
+                        disabled={targets.isPending || !!targets.error}
+                        onClick={() =>
+                          onAccess({
+                            address,
+                            networkID: network.id,
+                            ...(name ? { name } : {}),
+                          })
+                        }
+                      >
+                        {configured.has(address)
+                          ? "Изменить доступ"
+                          : "Настроить доступ"}
+                      </Button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {matches.length > limit && (
+        <div className="netmap-form-actions">
+          <Button size="sm" onClick={() => setLimit(limit + 50)}>
+            Показать ещё · {matches.length - limit}
+          </Button>
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 function pollResult(poll: Poll): Record<string, unknown> {
   const result = poll.result;
@@ -708,9 +896,8 @@ function NetMapSettings({ instance }: { instance: Instance }) {
   const base = `/modules/${instance.id}/netmap`;
   const networks = useAPI<Networks>(base + "/networks", enabled);
   const inventory = networks.data?.capabilities?.inventory === 1;
+  const createOnly = networks.data?.capabilities?.network_create_only === 1;
   const [selectedSection, setSelectedSection] = useState<NetMapSection>();
-  const section =
-    selectedSection || (networks.data && !inventory ? "networks" : "devices");
   const [legacyProfileOpen, setLegacyProfileOpen] = useState(false);
   const deviceAccess = networks.data?.capabilities?.device_access === 1;
   const orderedSNMP = networks.data?.capabilities?.ordered_snmp_profiles === 1;
@@ -719,6 +906,9 @@ function NetMapSettings({ instance }: { instance: Instance }) {
   const networkItems = Array.isArray(networks.data?.items)
     ? networks.data.items
     : [];
+  const section =
+    selectedSection ||
+    (inventory && networkItems.length ? "devices" : "networks");
   const profileItems = Array.isArray(profiles.data?.items)
     ? profiles.data.items
     : [];
@@ -729,8 +919,21 @@ function NetMapSettings({ instance }: { instance: Instance }) {
     networkItems.find((item) => item.id === selectedID) || networkItems[0];
   const [name, setName] = useState("");
   const [cidr, setCidr] = useState("");
+  const createAttempt = useRef<
+    | {
+        payload: string;
+        operation: string;
+        knownNetworkIDs: string[];
+      }
+    | undefined
+  >(undefined);
   const [networkProfile, setNetworkProfile] = useState("");
   const [networkAccess, setNetworkAccess] = useState<string>();
+  const [enrollmentTarget, setEnrollmentTarget] = useState<EnrollmentTarget>();
+  const [firstPollFailure, setFirstPollFailure] = useState<{
+    networkID: string;
+    error: Error;
+  }>();
   const [snmpDraft, setSnmpDraft] = useState<string[]>();
   const [profileID, setProfileID] = useState("");
   const [community, setCommunity] = useState("");
@@ -770,9 +973,29 @@ function NetMapSettings({ instance }: { instance: Instance }) {
       queryClient.invalidateQueries({
         predicate: (query) =>
           typeof query.queryKey[0] === "string" &&
-          query.queryKey[0].startsWith(base + "/devices"),
+          (query.queryKey[0].startsWith(base + "/devices") ||
+            query.queryKey[0].startsWith(base + "/sites/network-")),
       }),
     ]);
+  }
+
+  async function post<T>(
+    path: string,
+    body: unknown,
+    operation: string = crypto.randomUUID(),
+  ) {
+    const value = await api<T>(base + path, "POST", body, {
+      "Idempotency-Key": operation,
+    });
+    if (
+      value &&
+      typeof value === "object" &&
+      "error" in value &&
+      typeof value.error === "string"
+    ) {
+      throw new Error(value.error);
+    }
+    return value;
   }
 
   async function mutate<T>(
@@ -788,22 +1011,84 @@ function NetMapSettings({ instance }: { instance: Instance }) {
     setError(undefined);
     setNotice("");
     try {
-      const value = await api<T>(base + path, "POST", body, {
-        "Idempotency-Key": crypto.randomUUID(),
-      });
-      if (
-        value &&
-        typeof value === "object" &&
-        "error" in value &&
-        typeof value.error === "string"
-      ) {
-        throw new Error(value.error);
-      }
+      const value = await post<T>(path, body);
       onSaved?.(value);
       setNoticeKind(kind);
       setNotice(message);
       await reload();
     } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function addNetwork() {
+    if (busy || !enabled) return;
+    setSelectedSection("networks");
+    setBusy("network");
+    setError(undefined);
+    setNotice("");
+    try {
+      const body = {
+        cidr: cidr.trim(),
+        name: name.trim(),
+        profile: createOnly ? "" : networkProfile,
+        ...(createOnly ? { create_only: true } : {}),
+        ...(orderedSNMP ? { snmp_profiles: [] } : {}),
+      };
+      const payload = JSON.stringify(body);
+      const retry =
+        createAttempt.current?.payload === payload
+          ? createAttempt.current
+          : undefined;
+      const attempt = retry ?? {
+        payload,
+        operation: crypto.randomUUID(),
+        knownNetworkIDs: networkItems.map((network) => network.id),
+      };
+      const existing =
+        !retry &&
+        !createOnly &&
+        networkItems.find((network) => network.cidr === body.cidr);
+      createAttempt.current = attempt;
+      const { id, created } = existing
+        ? { id: existing.id, created: false }
+        : await post<{ id: string; created?: boolean }>(
+            "/networks",
+            body,
+            attempt.operation,
+          );
+      if (!/^[a-f0-9]{16}$/.test(id))
+        throw new Error("NetMap не подтвердил сохранение сети.");
+      createAttempt.current = undefined;
+      setSelectedID(id);
+      setNetworkAccess(undefined);
+      setSnmpDraft(undefined);
+      setName("");
+      setCidr("");
+
+      if (created ?? !attempt.knownNetworkIDs.includes(id)) {
+        try {
+          confirmPollStart(await post(`/networks/${id}/poll`, {}));
+          setNoticeKind("info");
+          setNotice("Сеть сохранена. Первый поиск устройств запущен.");
+        } catch (failure) {
+          setFirstPollFailure({
+            networkID: id,
+            error: new Error(
+              `Сеть сохранена. Запуск первого поиска не подтверждён. ${errorText(failure)}`,
+            ),
+          });
+        }
+      } else {
+        setNoticeKind("success");
+        setNotice("Эта сеть уже добавлена.");
+      }
+      await reload();
+    } catch (failure) {
+      if (failure instanceof APIError && failure.status < 500)
+        createAttempt.current = undefined;
       setError(failure);
     } finally {
       setBusy("");
@@ -837,7 +1122,7 @@ function NetMapSettings({ instance }: { instance: Instance }) {
         <div className="actions">
           {enabled && (
             <a className="button button-secondary" href="/netmap/">
-              <Map size={17} aria-hidden="true" />
+              <MapIcon size={17} aria-hidden="true" />
               Открыть карту
             </a>
           )}
@@ -874,6 +1159,8 @@ function NetMapSettings({ instance }: { instance: Instance }) {
               base={base}
               enabled={enabled}
               networks={networkItems}
+              enrollmentTarget={enrollmentTarget}
+              onEnrollmentDismissed={() => setEnrollmentTarget(undefined)}
               view={
                 section === "devices"
                   ? "devices"
@@ -925,8 +1212,8 @@ function NetMapSettings({ instance }: { instance: Instance }) {
               }
             >
               <p className="module-hint">
-                Проверка сети ищет устройства в диапазоне адресов. Профили SNMP
-                добавляют сведения об оборудовании.
+                После добавления сети NetMap запустит первый поиск устройств.
+                Повторную проверку можно запустить вручную.
               </p>
               {networks.error && (
                 <ErrorBox
@@ -963,107 +1250,121 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                   </Field>
                   {selected && (
                     <>
-                      <div className="netmap-network-profile">
-                        <label>
-                          <span>
-                            {deviceAccess
-                              ? "SSH-профиль новых устройств"
-                              : "Профиль"}
-                          </span>
-                          <select
-                            aria-label="Профиль выбранной сети"
-                            disabled={!!busy || activePoll || !!profiles.error}
-                            value={networkAccess ?? selected.profile}
-                            onChange={(event) =>
-                              setNetworkAccess(event.target.value)
-                            }
-                          >
-                            <option value="">Без профиля: ICMP/TCP</option>
-                            {profileItems.map((profile) => (
-                              <option key={profile.id} value={profile.id}>
-                                {profile.id}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {networkAccess !== undefined &&
-                          networkAccess !== selected.profile && (
-                            <Button
-                              size="icon"
-                              aria-label="Применить профиль к сети"
+                      <details
+                        className="netmap-add-network"
+                        open={inventory ? undefined : true}
+                      >
+                        <summary>
+                          <ChevronDown size={18} aria-hidden="true" />
+                          Дополнительные настройки сети
+                        </summary>
+                        <div className="netmap-network-profile">
+                          <label>
+                            <span>
+                              {deviceAccess
+                                ? "SSH-профиль новых устройств"
+                                : "Профиль"}
+                            </span>
+                            <select
+                              aria-label="Профиль выбранной сети"
                               disabled={
                                 !!busy || activePoll || !!profiles.error
                               }
-                              onClick={() =>
-                                void mutate(
-                                  "network-profile",
-                                  "/networks",
-                                  {
-                                    cidr: selected.cidr,
-                                    name: selected.name,
-                                    profile: networkAccess,
-                                    ...(orderedSNMP
-                                      ? {
-                                          snmp_profiles:
-                                            selected.snmp_profiles ?? [],
-                                        }
-                                      : {}),
-                                  },
-                                  "Профиль сети обновлён.",
-                                  () => setNetworkAccess(undefined),
-                                )
+                              value={networkAccess ?? selected.profile}
+                              onChange={(event) =>
+                                setNetworkAccess(event.target.value)
                               }
                             >
-                              <Check size={17} aria-hidden="true" />
-                            </Button>
-                          )}
-                      </div>
-                      {deviceAccess && (
-                        <p className="module-hint">
-                          Этот профиль назначается новым устройствам. Привязки
-                          уже добавленных устройств сохраняются.
-                        </p>
-                      )}
-                      {orderedSNMP && (
-                        <>
-                          <h3>SNMP-профили сети</h3>
-                          {selected.snmp_profiles_invalid && (
-                            <p role="alert">
-                              Список SNMP-профилей требует исправления: профиль
-                              удалён или в нём не задан SNMP community.
-                            </p>
-                          )}
-                          <SNMPOrder
-                            value={snmpDraft ?? selected.snmp_profiles ?? []}
-                            profiles={profileItems}
-                            disabled={!!busy || activePoll || !!profiles.error}
-                            onChange={setSnmpDraft}
-                          />
-                          {snmpDraft !== undefined && (
-                            <Button
+                              <option value="">Без профиля: ICMP/TCP</option>
+                              {profileItems.map((profile) => (
+                                <option key={profile.id} value={profile.id}>
+                                  {profile.id}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {networkAccess !== undefined &&
+                            networkAccess !== selected.profile && (
+                              <Button
+                                size="icon"
+                                aria-label="Применить профиль к сети"
+                                disabled={
+                                  !!busy || activePoll || !!profiles.error
+                                }
+                                onClick={() =>
+                                  void mutate(
+                                    "network-profile",
+                                    "/networks",
+                                    {
+                                      cidr: selected.cidr,
+                                      name: selected.name,
+                                      profile: networkAccess,
+                                      ...(orderedSNMP
+                                        ? {
+                                            snmp_profiles:
+                                              selected.snmp_profiles ?? [],
+                                          }
+                                        : {}),
+                                    },
+                                    "Профиль сети обновлён.",
+                                    () => setNetworkAccess(undefined),
+                                  )
+                                }
+                              >
+                                <Check size={17} aria-hidden="true" />
+                              </Button>
+                            )}
+                        </div>
+                        {deviceAccess && (
+                          <p className="module-hint">
+                            Этот профиль назначается новым устройствам. Привязки
+                            уже добавленных устройств сохраняются.
+                          </p>
+                        )}
+                        {orderedSNMP && (
+                          <>
+                            <h3>SNMP-профили сети</h3>
+                            {selected.snmp_profiles_invalid && (
+                              <p role="alert">
+                                Список SNMP-профилей требует исправления:
+                                профиль удалён или в нём не задан SNMP
+                                community.
+                              </p>
+                            )}
+                            <SNMPOrder
+                              value={snmpDraft ?? selected.snmp_profiles ?? []}
+                              profiles={profileItems}
                               disabled={
                                 !!busy || activePoll || !!profiles.error
                               }
-                              onClick={() =>
-                                void mutate(
-                                  "snmp-order",
-                                  "/networks",
-                                  {
-                                    cidr: selected.cidr,
-                                    name: selected.name,
-                                    profile: selected.profile,
-                                    snmp_profiles: snmpDraft,
-                                  },
-                                  "Порядок SNMP-профилей сохранён.",
-                                  () => setSnmpDraft(undefined),
-                                )
-                              }
-                            >
-                              Сохранить SNMP-профили
-                            </Button>
-                          )}
-                        </>
-                      )}
+                              onChange={setSnmpDraft}
+                            />
+                            {snmpDraft !== undefined && (
+                              <Button
+                                disabled={
+                                  !!busy || activePoll || !!profiles.error
+                                }
+                                onClick={() =>
+                                  void mutate(
+                                    "snmp-order",
+                                    "/networks",
+                                    {
+                                      cidr: selected.cidr,
+                                      name: selected.name,
+                                      profile: selected.profile,
+                                      snmp_profiles: snmpDraft,
+                                    },
+                                    "Порядок SNMP-профилей сохранён.",
+                                    () => setSnmpDraft(undefined),
+                                  )
+                                }
+                              >
+                                Сохранить SNMP-профили
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </details>
                       <div className="actions netmap-network-actions">
                         <Button
                           variant="default"
@@ -1082,10 +1383,12 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                               {},
                               "Проверка запущена. Результат появится в истории.",
                               (value) => {
-                                if (!value?.id || !running(value.state))
-                                  throw new Error(
-                                    "NetMap не подтвердил запуск проверки. Обновите историю.",
-                                  );
+                                confirmPollStart(value);
+                                setFirstPollFailure((previous) =>
+                                  previous?.networkID === selected.id
+                                    ? undefined
+                                    : previous,
+                                );
                               },
                               "info",
                             )
@@ -1100,7 +1403,7 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                           className="button button-secondary"
                           href={mapLink(selected)}
                         >
-                          <Map size={17} aria-hidden="true" />
+                          <MapIcon size={17} aria-hidden="true" />
                           На карте
                         </a>
                         <Button
@@ -1119,7 +1422,10 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                           <Trash2 size={17} aria-hidden="true" />
                         </Button>
                       </div>
-                      {needsSNMP && (
+                      {firstPollFailure?.networkID === selected.id && (
+                        <ErrorBox error={firstPollFailure.error} />
+                      )}
+                      {!inventory && needsSNMP && (
                         <div className="netmap-setup-note" role="note">
                           <Info size={17} aria-hidden="true" />
                           <div>
@@ -1176,23 +1482,7 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void mutate<{ id: string }>(
-                      "network",
-                      "/networks",
-                      {
-                        cidr: cidr.trim(),
-                        name: name.trim(),
-                        profile: networkProfile,
-                        ...(orderedSNMP ? { snmp_profiles: [] } : {}),
-                      },
-                      "Сеть сохранена.",
-                      (value) => {
-                        setSelectedID(value.id);
-                        setNetworkAccess(undefined);
-                        setName("");
-                        setCidr("");
-                      },
-                    );
+                    void addNetwork();
                   }}
                 >
                   <div className="form-grid">
@@ -1215,39 +1505,43 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                         onChange={(event) => setCidr(event.target.value)}
                       />
                     </Field>
-                    <Field
-                      label={
-                        deviceAccess
-                          ? "SSH-профиль новых устройств"
-                          : "Профиль доступа"
-                      }
-                      hint={
-                        orderedSNMP
-                          ? "После добавления сети задайте порядок SNMP-профилей отдельно."
-                          : undefined
-                      }
-                    >
-                      <select
-                        value={networkProfile}
-                        onChange={(event) =>
-                          setNetworkProfile(event.target.value)
+                    {!createOnly && (
+                      <Field
+                        label={
+                          deviceAccess
+                            ? "SSH-профиль новых устройств"
+                            : "Профиль доступа"
+                        }
+                        hint={
+                          orderedSNMP
+                            ? "После добавления сети задайте порядок SNMP-профилей отдельно."
+                            : undefined
                         }
                       >
-                        <option value="">Без профиля: ICMP/TCP</option>
-                        {profileItems.map((profile) => (
-                          <option key={profile.id} value={profile.id}>
-                            {profile.id}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
+                        <select
+                          value={networkProfile}
+                          onChange={(event) =>
+                            setNetworkProfile(event.target.value)
+                          }
+                        >
+                          <option value="">Без профиля: ICMP/TCP</option>
+                          {profileItems.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.id}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    )}
                   </div>
                   <div className="netmap-form-actions">
                     <Button
                       type="submit"
                       disabled={
                         !!busy ||
-                        !!profiles.error ||
+                        (!createOnly && !!profiles.error) ||
+                        !Array.isArray(networks.data?.items) ||
+                        !!networks.error ||
                         !name.trim() ||
                         !cidr.trim()
                       }
@@ -1258,6 +1552,15 @@ function NetMapSettings({ instance }: { instance: Instance }) {
                 </form>
               </details>
             </Panel>
+          )}
+          {section === "networks" && selected && inventory && (
+            <DiscoveredDevices
+              key={selected.id}
+              base={base}
+              network={selected}
+              poll={selectedPolls[0]}
+              onAccess={setEnrollmentTarget}
+            />
           )}
           {section === "access" && (
             <>

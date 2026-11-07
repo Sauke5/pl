@@ -28,6 +28,18 @@ class OrderedProfiles(unittest.TestCase):
     def network(self, **extra):
         return self.change('/api/networks', {'cidr': '192.0.2.0/30', 'name': 'Fixture', 'profile': 'a', **extra})['id']
 
+    def test_create_only_preserves_network_access_for_an_existing_canonical_cidr(self):
+        body = {'cidr': '2001:db8::/126', 'name': 'Configured', 'profile': 'a',
+                'snmp_profiles': ['b', 'a'], 'create_only': True}
+        original = self.change('/api/networks', body)
+        self.assertTrue(original['created'])
+        duplicate = self.change('/api/networks', {**body, 'cidr': '2001:0db8:0:0:0:0:0:0/126',
+                                                   'name': 'Duplicate', 'profile': '', 'snmp_profiles': []})
+        self.assertEqual(duplicate, {**original, 'created': False})
+        network = self.app.networks_view()['items'][0]
+        self.assertEqual((network['name'], network['profile'], network['snmp_profiles']),
+                         ('Configured', 'a', ['b', 'a']))
+
     def test_four_column_legacy_rows_and_omission_preserve_explicit_order_and_empty(self):
         network = self.network(snmp_profiles=['b', 'a'])
         self.network(profile='c')

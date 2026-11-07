@@ -15,7 +15,7 @@ type Write = {
 
 async function fixture(
   page: Page,
-  { guided = true, emptyProfiles = false } = {},
+  { guided = true, emptyProfiles = false, profileHostKeys = false } = {},
 ) {
   const writes: Write[] = [];
   const profiles: Record<string, unknown>[] = [
@@ -55,7 +55,10 @@ async function fixture(
               json: {
                 algorithm: "ssh-ed25519",
                 fingerprint: hostFingerprint,
-                known_hosts: knownHosts,
+                known_hosts:
+                  body.port === 22
+                    ? `${body.address} ssh-ed25519 fixture-public-host-key`
+                    : `[${body.address}]:${body.port} ssh-ed25519 fixture-public-host-key`,
               },
             });
       }
@@ -72,6 +75,10 @@ async function fixture(
             driver: profile.driver,
             port: profile.port,
           });
+        if (body.ssh_host_key) {
+          const saved = profiles.find((entry) => entry.id === id);
+          if (saved) saved.ssh_known_hosts_set = true;
+        }
         targets.push({
           id: targetID,
           profile_id: id,
@@ -129,8 +136,12 @@ async function fixture(
         return route.fulfill({ json: result });
       }
       if (path === base + "/inventory/targets") {
-        targets.push({ ...body, id: targetID });
-        return route.fulfill({ json: targets[0] });
+        const { ssh_host_key, replace_ssh_host_key, ...target } = body;
+        const id = target.id || targetID;
+        const current = targets.find((target) => target.id === id);
+        if (current) Object.assign(current, target);
+        else targets.push({ ...target, id });
+        return route.fulfill({ json: { id } });
       }
       if (path === base + "/inventory/targets/" + targetID + "/collect") {
         jobs.unshift({
@@ -171,6 +182,7 @@ async function fixture(
             json: {
               guided_enrollment: true,
               ssh_host_key: true,
+              profile_host_keys: profileHostKeys,
               drivers: [
                 "auto",
                 "openwrt",
@@ -466,6 +478,80 @@ test("an older module keeps manual device setup available", async ({
   ).toBeEnabled();
 });
 
+test("editing a device changes its type with a compatible profile and preserves the schedule", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  const linuxProfile = "d3333333-3333-4333-8333-333333333333";
+  state.profiles.push({
+    id: linuxProfile,
+    name: "Linux SSH",
+    kind: "linux",
+    username: "inventory-reader",
+    port: 22,
+    password_set: true,
+    ssh_known_hosts_set: true,
+  });
+  state.targets.push({
+    id: targetID,
+    name: "Маршрутизатор",
+    kind: "linux",
+    address: "192.0.2.10",
+    profile_id: linuxProfile,
+    interval_minutes: 1440,
+  });
+  await open(page);
+  const edit = page.getByRole("button", {
+    name: "Изменить устройство Маршрутизатор",
+    exact: true,
+  });
+  await edit.click();
+  const dialog = page.getByRole("dialog");
+  const kind = dialog.getByRole("combobox", { name: "Тип устройства" });
+  const profile = dialog.getByRole("combobox", { name: "Профиль доступа" });
+  const save = dialog.getByRole("button", { name: "Сохранить устройство" });
+  await expect(kind).toBeEnabled();
+  await expect(kind).toHaveValue("linux");
+  await kind.selectOption("windows");
+  await expect(save).toBeDisabled();
+  await expect(
+    dialog.getByText(/для этого типа устройства пока нет профиля/i),
+  ).toBeVisible();
+  await kind.selectOption("linux");
+  await expect(profile).toHaveValue(linuxProfile);
+  await kind.selectOption("network");
+  await expect(profile).toHaveValue("");
+  await expect(profile.getByRole("option", { name: /Linux SSH/ })).toHaveCount(
+    0,
+  );
+  await expect(save).toBeDisabled();
+  await profile.selectOption(profileID);
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0]).toMatchObject({
+    path: base + "/inventory/targets",
+    body: {
+      id: targetID,
+      name: "Маршрутизатор",
+      address: "192.0.2.10",
+      kind: "network",
+      profile_id: profileID,
+      network_id: "",
+      interval_minutes: 1440,
+    },
+  });
+  await expect(
+    page.getByRole("cell", { name: /Коммутаторы офиса/ }),
+  ).toBeVisible();
+  await edit.click();
+  await expect(kind).toHaveValue("network");
+  await expect(profile).toHaveValue(profileID);
+  await expect(
+    dialog.getByRole("combobox", { name: "Когда обновлять сведения" }),
+  ).toHaveValue("1440");
+});
+
 test("saved inventory profile is a summary; editing keeps stored credentials and trust", async ({
   page,
 }) => {
@@ -487,8 +573,8 @@ test("saved inventory profile is a summary; editing keeps stored credentials and
     .click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Пароль", { exact: true })).toHaveValue("");
-  await expect(dialog.getByLabel("Доверенные SSH-ключи устройств")).toHaveValue(
-    "",
+  await expect(dialog.getByLabel("Доверенные SSH-ключи устройств")).toHaveCount(
+    0,
   );
   await dialog
     .getByLabel("Название", { exact: true })
@@ -520,6 +606,121 @@ test("saved inventory profile is a summary; editing keeps stored credentials and
       .locator(".netmap-inventory")
       .getByText("Коммутаторы второго этажа", { exact: true }),
   ).toBeVisible();
+});
+
+test("replacing a stored SSH key requires explicit confirmation and only saves the binding", async ({
+  page,
+}) => {
+  const state = await fixture(page, { profileHostKeys: true });
+  state.targets.push({
+    id: targetID,
+    name: "Маршрутизатор",
+    kind: "network",
+    address: "192.0.2.10",
+    profile_id: profileID,
+    interval_minutes: 1440,
+  });
+  await open(page);
+  await page
+    .getByRole("button", {
+      name: "Изменить устройство Маршрутизатор",
+      exact: true,
+    })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Название", { exact: true })
+    .fill("Несохранённое имя");
+  await dialog
+    .getByRole("button", { name: "Обновить SSH-ключ", exact: true })
+    .click();
+  await expect(
+    dialog.getByText(hostFingerprint, { exact: true }),
+  ).toBeVisible();
+  const save = dialog.getByRole("button", {
+    name: "Сохранить SSH-ключ",
+    exact: true,
+  });
+  await expect(save).toBeDisabled();
+  expect(state.writes).toHaveLength(1);
+  await dialog
+    .getByRole("checkbox", { name: "Отпечаток совпадает с ключом устройства" })
+    .check();
+  await save.click();
+  await expect(dialog.getByLabel("Название", { exact: true })).toHaveValue(
+    "Несохранённое имя",
+  );
+  expect(state.writes[1].body).toEqual({
+    id: targetID,
+    address: "192.0.2.10",
+    profile_id: profileID,
+    ssh_host_key: knownHosts,
+    replace_ssh_host_key: true,
+  });
+  expect(state.targets[0].name).toBe("Маршрутизатор");
+  expect(state.targets[0].interval_minutes).toBe(1440);
+});
+
+test("an SSH profile is saved as credentials and the fingerprint is confirmed for each new address", async ({
+  page,
+}) => {
+  const state = await fixture(page, {
+    emptyProfiles: true,
+    profileHostKeys: true,
+  });
+  await open(page);
+  await openProfiles(page);
+  await page
+    .getByRole("button", { name: "Добавить профиль", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Доверенные SSH-ключи устройств")).toHaveCount(
+    0,
+  );
+  await dialog.getByLabel("Название", { exact: true }).fill("Маршрутизаторы");
+  await dialog.getByLabel("Пользователь", { exact: true }).fill("reader");
+  await dialog
+    .getByLabel("Пароль", { exact: true })
+    .fill("fixture-password-not-live");
+  await dialog.getByLabel("Порт", { exact: true }).fill("2222");
+  await dialog.getByRole("button", { name: "Сохранить профиль" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes).toHaveLength(1);
+  const profile = state.profiles[0];
+  expect(state.writes[0].body).not.toHaveProperty("ssh_known_hosts");
+
+  await page.getByRole("button", { name: "Устройства", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Добавить устройство", exact: true })
+    .click();
+  await dialog.getByLabel("IP-адрес", { exact: true }).fill("192.0.2.10");
+  await dialog.getByLabel("Данные входа").selectOption(String(profile.id));
+  await dialog.getByRole("button", { name: "Получить отпечаток" }).click();
+  await expect(
+    dialog.getByText(hostFingerprint, { exact: true }),
+  ).toBeVisible();
+  expect(state.writes[1]).toMatchObject({
+    path: base + "/inventory/ssh-host-key",
+    body: { address: "192.0.2.10", port: 2222 },
+  });
+  expect(state.writes).toHaveLength(2);
+  const enroll = dialog.getByRole("button", { name: "Добавить и опросить" });
+  await expect(enroll).toBeDisabled();
+  await dialog
+    .getByRole("checkbox", { name: "Отпечаток совпадает с ключом устройства" })
+    .check();
+  await enroll.click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes[2]).toMatchObject({
+    path: base + "/inventory/enroll",
+    body: {
+      address: "192.0.2.10",
+      profile_id: profile.id,
+      ssh_host_key: "[192.0.2.10]:2222 ssh-ed25519 fixture-public-host-key",
+    },
+  });
+  expect(state.writes[2].body).not.toHaveProperty("profile");
+  await expect(page.getByText("В очереди", { exact: true })).toBeVisible();
 });
 
 test("inventory target uses an explicit per-device profile and schedule, then shows actual partial result", async ({

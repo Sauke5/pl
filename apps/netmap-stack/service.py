@@ -66,7 +66,7 @@ MAX_BODY = 3 * 1024 * 1024
 MAX_RESPONSE = 32 * 1024 * 1024
 GRAPH_OBSERVATION_LIMIT = 4096
 GRAPH_REPORT_LIMIT = 8192
-NETMAP_VERSION = '1.2.1'
+NETMAP_VERSION = '1.2.2'
 NATIVE = {'netbox': ('netbox', 8080), 'gitea': ('gitea', 3000), 'oxidized': ('oxidized', 8888)}
 
 def canonical_network(value):
@@ -377,7 +377,8 @@ class Application:
                 invalid = True
             items.append({**network, 'snmp_profiles': names, 'snmp_profiles_invalid': invalid})
         return {'items': items,
-                'capabilities': {'device_access': 1, 'ordered_snmp_profiles': 1, 'max_snmp_profiles': 4, 'inventory': 1}}
+                'capabilities': {'device_access': 1, 'ordered_snmp_profiles': 1, 'max_snmp_profiles': 4,
+                                 'inventory': 1, 'network_create_only': 1}}
 
     def probe_profiles(self, address, candidates, deadline):
         attempts = []
@@ -1252,7 +1253,12 @@ class Application:
             elif method != 'POST':
                 raise ValueError('Unsupported NetMap mutation')
             elif path == '/api/networks':
-                if set(body) not in ({'cidr', 'name', 'profile'}, {'cidr', 'name', 'profile', 'snmp_profiles'}) or not isinstance(body['name'], str) or not 1 <= len(body['name']) <= 128 or not isinstance(body['profile'], str) or not re.fullmatch(r'[a-z0-9_-]{0,64}', body['profile']):
+                required = {'cidr', 'name', 'profile'}
+                if (not isinstance(body, dict) or not required <= body.keys()
+                        or body.keys() - (required | {'snmp_profiles', 'create_only'})
+                        or 'create_only' in body and body['create_only'] is not True
+                        or not isinstance(body['name'], str) or not 1 <= len(body['name']) <= 128
+                        or not isinstance(body['profile'], str) or not re.fullmatch(r'[a-z0-9_-]{0,64}', body['profile'])):
                     raise RequestError('netmap_invalid_network')
                 snmp_profiles = body.get('snmp_profiles')
                 if 'snmp_profiles' in body:
@@ -1263,14 +1269,20 @@ class Application:
                         raise RequestError('netmap_invalid_snmp_profiles')
                 cidr = canonical_network(body['cidr'])
                 network_id = hashlib.sha256(cidr.encode()).hexdigest()[:16]
+                create_only = body.get('create_only', False)
                 with self.store.connect() as db:
-                    if not db.execute('SELECT 1 FROM networks WHERE id=?', (network_id,)).fetchone() and db.execute('SELECT COUNT(*) FROM networks').fetchone()[0] >= 128:
+                    db.execute('BEGIN IMMEDIATE')
+                    exists = db.execute('SELECT 1 FROM networks WHERE id=?', (network_id,)).fetchone() is not None
+                    if not exists and db.execute('SELECT COUNT(*) FROM networks').fetchone()[0] >= 128:
                         raise RequestError('netmap_network_limit')
-                    db.execute('INSERT INTO networks VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,profile=excluded.profile', (network_id, cidr, body['name'], body['profile']))
-                    if 'snmp_profiles' in body:
-                        db.execute('INSERT INTO network_snmp_profiles VALUES(?,?) ON CONFLICT(network) DO UPDATE SET profiles=excluded.profiles',
-                                   (network_id, json.dumps(snmp_profiles)))
+                    if not (create_only and exists):
+                        db.execute('INSERT INTO networks VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,profile=excluded.profile', (network_id, cidr, body['name'], body['profile']))
+                        if 'snmp_profiles' in body:
+                            db.execute('INSERT INTO network_snmp_profiles VALUES(?,?) ON CONFLICT(network) DO UPDATE SET profiles=excluded.profiles',
+                                       (network_id, json.dumps(snmp_profiles)))
                 result = {'id': network_id, 'cidr': cidr}
+                if create_only:
+                    result['created'] = not exists
             elif path == '/api/profiles':
                 if set(body) - {'id', 'snmp_community', 'username', 'password', 'oxidized_model', 'ssh_known_hosts'} or not re.fullmatch(r'[a-z0-9_-]{1,64}', body.get('id', '')) or any(not isinstance(v, str) or len(v) > (65536 if key == 'ssh_known_hosts' else 1024) or any(ord(c) < 32 and not (key == 'ssh_known_hosts' and c == '\n') for c in v) for key, v in body.items()):
                     raise RequestError('netmap_invalid_profile')

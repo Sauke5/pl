@@ -17,15 +17,17 @@ import threading
 import time
 import uuid
 
-from inventory_collectors import DRIVERS, collect, validate_profile, InventoryCollectionError
+from inventory_collectors import (
+    DRIVERS, InventoryCollectionError, collect, host_key_name, ssh_host_pins, validate_profile, validate_ssh_host_key,
+)
 from inventory_netbox import sync_snapshot
 
 UUID = re.compile(r'[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\Z')
 ACTIVE = ('queued', 'running')
 SECRETS = ('password', 'private_key', 'passphrase', 'enable_password', 'ssh_known_hosts', 'ca_pem')
 PROFILE_KEYS = {'id', 'name', 'kind', 'username', 'port', 'driver', 'scheme', 'transport', 'auth_method', 'clear_secrets', *SECRETS}
-TARGET_KEYS = {'id', 'name', 'kind', 'address', 'profile_id', 'network_id', 'interval_minutes'}
-ENROLL_KEYS = (TARGET_KEYS - {'id'}) | {'profile'}
+TARGET_KEYS = {'id', 'name', 'kind', 'address', 'profile_id', 'network_id', 'interval_minutes', 'ssh_host_key', 'replace_ssh_host_key'}
+ENROLL_KEYS = (TARGET_KEYS - {'id', 'replace_ssh_host_key'}) | {'profile'}
 KIND = ('network', 'linux', 'windows')
 
 
@@ -65,10 +67,6 @@ def text(value, limit=128):
     return value.strip()
 
 
-def host_key_name(ip, port):
-    return ip if port == 22 else f'[{ip}]:{port}'
-
-
 def read_ssh_host_key(ip, port):
     """Stop after key exchange. There is no SSH login or trust-on-first-use write."""
     try:
@@ -95,6 +93,52 @@ def read_ssh_host_key(ip, port):
         raise InventoryError('inventory_timeout', 422) from None
     except (OSError, EOFError, paramiko.SSHException):
         raise InventoryError('inventory_connection_failed', 422) from None
+
+
+def without_ssh_host_pin(known_hosts, expected):
+    remaining = []
+    for line in known_hosts.splitlines(keepends=True):
+        content = line.lstrip()
+        parts = content.split(maxsplit=1)
+        if len(parts) == 2 and not parts[0].startswith('#'):
+            aliases = parts[0].split(',')
+            if expected in aliases:
+                others = [host for host in aliases if host != expected]
+                if not others:
+                    continue
+                line = line[:len(line) - len(content)] + ','.join(others) + content[len(parts[0]):]
+        remaining.append(line)
+    return ''.join(remaining)
+
+
+def profile_for_host(profile, ip, body, *, replace=False):
+    supplied = 'ssh_host_key' in body
+    if profile['kind'] == 'windows':
+        if supplied:
+            raise InventoryError('inventory_invalid_target')
+        return profile
+    expected = host_key_name(ip, profile.get('port', 22))
+    known_hosts = profile.get('ssh_known_hosts', '')
+    pins = ssh_host_pins(known_hosts, expected)
+    if not pins and (replace or not supplied):
+        raise InventoryError('inventory_host_key_required', 422)
+    if not supplied:
+        return profile
+    try:
+        confirmed = validate_ssh_host_key(body['ssh_host_key'], expected)
+        if pins and not replace:
+            _, algorithm, encoded = confirmed.split()
+            raw = base64.b64decode(encoded, validate=True)
+            if not any(kind == algorithm and base64.b64decode(pin, validate=True) == raw for kind, pin in pins):
+                raise InventoryError('inventory_host_key_failed', 422)
+            return profile
+        if replace:
+            known_hosts = without_ssh_host_pin(known_hosts, expected)
+        separator = '\n' if known_hosts and not known_hosts.endswith(('\n', '\r')) else ''
+        value = {**profile, 'ssh_known_hosts': known_hosts + separator + confirmed}
+        return validate_profile(value)
+    except InventoryCollectionError as exc:
+        raise InventoryError(exc.code, 503 if exc.code == 'inventory_dependency_missing' else 400) from None
 
 
 class InventoryJobs:
@@ -157,6 +201,7 @@ class InventoryJobs:
 
     def save_profile(self, body):
         with self.store.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
             return self._save_profile(db, body)
 
     def _save_profile(self, db, body):
@@ -184,7 +229,8 @@ class InventoryJobs:
             value['private_key'] = value['passphrase'] = ''
         value['name'] = text(value.get('name'))
         try:
-            value = validate_profile(value)
+            may_be_unpinned = not previous.get('ssh_known_hosts') and 'ssh_known_hosts' not in clears
+            value = validate_profile(value, allow_unpinned_ssh=may_be_unpinned)
         except InventoryCollectionError as exc:
             raise InventoryError(exc.code) from None
         if self._busy(db, profile_id=key):
@@ -196,6 +242,7 @@ class InventoryJobs:
 
     def save_target(self, body):
         with self.store.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
             return {'id': self._save_target(db, body)['id']}
 
     def _save_target(self, db, body):
@@ -203,11 +250,18 @@ class InventoryJobs:
             raise InventoryError('inventory_invalid_target')
         key = identifier(body.get('id', str(uuid.uuid4())))
         previous = self._get('inventory_targets', key, db)
-        value = {**(previous or {}), **body}
+        value = {**(previous or {}), **{name: field for name, field in body.items()
+                                       if name not in ('ssh_host_key', 'replace_ssh_host_key')}}
         value['id'] = key
         value['name'] = text(value.get('name'))
         value['address'] = address(value.get('address'))
         value['profile_id'] = identifier(value.get('profile_id'))
+        replace_pin = 'replace_ssh_host_key' in body
+        if replace_pin and (body['replace_ssh_host_key'] is not True or 'ssh_host_key' not in body
+                or set(body) - {'id', 'address', 'profile_id', 'ssh_host_key', 'replace_ssh_host_key'}
+                or not previous or value.get('kind') == 'windows'
+                or value['address'] != previous['address'] or value['profile_id'] != previous['profile_id']):
+            raise InventoryError('inventory_invalid_target')
         profile = self._get('inventory_profiles', value['profile_id'], db)
         if value.get('kind') not in KIND or not profile or profile['kind'] != value['kind']:
             raise InventoryError('inventory_profile_mismatch')
@@ -230,6 +284,11 @@ class InventoryJobs:
             raise InventoryError('inventory_address_exists', 409)
         if not previous and db.execute('SELECT COUNT(*) FROM inventory_targets').fetchone()[0] >= 2048:
             raise InventoryError('inventory_target_limit')
+        pinned = profile_for_host(profile, value['address'], body, replace=replace_pin)
+        if pinned is not profile:
+            db.execute('UPDATE inventory_profiles SET payload=? WHERE id=?', (json.dumps(pinned), value['profile_id']))
+        if replace_pin:
+            return previous
         db.execute('INSERT INTO inventory_targets VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET address=excluded.address,payload=excluded.payload,next_due=excluded.next_due',
                    (key, value['address'], json.dumps(value), time.time() + interval * 60 if interval else 0))
         return value
@@ -245,16 +304,18 @@ class InventoryJobs:
         return {'removed': True}
 
     def test_profile(self, key, body):
-        if not isinstance(body, dict) or set(body) != {'address'}:
+        if not isinstance(body, dict) or 'address' not in body or set(body) - {'address', 'ssh_host_key'}:
             raise InventoryError('inventory_invalid_target')
         profile = self.profile(identifier(key))
         if not profile:
             raise InventoryError('inventory_profile_missing', 404)
+        ip = address(body['address'])
+        profile = profile_for_host(profile, ip, body)
         # Admission remains bounded even if several clients test credentials.
         if not self.preview_slots.acquire(blocking=False):
             raise InventoryError('inventory_busy', 409)
         try:
-            snapshot = self.collector({'id': str(uuid.uuid4()), 'kind': profile['kind'], 'address': address(body['address'])}, profile, deadline=time.monotonic() + 20)
+            snapshot = self.collector({'id': str(uuid.uuid4()), 'kind': profile['kind'], 'address': ip}, profile, deadline=time.monotonic() + 20)
             return {'state': 'succeeded', 'summary': self.summary(snapshot), 'warnings': snapshot.get('warnings', [])}
         except InventoryCollectionError as exc:
             raise InventoryError(exc.code, 422) from None
@@ -265,7 +326,7 @@ class InventoryJobs:
 
     @staticmethod
     def capabilities():
-        return {'guided_enrollment': True, 'ssh_host_key': True, 'drivers': list(DRIVERS)}
+        return {'guided_enrollment': True, 'ssh_host_key': True, 'profile_host_keys': True, 'drivers': list(DRIVERS)}
 
     def ssh_host_key(self, body):
         if not isinstance(body, dict) or set(body) != {'address', 'port'}:
@@ -312,16 +373,7 @@ class InventoryJobs:
                 profile_id = self._save_profile(db, draft)['id']
             else:
                 profile_id = identifier(body['profile_id'])
-            profile = self._get('inventory_profiles', profile_id, db)
-            if not profile or profile['kind'] != kind:
-                raise InventoryError('inventory_profile_mismatch')
-            if kind != 'windows':
-                expected = host_key_name(ip, profile.get('port', 22))
-                pins = [line.split()[0].split(',') for line in profile.get('ssh_known_hosts', '').splitlines()
-                        if line.strip() and not line.lstrip().startswith('#')]
-                if not any(expected in hosts for hosts in pins):
-                    raise InventoryError('inventory_host_key_required', 422)
-            target = self._save_target(db, {**{key: body[key] for key in ('network_id', 'interval_minutes') if key in body},
+            target = self._save_target(db, {**{key: body[key] for key in ('network_id', 'interval_minutes', 'ssh_host_key') if key in body},
                 'address': ip, 'name': name, 'kind': kind, 'profile_id': profile_id})
             self._enqueue(db, target, operation, actor)
             result = {'target_id': target['id'], 'profile_id': profile_id, 'job_id': operation, 'state': 'queued'}

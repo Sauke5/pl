@@ -215,6 +215,19 @@ class BoundaryTests(unittest.TestCase):
             with self.subTest(fields=list(extra)), self.assertRaises(c.InventoryCollectionError):
                 c.validate_profile(profile('windows', **extra))
 
+    def test_unpinned_profiles_are_storable_but_do_not_start_a_collection(self):
+        unpinned = c.validate_profile(profile(ssh_known_hosts=''), allow_unpinned_ssh=True)
+        self.assertEqual(unpinned['ssh_known_hosts'], '')
+        with self.assertRaises(c.InventoryCollectionError):
+            c.validate_profile(profile(ssh_known_hosts='# missing'), allow_unpinned_ssh=True)
+        for settings, code in ((unpinned, 'inventory_profile_invalid'),
+                               (profile(ssh_known_hosts='192.0.2.2 ' + KEY), 'inventory_host_key_failed')):
+            with self.subTest(code=code), patch.object(c.subprocess, 'Popen') as spawn:
+                with self.assertRaises(c.InventoryCollectionError) as rejected:
+                    c.collect(target(), settings)
+                self.assertEqual(rejected.exception.code, code)
+                spawn.assert_not_called()
+
     def test_target_rejects_metadata_loopback_dns_and_scoped_ipv6_before_network(self):
         for address in ('127.0.0.1', '::1', '169.254.169.254', '::ffff:127.0.0.1', '::ffff:169.254.169.254', 'fd00:ec2::254', '100.100.100.200', 'fe80::1', 'fe80::1%eth0', '224.0.0.1', '0.0.0.0', 'router.example'):
             with self.subTest(address=address), patch.object(c.subprocess, 'Popen') as spawn:

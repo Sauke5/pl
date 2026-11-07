@@ -26,6 +26,9 @@ async function fixture(
     existing?: boolean;
     failCreate?: boolean;
     failPoll?: boolean;
+    failFirstPoll?: boolean;
+    loseFirstNetworkResponse?: boolean;
+    inventory?: boolean;
     unknownPoll?: boolean;
     missingSNMP?: boolean;
     alternateProfile?: boolean;
@@ -36,6 +39,10 @@ async function fixture(
 ) {
   const writes: Write[] = [];
   const reads: string[] = [];
+  let rejectNextPoll = !!options.failFirstPoll;
+  let loseNextNetworkResponse = !!options.loseFirstNetworkResponse;
+  const createOperations: string[] = [];
+  const savedNetworkResponses = new Map<string, Record<string, unknown>>();
   const networks: Network[] = options.existing
     ? [
         {
@@ -133,6 +140,10 @@ async function fixture(
         return route.fulfill({ json: { id: body.id } });
       }
       if (path === base + "/networks") {
+        const operation = request.headers()["idempotency-key"];
+        createOperations.push(operation);
+        const replay = savedNetworkResponses.get(operation);
+        if (replay) return route.fulfill({ json: replay });
         if (options.failCreate)
           return route.fulfill({
             status: 502,
@@ -151,12 +162,23 @@ async function fixture(
             : { snmp_profiles: body.snmp_profiles as string[] }),
         };
         const existing = networks.find((network) => network.id === networkID);
-        if (existing) Object.assign(existing, value);
-        else networks.push(value);
-        return route.fulfill({ json: { id: networkID, cidr: body.cidr } });
+        if (!existing) networks.push(value);
+        else if (!body.create_only) Object.assign(existing, value);
+        const response = {
+          id: networkID,
+          cidr: body.cidr,
+          ...(body.create_only ? { created: !existing } : {}),
+        };
+        savedNetworkResponses.set(operation, response);
+        if (loseNextNetworkResponse) {
+          loseNextNetworkResponse = false;
+          return route.abort("connectionreset");
+        }
+        return route.fulfill({ json: response });
       }
       if (path === base + `/networks/${networkID}/poll`) {
-        if (options.failPoll)
+        if (options.failPoll || rejectNextPoll) {
+          rejectNextPoll = false;
           return route.fulfill({
             status: 502,
             json: {
@@ -164,6 +186,7 @@ async function fixture(
               message: "Запуск проверки не подтверждён",
             },
           });
+        }
         polls.unshift({ id: "poll-1", network: networkID, state: "running" });
         return route.fulfill({ json: { id: "poll-1", state: "running" } });
       }
@@ -197,9 +220,55 @@ async function fixture(
       return route.fulfill({
         json: {
           items: networks,
-          ...(options.deviceAccess
-            ? { capabilities: { device_access: 1, ordered_snmp_profiles: 1 } }
-            : {}),
+          capabilities: {
+            ...(options.deviceAccess
+              ? { device_access: 1, ordered_snmp_profiles: 1 }
+              : {}),
+            ...(options.inventory
+              ? { inventory: 1, network_create_only: 1 }
+              : {}),
+          },
+        },
+      });
+    if (path === base + "/inventory/capabilities")
+      return route.fulfill({
+        json: {
+          guided_enrollment: true,
+          ssh_host_key: true,
+          drivers: ["auto"],
+        },
+      });
+    if (
+      ["targets", "jobs", "profiles"].some(
+        (name) => path === base + "/inventory/" + name,
+      )
+    )
+      return route.fulfill({ json: { items: [] } });
+    if (path === base + `/sites/network-${networkID}`)
+      return route.fulfill({
+        json: {
+          nodes: polls.some((poll) => poll.state === "complete")
+            ? [
+                {
+                  id: `observed:${networkID}:192.0.2.1`,
+                  management_ip: "192.0.2.1",
+                  name: "192.0.2.1",
+                  details: { observation_state: "observed" },
+                },
+                {
+                  id: "device:42",
+                  management_ip: "192.0.2.2",
+                  name: "Коммутатор",
+                  details: { source: `network:${networkID}`, netbox_id: 42 },
+                },
+                {
+                  id: "device:51",
+                  management_ip: "198.51.100.1",
+                  name: "Сосед из другой сети",
+                  details: { source: "network:other", netbox_id: 51 },
+                },
+              ]
+            : [],
         },
       });
     if (path === base + "/devices")
@@ -266,6 +335,7 @@ async function fixture(
   return {
     writes,
     reads,
+    createOperations,
     completeCollection() {
       collection = "collected";
     },
@@ -317,7 +387,7 @@ const section = (page: Page, name: string) =>
     .getByRole("navigation", { name: "Разделы NetMap" })
     .getByRole("button", { name, exact: true });
 
-test("NetMap creates a selected network without an automatic poll, then shows the actual asynchronous result", async ({
+test("NetMap creates a selected network, starts its first poll and shows the asynchronous result", async ({
   page,
 }, testInfo) => {
   const state = await fixture(page);
@@ -347,20 +417,20 @@ test("NetMap creates a selected network without an automatic poll, then shows th
     .getByRole("button", { name: "Добавить сеть", exact: true })
     .click();
   await expect(
-    page.getByRole("status").filter({ hasText: "Сеть сохранена." }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "Первый поиск устройств запущен." }),
   ).toBeVisible();
   expect(state.writes).toEqual([
     {
       path: base + "/networks",
       body: { cidr: "192.0.2.0/30", name: "Тестовая сеть", profile: "lab" },
     },
+    { path: base + `/networks/${networkID}/poll`, body: {} },
   ]);
   await expect(
     page.getByRole("link", { name: "На карте", exact: true }),
   ).toHaveAttribute("href", `/netmap/?scope=network-${networkID}`);
-  await page
-    .getByRole("button", { name: "Запустить проверку", exact: true })
-    .click();
   await expect(page.getByText("Выполняется", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Запустить проверку", exact: true }),
@@ -527,6 +597,122 @@ test("failed network save preserves the entered draft and does not start discove
     "192.0.2.0/30",
   );
   expect(state.writes).toHaveLength(1);
+});
+
+test("a found address opens the enrollment wizard with the address and network filled in", async ({
+  page,
+}) => {
+  const state = await fixture(page, { inventory: true });
+  await open(page);
+  await expect(
+    page.getByRole("heading", { name: "Сети", exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Название сети", { exact: true }).fill("Домашняя сеть");
+  await page.getByLabel("CIDR", { exact: false }).fill("192.0.2.0/30");
+  await expect(
+    page.getByRole("combobox", { name: "Профиль доступа", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Добавить сеть", exact: true })
+    .click();
+  await expect(
+    page.getByText("Ищем устройства.", { exact: false }),
+  ).toBeVisible();
+  expect(state.writes).toEqual([
+    {
+      path: base + "/networks",
+      body: {
+        cidr: "192.0.2.0/30",
+        name: "Домашняя сеть",
+        profile: "",
+        create_only: true,
+      },
+    },
+    { path: base + `/networks/${networkID}/poll`, body: {} },
+  ]);
+  state.completePoll({ observed_hosts: 1 });
+  const found = page.getByRole("table", { name: "Найденные устройства" });
+  await expect(found.getByRole("row")).toHaveCount(3);
+  await expect(found).toContainText("Коммутатор");
+  await expect(found).not.toContainText("198.51.100.1");
+  await found
+    .getByRole("row")
+    .filter({ hasText: "192.0.2.1" })
+    .getByRole("button", { name: "Настроить доступ", exact: true })
+    .click();
+  const wizard = page.getByRole("dialog", { name: "Добавить устройство" });
+  await expect(wizard.getByLabel("IP-адрес", { exact: true })).toHaveValue(
+    "192.0.2.1",
+  );
+  await expect(wizard.getByLabel("Связать с опрошенной сетью")).toHaveValue(
+    networkID,
+  );
+  expect(state.writes).toHaveLength(2);
+});
+
+test("a rejected first poll keeps the new network and can be retried without saving it again", async ({
+  page,
+}) => {
+  const state = await fixture(page, { inventory: true, failFirstPoll: true });
+  await open(page);
+  await page.getByLabel("Название сети", { exact: true }).fill("Домашняя сеть");
+  await page.getByLabel("CIDR", { exact: false }).fill("192.0.2.0/30");
+  await page
+    .getByRole("button", { name: "Добавить сеть", exact: true })
+    .click();
+  await expect(
+    page.getByText("Сеть сохранена. Запуск первого поиска не подтверждён.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Выбранная сеть")).toHaveValue(networkID);
+  await page
+    .getByRole("button", { name: "Запустить проверку", exact: true })
+    .click();
+  await expect(
+    page.getByText("Ищем устройства.", { exact: false }),
+  ).toBeVisible();
+  expect(state.writes.map(({ path }) => path)).toEqual([
+    base + "/networks",
+    base + `/networks/${networkID}/poll`,
+    base + `/networks/${networkID}/poll`,
+  ]);
+});
+
+test("retrying a lost create response preserves the first poll and does not create another network", async ({
+  page,
+}) => {
+  const state = await fixture(page, {
+    inventory: true,
+    loseFirstNetworkResponse: true,
+  });
+  await open(page);
+  await page.getByLabel("Название сети", { exact: true }).fill("Домашняя сеть");
+  await page.getByLabel("CIDR", { exact: false }).fill("192.0.2.0/30");
+  await page
+    .getByRole("button", { name: "Добавить сеть", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Обновить данные", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Обновить данные", exact: true })
+    .click();
+  await expect(page.getByLabel("Выбранная сеть")).toHaveValue(networkID);
+  await page.locator("summary").filter({ hasText: "Добавить сеть" }).click();
+  await page
+    .getByRole("button", { name: "Добавить сеть", exact: true })
+    .click();
+  await expect(
+    page.getByText("Ищем устройства.", { exact: false }),
+  ).toBeVisible();
+  expect(state.createOperations).toHaveLength(2);
+  expect(state.createOperations[0]).toBe(state.createOperations[1]);
+  expect(state.writes.map(({ path }) => path)).toEqual([
+    base + "/networks",
+    base + "/networks",
+    base + `/networks/${networkID}/poll`,
+  ]);
 });
 
 test("unknown poll status and a rejected start are never shown as successful results", async ({
@@ -706,9 +892,6 @@ test("a network without a profile can be checked and separates observed addresse
     path: base + "/networks",
     body: { cidr: "192.0.2.0/30", name: "Домашняя сеть", profile: "" },
   });
-  await page
-    .getByRole("button", { name: "Запустить проверку", exact: true })
-    .click();
   await expect(page.getByText("Выполняется", { exact: true })).toBeVisible();
   state.completePoll({
     devices: 0,

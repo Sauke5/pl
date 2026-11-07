@@ -115,6 +115,7 @@ class NetMapController:
         storage_version = bundle['database'].get('labels', {}).get('org.opencontainers.image.version')
         permitted_storage = {
             '1.1.0': ('1.0.0',), '1.2.0': ('1.0.0', '1.1.0'), '1.2.1': ('1.0.0', '1.1.0', '1.2.0'),
+            '1.2.2': ('1.0.0', '1.1.0', '1.2.0', '1.2.1'),
         }
         preserved_storage = (storage_version in permitted_storage.get(version, ())
             and all(image.get('labels', {}).get('org.opencontainers.image.version')

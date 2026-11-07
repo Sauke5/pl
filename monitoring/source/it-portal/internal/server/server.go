@@ -117,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 		m.HandleFunc("/netmap/", s.netmapGateway)
 		m.HandleFunc("GET /api/v1/modules/{id}/netmap/{path...}", s.moduleAuth(s.netmapModuleAPI))
 		m.HandleFunc("POST /api/v1/modules/{id}/netmap/{path...}", s.moduleAuth(s.netmapModuleAPI))
+		m.HandleFunc("DELETE /api/v1/modules/{id}/netmap/{path...}", s.moduleAuth(s.netmapModuleAPI))
 		m.HandleFunc("POST /api/v1/modules/{id}/initial-login", s.moduleAuth(s.moduleInitialLogin))
 	} else {
 		grafana := s.grafanaGateway()

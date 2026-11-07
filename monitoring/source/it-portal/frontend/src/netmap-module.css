@@ -14,6 +14,14 @@
   flex-wrap: wrap;
 }
 
+.netmap-page .panel-heading > .button-sm {
+  padding-inline: 9px;
+}
+
+.netmap-page .panel-heading > .button-icon {
+  padding: 0;
+}
+
 .netmap-enrollment fieldset {
   margin: 0;
   padding: 0;

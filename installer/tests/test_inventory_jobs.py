@@ -13,6 +13,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 import test_netmap_access_profiles as shared
+from test_inventory_collectors import KEY
 from test_inventory_collectors_transport import HAS_SSH, SSHFixture
 import inventory_jobs as jobs
 
@@ -49,11 +50,12 @@ class InventoryJobsTests(unittest.TestCase):
         self.manager = self.app.inventory = jobs.InventoryJobs(self.app, collector=self.collector, writer=self.writer, executor=self.executor)
         # Profile normalization/transport are exercised by collector tests. Keep
         # orchestration failures independent of SSH crypto availability here.
-        self.validation = patch.object(jobs, 'validate_profile', side_effect=lambda value: value)
+        self.validation = patch.object(jobs, 'validate_profile', side_effect=lambda value, **_: value)
         self.validation.start()
         self.addCleanup(self.validation.stop)
+        self.pins = '\n'.join(f'192.0.2.{index} {KEY}' for index in range(1, 18))
         self.profile = self.manager.save_profile({'name': 'Linux', 'kind': 'linux', 'username': 'readonly',
-            'password': 'fixture-password', 'ssh_known_hosts': 'fixture-trusted-host', 'auth_method': 'password'})['id']
+            'password': 'fixture-password', 'ssh_known_hosts': self.pins, 'auth_method': 'password'})['id']
         self.target = self.manager.save_target({'name': 'Linux test', 'kind': 'linux', 'address': '192.0.2.1', 'profile_id': self.profile})['id']
 
     def start(self, target=None):
@@ -76,7 +78,7 @@ class InventoryJobsTests(unittest.TestCase):
         self.assertEqual(item['result']['sync']['object_id'], 4)
         self.assertEqual(item['actor'], 'local:test')
         self.assertNotIn('fixture-password', json.dumps(item))
-        self.assertNotIn('fixture-trusted-host', json.dumps(self.manager.profiles()))
+        self.assertNotIn(KEY, json.dumps(self.manager.profiles()))
 
     def test_guided_enrollment_saves_device_and_queues_first_collection_once(self):
         operation = str(uuid.uuid4())
@@ -117,6 +119,173 @@ class InventoryJobsTests(unittest.TestCase):
             self.assertEqual(rejected.exception.code, error)
             self.assertEqual(initial, (self.manager.profiles(), self.manager.targets(), self.manager.jobs()))
         self.assertEqual(self.executor.calls, [])
+
+    @unittest.skipUnless(HAS_SSH, 'Install pinned SSH requirements for host key parsing')
+    def test_saved_ssh_profile_enrollment_requires_exact_confirmed_host_and_port(self):
+        self.validation.stop()
+        profile = self.manager.save_profile({'name': 'Routers', 'kind': 'network', 'driver': 'auto', 'port': 2222,
+            'username': 'reader', 'password': 'profile-fixture-secret'})['id']
+        self.assertTrue(self.manager.capabilities()['profile_host_keys'])
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], '')
+        path = '/api/inventory/enroll'
+        ip = '2001:db8::10'
+        body = {'name': 'Router', 'address': ip, 'kind': 'network', 'profile_id': profile}
+        confirmed = f'[{ip}]:2222 {KEY}'
+        malformed = f'[{ip}]:2222 ssh-ed25519 ' + base64.b64encode(b'x' * 40).decode()
+        for extra, code, status in (({}, 'inventory_host_key_required', 422),
+                ({'ssh_host_key': f'[{ip}]:22 {KEY}'}, 'inventory_profile_invalid', 400),
+                ({'ssh_host_key': f'[2001:db8::11]:2222 {KEY}'}, 'inventory_profile_invalid', 400),
+                ({'ssh_host_key': f'[{ip}]:2222,[2001:db8::11]:2222 {KEY}'}, 'inventory_profile_invalid', 400),
+                ({'ssh_host_key': confirmed + '\n' + confirmed}, 'inventory_profile_invalid', 400),
+                ({'ssh_host_key': malformed}, 'inventory_profile_invalid', 400),
+                ({'ssh_host_key': confirmed + ' ключ'}, 'inventory_profile_invalid', 400)):
+            with self.subTest(code=code, extra=extra), self.assertRaises(jobs.InventoryError) as rejected:
+                self.app.mutation(path, {**body, **extra}, {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+            self.assertEqual((rejected.exception.code, rejected.exception.status), (code, status))
+            self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], '')
+        self.assertFalse(self.executor.calls)
+        claims = {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'}
+        body['ssh_host_key'] = confirmed
+        result = self.app.mutation(path, body, claims)
+        self.assertEqual(self.app.mutation(path, body, claims), result)
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], confirmed)
+        self.assertEqual(len(self.executor.calls), 1)
+        self.assertNotIn('ssh_host_key', self.manager.target(result['target_id']))
+        for view in (result, self.manager.profiles(), self.manager.targets(), self.manager.jobs()):
+            self.assertNotIn('profile-fixture-secret', json.dumps(view))
+            self.assertNotIn(KEY, json.dumps(view))
+
+    @unittest.skipUnless(HAS_SSH, 'Install pinned SSH requirements for host key parsing')
+    def test_target_writes_keep_existing_pins_and_refuse_a_changed_key(self):
+        self.validation.stop()
+        original = '# Legacy comment\n192.0.2.30,192.0.2.31 ' + KEY + '\n'
+        profile = self.manager.save_profile({'name': 'Linux', 'kind': 'linux', 'username': 'reader',
+            'password': 'secret', 'ssh_known_hosts': original})['id']
+        target = {'name': 'Host', 'address': '192.0.2.32', 'kind': 'linux', 'profile_id': profile}
+        confirmed = '192.0.2.32 ' + KEY
+        add = self.app.mutation('/api/inventory/targets', {**target, 'ssh_host_key': confirmed},
+            {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], original + confirmed)
+        self.assertNotIn('ssh_host_key', self.manager.target(add['id']))
+        with self.assertRaises(jobs.InventoryError) as clear:
+            self.manager.save_profile({'id': profile, 'clear_secrets': ['ssh_known_hosts']})
+        self.assertEqual(clear.exception.code, 'inventory_profile_invalid')
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], original + confirmed)
+        self.manager.save_target({'id': add['id'], 'name': 'Edited', 'interval_minutes': 30})
+        self.manager.save_target({'id': add['id'], 'ssh_host_key': confirmed})
+        new_material = base64.b64decode(KEY.split()[1])[:-32] + b'X' * 32
+        changed = '192.0.2.32 ssh-ed25519 ' + base64.b64encode(new_material).decode()
+        with self.assertRaises(jobs.InventoryError) as rejected:
+            self.manager.save_target({'id': add['id'], 'ssh_host_key': changed, 'name': 'Must not change'})
+        self.assertEqual((rejected.exception.code, rejected.exception.status), ('inventory_host_key_failed', 422))
+        self.assertEqual(self.manager.target(add['id'])['name'], 'Edited')
+        self.assertEqual(self.manager.target(add['id'])['interval_minutes'], 30)
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], original + confirmed)
+        self.manager.save_target({**target, 'address': '192.0.2.31'})
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], original + confirmed)
+        network = self.manager.save_profile({'name': 'Router', 'kind': 'network', 'driver': 'auto', 'username': 'reader',
+            'password': 'network-secret'})['id']
+        edit = {'id': add['id'], 'kind': 'network', 'profile_id': network}
+        with self.assertRaises(jobs.InventoryError) as needs_pin:
+            self.manager.save_target(edit)
+        self.assertEqual(needs_pin.exception.code, 'inventory_host_key_required')
+        self.manager.save_target({**edit, 'ssh_host_key': confirmed})
+        saved = self.manager.target(add['id'])
+        self.assertEqual((saved['kind'], saved['profile_id'], saved['interval_minutes']), ('network', network, 30))
+        self.assertEqual(self.manager.profile(network)['ssh_known_hosts'], confirmed)
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], original + confirmed)
+
+    @unittest.skipUnless(HAS_SSH, 'Install pinned SSH requirements for host key parsing')
+    def test_explicit_pin_replacement_is_limited_to_existing_target_host_and_port(self):
+        self.validation.stop()
+        host, peer = '192.0.2.30', '192.0.2.31'
+        exact, peer_exact = f'[{host}]:2222', f'[{peer}]:2222'
+        comment = '# Legacy aliases\r\n'
+        separate_port = f'[{host}]:2200 {KEY}\n'
+        original = comment + f'  {exact},{peer_exact}\t{KEY} # shared\r\n{exact} {KEY}\n' + separate_port
+        profile = self.manager.save_profile({'name': 'Hosts', 'kind': 'linux', 'username': 'reader',
+            'password': 'secret', 'port': 2222, 'ssh_known_hosts': original})['id']
+        target = {'name': 'Host', 'address': host, 'kind': 'linux', 'profile_id': profile, 'interval_minutes': 15}
+        target_id = self.manager.save_target(target)['id']
+        peer_id = self.manager.save_target({**target, 'address': peer})['id']
+        peer_before = self.manager.target(peer_id)
+        with self.manager.store.connect() as db:
+            next_due = db.execute('SELECT next_due FROM inventory_targets WHERE id=?', (target_id,)).fetchone()[0]
+        other_profile = self.manager.save_profile({'name': 'Other', 'kind': 'linux', 'username': 'reader',
+            'password': 'other-secret'})['id']
+        new_material = base64.b64decode(KEY.split()[1])[:-32] + b'X' * 32
+        key = 'ssh-ed25519 ' + base64.b64encode(new_material).decode()
+        confirmed = exact + ' ' + key
+        rotation = {'ssh_host_key': confirmed, 'replace_ssh_host_key': True}
+        for body, code in (({**target, **rotation}, 'inventory_invalid_target'),
+                ({'id': target_id, **rotation, 'address': peer}, 'inventory_invalid_target'),
+                ({'id': target_id, **rotation, 'profile_id': other_profile}, 'inventory_invalid_target'),
+                ({'id': target_id, **rotation, 'interval_minutes': 60}, 'inventory_invalid_target'),
+                ({'id': target_id, 'replace_ssh_host_key': True}, 'inventory_invalid_target'),
+                ({'id': target_id, **rotation, 'replace_ssh_host_key': 1}, 'inventory_invalid_target'),
+                ({'id': target_id, **rotation, 'ssh_host_key': host + ' ' + key}, 'inventory_profile_invalid')):
+            with self.subTest(body=body):
+                with self.assertRaises(jobs.InventoryError) as rejected:
+                    self.manager.save_target(body)
+                self.assertEqual(rejected.exception.code, code)
+                self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], original)
+        for path, body in (('/api/inventory/enroll', {**target, **rotation}),
+                          (f'/api/inventory/profiles/{profile}/test', {'address': host, **rotation})):
+            with self.assertRaises(jobs.InventoryError) as rejected:
+                self.app.mutation(path, body, {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+            self.assertEqual(rejected.exception.code, 'inventory_invalid_target')
+        result = self.app.mutation('/api/inventory/targets', {'id': target_id, **rotation},
+            {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+        expected = comment + f'  {peer_exact}\t{KEY} # shared\r\n' + separate_port + confirmed
+        self.assertEqual(result, {'id': target_id})
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], expected)
+        self.assertEqual(self.manager.target(peer_id), peer_before)
+        self.assertEqual(self.manager.target(target_id), {**target, 'id': target_id, 'network_id': ''})
+        with self.manager.store.connect() as db:
+            self.assertEqual(db.execute('SELECT next_due FROM inventory_targets WHERE id=?', (target_id,)).fetchone()[0], next_due)
+        self.manager.save_target({'id': peer_id, 'name': 'Still trusted'})
+        self.manager.save_target({'id': target_id, 'ssh_host_key': confirmed})
+        self.manager.save_profile({'id': profile, 'port': 2223})
+        with self.assertRaises(jobs.InventoryError) as missing:
+            self.manager.save_target({'id': target_id, **rotation, 'ssh_host_key': f'[{host}]:2223 {key}'})
+        self.assertEqual(missing.exception.code, 'inventory_host_key_required')
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], expected)
+
+    @unittest.skipUnless(HAS_SSH, 'Install pinned SSH requirements for host key parsing')
+    def test_enrollment_rolls_back_the_pin_and_target_if_job_cannot_queue(self):
+        profile = self.manager.save_profile({'name': 'Linux', 'kind': 'linux', 'username': 'reader', 'password': 'secret'})['id']
+        body = {'name': 'Host', 'address': '192.0.2.20', 'kind': 'linux', 'profile_id': profile,
+            'ssh_host_key': '192.0.2.20 ' + KEY}
+        claims = {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'}
+        before = self.manager.targets()
+        with patch.object(self.manager, '_enqueue', side_effect=jobs.InventoryError('inventory_busy', 409)), \
+                self.assertRaises(jobs.InventoryError) as rejected:
+            self.app.mutation('/api/inventory/enroll', body, claims)
+        self.assertEqual(rejected.exception.code, 'inventory_busy')
+        self.assertFalse(self.manager.profile(profile).get('ssh_known_hosts'))
+        self.assertEqual(self.manager.targets(), before)
+        self.assertFalse(self.executor.calls)
+        self.assertEqual(self.app.mutation('/api/inventory/enroll', body, claims)['state'], 'queued')
+
+    @unittest.skipUnless(HAS_SSH, 'Install pinned SSH requirements for host key parsing')
+    def test_saved_ssh_profile_connection_test_uses_pin_without_saving_it(self):
+        self.validation.stop()
+        profile = self.manager.save_profile({'name': 'Linux', 'kind': 'linux', 'username': 'reader',
+            'password': 'secret', 'port': 2222})['id']
+        path = '/api/inventory/profiles/' + profile + '/test'
+        body = {'address': '192.0.2.20'}
+        for extra, code in (({}, 'inventory_host_key_required'),
+                            ({'ssh_host_key': body['address'] + ' ' + KEY}, 'inventory_profile_invalid')):
+            with self.assertRaises(jobs.InventoryError) as rejected:
+                self.app.mutation(path, {**body, **extra}, {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+            self.assertEqual(rejected.exception.code, code)
+        self.collector.assert_not_called()
+        confirmed = '[' + body['address'] + ']:2222 ' + KEY
+        result = self.app.mutation(path, {**body, 'ssh_host_key': confirmed},
+            {'idempotency_key': str(uuid.uuid4()), 'sub': 'local:test'})
+        self.assertEqual(result['state'], 'succeeded')
+        self.assertEqual(self.collector.call_args.args[1]['ssh_known_hosts'], confirmed)
+        self.assertEqual(self.manager.profile(profile)['ssh_known_hosts'], '')
 
     def test_host_key_preview_checks_address_port_and_carries_no_credentials(self):
         path = '/api/inventory/ssh-host-key'
@@ -178,7 +347,7 @@ class InventoryJobsTests(unittest.TestCase):
     def test_edit_preserves_credentials_and_auth_switch_clears_old_method(self):
         self.manager.save_profile({'id': self.profile, 'name': 'Renamed', 'password': '', 'ssh_known_hosts': ''})
         value = self.manager.profile(self.profile)
-        self.assertEqual((value['password'], value['ssh_known_hosts']), ('fixture-password', 'fixture-trusted-host'))
+        self.assertEqual((value['password'], value['ssh_known_hosts']), ('fixture-password', self.pins))
         self.manager.save_profile({'id': self.profile, 'auth_method': 'key', 'private_key': 'fixture-new-key', 'passphrase': 'phrase'})
         self.assertEqual(self.manager.profile(self.profile)['password'], '')
         self.manager.save_profile({'id': self.profile, 'clear_secrets': ['passphrase']})
@@ -295,18 +464,17 @@ class InventoryJobsTests(unittest.TestCase):
     def test_stored_standalone_target_is_accepted_by_real_collector_validation(self):
         self.validation.stop()
         import inventory_collectors as real
-        keytype = b'ssh-ed25519'
-        public_key = len(keytype).to_bytes(4, 'big') + keytype + (32).to_bytes(4, 'big') + bytes(range(32))
         for kind in ('linux', 'windows', 'network'):
+            ip = '192.0.2.' + str(10 + len(self.manager.targets()['items']))
             profile = {'name': kind, 'kind': kind, 'username': 'readonly', 'password': 'fixture-password'}
             if kind == 'windows':
                 profile.update(scheme='http', transport='ntlm', port=5985)
             else:
-                profile['ssh_known_hosts'] = '192.0.2.9 ssh-ed25519 ' + base64.b64encode(public_key).decode()
+                profile['ssh_known_hosts'] = ip + ' ' + KEY
             if kind == 'network':
                 profile['driver'] = 'huawei_vrp'
             key = self.manager.save_profile(profile)['id']
-            target_id = self.manager.save_target({'name': kind, 'kind': kind, 'address': '192.0.2.' + str(10 + len(self.manager.targets()['items'])), 'profile_id': key})['id']
+            target_id = self.manager.save_target({'name': kind, 'kind': kind, 'address': ip, 'profile_id': key})['id']
             target = self.manager.target(target_id)
             self.assertEqual(real._target(target, kind), target['address'])
             self.assertEqual(real.validate_profile(self.manager.profile(key))['kind'], kind)

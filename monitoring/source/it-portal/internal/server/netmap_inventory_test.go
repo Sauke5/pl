@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"pl/portal/internal/modules"
 )
 
 func TestNetMapInventoryRoutesAreFiniteAndAdminOnly(t *testing.T) {
@@ -35,6 +37,19 @@ func TestNetMapInventoryRoutesAreFiniteAndAdminOnly(t *testing.T) {
 	}
 }
 
+func TestNetMapInventoryDeletionRoutesRequireSession(t *testing.T) {
+	s := &Server{Config: Config{PortableRelease: true, PublicURL: "https://portal.example.test"}, Modules: &modules.Manager{}}
+	handler := s.Handler()
+	for _, kind := range []string{"targets", "profiles"} {
+		path := "/api/v1/modules/" + netmapGatewayID + "/netmap/inventory/" + kind + "/" + netmapGatewayID
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, s.Config.PublicURL+path, nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Errorf("DELETE %s: want authentication challenge, got %d %s", path, response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestNetMapInventoryMutationRequiresCSRFAndBindsBody(t *testing.T) {
 	calls := 0
 	g := netmapFixture(t, func(r *http.Request, body []byte) *http.Response {
@@ -45,12 +60,12 @@ func TestNetMapInventoryMutationRequiresCSRFAndBindsBody(t *testing.T) {
 		return netmapResponse("application/json", `{"removed":true}`)
 	})
 	headers := http.Header{"Content-Type": {"application/json"}, "Origin": {"https://portal.example.test"}, "Idempotency-Key": {netmapGatewayID}}
-	path := "/netmap/api/inventory/targets/" + netmapGatewayID
-	if got := netmapCall(g, "DELETE", path, "{}", headers, false); got.Code == 200 || calls != 0 {
+	path := "/api/v1/modules/" + netmapGatewayID + "/netmap/inventory/targets/" + netmapGatewayID
+	if got := netmapCall(g, "DELETE", path, "{}", headers, true); got.Code != http.StatusForbidden || calls != 0 {
 		t.Fatal("inventory deletion bypassed CSRF")
 	}
 	headers.Set("X-CSRF-Token", netmapSession().CSRF)
-	if got := netmapCall(g, "DELETE", path, "{}", headers, false); got.Code != 200 || calls != 1 {
+	if got := netmapCall(g, "DELETE", path, "{}", headers, true); got.Code != http.StatusOK || calls != 1 {
 		t.Fatalf("signed inventory deletion failed: %d %s", got.Code, got.Body.String())
 	}
 }

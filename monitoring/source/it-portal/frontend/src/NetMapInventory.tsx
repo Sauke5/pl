@@ -23,9 +23,18 @@ type Items<T> = { items: T[] };
 type EnrollmentCapabilities = {
   guided_enrollment?: boolean;
   ssh_host_key?: boolean;
+  profile_host_keys?: boolean;
   drivers?: string[];
 };
 type HostKey = { algorithm: string; fingerprint: string; known_hosts: string };
+type ConfirmableHostKey = {
+  key: HostKey;
+  address: string;
+  port: number;
+  confirmed: boolean;
+};
+type TargetHostKey = ConfirmableHostKey & { replace?: boolean };
+type EnrollmentTarget = { address: string; networkID: string; name?: string };
 type Enrollment = {
   target_id: string;
   profile_id: string;
@@ -159,7 +168,7 @@ const explanations: Record<string, string> = {
     "Укажите IPv4 или IPv6 устройства, доступный с хоста PL.",
   inventory_invalid_port: "Укажите порт от 1 до 65535.",
   inventory_host_key_required:
-    "У профиля нет доверенного SSH-ключа для этого адреса и порта. Введите данные входа и подтвердите отпечаток устройства.",
+    "Подтвердите SSH-отпечаток устройства для этого адреса и порта.",
   inventory_invalid_name: "Укажите короткое название без переноса строки.",
   inventory_profile_kind_changed:
     "Тип сохранённого профиля изменить нельзя. Создайте профиль нужного типа.",
@@ -197,7 +206,7 @@ const explanations: Record<string, string> = {
   inventory_auth_failed:
     "Устройство отклонило доступ. Проверьте пользователя, пароль или ключ и права на чтение сведений.",
   inventory_host_key_failed:
-    "SSH-ключ устройства не совпадает с доверенным. Проверьте отпечаток и список ключей в профиле.",
+    "SSH-ключ устройства изменился. Сверьте отпечаток и обновите ключ в настройках устройства.",
   inventory_tls_failed:
     "Не удалось проверить сертификат WinRM. Проверьте IP-адрес в сертификате и доверенный центр сертификации.",
   inventory_connection_failed:
@@ -297,6 +306,13 @@ function enrollmentError(failure: unknown) {
   return failureText(failure);
 }
 
+function hostKeyRequired(failure: unknown) {
+  return (
+    failure instanceof APIError &&
+    failure.code === "inventory_host_key_required"
+  );
+}
+
 function jobLabel(job?: Job) {
   const [tone, label] = job
     ? states[job.state] || ["unknown", "Состояние неизвестно"]
@@ -359,11 +375,60 @@ const intervals = [
   ["1440", "Раз в сутки"],
 ] as const;
 
+function checkedHostKey(key: HostKey) {
+  if (!key?.algorithm || !key.fingerprint || !key.known_hosts)
+    throw new Error(
+      "NetMap не вернул отпечаток SSH-ключа. Повторите проверку.",
+    );
+  return key;
+}
+
+function HostKeyConfirmation({
+  hostKey,
+  disabled,
+  onConfirm,
+}: {
+  hostKey: ConfirmableHostKey;
+  disabled: boolean;
+  onConfirm: (confirmed: boolean) => void;
+}) {
+  return (
+    <>
+      <div className="netmap-host-key">
+        <KeyRound size={20} aria-hidden="true" />
+        <div>
+          <strong>
+            {hostKey.address} · порт {hostKey.port}
+          </strong>
+          <span>{hostKey.key.algorithm}</span>
+          <code>{hostKey.key.fingerprint}</code>
+        </div>
+      </div>
+      <p className="module-hint">
+        Сравните отпечаток с ключом в настройках устройства или в SSH-клиенте,
+        которому вы уже доверяете.
+      </p>
+      <label className="netmap-confirm-key">
+        <input
+          autoFocus
+          type="checkbox"
+          checked={hostKey.confirmed}
+          disabled={disabled}
+          onChange={(event) => onConfirm(event.target.checked)}
+        />
+        Отпечаток совпадает с ключом устройства
+      </label>
+    </>
+  );
+}
+
 function EnrollmentDialog({
   endpoint,
   profiles,
   networks,
   supportedDrivers,
+  profileHostKeys,
+  target,
   onClose,
   onSaved,
 }: {
@@ -371,6 +436,8 @@ function EnrollmentDialog({
   profiles: Profile[];
   networks: Network[];
   supportedDrivers: string[];
+  profileHostKeys: boolean;
+  target?: EnrollmentTarget;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -379,13 +446,14 @@ function EnrollmentDialog({
     driver: supportedDrivers.includes("auto")
       ? "auto"
       : supportedDrivers[0] || "",
-    address: "",
+    name: target?.name ?? "",
+    address: target?.address ?? "",
     profileID: "",
-    networkID: "",
+    networkID: target?.networkID ?? "",
     interval: "0",
   }));
-  const [hostKey, setHostKey] = useState<HostKey>();
-  const [confirmed, setConfirmed] = useState(false);
+  const [hostKey, setHostKey] = useState<ConfirmableHostKey>();
+  const [savedNeedsHostKey, setSavedNeedsHostKey] = useState(false);
   const [busy, setBusy] = useState<"key" | "save">();
   const [error, setError] = useState<Error>();
   const pending = useRef(false);
@@ -393,20 +461,31 @@ function EnrollmentDialog({
   const saved = profiles.find(
     (profile) => profile.id === draft.profileID && profile.kind === draft.kind,
   );
-  const needsHostKey = draft.kind !== "windows" && !saved;
+  const needsHostKey =
+    draft.kind !== "windows" &&
+    (!saved ||
+      (profileHostKeys && (!saved.ssh_known_hosts_set || savedNeedsHostKey)));
   const kindValue = draft.kind === "network" ? draft.driver : draft.kind;
   const address = draft.address.trim();
-  const port = Number(draft.port);
+  const port = saved?.port ?? Number(draft.port);
 
   function update(patch: Partial<typeof draft>) {
     enrollmentID.current = undefined;
+    setSavedNeedsHostKey(false);
     setError(undefined);
     setDraft((previous) => ({ ...previous, ...patch }));
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending.current || (hostKey && !confirmed)) return;
+    if (pending.current || (hostKey && !hostKey.confirmed)) return;
+    if (hostKey && (hostKey.address !== address || hostKey.port !== port)) {
+      setHostKey(undefined);
+      setError(
+        new Error("Адрес или порт изменился. Получите отпечаток ещё раз."),
+      );
+      return;
+    }
     const readKey = needsHostKey && !hostKey;
     pending.current = true;
     setError(undefined);
@@ -419,11 +498,12 @@ function EnrollmentDialog({
           { address, port },
           { "Idempotency-Key": crypto.randomUUID() },
         );
-        if (!key?.algorithm || !key.fingerprint || !key.known_hosts)
-          throw new Error(
-            "NetMap не вернул отпечаток SSH-ключа. Повторите проверку.",
-          );
-        setHostKey(key);
+        setHostKey({
+          key: checkedHostKey(key),
+          address,
+          port,
+          confirmed: false,
+        });
         return;
       }
 
@@ -441,7 +521,7 @@ function EnrollmentDialog({
             }
           : {
               auth_method: draft.auth_method,
-              ssh_known_hosts: hostKey?.known_hosts,
+              ssh_known_hosts: hostKey?.key.known_hosts,
               ...(draft.kind === "network"
                 ? {
                     driver: draft.driver,
@@ -473,7 +553,12 @@ function EnrollmentDialog({
             ? { network_id: draft.networkID }
             : {}),
           interval_minutes: Number(draft.interval),
-          ...(saved ? { profile_id: saved.id } : { profile }),
+          ...(saved
+            ? {
+                profile_id: saved.id,
+                ...(hostKey ? { ssh_host_key: hostKey.key.known_hosts } : {}),
+              }
+            : { profile }),
         },
         { "Idempotency-Key": enrollmentID.current },
       );
@@ -488,6 +573,11 @@ function EnrollmentDialog({
         );
       onSaved();
     } catch (failure) {
+      if (profileHostKeys && saved && !hostKey && hostKeyRequired(failure)) {
+        setSavedNeedsHostKey(true);
+        enrollmentID.current = undefined;
+        return;
+      }
       setError(enrollmentError(failure));
     } finally {
       pending.current = false;
@@ -512,32 +602,11 @@ function EnrollmentDialog({
         onSubmit={(event) => void submit(event)}
       >
         {hostKey ? (
-          <>
-            <div className="netmap-host-key">
-              <KeyRound size={20} aria-hidden="true" />
-              <div>
-                <strong>
-                  {address} · порт {port}
-                </strong>
-                <span>{hostKey.algorithm}</span>
-                <code>{hostKey.fingerprint}</code>
-              </div>
-            </div>
-            <p className="module-hint">
-              Сравните отпечаток с ключом в настройках устройства или в
-              SSH-клиенте, которому вы уже доверяете.
-            </p>
-            <label className="netmap-confirm-key">
-              <input
-                autoFocus
-                type="checkbox"
-                checked={confirmed}
-                disabled={!!busy}
-                onChange={(event) => setConfirmed(event.target.checked)}
-              />
-              Отпечаток совпадает с ключом устройства
-            </label>
-          </>
+          <HostKeyConfirmation
+            hostKey={hostKey}
+            disabled={!!busy}
+            onConfirm={(confirmed) => setHostKey({ ...hostKey, confirmed })}
+          />
         ) : (
           <fieldset disabled={!!busy}>
             <div className="form-grid">
@@ -824,7 +893,6 @@ function EnrollmentDialog({
             onClick={() => {
               if (!hostKey) return onClose();
               setHostKey(undefined);
-              setConfirmed(false);
               setError(undefined);
               enrollmentID.current = undefined;
             }}
@@ -837,7 +905,7 @@ function EnrollmentDialog({
             disabled={
               !!busy ||
               (hostKey
-                ? !confirmed
+                ? !hostKey.confirmed
                 : !address ||
                   (!saved &&
                     (!draft.username.trim() ||
@@ -865,11 +933,15 @@ export default function NetMapInventory({
   enabled = true,
   networks = [],
   view = "devices",
+  enrollmentTarget,
+  onEnrollmentDismissed,
 }: {
   base: string;
   enabled?: boolean;
   networks?: Network[];
   view?: "devices" | "profiles" | "hidden";
+  enrollmentTarget?: EnrollmentTarget;
+  onEnrollmentDismissed?: () => void;
 }) {
   const endpoint = base + "/inventory";
   const capabilities = useAPI<EnrollmentCapabilities>(
@@ -879,6 +951,8 @@ export default function NetMapInventory({
   const guided =
     capabilities.data?.guided_enrollment === true &&
     capabilities.data.ssh_host_key === true;
+  const profileHostKeys =
+    guided && capabilities.data?.profile_host_keys === true;
   const capabilitiesError = capabilities.error;
   const legacy =
     (!!capabilities.data && !guided) ||
@@ -902,11 +976,18 @@ export default function NetMapInventory({
   const emptyTargets =
     Array.isArray(targets.data?.items) && !targetItems.length && !targets.error;
   const jobItems = Array.isArray(jobs.data?.items) ? jobs.data.items : [];
+  const enrolledTarget = enrollmentTarget
+    ? targetItems.find((target) => target.address === enrollmentTarget.address)
+    : undefined;
   const [enrolling, setEnrolling] = useState(false);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>();
   const [targetDraft, setTargetDraft] = useState<TargetDraft>();
+  const [targetHostKey, setTargetHostKey] = useState<TargetHostKey>();
+  const [targetNeedsHostKey, setTargetNeedsHostKey] = useState(false);
   const [testing, setTesting] = useState<Profile>();
   const [testAddress, setTestAddress] = useState("");
+  const [testHostKey, setTestHostKey] = useState<ConfirmableHostKey>();
+  const [testNeedsHostKey, setTestNeedsHostKey] = useState(false);
   const [testResult, setTestResult] = useState<Summary>();
   const [removing, setRemoving] = useState<{
     type: "profiles" | "targets";
@@ -937,6 +1018,34 @@ export default function NetMapInventory({
   const existingProfile = profileItems.find(
     (profile) => profile.id === profileDraft?.id,
   );
+  const profileNeedsWizard =
+    guided &&
+    !profileHostKeys &&
+    profileDraft?.kind !== "windows" &&
+    !existingProfile?.ssh_known_hosts_set;
+  const targetProfiles = profileItems.filter(
+    (profile) => profile.kind === targetDraft?.kind,
+  );
+  const targetProfile = targetProfiles.find(
+    (profile) => profile.id === targetDraft?.profile_id,
+  );
+  const originalTarget = targetItems.find(
+    (target) => target.id === targetDraft?.id,
+  );
+  const canReplaceTargetHostKey =
+    profileHostKeys &&
+    targetDraft?.kind !== "windows" &&
+    targetProfile?.ssh_known_hosts_set &&
+    originalTarget?.address === targetDraft?.address &&
+    originalTarget?.profile_id === targetProfile.id;
+  const needsTargetHostKey =
+    profileHostKeys &&
+    targetDraft?.kind !== "windows" &&
+    (targetNeedsHostKey || !targetProfile?.ssh_known_hosts_set);
+  const needsTestHostKey =
+    profileHostKeys &&
+    testing?.kind !== "windows" &&
+    (testNeedsHostKey || !testing?.ssh_known_hosts_set);
   const latestJobs = new Map<string, Job>();
   const latestReportedJobs = new Map<string, Job>();
   const profileUse = new Map<string, number>();
@@ -969,6 +1078,23 @@ export default function NetMapInventory({
     };
   }, [enabled, hasPending, jobs.refetch]);
 
+  useEffect(() => {
+    if (!enrolledTarget) return;
+    setError(undefined);
+    setTargetHostKey(undefined);
+    setTargetNeedsHostKey(false);
+    setTargetDraft({
+      ...enrolledTarget,
+      interval_minutes: String(enrolledTarget.interval_minutes || 0),
+    });
+    onEnrollmentDismissed?.();
+  }, [enrolledTarget, onEnrollmentDismissed]);
+
+  function closeEnrollment() {
+    setEnrolling(false);
+    onEnrollmentDismissed?.();
+  }
+
   async function reload() {
     await Promise.all([profiles.refetch(), targets.refetch(), jobs.refetch()]);
   }
@@ -979,6 +1105,7 @@ export default function NetMapInventory({
     method: "POST" | "DELETE",
     body: unknown,
     success: (value: T) => void,
+    onFailure?: (failure: unknown) => boolean,
   ) {
     if (!enabled || pending.current) return;
     pending.current = true;
@@ -992,7 +1119,7 @@ export default function NetMapInventory({
       success(value);
       await reload();
     } catch (failure) {
-      setError(failureText(failure));
+      if (!onFailure?.(failure)) setError(failureText(failure));
     } finally {
       setBusy("");
       pending.current = false;
@@ -1016,7 +1143,7 @@ export default function NetMapInventory({
 
   function saveProfile(event: FormEvent) {
     event.preventDefault();
-    if (!profileDraft) return;
+    if (!profileDraft || profileNeedsWizard) return;
     const {
       password,
       private_key,
@@ -1078,6 +1205,8 @@ export default function NetMapInventory({
     }
     const first = profileItems[0];
     setError(undefined);
+    setTargetHostKey(undefined);
+    setTargetNeedsHostKey(false);
     setTargetDraft({
       name: "",
       kind: first?.kind || "network",
@@ -1090,10 +1219,33 @@ export default function NetMapInventory({
 
   function editTarget(target: Target) {
     setError(undefined);
+    setTargetHostKey(undefined);
+    setTargetNeedsHostKey(false);
     setTargetDraft({
       ...target,
       interval_minutes: String(target.interval_minutes || 0),
     });
+  }
+
+  function readHostKey(
+    action: string,
+    address: string,
+    port: number,
+    setHostKey: (key: ConfirmableHostKey) => void,
+  ) {
+    void mutate<HostKey>(
+      action,
+      "/ssh-host-key",
+      "POST",
+      { address, port },
+      (key) =>
+        setHostKey({
+          key: checkedHostKey(key),
+          address,
+          port,
+          confirmed: false,
+        }),
+    );
   }
 
   if (!enabled) return null;
@@ -1451,6 +1603,8 @@ export default function NetMapInventory({
                                   )?.address || "",
                                 );
                                 setTestResult(undefined);
+                                setTestHostKey(undefined);
+                                setTestNeedsHostKey(false);
                                 setTesting(profile);
                               }}
                             >
@@ -1501,15 +1655,21 @@ export default function NetMapInventory({
         </Panel>
       )}
 
-      {enrolling && (
+      {(enrolling ||
+        (guided &&
+          enrollmentTarget &&
+          !targets.isPending &&
+          !enrolledTarget)) && (
         <EnrollmentDialog
           endpoint={endpoint}
           profiles={profileItems}
           networks={networks}
           supportedDrivers={availableDrivers}
-          onClose={() => setEnrolling(false)}
+          profileHostKeys={profileHostKeys}
+          target={enrollmentTarget}
+          onClose={closeEnrollment}
           onSaved={() => {
-            setEnrolling(false);
+            closeEnrollment();
             setNotice("Устройство добавлено. Первый опрос в очереди.");
             void reload();
           }}
@@ -1846,31 +2006,39 @@ export default function NetMapInventory({
                 </>
               )}
             {profileDraft.kind !== "windows" ? (
-              <Field
-                label="Доверенные SSH-ключи устройств"
-                hint={
-                  existingProfile?.ssh_known_hosts_set
-                    ? "Ключи сохранены. Новое содержимое заменит весь список. Пустое поле сохраняет его."
-                    : "Вставьте строки known_hosts: IP, тип ключа и сам ключ. Для нестандартного порта адрес записывают как [IP]:порт. Сверьте отпечаток с устройством перед добавлением."
-                }
-              >
-                <textarea
-                  rows={4}
-                  spellCheck={false}
-                  autoComplete="off"
-                  value={profileDraft.ssh_known_hosts}
-                  required={!existingProfile?.ssh_known_hosts_set}
-                  maxLength={65536}
-                  placeholder="192.0.2.10 ssh-ed25519 AAAA…"
-                  disabled={!!busy}
-                  onChange={(event) =>
-                    setProfileDraft({
-                      ...profileDraft,
-                      ssh_known_hosts: event.target.value,
-                    })
+              legacy ? (
+                <Field
+                  label="Доверенные SSH-ключи устройств"
+                  hint={
+                    existingProfile?.ssh_known_hosts_set
+                      ? "Ключи сохранены. Новое содержимое заменит весь список. Пустое поле сохраняет его."
+                      : "Вставьте строки known_hosts: IP, тип ключа и сам ключ. Для нестандартного порта адрес записывают как [IP]:порт. Сверьте отпечаток с устройством перед добавлением."
                   }
-                />
-              </Field>
+                >
+                  <textarea
+                    rows={4}
+                    spellCheck={false}
+                    autoComplete="off"
+                    value={profileDraft.ssh_known_hosts}
+                    required={!existingProfile?.ssh_known_hosts_set}
+                    maxLength={65536}
+                    placeholder="192.0.2.10 ssh-ed25519 AAAA…"
+                    disabled={!!busy}
+                    onChange={(event) =>
+                      setProfileDraft({
+                        ...profileDraft,
+                        ssh_known_hosts: event.target.value,
+                      })
+                    }
+                  />
+                </Field>
+              ) : (
+                <p className="module-hint">
+                  {profileNeedsWizard
+                    ? "Для этой версии NetMap добавьте устройство через мастер. Он сохранит профиль после подтверждения SSH-отпечатка."
+                    : "При подключении нового устройства NetMap покажет SSH-отпечаток для подтверждения."}
+                </p>
+              )
             ) : profileDraft.scheme === "https" ? (
               <>
                 <Field
@@ -1932,7 +2100,11 @@ export default function NetMapInventory({
               >
                 Отмена
               </Button>
-              <Button type="submit" variant="default" disabled={!!busy}>
+              <Button
+                type="submit"
+                variant="default"
+                disabled={!!busy || profileNeedsWizard}
+              >
                 {busy === "profile-save" ? "Сохраняем…" : "Сохранить профиль"}
               </Button>
             </div>
@@ -1953,6 +2125,51 @@ export default function NetMapInventory({
           <form
             onSubmit={(event) => {
               event.preventDefault();
+              if (!targetProfile || (targetHostKey && !targetHostKey.confirmed))
+                return;
+              if (
+                targetHostKey &&
+                (targetHostKey.address !== targetDraft.address ||
+                  targetHostKey.port !== targetProfile.port)
+              ) {
+                setTargetHostKey(undefined);
+                setTargetNeedsHostKey(true);
+                setError(
+                  new Error(
+                    "Адрес или порт изменился. Получите отпечаток ещё раз.",
+                  ),
+                );
+                return;
+              }
+              if (targetHostKey?.replace) {
+                if (!canReplaceTargetHostKey) return;
+                void mutate(
+                  "target-save",
+                  "/targets",
+                  "POST",
+                  {
+                    id: targetDraft.id,
+                    address: targetDraft.address,
+                    profile_id: targetProfile.id,
+                    ssh_host_key: targetHostKey.key.known_hosts,
+                    replace_ssh_host_key: true,
+                  },
+                  () => {
+                    setTargetHostKey(undefined);
+                    setNotice("Доверенный SSH-ключ устройства обновлён.");
+                  },
+                );
+                return;
+              }
+              if (needsTargetHostKey && !targetHostKey) {
+                readHostKey(
+                  "target-key",
+                  targetDraft.address,
+                  targetProfile.port,
+                  setTargetHostKey,
+                );
+                return;
+              }
               void mutate(
                 "target-save",
                 "/targets",
@@ -1960,7 +2177,13 @@ export default function NetMapInventory({
                 {
                   ...targetDraft,
                   interval_minutes: Number(targetDraft.interval_minutes),
-                  network_id: targetDraft.network_id || "",
+                  network_id:
+                    targetDraft.kind === "network"
+                      ? targetDraft.network_id || ""
+                      : "",
+                  ...(targetHostKey
+                    ? { ssh_host_key: targetHostKey.key.known_hosts }
+                    : {}),
                 },
                 () => {
                   setTargetDraft(undefined);
@@ -1970,145 +2193,184 @@ export default function NetMapInventory({
                       : "Устройство сохранено. Запустите первый опрос кнопкой «Опросить».",
                   );
                 },
+                (failure) => {
+                  if (!profileHostKeys || !hostKeyRequired(failure))
+                    return false;
+                  setTargetNeedsHostKey(true);
+                  return true;
+                },
               );
             }}
           >
-            <Field label="Название">
-              <input
-                autoFocus
-                required
-                maxLength={120}
-                value={targetDraft.name}
+            {targetHostKey && targetProfile ? (
+              <HostKeyConfirmation
+                hostKey={targetHostKey}
                 disabled={!!busy}
-                placeholder="Например, маршрутизатор офиса"
-                onChange={(event) =>
-                  setTargetDraft({ ...targetDraft, name: event.target.value })
+                onConfirm={(confirmed) =>
+                  setTargetHostKey({ ...targetHostKey, confirmed })
                 }
               />
-            </Field>
-            <div className="form-grid">
-              <Field label="Тип устройства">
-                <select
-                  disabled={!!busy || !!targetDraft.id}
-                  value={targetDraft.kind}
-                  onChange={(event) => {
-                    const kind = event.target.value as Kind;
-                    setTargetDraft({
-                      ...targetDraft,
-                      kind,
-                      profile_id:
-                        profileItems.find((profile) => profile.kind === kind)
-                          ?.id || "",
-                      network_id: "",
-                    });
-                  }}
-                >
-                  {Object.entries(kinds).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field
-                label="IP-адрес"
-                hint="Адрес устройства, доступный с хоста PL. IPv4 или IPv6."
-              >
-                <input
-                  required
-                  aria-label="IP-адрес"
-                  maxLength={45}
-                  spellCheck={false}
-                  value={targetDraft.address}
-                  placeholder="192.0.2.10"
-                  disabled={!!busy}
-                  onChange={(event) =>
-                    setTargetDraft({
-                      ...targetDraft,
-                      address: event.target.value.trim(),
-                    })
-                  }
-                />
-              </Field>
-            </div>
-            <Field label="Профиль доступа">
-              <select
-                required
-                value={targetDraft.profile_id}
-                disabled={!!busy}
-                onChange={(event) =>
-                  setTargetDraft({
-                    ...targetDraft,
-                    profile_id: event.target.value,
-                  })
-                }
-              >
-                <option value="">Выберите профиль</option>
-                {profileItems
-                  .filter((profile) => profile.kind === targetDraft.kind)
-                  .map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} · {profile.username}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-            {!profileItems.some(
-              (profile) => profile.kind === targetDraft.kind,
-            ) && (
-              <p className="module-hint">
-                Для этого типа устройства пока нет профиля. Сохраните профиль
-                доступа перед добавлением устройства.
-              </p>
-            )}
-            {targetDraft.kind === "network" && (
-              <Field
-                label="Связать с опрошенной сетью"
-                hint="Выберите сеть, если устройство уже найдено по SNMP. PL дополнит ту же карточку NetBox."
-              >
-                <select
-                  value={targetDraft.network_id || ""}
-                  disabled={!!busy || !!targetDraft.id}
-                  onChange={(event) =>
-                    setTargetDraft({
-                      ...targetDraft,
-                      network_id: event.target.value,
-                    })
-                  }
-                >
-                  <option value="">Отдельное устройство</option>
-                  {networks.map((network) => (
-                    <option key={network.id} value={network.id}>
-                      {network.name} · {network.cidr}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-            <Field label="Когда обновлять сведения">
-              <select
-                value={targetDraft.interval_minutes}
-                disabled={!!busy}
-                onChange={(event) =>
-                  setTargetDraft({
-                    ...targetDraft,
-                    interval_minutes: event.target.value,
-                  })
-                }
-              >
-                {!["0", "15", "60", "1440"].includes(
-                  targetDraft.interval_minutes,
-                ) && (
-                  <option value={targetDraft.interval_minutes}>
-                    Каждые {targetDraft.interval_minutes} мин
-                  </option>
+            ) : (
+              <>
+                <Field label="Название">
+                  <input
+                    autoFocus
+                    required
+                    maxLength={120}
+                    value={targetDraft.name}
+                    disabled={!!busy}
+                    placeholder="Например, маршрутизатор офиса"
+                    onChange={(event) =>
+                      setTargetDraft({
+                        ...targetDraft,
+                        name: event.target.value,
+                      })
+                    }
+                  />
+                </Field>
+                <div className="form-grid">
+                  <Field label="Тип устройства">
+                    <select
+                      disabled={!!busy}
+                      value={targetDraft.kind}
+                      onChange={(event) => {
+                        const kind = event.target.value as Kind;
+                        const original = targetItems.find(
+                          (target) => target.id === targetDraft.id,
+                        );
+                        const profile = profileItems.find(
+                          (item) =>
+                            item.kind === kind &&
+                            (!original || item.id === original.profile_id),
+                        );
+                        setTargetDraft({
+                          ...targetDraft,
+                          kind,
+                          profile_id: profile?.id || "",
+                        });
+                      }}
+                    >
+                      {Object.entries(kinds).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field
+                    label="IP-адрес"
+                    hint="Адрес устройства, доступный с хоста PL. IPv4 или IPv6."
+                  >
+                    <input
+                      required
+                      aria-label="IP-адрес"
+                      maxLength={45}
+                      spellCheck={false}
+                      value={targetDraft.address}
+                      placeholder="192.0.2.10"
+                      disabled={!!busy}
+                      onChange={(event) =>
+                        setTargetDraft({
+                          ...targetDraft,
+                          address: event.target.value.trim(),
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+                <Field label="Профиль доступа">
+                  <select
+                    required
+                    value={targetDraft.profile_id}
+                    disabled={!!busy}
+                    onChange={(event) =>
+                      setTargetDraft({
+                        ...targetDraft,
+                        profile_id: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Выберите профиль</option>
+                    {targetProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name} · {profile.username}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {!targetProfiles.length && (
+                  <p className="module-hint">
+                    Для этого типа устройства пока нет профиля. Создайте его в
+                    разделе «Доступ и конфигурации».
+                  </p>
                 )}
-                <option value="0">Только по кнопке «Опросить»</option>
-                <option value="15">Каждые 15 минут</option>
-                <option value="60">Каждый час</option>
-                <option value="1440">Раз в сутки</option>
-              </select>
-            </Field>
+                {canReplaceTargetHostKey && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!!busy}
+                    onClick={() =>
+                      readHostKey(
+                        "target-key",
+                        targetDraft.address,
+                        targetProfile.port,
+                        (key) => setTargetHostKey({ ...key, replace: true }),
+                      )
+                    }
+                  >
+                    Обновить SSH-ключ
+                  </Button>
+                )}
+                {targetDraft.kind === "network" && (
+                  <Field
+                    label="Связать с опрошенной сетью"
+                    hint="Выберите сеть, если устройство уже найдено по SNMP. PL дополнит ту же карточку NetBox."
+                  >
+                    <select
+                      value={targetDraft.network_id || ""}
+                      disabled={!!busy || !!targetDraft.id}
+                      onChange={(event) =>
+                        setTargetDraft({
+                          ...targetDraft,
+                          network_id: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Отдельное устройство</option>
+                      {networks.map((network) => (
+                        <option key={network.id} value={network.id}>
+                          {network.name} · {network.cidr}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <Field label="Когда обновлять сведения">
+                  <select
+                    value={targetDraft.interval_minutes}
+                    disabled={!!busy}
+                    onChange={(event) =>
+                      setTargetDraft({
+                        ...targetDraft,
+                        interval_minutes: event.target.value,
+                      })
+                    }
+                  >
+                    {!["0", "15", "60", "1440"].includes(
+                      targetDraft.interval_minutes,
+                    ) && (
+                      <option value={targetDraft.interval_minutes}>
+                        Каждые {targetDraft.interval_minutes} мин
+                      </option>
+                    )}
+                    <option value="0">Только по кнопке «Опросить»</option>
+                    <option value="15">Каждые 15 минут</option>
+                    <option value="60">Каждый час</option>
+                    <option value="1440">Раз в сутки</option>
+                  </select>
+                </Field>
+              </>
+            )}
             {!!error && <ErrorBox error={error} />}
             <div className="dialog-footer">
               <Button
@@ -2116,18 +2378,31 @@ export default function NetMapInventory({
                 variant="ghost"
                 disabled={!!busy}
                 onClick={() => {
-                  setTargetDraft(undefined);
                   setError(undefined);
+                  if (targetHostKey) setTargetHostKey(undefined);
+                  else setTargetDraft(undefined);
                 }}
               >
-                Отмена
+                {targetHostKey ? "Назад" : "Отмена"}
               </Button>
               <Button
                 type="submit"
                 variant="default"
-                disabled={!!busy || !targetDraft.profile_id}
+                disabled={
+                  !!busy ||
+                  !targetProfile ||
+                  (targetHostKey && !targetHostKey.confirmed)
+                }
               >
-                {busy === "target-save" ? "Сохраняем…" : "Сохранить устройство"}
+                {busy === "target-key"
+                  ? "Читаем отпечаток…"
+                  : busy === "target-save"
+                    ? "Сохраняем…"
+                    : targetHostKey?.replace
+                      ? "Сохранить SSH-ключ"
+                      : needsTargetHostKey && !targetHostKey
+                        ? "Получить отпечаток"
+                        : "Сохранить устройство"}
               </Button>
             </div>
           </form>
@@ -2152,34 +2427,82 @@ export default function NetMapInventory({
             onSubmit={(event) => {
               event.preventDefault();
               setTestResult(undefined);
+              if (testHostKey && !testHostKey.confirmed) return;
+              const profile =
+                profileItems.find((item) => item.id === testing.id) || testing;
+              if (
+                testHostKey &&
+                (testHostKey.address !== testAddress ||
+                  testHostKey.port !== profile.port)
+              ) {
+                setTestHostKey(undefined);
+                setTestNeedsHostKey(true);
+                setError(
+                  new Error(
+                    "Адрес или порт изменился. Получите отпечаток ещё раз.",
+                  ),
+                );
+                return;
+              }
+              if (needsTestHostKey && !testHostKey) {
+                readHostKey(
+                  "test-key",
+                  testAddress,
+                  profile.port,
+                  setTestHostKey,
+                );
+                return;
+              }
               void mutate<{ summary: Summary }>(
                 "profile-test",
                 "/profiles/" + testing.id + "/test",
                 "POST",
-                { address: testAddress },
+                {
+                  address: testAddress,
+                  ...(testHostKey
+                    ? { ssh_host_key: testHostKey.key.known_hosts }
+                    : {}),
+                },
                 (value) => {
                   setTestResult(value.summary);
                   setNotice(
                     "Доступ подтверждён, сведения об устройстве получены.",
                   );
                 },
+                (failure) => {
+                  if (!profileHostKeys || !hostKeyRequired(failure))
+                    return false;
+                  setTestNeedsHostKey(true);
+                  return true;
+                },
               );
             }}
           >
-            <Field label="IP-адрес устройства">
-              <input
-                autoFocus
-                required
-                maxLength={45}
-                spellCheck={false}
-                value={testAddress}
+            {testHostKey ? (
+              <HostKeyConfirmation
+                hostKey={testHostKey}
                 disabled={!!busy}
-                onChange={(event) => {
-                  setTestAddress(event.target.value.trim());
-                  setTestResult(undefined);
-                }}
+                onConfirm={(confirmed) =>
+                  setTestHostKey({ ...testHostKey, confirmed })
+                }
               />
-            </Field>
+            ) : (
+              <Field label="IP-адрес устройства">
+                <input
+                  autoFocus
+                  required
+                  maxLength={45}
+                  spellCheck={false}
+                  value={testAddress}
+                  disabled={!!busy}
+                  onChange={(event) => {
+                    setTestAddress(event.target.value.trim());
+                    setTestNeedsHostKey(false);
+                    setTestResult(undefined);
+                  }}
+                />
+              </Field>
+            )}
             {testResult && (
               <p role="status">
                 <Check size={16} aria-hidden="true" /> Доступ подтверждён
@@ -2197,14 +2520,27 @@ export default function NetMapInventory({
                 variant="ghost"
                 disabled={!!busy}
                 onClick={() => {
-                  setTesting(undefined);
                   setError(undefined);
+                  if (testHostKey) {
+                    setTestHostKey(undefined);
+                    setTestResult(undefined);
+                  } else setTesting(undefined);
                 }}
               >
-                Закрыть
+                {testHostKey ? "Назад" : "Закрыть"}
               </Button>
-              <Button type="submit" variant="default" disabled={!!busy}>
-                {busy === "profile-test" ? "Проверяем…" : "Проверить доступ"}
+              <Button
+                type="submit"
+                variant="default"
+                disabled={!!busy || (testHostKey && !testHostKey.confirmed)}
+              >
+                {busy === "test-key"
+                  ? "Читаем отпечаток…"
+                  : busy === "profile-test"
+                    ? "Проверяем…"
+                    : needsTestHostKey && !testHostKey
+                      ? "Получить отпечаток"
+                      : "Проверить доступ"}
               </Button>
             </div>
           </form>

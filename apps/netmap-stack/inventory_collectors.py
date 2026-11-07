@@ -16,6 +16,7 @@ import math
 from pathlib import Path
 import re
 import socket
+import struct
 import subprocess
 import sys
 import ssl
@@ -80,7 +81,44 @@ def _known_hosts(value):
     return value
 
 
-def validate_profile(profile):
+def host_key_name(ip, port):
+    return ip if port == 22 else f'[{ip}]:{port}'
+
+
+def ssh_host_pins(known_hosts, expected):
+    pins = []
+    for line in known_hosts.splitlines():
+        parts = line.split(maxsplit=3)
+        if len(parts) >= 3 and not parts[0].startswith('#') and expected in parts[0].split(','):
+            pins.append((parts[1], parts[2]))
+    return pins
+
+
+def validate_ssh_host_key(value, expected):
+    if not isinstance(value, str) or not value.isascii():
+        fail('inventory_profile_invalid')
+    _text(value, 16384, empty=False)
+    parts = value.split()
+    if len(parts) != 3 or parts[0] != expected:
+        fail('inventory_profile_invalid')
+    _known_hosts(value)
+    try:
+        import paramiko
+    except ImportError:
+        fail('inventory_dependency_missing')
+    algorithm, encoded = parts[1:]
+    raw = base64.b64decode(encoded, validate=True)
+    try:
+        key = paramiko.PKey.from_type_string(algorithm, raw)
+        parsed = key.asbytes()
+    except (TypeError, ValueError, paramiko.SSHException, struct.error):
+        fail('inventory_profile_invalid')
+    if key.get_name() != algorithm or parsed != raw:
+        fail('inventory_profile_invalid')
+    return f'{expected} {algorithm} {key.get_base64()}'
+
+
+def validate_profile(profile, *, allow_unpinned_ssh=False):
     try:
         if not isinstance(profile, dict) or profile.get('kind') not in ('network', 'linux', 'windows'):
             fail('inventory_profile_invalid')
@@ -106,7 +144,8 @@ def validate_profile(profile):
                 if result['scheme'] != 'https' or 'PRIVATE KEY' in result['ca_pem']: fail('inventory_profile_invalid')
                 ssl.create_default_context(cadata=result['ca_pem'])
         else:
-            result['ssh_known_hosts'] = _known_hosts(result.get('ssh_known_hosts', ''))
+            known_hosts = result.get('ssh_known_hosts', '')
+            result['ssh_known_hosts'] = '' if allow_unpinned_ssh and known_hosts == '' else _known_hosts(known_hosts)
             result.setdefault('auth_method', 'key' if result['private_key'] else 'password')
             if result['auth_method'] not in ('password', 'key') or (result['auth_method'] == 'key') != bool(result['private_key']):
                 fail('inventory_profile_invalid')
@@ -1511,7 +1550,9 @@ def collect(target, profile, *, deadline=None):
     timed-out process also closes its SSH/WinRM sockets; no local worker remains.
     """
     profile = validate_profile(profile)
-    _target(target, profile['kind'])
+    ip = _target(target, profile['kind'])
+    if profile['kind'] != 'windows' and not ssh_host_pins(profile['ssh_known_hosts'], host_key_name(ip, profile['port'])):
+        fail('inventory_host_key_failed')
     budget = Budget(deadline)
     budget.remaining()
     request = json.dumps({'target': target, 'profile': profile, 'deadline': budget.deadline}).encode()
