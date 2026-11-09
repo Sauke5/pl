@@ -11015,8 +11015,8 @@
     },
     {
       "path": "apps/doska/apps/web/src/doska/task-details.css",
-      "sha256": "5237a74451772bdcda0809f790555b35ccae5a192f33705ec2aebb0578dea62a",
-      "size": 8119
+      "sha256": "33ea536ec26837043520fe990f4f7ce9d101f97bd45f72bc2accf1f52379f38d",
+      "size": 7445
     },
     {
       "path": "apps/doska/apps/web/src/doska/task-details.test.tsx",

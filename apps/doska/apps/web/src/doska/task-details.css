@@ -31,12 +31,6 @@
 .doska-checklist-items li { display: flex; align-items: start; gap: 8px; padding: 8px 0; }
 .doska-checklist-items label { flex: 1; min-width: 0; line-height: 24px; }
 .doska-checklist-items label input { margin-top: 4px; accent-color: var(--accent); }
-/* Keep the row stable while secondary controls appear on interaction. */
-.doska-checklist-controls > button { opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
-.doska-checklist header:hover .doska-checklist-controls > button,
-.doska-checklist header:focus-within .doska-checklist-controls > button,
-.doska-checklist-items li:hover .doska-checklist-controls > button,
-.doska-checklist-items li:focus-within .doska-checklist-controls > button { opacity: 1; pointer-events: auto; }
 .doska-checklist-menu { position: relative; flex-shrink: 0; }
 .doska-checklist-menu > summary { display: flex; align-items: center; justify-content: center; width: 28px; min-height: 28px; padding: 4px; border-radius: 7px; color: var(--muted); cursor: pointer; list-style: none; }
 .doska-checklist-menu > summary::-webkit-details-marker { display: none; }
@@ -48,11 +42,9 @@
 :root[data-theme="light"] .doska-checklist-menu-popup { background: #fff; }
 :root[data-theme="light"] .doska-checklist .doska-checklist-menu-popup > button { color: #b62f40; }
 @media (hover: none), (pointer: coarse) {
-  .doska-checklist-controls > button { opacity: 1; pointer-events: auto; }
   .doska-checklist-menu > summary { width: 36px; min-height: 36px; }
   .doska-app .doska-checklist-controls > .doska-icon { width: 36px; height: 36px; min-height: 36px; }
 }
-@media (prefers-reduced-motion: reduce) { .doska-checklist-controls > button { transition: none; } }
 .doska-checklist-progress { display: block; width: 100%; height: 4px; margin: 12px 0; border: 0; border-radius: 4px; overflow: hidden; background: var(--border); accent-color: var(--accent); }
 .doska-checklist-progress::-webkit-progress-bar { background: var(--border); }
 .doska-checklist-progress::-webkit-progress-value { background: var(--accent); border-radius: 4px; }
