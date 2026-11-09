@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Owned official Grafana lifecycle with native authentication and users."""
 from __future__ import annotations
+import base64
 from contextlib import contextmanager, nullcontext
 import fcntl
 import hashlib
+from http.cookies import CookieError, SimpleCookie
 import importlib.util
 import ipaddress
 import json
@@ -25,6 +27,10 @@ _spec.loader.exec_module(_files)
 identifier, directory, read_file = _files.identifier, _files.directory, _files.read_file
 atomic, encoded, fsync_directory = _files.atomic, _files.encoded, _files.fsync_directory
 MAX_RESPONSE = 4 * 1024**2
+MAX_CHART_BODY = 512 * 1024
+CHART_DASHBOARD_PATH = re.compile(r'/grafana/api/dashboards/uid/[A-Za-z0-9_-]{1,128}')
+SESSION_VALUE = re.compile(r'[A-Za-z0-9._~+/=-]{1,512}')
+SESSION_COOKIES = {'grafana_session', 'grafana_session_expiry'}
 
 
 def public_origin(value):
@@ -349,7 +355,7 @@ class GrafanaController:
         return 'http://127.0.0.1:' + ports[0]['HostPort']
 
     def http(self, instance, obj):
-        # The root controller uses loopback only for unauthenticated native health.
+        # Native lifecycle health is unauthenticated.
         origin = urllib.parse.urlsplit(self.state(instance)['root_url'])
         req = urllib.request.Request(self.endpoint(obj) + '/grafana/api/health',
                                      headers={'Accept-Encoding': 'identity', 'Host': origin.netloc}, method='GET')
@@ -551,4 +557,95 @@ class GrafanaController:
             return self.observe(identifier(instance))
 
     def request(self, body):
-        raise ValueError('Grafana uses direct native HTTP proxy; controller gateway is unsupported')
+        fields = {'instance_id', 'method', 'path', 'query', 'content_type', 'body',
+                  'user_id', 'user_name', 'admin', 'browser_session'}
+        if not isinstance(body, dict) or set(body) != fields:
+            raise ValueError('Grafana uses direct native HTTP proxy; controller gateway is unsupported')
+        session = body['browser_session']
+        if (body['user_id'] != 'system:modules:provider' or body['admin'] is not False
+                or not isinstance(session, str) or not SESSION_VALUE.fullmatch(session)):
+            raise ValueError('Invalid Grafana chart session')
+        instance = identifier(body['instance_id'])
+        method, path, query = body['method'], body['path'], body['query']
+        content_type, raw = body['content_type'], body['body']
+        if not isinstance(path, str) or not isinstance(raw, str):
+            raise ValueError('Invalid Grafana chart request')
+        if method == 'GET':
+            if path == '/grafana/api/search':
+                allowed = query == 'limit=201&type=dash-db'
+            else:
+                allowed = query == '' and (path == '/grafana/api/datasources' or CHART_DASHBOARD_PATH.fullmatch(path))
+            if not allowed or raw != '' or content_type != '':
+                raise ValueError('Invalid Grafana chart read')
+            payload = None
+        elif (method == 'POST' and path == '/grafana/api/ds/query' and query == ''
+              and content_type == 'application/json' and len(raw) <= 4 * ((MAX_CHART_BODY + 2) // 3)):
+            payload = base64.b64decode(raw, validate=True)
+            if not 0 < len(payload) <= MAX_CHART_BODY or not isinstance(json.loads(payload), dict):
+                raise ValueError('Invalid Grafana chart query')
+        else:
+            raise ValueError('Invalid Grafana chart route')
+
+        with self.instance_lock(instance):
+            obj = self.inspect(instance)
+            if obj is None or not obj['State'].get('Running'):
+                raise ValueError('Grafana module is unavailable')
+            state = self.journal(instance)
+            if state.get('schema') != 2:
+                raise ValueError('Grafana native session is unavailable')
+            origin = urllib.parse.urlsplit(state['root_url'])
+            endpoint = self.endpoint(obj)
+            address = endpoint + path + ('?' + query if query else '')
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+            status, data, cookies = self.chart_response(opener, address, origin, method, payload, session)
+            if status == 401:
+                try:
+                    error = json.loads(data)
+                except ValueError:
+                    error = None
+                if isinstance(error, dict) and error.get('messageId') == 'session.token.rotate':
+                    rotated, _, rotated_cookies = self.chart_response(
+                        opener, endpoint + '/grafana/api/user/auth-tokens/rotate', origin, 'POST', None, session)
+                    if 200 <= rotated < 300:
+                        renewed = self.chart_session_cookie(rotated_cookies)
+                        if renewed:
+                            status, data, cookies = self.chart_response(opener, address, origin, method, payload, renewed)
+                            cookies = rotated_cookies + cookies
+        # An expired Grafana login can redirect to its login page. Never follow it.
+        if 300 <= status < 400:
+            status, data = 401, b''
+        return {'instance_id': instance, 'status': status, 'content_type': 'application/json',
+                'body': base64.b64encode(data).decode('ascii'), 'set_cookies': cookies}
+
+    @staticmethod
+    def chart_response(opener, address, origin, method, payload, session):
+        headers = {'Accept': 'application/json', 'Accept-Encoding': 'identity',
+                   'Host': origin.netloc, 'X-Forwarded-Proto': origin.scheme,
+                   'Cookie': 'grafana_session=' + session}
+        if method == 'POST':
+            headers.update({'Content-Type': 'application/json', 'Origin': origin.scheme + '://' + origin.netloc})
+        request = urllib.request.Request(address, headers=headers, method=method, data=payload)
+        try:
+            response = opener.open(request, timeout=12)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            data = response.read(MAX_RESPONSE + 1)
+            if len(data) > MAX_RESPONSE:
+                raise ValueError('Grafana chart response exceeds limit')
+            cookies = [value for value in response.headers.get_all('Set-Cookie', [])
+                       if len(value) <= 1024 and value.partition('=')[0] in SESSION_COOKIES][:4]
+            return response.status, data, cookies
+
+    @staticmethod
+    def chart_session_cookie(cookies):
+        for raw in cookies:
+            cookie = SimpleCookie()
+            try:
+                cookie.load(raw)
+            except CookieError:
+                continue
+            value = cookie.get('grafana_session')
+            if value and not value['domain'] and value['path'] in ('/grafana', '/grafana/') and SESSION_VALUE.fullmatch(value.value):
+                return value.value
+        return ''

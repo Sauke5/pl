@@ -3,17 +3,24 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"pl/portal/internal/model"
+	"pl/portal/internal/modules"
 	"pl/portal/internal/providers"
 	"pl/portal/internal/store"
 )
 
+const grafanaChartPrefix = "/grafana/_pl/charts"
+
 func (s *Server) registerProviderBrowseRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/integrations/{id}/prometheus/options", s.auth(s.prometheusOptions, true))
-	m.HandleFunc("GET /api/v1/integrations/{id}/grafana/dashboards", s.auth(s.grafanaDashboards, true))
-	m.HandleFunc("GET /api/v1/integrations/{id}/grafana/dashboards/{uid}/panels", s.auth(s.grafanaPanels, true))
-	m.HandleFunc("POST /api/v1/integrations/{id}/grafana/query", s.auth(s.grafanaQuery, true))
+	for _, prefix := range []string{"", grafanaChartPrefix} {
+		base := prefix + "/api/v1/integrations/{id}/grafana"
+		m.HandleFunc("GET "+base+"/dashboards", s.auth(s.grafanaDashboards, true))
+		m.HandleFunc("GET "+base+"/dashboards/{uid}/panels", s.auth(s.grafanaPanels, true))
+		m.HandleFunc("POST "+base+"/query", s.auth(s.grafanaQuery, true))
+	}
 }
 func (s *Server) browseIntegration(w http.ResponseWriter, r *http.Request, kind string) (model.Integration, bool) {
 	i, e := store.Get[model.Integration](r.Context(), s.Store, "integration", r.PathValue("id"))
@@ -60,9 +67,13 @@ func (s *Server) grafanaDashboards(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r, ok = s.grafanaChartRequest(w, r, i)
+	if !ok {
+		return
+	}
 	out, e := s.Providers.GrafanaDashboards(r.Context(), i)
 	if e != nil {
-		s.browseError(w, e)
+		s.grafanaChartError(w, r, e)
 		return
 	}
 	respond(w, 200, out)
@@ -72,26 +83,74 @@ func (s *Server) grafanaPanels(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r, ok = s.grafanaChartRequest(w, r, i)
+	if !ok {
+		return
+	}
 	out, e := s.Providers.GrafanaPanels(r.Context(), i, r.PathValue("uid"))
 	if e != nil {
-		s.browseError(w, e)
+		s.grafanaChartError(w, r, e)
 		return
 	}
 	respond(w, 200, out)
 }
 func (s *Server) grafanaQuery(w http.ResponseWriter, r *http.Request) {
-	var input providers.GrafanaQuery
-	if !decode(w, r, &input) {
-		return
-	}
 	i, ok := s.browseIntegration(w, r, "grafana")
 	if !ok {
 		return
 	}
+	r, ok = s.grafanaChartRequest(w, r, i)
+	if !ok {
+		return
+	}
+	var input providers.GrafanaQuery
+	if !decode(w, r, &input) {
+		return
+	}
 	out, e := s.Providers.GrafanaQuery(r.Context(), i, input)
 	if e != nil {
-		s.browseError(w, e)
+		s.grafanaChartError(w, r, e)
 		return
 	}
 	respond(w, 200, out)
+}
+
+func (s *Server) grafanaChartRequest(w http.ResponseWriter, r *http.Request, i model.Integration) (*http.Request, bool) {
+	scoped := strings.HasPrefix(r.URL.Path, grafanaChartPrefix+"/")
+	if !s.Config.PortableRelease || i.ManagedModuleID == "" {
+		if scoped {
+			http.NotFound(w, r)
+			return r, false
+		}
+		return r, true
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if !scoped {
+		// Grafana scopes its session cookie to /grafana. Keep the public chart
+		// API compatible and preserve the method and body on same-origin redirects.
+		http.Redirect(w, r, grafanaChartPrefix+r.URL.EscapedPath(), http.StatusTemporaryRedirect)
+		return r, false
+	}
+	source, err := s.connectorSource(r, "grafana", "")
+	if err != nil || source.ID != i.ID {
+		s.browseError(w, providers.ErrBrowseUnavailable)
+		return r, false
+	}
+	cookies := r.CookiesNamed(modules.GrafanaSessionCookie)
+	if len(cookies) != 1 || !modules.ValidGrafanaSession(cookies[0].Value) {
+		s.grafanaChartError(w, r, providers.ErrBrowseAuth)
+		return r, false
+	}
+	ctx := modules.WithGrafanaSession(r.Context(), cookies[0].Value, func(cookie *http.Cookie) {
+		http.SetCookie(w, cookie)
+	})
+	return r.WithContext(ctx), true
+}
+
+func (s *Server) grafanaChartError(w http.ResponseWriter, r *http.Request, err error) {
+	if strings.HasPrefix(r.URL.Path, grafanaChartPrefix+"/") && errors.Is(err, providers.ErrBrowseAuth) {
+		problem(w, http.StatusBadGateway, "grafana_session_required", "Войдите в Grafana с учётной записью, у которой есть доступ к дашборду и источнику данных.")
+		return
+	}
+	s.browseError(w, err)
 }

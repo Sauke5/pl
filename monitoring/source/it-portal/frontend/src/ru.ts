@@ -20,6 +20,7 @@ export const ru = {
   chart_picker_hint:
     "Выберите существующую панель. График появится здесь; настройка Grafana не изменится.",
   chart_source: "Источник Grafana",
+  chart_open_grafana: "Открыть Grafana",
   chart_dashboard: "Дашборд",
   chart_panel: "Панель",
   chart_choose_dashboard: "Выберите дашборд",

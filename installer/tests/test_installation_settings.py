@@ -304,14 +304,19 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(d.read(self.delivery.base / 'operation.json')['phase'], 'rolled_back')
 
     def test_outbound_ca_apply_preserve_and_explicit_clear(self):
-        body = request(outbound_ca_pem='public CA')
+        pem = 'public CA\r\nsecond line\r\n'
+        body = request(outbound_ca_pem=pem)
         self.prepare(body); self.runtime(); self.service.perform()
+        self.assertEqual(d.read(self.delivery.base / 'operation.json')['phase'], 'complete')
         current = d.read(self.root / 'config/compose.json')
         self.assertEqual(current['services']['api']['environment']['PORTAL_OUTBOUND_CA_FILE'], '/run/secrets/outbound-ca.pem')
-        self.assertEqual((self.root / 'private/outbound-ca.pem').read_text(), 'public CA')
+        self.assertEqual((self.root / 'private/outbound-ca.pem').read_bytes(), pem.encode())
+        status = self.service.status({})
+        self.assertEqual(status['outbound_ca_pem'], pem)
+        self.assertEqual(status['outbound_ca_sha256'], hashlib.sha256(pem.encode()).hexdigest())
         keep = request(revision=1)
         self.prepare(keep); self.runtime(); self.service.perform()
-        self.assertEqual((self.root / 'private/outbound-ca.pem').read_text(), 'public CA')
+        self.assertEqual((self.root / 'private/outbound-ca.pem').read_bytes(), pem.encode())
         clear = request(revision=2, outbound_ca_pem='')
         self.prepare(clear); self.runtime(); self.service.perform()
         self.assertFalse((self.root / 'private/outbound-ca.pem').exists())

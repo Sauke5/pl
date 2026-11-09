@@ -3,19 +3,29 @@
 import argparse
 from contextlib import closing
 import http.server
+from ipaddress import ip_address
 import json
 import os
 from pathlib import Path
 import re
 import sqlite3
+from time import time
 
 
 def initialize(database):
     with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
         connection.execute('''CREATE TABLE IF NOT EXISTS installations (
             installation_id TEXT PRIMARY KEY NOT NULL,
-            version TEXT NOT NULL
+            version TEXT NOT NULL,
+            last_seen INTEGER,
+            last_ip TEXT
         )''')
+        columns = {column[1] for column in connection.execute('PRAGMA table_info(installations)')}
+        if 'last_seen' not in columns:
+            connection.execute('ALTER TABLE installations ADD COLUMN last_seen INTEGER')
+        if 'last_ip' not in columns:
+            connection.execute('ALTER TABLE installations ADD COLUMN last_ip TEXT')
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -57,11 +67,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(400)
             return
 
+        received_at = int(time())
+        # This loopback handler gets the peer address from Caddy's upstream header.
+        source_ip = self.headers.get('X-PL-Source-IP')
+        try:
+            source_ip = str(ip_address(source_ip)) if source_ip else None
+        except ValueError:
+            source_ip = None
         try:
             with closing(sqlite3.connect(self.server.database, timeout=2)) as connection, connection:
-                connection.execute('''INSERT INTO installations (installation_id, version) VALUES (?, ?)
-                    ON CONFLICT(installation_id) DO UPDATE SET version = excluded.version
-                    WHERE installations.version <> excluded.version''', (installation, version))
+                connection.execute('''
+                    INSERT INTO installations (installation_id, version, last_seen, last_ip) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(installation_id) DO UPDATE
+                    SET version = excluded.version, last_seen = excluded.last_seen, last_ip = excluded.last_ip
+                ''', (installation, version, received_at, source_ip))
         except sqlite3.Error:
             self.reply(503)
             return

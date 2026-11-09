@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -19,6 +20,52 @@ import (
 )
 
 var ErrGrafanaUnavailable = errors.New("Grafana недоступна")
+
+const GrafanaSessionCookie = "grafana_session"
+
+var grafanaSessionValue = regexp.MustCompile(`^[A-Za-z0-9._~+/=-]{1,512}$`)
+
+type grafanaSessionKey struct{}
+type grafanaSession struct {
+	value     string
+	setCookie func(*http.Cookie)
+}
+
+func ValidGrafanaSession(value string) bool { return grafanaSessionValue.MatchString(value) }
+
+// WithGrafanaSession keeps the Grafana identity scoped to a single chart request,
+// including any session rotation between dashboard, datasource and query reads.
+func WithGrafanaSession(ctx context.Context, value string, setCookie func(*http.Cookie)) context.Context {
+	return context.WithValue(ctx, grafanaSessionKey{}, &grafanaSession{value, setCookie})
+}
+
+func (session *grafanaSession) renew(raw string) {
+	if len(raw) > 1024 {
+		return
+	}
+	cookie, err := http.ParseSetCookie(raw)
+	if err != nil || cookie.Domain != "" || (cookie.Path != "/grafana" && cookie.Path != "/grafana/") {
+		return
+	}
+	switch cookie.Name {
+	case GrafanaSessionCookie:
+		if cookie.Value != "" && !ValidGrafanaSession(cookie.Value) {
+			return
+		}
+		session.value = cookie.Value
+	case "grafana_session_expiry":
+		if cookie.Value != "" {
+			if _, err := strconv.ParseInt(cookie.Value, 10, 64); err != nil {
+				return
+			}
+		}
+	default:
+		return
+	}
+	if session.setCookie != nil {
+		session.setCookie(cookie)
+	}
+}
 
 // ProviderRequest is a read-only service transport, separate from native browser roles.
 func (m *Manager) ProviderRequest(ctx context.Context, integration model.Integration, method, path, query, contentType string, body []byte) (*http.Response, error) {
@@ -37,7 +84,15 @@ func (c *HostController) RequestGrafana(ctx context.Context, id, method, path, q
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	payload, _ := json.Marshal(map[string]any{"instance_id": id, "method": method, "path": path, "query": query, "content_type": contentType, "user_id": userID, "user_name": userName, "admin": admin, "body": base64.StdEncoding.EncodeToString(body)})
+	input := map[string]any{"instance_id": id, "method": method, "path": path, "query": query, "content_type": contentType, "user_id": userID, "user_name": userName, "admin": admin, "body": base64.StdEncoding.EncodeToString(body)}
+	session, _ := ctx.Value(grafanaSessionKey{}).(*grafanaSession)
+	if session != nil {
+		if !ValidGrafanaSession(session.value) {
+			return bufferedResponse(http.StatusUnauthorized, "application/json", nil), nil
+		}
+		input["browser_session"] = session.value
+	}
+	payload, _ := json.Marshal(input)
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	endpoint := "/v1/grafana/request"
 	mac := hmac.New(sha256.New, c.key)
@@ -61,10 +116,11 @@ func (c *HostController) RequestGrafana(ctx context.Context, id, method, path, q
 		return nil, errors.New("Host controller не подтвердил запрос Grafana")
 	}
 	var output struct {
-		InstanceID  string `json:"instance_id"`
-		Status      int    `json:"status"`
-		ContentType string `json:"content_type"`
-		Body        string `json:"body"`
+		InstanceID  string   `json:"instance_id"`
+		Status      int      `json:"status"`
+		ContentType string   `json:"content_type"`
+		Body        string   `json:"body"`
+		SetCookies  []string `json:"set_cookies"`
 	}
 	if json.Unmarshal(raw, &output) != nil || output.InstanceID != id || !readStatus(output.Status) || !readContentType(output.ContentType) {
 		return nil, errors.New("Некорректный ответ Grafana")
@@ -72,6 +128,11 @@ func (c *HostController) RequestGrafana(ctx context.Context, id, method, path, q
 	decoded, err := base64.StdEncoding.Strict().DecodeString(output.Body)
 	if err != nil || len(decoded) > maximum {
 		return nil, errors.New("Превышен размер ответа Grafana")
+	}
+	if session != nil {
+		for _, raw := range output.SetCookies {
+			session.renew(raw)
+		}
 	}
 	return bufferedResponse(output.Status, output.ContentType, decoded), nil
 }

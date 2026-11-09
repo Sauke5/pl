@@ -9,8 +9,10 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
 ENV VITE_BASE_PATH=/doska/ VITE_DOSKA_MODE=platform VITE_API_URL=/doska/api
-RUN pnpm --filter @kaneo/email --filter @kaneo/permissions --filter @kaneo/importers --filter @kaneo/mcp run build && \
-    pnpm --filter @kaneo/api run build && pnpm --filter @kaneo/web run build && node deploy/generate-manifest.mjs
+# BuildKit caches this layer. Vite Task's file tracking cannot spawn under amd64 emulation.
+RUN pnpm exec vp run --no-cache --filter @kaneo/email --filter @kaneo/permissions --filter @kaneo/importers --filter @kaneo/mcp compile && \
+    pnpm exec vp run --no-cache --ignore-depends-on --filter @kaneo/api --filter @kaneo/web compile && \
+    node deploy/generate-manifest.mjs
 
 FROM build AS production-dependencies
 RUN pnpm --filter @kaneo/api --prod deploy --legacy /production

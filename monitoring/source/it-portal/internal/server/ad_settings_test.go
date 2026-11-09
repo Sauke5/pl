@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -163,6 +164,39 @@ func TestManagedADSettingsPermissionsTLSAndNoFailedWrites(t *testing.T) {
 	}
 	if _, err := s.Store.ADLoginSettings(context.Background()); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("failed requests changed persisted AD", err)
+	}
+}
+
+func TestManagedADSettingsReusesPlatformCA(t *testing.T) {
+	s, admin, input := managedADFixture(t, &adFixture{admin: true})
+	s.Config.PortableRelease = true
+	ca := input.CAPEM
+	input.CAPEM = ""
+	if w := adSettingsCall(s, admin, "POST", "/api/v1/settings/ad/test", input, nil); w.Code != http.StatusServiceUnavailable {
+		t.Fatal("untrusted LDAPS accepted", w.Code, w.Body.String())
+	}
+	path := filepath.Join(t.TempDir(), "platform-ca.pem")
+	if err := os.WriteFile(path, []byte(ca), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s.Config.OutboundCAFile = path
+	if w := adSettingsCall(s, admin, "POST", "/api/v1/settings/ad/test", input, nil); w.Code != http.StatusOK {
+		t.Fatal("shared CA did not verify LDAPS", w.Code, w.Body.String())
+	}
+	state := apiDecode[adSettingsResponse](t, adSettingsCall(s, admin, "PUT", "/api/v1/settings/ad", input, nil), http.StatusOK)
+	if state.CAPEM != "" {
+		t.Fatal("shared CA was copied into AD settings")
+	}
+	cfg, _, err := s.adConfiguration(context.Background())
+	if err != nil || cfg.CAFile != path {
+		t.Fatal("saved AD settings did not inherit the shared CA", err)
+	}
+
+	input.Revision = state.Revision
+	input.CAPEM = ca
+	s.Config.OutboundCAFile = filepath.Join(t.TempDir(), "unavailable.pem")
+	if w := adSettingsCall(s, admin, "POST", "/api/v1/settings/ad/test", input, nil); w.Code != http.StatusOK {
+		t.Fatal("explicit AD CA lost priority", w.Code, w.Body.String())
 	}
 }
 

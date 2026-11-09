@@ -10955,8 +10955,8 @@
     },
     {
       "path": "apps/doska/apps/web/src/doska/task-checklists.tsx",
-      "sha256": "1e04fc42bf3500706a6ec33f3547ee10f018cbf39efd1f217f5814de9279b9f0",
-      "size": 22941
+      "sha256": "9c0eee5c67388da3fbb2dc6c494826fb97a4c415cacbef7c7f23a50ae6641c08",
+      "size": 23235
     },
     {
       "path": "apps/doska/apps/web/src/doska/task-color-picker.css",
@@ -11015,8 +11015,8 @@
     },
     {
       "path": "apps/doska/apps/web/src/doska/task-details.css",
-      "sha256": "5eb258e429098f123a292d8b4247a8ea0df9ccac5f3605c9b8fcd072fac82376",
-      "size": 7893
+      "sha256": "5237a74451772bdcda0809f790555b35ccae5a192f33705ec2aebb0578dea62a",
+      "size": 8119
     },
     {
       "path": "apps/doska/apps/web/src/doska/task-details.test.tsx",
@@ -16959,6 +16959,11 @@
       "size": 2272
     },
     {
+      "path": "docs/releases/0.8.9.json",
+      "sha256": "5abc310ad40aaf6549b6aab8a19d0d1e10b8b72febecd2cbc72c226bf7c9e078",
+      "size": 2255
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
       "size": 3327
@@ -17000,8 +17005,8 @@
     },
     {
       "path": "installer/core-modules.ru.md",
-      "sha256": "0b3d2c22a6534e0296f48fc3a9d414a520d80f99dfa33e929ba31d5d4589c21e",
-      "size": 14729
+      "sha256": "cc744ddc83a12a59a7eb02ec880e165754ebcbfdb10aec3499b78cc848402f1d",
+      "size": 16047
     },
     {
       "path": "installer/delivery-proxy.py",
@@ -17050,8 +17055,8 @@
     },
     {
       "path": "installer/grafana-controller.py",
-      "sha256": "947fa3765b9a899e0bd250a2a50a5dd67dd40c584b018884861f1eadcb988245",
-      "size": 33363
+      "sha256": "86ed4c7e9d3e530d27f97e03d4a40446d5649533617e7b231088748efad28177",
+      "size": 38817
     },
     {
       "path": "installer/grafana-plugins.json",
@@ -17090,8 +17095,8 @@
     },
     {
       "path": "installer/installation-settings.py",
-      "sha256": "221d95f9dbdf6b42b4ed3148c71367e8e29646465cf75f91f94bee182694986e",
-      "size": 37392
+      "sha256": "32c26491b6a4e71abf17a317b4a7d8a7206975000b954ec6949ae03492a34ebd",
+      "size": 37503
     },
     {
       "path": "installer/license-notices.py",
@@ -17155,8 +17160,8 @@
     },
     {
       "path": "installer/nginx.conf",
-      "sha256": "8d541356efea0ef09362c2eeb2741c78e8fe698494df7a132b82cae82509bf4d",
-      "size": 18356
+      "sha256": "baff978680ab3be47dd755fac364d5ded078c4b1a8167dbc843bc76d48377070",
+      "size": 18862
     },
     {
       "path": "installer/package.py",
@@ -17165,8 +17170,8 @@
     },
     {
       "path": "installer/platform-guide.ru.md",
-      "sha256": "43994fceed5e0b6ca0683823292b62e2692833d7e2b860aedb5ec09e37a81cea",
-      "size": 7342
+      "sha256": "8891c2b3bced344fbf16415cb54a3b63d478d1852678b89960efea462bf33a47",
+      "size": 9359
     },
     {
       "path": "installer/public-export.py",
@@ -17300,8 +17305,8 @@
     },
     {
       "path": "installer/tests/test_grafana_controller.py",
-      "sha256": "bdec2c636f810d53c822e6235bda293d1f16e1560a6cd2ae532b0eec4d7e3f7e",
-      "size": 31101
+      "sha256": "06b481fb25ee700abdbd03e7b5698cd73ea1445d4c483ac41da69d6f611feb3a",
+      "size": 35573
     },
     {
       "path": "installer/tests/test_grafana_package.py",
@@ -17340,13 +17345,13 @@
     },
     {
       "path": "installer/tests/test_installation_counter.py",
-      "sha256": "27eef9b458e0c92b1e64c38e8de4ca49da005b311020cf2ec89d559a5ef83bab",
-      "size": 9200
+      "sha256": "5e29e7395c53786a69d90583667b9417e1a64205ac0eb97185724ef30a692836",
+      "size": 10364
     },
     {
       "path": "installer/tests/test_installation_settings.py",
-      "sha256": "7d5b8efcb158fd12d5fde31f28e60515aee14c806d053d98da9c3c543690ab7e",
-      "size": 22883
+      "sha256": "c0f77c95784ecf3d7d2d0681b91057d9da1a8b8027e0a728706dd10cac6d0853",
+      "size": 23212
     },
     {
       "path": "installer/tests/test_integration_config.py",
@@ -17415,8 +17420,8 @@
     },
     {
       "path": "installer/tests/test_module_proxy.py",
-      "sha256": "7ab36be8f75aefffa912c4dcd4f903077b9bd37c0c9cd5a6aa29b864fed0082f",
-      "size": 11751
+      "sha256": "e59a8197fa94cb092e97ec186e05b612ad673db5b2c85f0e6ea830e049f4c237",
+      "size": 12036
     },
     {
       "path": "installer/tests/test_module_update_delivery.py",
@@ -17775,8 +17780,8 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/doska.Dockerfile",
-      "sha256": "0da8010b76574f462579d999c5dc51e051727e02c2e3a9e9518e84bf77eaede7",
-      "size": 2957
+      "sha256": "b2745e6997bae982ac33fa71f50797c36b7ef19700a5a42d3dd60219b8505dca",
+      "size": 3099
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/doska.sources.json",
@@ -18065,8 +18070,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ADSettings.tsx",
-      "sha256": "c195ebfda459e276360232fc695af6e5a04ff2671e7b4c828a711fcdc9f4ad6a",
-      "size": 11447
+      "sha256": "3eda1f05f35a73cd39436551fc6ecefddeb821f233716edf3d4a389903e8fea4",
+      "size": 11486
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ActionNotifications.tsx",
@@ -18145,8 +18150,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/GrafanaCharts.tsx",
-      "sha256": "a7040f05c67f4b761d84500229ce11750ed82b1479ad95176c0d7bd5f93abb33",
-      "size": 12861
+      "sha256": "8b2c9c10f97343d7feaaa83220fa47646a643a23eee28dc501eab6d996fad3ad",
+      "size": 13391
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Help.tsx",
@@ -18155,8 +18160,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/InstallationSettings.tsx",
-      "sha256": "8d9ab786eadd4ee45b2a80a70e9eb9824df73d21eae90e4d4e9bafd34d351923",
-      "size": 20072
+      "sha256": "7ffb5a29857d5316565d35c11e72caeee22785d8cac831b941e1602188a1d74f",
+      "size": 20629
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/InstallationTransition.tsx",
@@ -18630,8 +18635,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ru.ts",
-      "sha256": "650b7bea3e9f3206efb54bc7ef2f697735072eda73a7dee88c7dccd111b2f58b",
-      "size": 35220
+      "sha256": "71ffe4c192454d94f2c45b0ebca98ec0dc76fbddeeed7e5bef97ced586c82d6f",
+      "size": 35268
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/runtime-settings.css",
@@ -18855,8 +18860,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/installation.spec.ts",
-      "sha256": "b1907290251e23106eb42b069ffbb968327dbdcbdcafbcaaa4925b1503791f83",
-      "size": 10251
+      "sha256": "fba8e7262f6aaa2a97c55343228d53db33be1f1eee4da06140cd2431124a1b22",
+      "size": 10719
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/iperf.spec.ts",
@@ -19325,8 +19330,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/grafana.go",
-      "sha256": "c1d4909506f357db7667e3d49d1a150ab5ba306e33090876d9b7304823e33cf3",
-      "size": 4796
+      "sha256": "e47f4dfb35a172c6a2ee7278bf8de56208df51e299dd5c7603ea16b50e38b287",
+      "size": 6551
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/grafana_test.go",
@@ -19775,13 +19780,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/ad_settings.go",
-      "sha256": "10bbc8d931171d277ab5763826d959f2431a748c361a6db9ec5b3dfbcde52e7c",
-      "size": 13780
+      "sha256": "ade949429b1f2d629c7185c230e6cae8f8a19c11cb0db21fbe78d3e27f815ad5",
+      "size": 13856
     },
     {
       "path": "monitoring/source/it-portal/internal/server/ad_settings_test.go",
-      "sha256": "c6e3fbcdc1ab6ce23cbeda9ad412b20e7408df8298f9dea8f4d15036bc5441f8",
-      "size": 11621
+      "sha256": "402ba85fb5e794991913db74b8fbc219702c2bf6ffbb2d229405e3bebd67beee",
+      "size": 13046
     },
     {
       "path": "monitoring/source/it-portal/internal/server/alertmanager.go",
@@ -20635,13 +20640,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/provider_browse.go",
-      "sha256": "e9b903af4b3487268ea9a396783c5eebd0743ce82206c9073e919eb0ac0db911",
-      "size": 2935
+      "sha256": "970dd1d1317edb6b36a9ce293a18ecd64d0551d3d351069db7a0ff7801ef3c92",
+      "size": 4916
     },
     {
       "path": "monitoring/source/it-portal/internal/server/provider_browse_test.go",
-      "sha256": "aca360b2f071f5d6985335afe6e32ec4d31c0271c8cdd2f3ab865a8138408f78",
-      "size": 4241
+      "sha256": "334ea8dcdf24c85fcb94186b26404e16cf433c81e0712f0d37dbfb7110d4ccd8",
+      "size": 10057
     },
     {
       "path": "monitoring/source/it-portal/internal/server/proxy_automation.go",
@@ -22255,8 +22260,8 @@
     },
     {
       "path": "release/installation-counter-receiver.py",
-      "sha256": "9cec105113917b1fcf96b95242cf085d0b0c82283388ea81030bec47e58a8584",
-      "size": 3464
+      "sha256": "cf867032685f587d3e5fa68bef5c96b3f63f2ea6950498cb9c38e70850c91b90",
+      "size": 4386
     }
   ],
   "generated_files": [

@@ -1,5 +1,7 @@
 """Owned Grafana lifecycle; native browser/login acceptance belongs to CI."""
+import base64
 import copy
+from email.message import Message
 import importlib.util
 import json
 from pathlib import Path
@@ -422,6 +424,86 @@ class GrafanaTests(unittest.TestCase):
         for body in ({}, {'instance_id': self.instance, 'admin': True, 'user_id': 'platform-admin'}, None):
             with self.assertRaisesRegex(ValueError, 'direct native HTTP proxy'):
                 self.controller.request(body)
+
+    def test_chart_transport_uses_native_session_and_bounds_routes(self):
+        self.install()
+        body = {'instance_id': self.instance, 'method': 'GET', 'path': '/grafana/api/search',
+                'query': 'limit=201&type=dash-db', 'content_type': '', 'body': '',
+                'user_id': 'system:modules:provider', 'user_name': 'PL', 'admin': False,
+                'browser_session': 'native-session'}
+        captured = []
+
+        class Response:
+            status = 200
+            headers = Message()
+            headers.add_header('Set-Cookie', 'grafana_session=rotated; Path=/grafana/; HttpOnly')
+            headers.add_header('Set-Cookie', 'portal_session=forged; Path=/')
+            def read(self, limit):
+                return b'[]'
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+
+        def open_request(request, timeout):
+            captured.append(request)
+            return Response()
+
+        query = base64.b64encode(b'{"queries":[]}').decode()
+        with patch.object(gf.urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=open_request)):
+            result = self.controller.request(body)
+            self.controller.request({**body, 'method': 'POST', 'path': '/grafana/api/ds/query',
+                                     'query': '', 'content_type': 'application/json', 'body': query})
+            for fields in ({'admin': True}, {'browser_session': 'foo; portal_session=bad'},
+                           {'path': '/grafana/api/admin/users'}, {'query': 'limit=10000&type=dash-db'},
+                           {'method': 'POST', 'path': '/grafana/api/datasources', 'query': '',
+                            'content_type': 'application/json', 'body': query}):
+                with self.subTest(fields=fields), self.assertRaises(ValueError):
+                    self.controller.request({**body, **fields})
+        self.assertEqual(len(captured), 2)
+        self.assertEqual(result['set_cookies'], ['grafana_session=rotated; Path=/grafana/; HttpOnly'])
+        self.assertEqual(captured[0].full_url, 'http://127.0.0.1:32100/grafana/api/search?limit=201&type=dash-db')
+        self.assertEqual(captured[0].get_header('Cookie'), 'grafana_session=native-session')
+        self.assertIsNone(captured[0].get_header('Authorization'))
+        self.assertEqual(captured[1].get_header('Origin'), 'https://pl.example')
+        self.assertEqual(captured[1].data, b'{"queries":[]}')
+
+    def test_chart_transport_renews_grafana_session_on_rotation_error(self):
+        self.install()
+        body = {'instance_id': self.instance, 'method': 'GET', 'path': '/grafana/api/search',
+                'query': 'limit=201&type=dash-db', 'content_type': '', 'body': '',
+                'user_id': 'system:modules:provider', 'user_name': 'PL', 'admin': False,
+                'browser_session': 'before-rotation'}
+        cookie = 'grafana_session=after-rotation; Path=/grafana/; HttpOnly'
+        captured = []
+        responses = iter(((401, b'{"messageId":"session.token.rotate"}', ''),
+                          (200, b'{}', cookie), (200, b'[]', '')))
+
+        class Response:
+            def __init__(self, status, data, session_cookie):
+                self.status, self.data, self.headers = status, data, Message()
+                if session_cookie:
+                    self.headers.add_header('Set-Cookie', session_cookie)
+            def read(self, limit):
+                return self.data
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+
+        def open_request(request, timeout):
+            captured.append((request.method, gf.urllib.parse.urlsplit(request.full_url).path, request.get_header('Cookie')))
+            return Response(*next(responses))
+
+        with patch.object(gf.urllib.request, 'build_opener', return_value=types.SimpleNamespace(open=open_request)):
+            result = self.controller.request(body)
+        self.assertEqual(captured, [
+            ('GET', '/grafana/api/search', 'grafana_session=before-rotation'),
+            ('POST', '/grafana/api/user/auth-tokens/rotate', 'grafana_session=before-rotation'),
+            ('GET', '/grafana/api/search', 'grafana_session=after-rotation'),
+        ])
+        self.assertEqual(result['status'], 200)
+        self.assertEqual(result['set_cookies'], [cookie])
 
     def legacy_fixture(self, with_container=True, prometheus=True):
         self.install()

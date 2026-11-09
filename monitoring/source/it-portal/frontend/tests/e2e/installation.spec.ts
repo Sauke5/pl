@@ -16,11 +16,15 @@ test("deployment settings protect drafts, confirm restart and persist server pol
     operation: undefined as Record<string, unknown> | undefined,
   };
   const writes: Record<string, unknown>[] = [];
+  let restarting = false;
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname.replace("/api/v1", "");
     if (path === "/installation") {
-      if (request.method() === "GET") return route.fulfill({ json: state });
+      if (request.method() === "GET") {
+        if (restarting) return route.abort("connectionrefused");
+        return route.fulfill({ json: state });
+      }
       expect(request.method()).toBe("PUT");
       expect(request.headers()["x-csrf-token"]).toBe("installation-csrf");
       const body = request.postDataJSON();
@@ -88,12 +92,21 @@ test("deployment settings protect drafts, confirm restart and persist server pol
   expect(writes[0]).not.toHaveProperty("tls_key_pem");
   expect(writes[0]).not.toHaveProperty("icmp_policy_mode");
   expect(writes[0]).not.toHaveProperty("icmp_allowed_cidrs");
+  restarting = true;
+  await expect(page.getByRole("status")).toContainText(
+    "Ждём ответа PL после перезапуска",
+  );
+  await expect(page.getByText("Failed to fetch", { exact: true })).toHaveCount(
+    0,
+  );
+  restarting = false;
   state = {
     ...state,
     revision: 1,
     allowed_ports: [80, 443, 9090],
     operation: { ...state.operation, phase: "complete" },
   };
+  await expect(page.getByRole("status")).toContainText("Параметры применены");
   await page.reload();
   await expect(page.getByRole("status")).toContainText("Параметры применены");
   await expect(page.getByLabel(/^Порты подключаемых сервисов/)).toHaveValue(

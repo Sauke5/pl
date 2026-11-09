@@ -5,7 +5,13 @@ import { api, APIError, date, queryClient, useAPI } from "./api";
 import type { Integration } from "./types";
 import { Dialog } from "./components/ui/dialog";
 import { Button } from "./components/ui/button";
-import { Empty, ErrorBox, Field, Panel } from "./components/common";
+import {
+  Empty,
+  ErrorBox,
+  ExternalLink,
+  Field,
+  Panel,
+} from "./components/common";
 import { TimeSeriesChart, type ChartData } from "./TimeSeriesChart";
 import { ru } from "./ru";
 export type ChartRange = "1h" | "6h" | "24h" | "7d";
@@ -41,6 +47,27 @@ const ranges: Record<ChartRange, { label: string; ms: number }> = {
   "24h": { label: ru.chart_day, ms: 86400000 },
   "7d": { label: ru.chart_week, ms: 604800000 },
 };
+function grafanaLoginRequired(error: unknown) {
+  return error instanceof APIError && error.code === "grafana_session_required";
+}
+
+function GrafanaChartError({
+  error,
+  retry,
+}: {
+  error: unknown;
+  retry?: () => void;
+}) {
+  return (
+    <>
+      <ErrorBox error={error} retry={retry} />
+      {grafanaLoginRequired(error) && (
+        <ExternalLink url="/grafana/">{ru.chart_open_grafana}</ExternalLink>
+      )}
+    </>
+  );
+}
+
 export function GrafanaCharts({ timezone }: { timezone: string }) {
   const settings = useAPI<ChartSettings>("/chart-settings");
   const integrations = useAPI<Integration[]>("/integrations");
@@ -242,7 +269,7 @@ function ChartPicker({
             </select>
           </Field>
           {dashboards.error && (
-            <ErrorBox
+            <GrafanaChartError
               error={dashboards.error}
               retry={() => void dashboards.refetch()}
             />
@@ -274,7 +301,7 @@ function ChartPicker({
             </Field>
           )}
           {panels.error && (
-            <ErrorBox
+            <GrafanaChartError
               error={panels.error}
               retry={() => void panels.refetch()}
             />
@@ -358,10 +385,11 @@ function GrafanaChart({
     retry: false,
     refetchInterval: 60000,
   });
+  const chart = grafanaLoginRequired(data.error) ? undefined : data.data;
   return (
     <Panel
       className="grafana-chart"
-      title={data.data?.title || ru.chart_title}
+      title={chart?.title || ru.chart_title}
       icon={<ChartNoAxesCombined size={18} />}
       action={
         <div className="chart-actions">
@@ -401,23 +429,23 @@ function GrafanaChart({
       {!sourceLoading && !source?.enabled && (
         <p className="notice">{ru.chart_source_disabled}</p>
       )}
-      {data.error && <ErrorBox error={data.error} />}
-      {data.error && data.data && (
+      {data.error && <GrafanaChartError error={data.error} />}
+      {data.error && chart && (
         <p className="notice">
-          {ru.chart_previous_data} {date(data.data.observed_at)}
+          {ru.chart_previous_data} {date(chart.observed_at)}
         </p>
       )}
-      {!data.data && data.isFetching && (
+      {!chart && data.isFetching && (
         <div className="chart-loading" role="status">
           {ru.chart_loading}
         </div>
       )}
-      {data.data && <TimeSeriesChart data={data.data} timezone={timezone} />}
-      {data.data && (
+      {chart && <TimeSeriesChart data={chart} timezone={timezone} />}
+      {chart && (
         <div className="chart-source-caption">
           <span>{source?.name || ru.chart_source}</span>
           <span>
-            {ru.chart_observed}: {date(data.data.observed_at)}
+            {ru.chart_observed}: {date(chart.observed_at)}
           </span>
         </div>
       )}

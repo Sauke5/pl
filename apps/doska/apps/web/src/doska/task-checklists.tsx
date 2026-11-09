@@ -203,6 +203,7 @@ export function DoskaTaskChecklists({
                     <div className="doska-detail-actions doska-checklist-controls">
                       <button
                         type="button"
+                        className="doska-icon"
                         disabled={mutation.isPending || (!!draft && !conflict)}
                         onClick={() =>
                           begin({
@@ -220,6 +221,7 @@ export function DoskaTaskChecklists({
 
                       <button
                         type="button"
+                        className="doska-icon"
                         aria-label={t("checklistUp", { name: list.title })}
                         disabled={blocked || !!draft || listIndex === 0}
                         onClick={() =>
@@ -239,6 +241,7 @@ export function DoskaTaskChecklists({
                       </button>
                       <button
                         type="button"
+                        className="doska-icon"
                         aria-label={t("checklistDown", { name: list.title })}
                         disabled={
                           blocked ||
@@ -379,6 +382,7 @@ export function DoskaTaskChecklists({
                         <div className="doska-detail-actions doska-checklist-controls">
                           <button
                             type="button"
+                            className="doska-icon"
                             aria-label={t("checklistEditItem", {
                               name: item.text,
                             })}
@@ -400,6 +404,7 @@ export function DoskaTaskChecklists({
 
                           <button
                             type="button"
+                            className="doska-icon"
                             aria-label={t("checklistUp", { name: item.text })}
                             disabled={blocked || !!draft || itemIndex === 0}
                             onClick={() =>
@@ -424,6 +429,7 @@ export function DoskaTaskChecklists({
                           </button>
                           <button
                             type="button"
+                            className="doska-icon"
                             aria-label={t("checklistDown", { name: item.text })}
                             disabled={
                               blocked ||

@@ -105,6 +105,12 @@ export function InstallationSettings() {
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(baseline);
   const running =
     !!status.data?.operation && !terminal.has(status.data.operation.phase);
+  const waitingForServer =
+    running &&
+    status.data?.operation?.kind === "configuration" &&
+    (status.error instanceof TypeError ||
+      (status.error instanceof APIError &&
+        [502, 503, 504].includes(status.error.status)));
   useEffect(() => {
     const value = status.data;
     if (value) settleInstallationTransition(value);
@@ -237,7 +243,7 @@ export function InstallationSettings() {
           Адрес открытия PL, сертификат HTTPS и сети подключаемых сервисов. При
           применении PL кратковременно перезапустится.
         </p>
-        {status.error && <ErrorBox error={status.error} />}
+        {status.error && !waitingForServer && <ErrorBox error={status.error} />}
         {status.data?.operation?.kind === "configuration" && (
           <div role="status" aria-live="polite">
             <p>
@@ -251,6 +257,9 @@ export function InstallationSettings() {
                       ? "Требуется восстановление. Откройте раздел обновлений."
                       : "Параметры не применены"}
             </p>
+            {waitingForServer && (
+              <p className="muted">Ждём ответа PL после перезапуска…</p>
+            )}
             {status.data.operation.error && (
               <ErrorBox error={new Error(status.data.operation.error)} />
             )}
@@ -404,9 +413,10 @@ export function InstallationSettings() {
               <details>
                 <summary>Сертификаты внешних интеграций</summary>
                 <p className="muted">
-                  Системные центры сертификации используются всегда. Для
-                  сервисов с собственной CA можно добавить PEM-сертификат или
-                  цепочку. Проверка имени сервера сохраняется.
+                  Загрузите сертификат корпоративного центра сертификации один
+                  раз для HTTPS-интеграций Платформы и входа через AD. В
+                  настройках AD при необходимости можно выбрать отдельный
+                  сертификат. Используйте DNS-имена из сертификатов серверов.
                 </p>
                 <Field label="Дополнительный CA для интеграций">
                   <input

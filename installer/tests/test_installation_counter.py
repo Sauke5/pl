@@ -93,6 +93,23 @@ class InstallationCounterTests(unittest.TestCase):
         count = subprocess.check_output([sys.executable, str(RECEIVER), '--database', str(self.database), '--count'], text=True)
         self.assertEqual(count.strip(), '2')
 
+    def test_same_version_report_refreshes_contact_time_and_ip(self):
+        installation, version = 'pl-0123456789ab', '0.8.5'
+        report = json.dumps({'installation_id': installation, 'version': version})
+        tls = ssl.create_default_context(cafile=self.cert)
+        for stamp, ip, normalized in ((100, '192.0.2.1', '192.0.2.1'), (160, '2001:0DB8::1', '2001:db8::1')):
+            headers = {'Content-Type': 'application/json', 'X-PL-Source-IP': ip}
+            with patch.object(receiver, 'time', return_value=stamp), closing(
+                http.client.HTTPSConnection('127.0.0.1', self.server.server_port, timeout=2, context=tls)
+            ) as connection:
+                connection.request('POST', '/v1/installs', report, headers)
+                with connection.getresponse() as response:
+                    self.assertEqual(response.status, 204)
+            with closing(sqlite3.connect(self.database)) as connection:
+                self.assertEqual(connection.execute(
+                    'SELECT installation_id, version, last_seen, last_ip FROM installations'
+                ).fetchall(), [(installation, version, stamp, normalized)])
+
     def test_tls_and_http_failures_are_ignored_silently(self):
         output, errors = io.StringIO(), io.StringIO()
         with redirect_stdout(output), redirect_stderr(errors):

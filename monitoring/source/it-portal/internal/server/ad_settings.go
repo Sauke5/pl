@@ -66,6 +66,9 @@ func (v adLoginConfiguration) config(base Config) (Config, error) {
 	c.ADURL, c.ADBaseDN, c.ADUserSuffix, c.ADGroupDN, c.ADGroup = v.URL, v.BaseDN, v.UserSuffix, v.AdminGroupDN, ""
 	c.CAFile = ""
 	c.ADCAPEM = v.CAPEM
+	if c.PortableRelease && c.ADCAPEM == "" {
+		c.CAFile = c.OutboundCAFile
+	}
 	if len(v.URL) > 2048 || strings.TrimSpace(v.URL) != v.URL || !c.adEnabled() || len(v.BindUsername) == 0 || len(v.BindUsername) > 2048 || !utf8.ValidString(v.BindUsername) || strings.TrimSpace(v.BindUsername) != v.BindUsername || strings.ContainsAny(v.BindUsername, "\x00\r\n") || len(v.CAPEM) > 65536 {
 		return c, store.ErrInvalid
 	}

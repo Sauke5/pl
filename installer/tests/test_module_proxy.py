@@ -98,6 +98,10 @@ class ModuleProxyTests(unittest.TestCase):
     def test_grafana_uses_native_proxy_for_login_api_plugins_and_websocket(self):
         directives, _ = self.route('/grafana?orgId=2')
         self.assertEqual(directives.get('return'), '308 /grafana/$is_args$args')
+        charts, chart_headers = self.route('/grafana/_pl/charts/api/v1/integrations/id/grafana/dashboards')
+        self.assertEqual(charts.get('proxy_pass'), 'http://$api$request_uri')
+        self.assertNotIn('auth_request', charts)
+        self.assertNotIn('Cookie', chart_headers)
         for path in ('/grafana/', '/grafana/login', '/grafana/api/user',
                      '/grafana/api/ds/query?x=1', '/grafana/api/plugins/example/settings',
                      '/grafana/public/plugins/example/module.js', '/grafana/api/live/ws'):

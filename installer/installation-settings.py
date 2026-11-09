@@ -181,12 +181,12 @@ class InstallationSettings:
             raise ConfigurationError(message='Исходящее доверие задано устаревшим серверным контрактом. Требуется перенос в настройки установки.')
         if env.get('PORTAL_OUTBOUND_CA_FILE') and not outbound.exists():
             raise ConfigurationError(message='Файл доверенных исходящих CA недоступен.')
-        ca_pem = outbound.read_text() if env.get('PORTAL_OUTBOUND_CA_FILE') else ''
-        if len(ca_pem.encode()) > 64 * 1024:
+        ca_bytes = outbound.read_bytes() if env.get('PORTAL_OUTBOUND_CA_FILE') else b''
+        if len(ca_bytes) > 64 * 1024:
             raise ConfigurationError(message='Файл доверенных исходящих CA превышает допустимый размер.')
         return {'core_api': 1, 'public_url': state['config']['public_url'], 'bind_address': state['config']['bind_address'],
                 'allowed_cidrs': cidrs, 'allowed_ports': ports, 'custom_tls': self.custom_tls(state),
-                'outbound_ca_pem': ca_pem, 'outbound_ca_sha256': hashlib.sha256(ca_pem.encode()).hexdigest() if ca_pem else '',
+                'outbound_ca_pem': ca_bytes.decode('utf-8'), 'outbound_ca_sha256': hashlib.sha256(ca_bytes).hexdigest() if ca_bytes else '',
                 'icmp_policy_mode': icmp_policy(state['config'])['mode'], 'icmp_allowed_cidrs': icmp_policy(state['config'])['cidrs'],
                 'revision': self.revision(state), 'operation': projection}
 
@@ -427,7 +427,8 @@ class InstallationSettings:
             self.preflight_port(config, state['config'])
             self.validate_tls(pending / 'tls.crt', pending / 'tls.key', config['hostname'])
             if config.get('outbound_ca_pem'):
-                if (pending / 'outbound-ca.pem').read_text() != config['outbound_ca_pem']:
+                # Compare the staged PEM byte for byte, including its line endings.
+                if (pending / 'outbound-ca.pem').read_bytes() != config['outbound_ca_pem'].encode('utf-8'):
                     raise ConfigurationError()
                 self.validate_outbound_ca(pending / 'outbound-ca.pem')
             plan = self.origin_plan(state['config'], config, request['tls_changed'])
