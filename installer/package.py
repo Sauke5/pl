@@ -16,7 +16,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALLATION_COUNTER_URL = "https://185.74.45.145:27828/v1/installs"
+INSTALLATION_COUNTER_URL = "https://185.74.45.145:27828/v2/installs"
 RECIPES = {"db": "deploy/images/postgres.Dockerfile", "prometheus": "deploy/images/prometheus.Dockerfile", "xray": "deploy/images/xray.Dockerfile", "alertmanager": "deploy/images/alertmanager.Dockerfile", "grafana": "deploy/images/grafana.Dockerfile"}
 IMAGE_SOURCES = {"db": {"pl.component": "postgresql", "pl.postgresql.version": "18.6", "pl.gosu.version": "1.19", "pl.gosu.go.version": "1.27.2"},
                  "prometheus": {"pl.module.id": "prometheus", "pl.module.config.version": "1", "org.opencontainers.image.version": "3.15.0", "pl.build.go": "1.27.2", "pl.build.x-net": "v0.61.0"}}

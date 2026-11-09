@@ -16929,6 +16929,11 @@
       "size": 4298
     },
     {
+      "path": "docs/releases/0.8.10.json",
+      "sha256": "66a7706e24010e9735f56bd9041406b4ff578be3b1cf9b8a12bdec6e9ca1bfa6",
+      "size": 2715
+    },
+    {
       "path": "docs/releases/0.8.2.json",
       "sha256": "453b99310d02ab02abc3b9e67595fb35182d9a63333a2f7259628d34e7d7264c",
       "size": 3014
@@ -17120,8 +17125,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "6b0d549a0cedc7b161c7216c4730f82a0889eaf7d819091806dac38c7de51193",
-      "size": 89312
+      "sha256": "24e5155b70c0b33fd3219b4a689b6fabfd79f8046fe2902fa1cbb0c2c08a42a4",
+      "size": 92452
     },
     {
       "path": "installer/module-network.py",
@@ -17165,7 +17170,7 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "ee3cc61f6590d9244dc51203e4a9da11f0c1989e0bcbb6de2ed72d953d7ce3b5",
+      "sha256": "078ac8026303f34c74985b0a66a837123d883822e7d0fa1f1f45de2db60c4d55",
       "size": 37343
     },
     {
@@ -17345,8 +17350,8 @@
     },
     {
       "path": "installer/tests/test_installation_counter.py",
-      "sha256": "5e29e7395c53786a69d90583667b9417e1a64205ac0eb97185724ef30a692836",
-      "size": 10364
+      "sha256": "b02b664346c9f09cc8718bd49556e86d1995b398a31cad57fb9309a34de2f436",
+      "size": 12164
     },
     {
       "path": "installer/tests/test_installation_settings.py",
@@ -22260,8 +22265,8 @@
     },
     {
       "path": "release/installation-counter-receiver.py",
-      "sha256": "cf867032685f587d3e5fa68bef5c96b3f63f2ea6950498cb9c38e70850c91b90",
-      "size": 4386
+      "sha256": "84044c61a08b2e702f40148aaac303fea70d7a5626138740274d3b767a3249dc",
+      "size": 8290
     }
   ],
   "generated_files": [

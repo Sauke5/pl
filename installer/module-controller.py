@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import socketserver
@@ -32,6 +33,12 @@ from datetime import datetime, timedelta
 
 IMAGE = 'prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e'
 VERSION = '3.15.0'
+MODULE_PRIMARY_ROLES = {
+    'prometheus': None, 'xray': None, 'alertmanager': None, 'grafana': None,
+    'wayline': 'api', 'forms': 'adapter', 'doska': 'api', 'sftpgo': 'server',
+    'netmap': 'adapter', 'bookstack': 'web',
+}
+OS_RELEASE = Path('/etc/os-release')
 CONFIG = b'global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: prometheus\n    static_configs:\n      - targets: ["127.0.0.1:9090"]\n'
 FLAGS = ['--config.file=/etc/prometheus/prometheus.yml', '--storage.tsdb.path=/prometheus',
          '--storage.tsdb.retention.time=15d', '--storage.tsdb.retention.size=512MB',
@@ -232,6 +239,25 @@ def safe_directory(path):
         raise ValueError('Unsafe module directory owner or mode')
 
 
+def read_module_image_registry(path, installation, *, require_prometheus=False):
+    parent = path.parent
+    if (parent.is_symlink() or parent.stat().st_uid != 0 or parent.stat().st_mode & 0o077
+            or path.is_symlink() or not path.is_file() or path.stat().st_uid != 0
+            or path.stat().st_mode & 0o777 != 0o600 or path.stat().st_size > 65536):
+        raise ValueError('Unsafe module image descriptor')
+    value = json.loads(path.read_text())
+    required = {'schema', 'installation', 'manifest_sha256'}
+    if require_prometheus:
+        required.add('prometheus')
+    if (not isinstance(value, dict) or not required <= value.keys()
+            or value.keys() - required - MODULE_PRIMARY_ROLES.keys()
+            or value.get('schema') != 1 or value.get('installation') != installation
+            or not isinstance(value.get('manifest_sha256'), str)
+            or not re.fullmatch(r'[0-9a-f]{64}', value['manifest_sha256'])):
+        raise ValueError('Invalid module image installation identity')
+    return value
+
+
 class Controller:
     def __init__(self, root, installation):
         self.root = Path(root)
@@ -281,17 +307,7 @@ class Controller:
                 raise ValueError('Bundled module image descriptor is missing')
             # Legacy packages have no bundled optional image descriptor.
             return IMAGE
-        parent = path.parent
-        if (parent.is_symlink() or parent.stat().st_uid != 0 or parent.stat().st_mode & 0o077
-                or path.is_symlink() or not path.is_file() or path.stat().st_uid != 0
-                or path.stat().st_mode & 0o777 != 0o600 or path.stat().st_size > 65536):
-            raise ValueError('Unsafe module image descriptor')
-        value = json.loads(path.read_text())
-        required = {'schema', 'installation', 'manifest_sha256'} | (set() if self.on_demand else {'prometheus'})
-        if (not isinstance(value, dict) or not required <= set(value) or set(value) - {'schema', 'installation', 'manifest_sha256', 'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'}
-                or value.get('schema') != 1 or value.get('installation') != self.installation
-                or not re.fullmatch(r'[0-9a-f]{64}', value.get('manifest_sha256', ''))):
-            raise ValueError('Invalid module image installation identity')
+        value = read_module_image_registry(path, self.installation, require_prometheus=not self.on_demand)
         statepath = self.root / 'state/installation.json'
         if (statepath.parent.is_symlink() or statepath.parent.stat().st_uid != 0
                 or statepath.parent.stat().st_mode & 0o022
@@ -1094,8 +1110,69 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError('Module redirects refused')
 
 
-def report_installation(state_path, destination, installation, version, requested, stopped):
-    payload = json.dumps({'installation_id': installation, 'version': version}).encode('ascii')
+def report_version(value):
+    return value if isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+-]{0,63}', value) else None
+
+
+def report_os():
+    values = {}
+    try:
+        for line in OS_RELEASE.read_text(encoding='utf-8').splitlines():
+            key, _, value = line.lstrip().partition('=')
+            if key in ('ID', 'VERSION_ID'):
+                value = value.strip()
+                if value[:1] in ('"', "'") and value[:1] == value[-1:]:
+                    value = value[1:-1]
+                values[key] = value
+    except (OSError, UnicodeError):
+        return None
+    os_id = values.get('ID', '')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,31}', os_id):
+        return None
+    return {'id': os_id, 'version': report_version(values.get('VERSION_ID'))}
+
+
+def report_architecture():
+    try:
+        return {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine())
+    except OSError:
+        return None
+
+
+def report_module_version(root, module, descriptor):
+    # Storage image roles can survive a native module upgrade with older labels.
+    role = MODULE_PRIMARY_ROLES[module]
+    image = descriptor.get(role) if role and isinstance(descriptor, dict) else descriptor
+    labels = image.get('labels') if isinstance(image, dict) else None
+    if isinstance(labels, dict) and labels.get('pl.module.id') == module:
+        version = report_version(labels.get('org.opencontainers.image.version'))
+        if version is not None:
+            return version
+
+    path = root / 'state/delivery' / ('module-' + module + '.json')
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022 or info.st_size > 4096:
+            return None
+        receipt = json.loads(path.read_bytes())
+    except (OSError, ValueError, RecursionError):
+        return None
+    return report_version(receipt.get('version')) if isinstance(receipt, dict) and receipt.get('module_id') == module else None
+
+
+def report_modules(root, state):
+    try:
+        registry = read_module_image_registry(root / 'private/module-images.json', state['install_id'])
+    except (OSError, ValueError, RecursionError):
+        return None
+    if registry['manifest_sha256'] != state.get('manifest_sha256'):
+        return None
+    return [{'id': module, 'version': report_module_version(root, module, registry[module])}
+            for module in sorted(MODULE_PRIMARY_ROLES.keys() & registry.keys())]
+
+
+def report_installation(root, destination, installation, version, requested, stopped):
+    state_path = root / 'state/installation.json'
     headers = {'Content-Type': 'application/json', 'User-Agent': 'PL'}
     while not stopped.is_set():
         requested.clear()
@@ -1104,6 +1181,9 @@ def report_installation(state_path, destination, installation, version, requeste
             state = json.loads(state_path.read_bytes())
             if (isinstance(state, dict) and state.get('phase') == 'ready'
                     and state.get('install_id') == installation and state.get('version') == version):
+                payload = json.dumps({'installation_id': installation, 'version': version,
+                                      'os': report_os(), 'arch': report_architecture(),
+                                      'modules': report_modules(root, state)}, separators=(',', ':')).encode('utf-8')
                 with closing(http.client.HTTPSConnection(destination.hostname, destination.port, timeout=5)) as connection:
                     connection.request('POST', destination.path, payload, headers)
                     with connection.getresponse() as response:
@@ -1121,7 +1201,7 @@ def installation_counter(root, installation):
         destination = urllib.parse.urlsplit(manifest.get('installation_counter_url', ''))
         version = manifest.get('version', '')
         enabled = (destination.scheme == 'https' and destination.hostname and destination.username is None
-                   and destination.path == '/v1/installs' and not (destination.query or destination.fragment)
+                   and destination.path == '/v2/installs' and not (destination.query or destination.fragment)
                    and isinstance(version, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', version))
     except (AttributeError, OSError, TypeError, ValueError):
         enabled = False
@@ -1131,7 +1211,7 @@ def installation_counter(root, installation):
 
     requested, stopped = threading.Event(), threading.Event()
     thread = threading.Thread(target=report_installation, name='pl-installation-counter', daemon=True,
-                              args=(root / 'state/installation.json', destination, installation, version, requested, stopped))
+                              args=(root, destination, installation, version, requested, stopped))
     thread.start()
     try:
         yield requested.set
