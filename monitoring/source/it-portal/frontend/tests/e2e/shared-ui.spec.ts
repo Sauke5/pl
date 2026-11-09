@@ -149,6 +149,58 @@ test("shared dialog preserves its draft and focus when nested help closes", asyn
   await expect(dialog).toHaveCount(0);
 });
 
+for (const { width, height, mode } of [
+  { width: 1280, height: 600, mode: "expanded" },
+  { width: 1024, height: 520, mode: "collapsed" },
+  { width: 390, height: 540, mode: "drawer" },
+]) {
+  test(`full sidebar keeps settings reachable at ${width}x${height}`, async ({
+    page,
+  }) => {
+    await fixture(page);
+    await page.route("**/api/v1/modules", (route) =>
+      route.fulfill({
+        json: {
+          items: ["prometheus", "alertmanager", "mailcow", "netmap", "sftpgo", "xray"].map((id) => ({
+            id,
+            module_id: id,
+            name: id,
+            mode: id === "mailcow" ? "external" : "local",
+            desired_state: "enabled",
+            observed_state: "running",
+          })),
+        },
+      }),
+    );
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    if (mode === "collapsed")
+      await page.getByRole("button", { name: "Свернуть меню" }).click();
+    if (mode === "drawer")
+      await page.getByRole("button", { name: "Открыть меню" }).click();
+
+    const navigation = page.getByRole("navigation", {
+      name: "Основная навигация",
+    });
+    const settings = page.getByRole("link", { name: "Настройки", exact: true });
+    const discovery = navigation.getByRole("link", { name: "Обнаружение" });
+    await expect(
+      navigation.getByRole("link", { name: "NetMap", exact: true }),
+    ).toBeAttached();
+    await expect(settings).toBeInViewport({ ratio: 1, timeout: 2500 });
+    await navigation.hover();
+    await page.mouse.wheel(0, 1500);
+    await expect(discovery).toBeInViewport({ ratio: 1 });
+    await expect
+      .poll(() => navigation.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(settings).toBeInViewport({ ratio: 1 });
+    await settings.click();
+    await expect(page).toHaveURL(/#settings$/);
+  });
+}
+
 for (const viewport of [
   { width: 1920, height: 1080 },
   { width: 1920, height: 1200 },

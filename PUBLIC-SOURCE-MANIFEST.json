@@ -16960,8 +16960,8 @@
     },
     {
       "path": "docs/releases/0.8.9.json",
-      "sha256": "5abc310ad40aaf6549b6aab8a19d0d1e10b8b72febecd2cbc72c226bf7c9e078",
-      "size": 2255
+      "sha256": "b547b7fc76bb45588ac7b928d0828844d3024c0e8e9ab8b00713e1fe63d651af",
+      "size": 2714
     },
     {
       "path": "installer/LICENSES.txt",
@@ -17005,8 +17005,8 @@
     },
     {
       "path": "installer/core-modules.ru.md",
-      "sha256": "cc744ddc83a12a59a7eb02ec880e165754ebcbfdb10aec3499b78cc848402f1d",
-      "size": 16047
+      "sha256": "476948aff2a530e0d4c773fedb786900b9f698c4ed20e116e1544554e9ad06a1",
+      "size": 16039
     },
     {
       "path": "installer/delivery-proxy.py",
@@ -18010,8 +18010,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/packages/pl-ui/styles.css",
-      "sha256": "9acd6ca6f66c8186acb5f1268c11a1b63f80686b2d9ab98535a3f27f2484a0ae",
-      "size": 18579
+      "sha256": "785d516b3d590fb94da575bad11f92b33422702f5309810450b62dbe2f303e4a",
+      "size": 19413
     },
     {
       "path": "monitoring/source/it-portal/frontend/playwright.config.ts",
@@ -18050,8 +18050,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/public/ecosystem/ui-v1.css",
-      "sha256": "9acd6ca6f66c8186acb5f1268c11a1b63f80686b2d9ab98535a3f27f2484a0ae",
-      "size": 18579
+      "sha256": "785d516b3d590fb94da575bad11f92b33422702f5309810450b62dbe2f303e4a",
+      "size": 19413
     },
     {
       "path": "monitoring/source/it-portal/frontend/public/ecosystem/ui-v1.js",
@@ -19005,8 +19005,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/shared-ui.spec.ts",
-      "sha256": "8a048f67a77e5691bed77d7db0a08747e697c10e669e97950428c506a6ccaed7",
-      "size": 8207
+      "sha256": "ec5cb40e40d1461f3e5c5303d4ebf0cf51e214cfda6fbadf6c47febc35028924",
+      "size": 10181
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/system-icons.spec.ts",
