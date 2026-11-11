@@ -100,7 +100,7 @@ test('arbitrary registry custom palette works without a new hardcoded id', async
   try {
     assert.deepEqual(await page.evaluate(() => [PLTheme.get(), document.documentElement.dataset.plUiThemeKind, document.documentElement.style.getPropertyValue('--pl-ui-theme-text')]), ['graphite-next', 'custom', '#abcdef']);
     await page.evaluate(() => PLTheme.mountMenu(document.querySelector('#theme')));
-    assert.equal(await page.getByRole('menuitemradio', { includeHidden: true }).count(), 4);
+    assert.equal(await page.getByRole('menuitemradio', { includeHidden: true }).count(), extended.themes.length);
     assert.equal(await page.evaluate(() => PLTheme.set('unknown-theme')), 'dark');
   } finally { await page.context().close(); }
 });
@@ -137,7 +137,7 @@ test('keyboard navigation, Tab continuation, and outside dismissal', async () =>
     await page.keyboard.press('Home');
     assert.equal(await page.getByRole('menuitemradio', { name: 'Светлая' }).evaluate(el => el === document.activeElement), true);
     await page.keyboard.press('ArrowUp');
-    assert.equal(await page.getByRole('menuitemradio', { name: 'Хэллоуин' }).evaluate(el => el === document.activeElement), true);
+    assert.equal(await page.getByRole('menuitemradio', { name: catalog.themes.at(-1).label }).evaluate(el => el === document.activeElement), true);
     await page.keyboard.press('Tab');
     assert.equal(await page.getByRole('menu').isVisible(), false);
     assert.equal(await page.locator('#after').evaluate(el => el === document.activeElement), true);

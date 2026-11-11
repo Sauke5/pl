@@ -94,6 +94,37 @@
         "focus": "#ffb776",
         "overlay": "rgba(7,4,12,.72)"
       }
+    },
+    {
+      "id": "new-year",
+      "label": "Новогодняя",
+      "colorScheme": "dark",
+      "background": "#162125",
+      "icon": "moon-star",
+      "kind": "custom",
+      "palette": {
+        "background": "#162125",
+        "surface": "#1e2b30",
+        "raised": "#27363c",
+        "border": "rgba(161,190,196,.20)",
+        "text": "#e3ebed",
+        "muted": "#a8b9bf",
+        "subtle": "#91a4ac",
+        "input": "#182429",
+        "hover": "rgba(143,190,180,.12)",
+        "primary-bg": "#315653",
+        "primary-text": "#eef6f4",
+        "primary-hover": "#3a645e",
+        "accent": "#92c1b7",
+        "success": "#80c79e",
+        "warning": "#dfba76",
+        "danger": "#e5919b",
+        "shadow": "0 16px 46px rgba(3,9,13,.42)",
+        "gradient-start": "#25343a",
+        "gradient-end": "#162125",
+        "focus": "#a4d2c7",
+        "overlay": "rgba(5,11,15,.72)"
+      }
     }
   ]
 }

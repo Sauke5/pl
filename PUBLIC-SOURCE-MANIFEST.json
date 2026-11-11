@@ -16934,6 +16934,11 @@
       "size": 2715
     },
     {
+      "path": "docs/releases/0.8.11.json",
+      "sha256": "ad03000145664680d5f940ef9bd42066643c44f4c03823d936ed25f995f7e943",
+      "size": 828
+    },
+    {
       "path": "docs/releases/0.8.2.json",
       "sha256": "453b99310d02ab02abc3b9e67595fb35182d9a63333a2f7259628d34e7d7264c",
       "size": 3014
@@ -18035,18 +18040,18 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/public/ecosystem/theme-catalog.js",
-      "sha256": "9f399b0e2b36b71c93bd1bc92d9017dd8afae0ad13eaebdbc51148643c6848b0",
-      "size": 2924
+      "sha256": "58017770e0f45538ab0ada814d9ee5f27d615135760157a240acb20ef9f9f3bf",
+      "size": 3838
     },
     {
       "path": "monitoring/source/it-portal/frontend/public/ecosystem/theme-catalog.json",
-      "sha256": "14fa6a74b980df4f0bf155ac62d331610b2f325bb39f55675dbfc3e1283abe5f",
-      "size": 2817
+      "sha256": "a857b106821176cfcd9ec92ef417c7cd7d12744a51a76ecbe354d9f8ec482f93",
+      "size": 3731
     },
     {
       "path": "monitoring/source/it-portal/frontend/public/ecosystem/theme-menu.css",
-      "sha256": "6ccbde08dece56783dde40f2c72c25dcfa8cf4d26564dd3497976e71c8f70313",
-      "size": 5892
+      "sha256": "a250e76bf78944612f6aa638f1018f39f0cbbaaaf2fceff7011c5a62b2f7c8fb",
+      "size": 25135
     },
     {
       "path": "monitoring/source/it-portal/frontend/public/ecosystem/theme-runtime.js",
@@ -18919,6 +18924,11 @@
       "size": 41299
     },
     {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/new-year-theme.spec.ts",
+      "sha256": "5ede8ca0c0bb1a677778f288a6688026eaec23bbe5146290fee6a0577aa6f9e3",
+      "size": 3492
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/night-theme.spec.ts",
       "sha256": "7796b03fc32b49c5a9b7161fa145e37e5e25b5d386b8400333c7c25bb988e27b",
       "size": 11368
@@ -19080,8 +19090,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/unit/theme-runtime.test.cjs",
-      "sha256": "ac4f85c6cfe28bcecc01810218cb6a59a8dca82ae55d6af42413225bd7b3f5a4",
-      "size": 9783
+      "sha256": "caba1612c8ae0c941782c97f0aa54fc2bd05c61a463c134c4e9f8f63a7a4a440",
+      "size": 9813
     },
     {
       "path": "monitoring/source/it-portal/frontend/tsconfig.json",
