@@ -283,6 +283,48 @@ async function portal(page: Page, initial = example(), admin = true) {
   return { state, writes, flags };
 }
 
+test("Корпоративный VPN открывается из бокового меню сразу под прокси", async ({
+  page,
+}) => {
+  await portal(page);
+  await page.route("**/api/v1/modules", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          { id: "xray-instance", module_id: "xray", name: "Прокси" },
+          { id, module_id: "ocserv", name: "Корпоративный VPN" },
+        ].map((item) => ({
+          ...item,
+          mode: "local",
+          desired_state: "enabled",
+          observed_state: "running",
+        })),
+      },
+    }),
+  );
+  await page.goto("/#modules");
+  const navigation = page.getByRole("navigation", {
+    name: "Основная навигация",
+  });
+  const proxy = navigation.getByRole("link", { name: "Прокси", exact: true });
+  const vpn = navigation.getByRole("link", {
+    name: "Корпоративный VPN",
+    exact: true,
+  });
+  await expect(proxy.locator("+ a")).toHaveText("Корпоративный VPN");
+  await vpn.click();
+  await expect(page).toHaveURL((url) => url.hash === pageURL.slice(1));
+  await expect(vpn).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("heading", { name: "Корпоративный VPN", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Сети и профили", exact: true }).click();
+  await expect(vpn).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("heading", { name: "Матрица доступа" }),
+  ).toBeVisible();
+});
+
 test("Карточка VPN под прокси открывает мастер шлюза из настроек", async ({
   page,
 }) => {
@@ -328,6 +370,11 @@ test("Настройки VPN ведут в каталог, если модуль
   );
   await page.goto("/#settings?section=vpn");
   await expect(page.getByText("Корпоративный VPN не установлен")).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Основная навигация" })
+      .getByRole("link", { name: "Корпоративный VPN", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Настроить шлюз" }),
   ).toHaveCount(0);

@@ -17124,6 +17124,11 @@
       "size": 1424
     },
     {
+      "path": "docs/releases/0.9.3.json",
+      "sha256": "2a76e4cb147d76c97772c2df13b92e966edbf586e64c3abf94746248e627877c",
+      "size": 4974
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -18390,8 +18395,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/App.tsx",
-      "sha256": "989a8b04da18cea458baa0593ab955cec64d004e51962aadbcea5ad3a65145ef",
-      "size": 48341
+      "sha256": "0df558f47b0a775fc2730d8daac640e3fbd2efbb85d8c79b4affae03277786c5",
+      "size": 48888
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/AuthScenes.tsx",
@@ -18835,8 +18840,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/copy.ts",
-      "sha256": "f072cf777107de48980e1b660e5a8be992dbe42ec13f66d7f3409ef51caed55f",
-      "size": 3978
+      "sha256": "bfe725ba90f02f36b0c996469f5a9c56f76b6e0e05688bc7b8c7bb673b920c84",
+      "size": 4026
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/dashboard-layout.css",
@@ -19320,8 +19325,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/ocserv-module.spec.ts",
-      "sha256": "d76ee7dec8ecd7d304d81ee4084e14daff2a5c68e147cf0653dea0defbbee5b1",
-      "size": 34065
+      "sha256": "43716fa17780df71af28890ef2d0530ee8a39b6c544b867ecd1f813979e688c9",
+      "size": 35844
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/pl-merge.spec.ts",
@@ -19410,8 +19415,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/shared-ui.spec.ts",
-      "sha256": "ec5cb40e40d1461f3e5c5303d4ebf0cf51e214cfda6fbadf6c47febc35028924",
-      "size": 10181
+      "sha256": "f325695d04a457d6458907e528ffc894299772f13bf6c6215888f558a75d4ff6",
+      "size": 10349
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/syslog-module.spec.ts",

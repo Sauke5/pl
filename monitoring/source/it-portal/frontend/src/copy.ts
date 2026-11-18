@@ -93,6 +93,7 @@ export const nav = [
   ["mail", "Почта"],
   ["netmap", "NetMap"],
   ["proxy", "Прокси"],
+  ["ocserv", "Корпоративный VPN"],
   ["files", "Файлы"],
   ["settings", copy.settings],
 ] as const;

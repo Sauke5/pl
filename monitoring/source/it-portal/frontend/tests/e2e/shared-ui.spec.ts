@@ -161,7 +161,9 @@ for (const { width, height, mode } of [
     await page.route("**/api/v1/modules", (route) =>
       route.fulfill({
         json: {
-          items: ["prometheus", "alertmanager", "mailcow", "netmap", "sftpgo", "xray"].map((id) => ({
+          items: [
+            "prometheus", "alertmanager", "mailcow", "netmap", "sftpgo", "xray", "ocserv",
+          ].map((id) => ({
             id,
             module_id: id,
             name: id,
@@ -186,6 +188,9 @@ for (const { width, height, mode } of [
     const discovery = navigation.getByRole("link", { name: "Обнаружение" });
     await expect(
       navigation.getByRole("link", { name: "NetMap", exact: true }),
+    ).toBeAttached();
+    await expect(
+      navigation.getByRole("link", { name: "Корпоративный VPN", exact: true }),
     ).toBeAttached();
     await expect(settings).toBeInViewport({ ratio: 1, timeout: 2500 });
     await navigation.hover();

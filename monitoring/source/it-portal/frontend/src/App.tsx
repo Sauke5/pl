@@ -89,6 +89,7 @@ import {
   Wrench,
   X,
   Shield,
+  ShieldCheck,
   Radio,
   Eye,
   EyeOff,
@@ -132,6 +133,7 @@ const icons = {
   files: Folder,
   settings: SettingsIcon,
   proxy: Radio,
+  ocserv: ShieldCheck,
   edge: Shield,
 };
 function route() {
@@ -139,16 +141,17 @@ function route() {
     return "sftpgo";
   if (location.pathname === "/proxy-4.14") return "proxy";
   const [page, query] = location.hash.replace("#", "").split("?");
-  if (
-    page === "modules" &&
-    new URLSearchParams(query).get("view") === "mailcow"
-  )
-    return "mail";
+  if (page === "modules") {
+    const view = new URLSearchParams(query).get("view");
+    if (view === "mailcow") return "mail";
+    if (view === "ocserv") return "ocserv";
+  }
   return page || "home";
 }
 const knownPages = new Set([
   "sftpgo",
   "proxy",
+  "ocserv",
   "home",
   "catalog",
   "module-catalog",
@@ -678,7 +681,8 @@ function Admin({ session }: { session: Session }) {
     catalogResourceId(location.hash),
   );
   const missingPage = isMissingLocation(page);
-  useHelpTopic(page in helpTopics ? (page as HelpTopic) : undefined);
+  const helpPage = page === "ocserv" ? "modules" : page;
+  useHelpTopic(helpPage in helpTopics ? (helpPage as HelpTopic) : undefined);
   const [palette, setPalette] = useState(false);
   const [editor, setEditor] = useState<Resource | "new">();
   const [detail, setDetail] = useState<Resource>();
@@ -692,6 +696,10 @@ function Admin({ session }: { session: Session }) {
   const localModules = useAPI<{ items: LocalProxyInstance[] }>("/modules");
   const proxyInstalled =
     installedLocalXrays(localModules.data?.items).length > 0;
+  const vpn = installedLocalModules(localModules.data?.items, "ocserv")[0];
+  const vpnRoute = vpn
+    ? `modules?instance=${encodeURIComponent(vpn.id)}&view=ocserv`
+    : "";
   const monitoringInstalled =
     installedLocalModules(localModules.data?.items, "prometheus").length > 0;
   const notificationsInstalled =
@@ -726,7 +734,7 @@ function Admin({ session }: { session: Session }) {
         return;
       }
       location.hash = next;
-      setPage(next.split("?")[0]);
+      setPage(route());
     });
   }
   function navigateLink(
@@ -885,6 +893,7 @@ function Admin({ session }: { session: Session }) {
                 ([id]) =>
                   !["settings", "problems", "tools", "reports"].includes(id) &&
                   (id !== "proxy" || proxyInstalled) &&
+                  (id !== "ocserv" || vpnRoute) &&
                   (id !== "monitoring" || monitoringInstalled) &&
                   (id !== "notifications" || notificationsInstalled) &&
                   (id !== "mail" || mailConnected) &&
@@ -893,16 +902,17 @@ function Admin({ session }: { session: Session }) {
               )
               .map(([id, label]) => {
                 const Icon = icons[id];
+                const target = id === "ocserv" ? vpnRoute : id;
                 return (
                   <a
                     key={id}
-                    href={`/#${id}`}
+                    href={`/#${target}`}
                     title={label}
                     className={!missingPage && page === id ? "active" : ""}
                     aria-current={
                       !missingPage && page === id ? "page" : undefined
                     }
-                    onClick={(event) => navigateLink(event, id)}
+                    onClick={(event) => navigateLink(event, target)}
                   >
                     <Icon size={21} />
                     <span>{label}</span>
@@ -1039,9 +1049,11 @@ function Admin({ session }: { session: Session }) {
           />
         ) : page === "catalog" ? (
           <Catalog {...actions} />
-        ) : page === "module-catalog" || page === "modules" ? (
+        ) : page === "module-catalog" ||
+          page === "modules" ||
+          page === "ocserv" ? (
           <Modules
-            key={page}
+            key={page === "module-catalog" ? page : "modules"}
             view={page === "module-catalog" ? "catalog" : "installed"}
           />
         ) : page === "problems" ? (
