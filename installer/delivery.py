@@ -45,7 +45,7 @@ HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3
 MAX_RELEASE_NOTES = 24 * 1024
 RESERVE = 512 * 1024**2
-HOST_FEATURE_API = 3
+HOST_FEATURE_API = 4
 # Attested Forms 0.1.0 provenance COPY layers: sources.json content SHA256
 # ac12391b2cce684c93dd41bfaec3615593607436f94fa9e9006ea67538f377b1
 # is unchanged; only file mode 0664 -> 0644 and directory/file mtimes differ.
@@ -1002,7 +1002,7 @@ class Delivery:
         if 'worker_handoff' in operation:
             handoff = operation['worker_handoff']
             if (not isinstance(handoff, dict) or set(handoff) != {'schema', 'capability', 'from_version', 'from_manifest_sha256', 'core_from_version', 'to_version', 'to_manifest_sha256'}
-                    or handoff.get('schema') != 1 or type(handoff.get('capability')) is not int or handoff.get('capability') not in (1, 2, 3)
+                    or handoff.get('schema') != 1 or type(handoff.get('capability')) is not int or handoff.get('capability') not in (1, 2, 3, 4)
                     or handoff.get('to_version') != operation.get('worker_version')
                     or handoff.get('to_version') != operation.get('version')
                     or handoff.get('to_manifest_sha256') != operation.get('worker_manifest_sha256')
@@ -1838,6 +1838,10 @@ class Delivery:
                 if kind in registry:
                     if not manifest.get('features', {}).get(kind + '_controller'):
                         raise ValueError('Target core does not support the installed ' + kind + ' module')
+                    if (kind == 'ocserv' and manifest['features'].get('automatic_module_networks')
+                            and (self.root / 'modules/ocserv/instances').is_dir()
+                            and self.parent.application(kind).has_unprovisioned_instance()):
+                        continue
                     self.module_upgrade_helper().plan(self.parent, kind, registry[kind], registry[kind])
             containers = self.inventory()
             self.check_snapshot_capacity()

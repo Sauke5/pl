@@ -400,8 +400,10 @@ def verify_package(package, arch):
             if manifest.get('schema') not in (1, 2) or manifest.get('product') not in ('PL', 'Pl') or manifest.get('architecture') != arch:
                 fail('Package schema, product or architecture mismatch.')
             features = manifest.get('features', {})
-            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades', 'verified_native_resume', 'log_export', 'syslog_controller', 'f12_controller', 'ocserv_controller'} or any(type(value) is not bool for value in features.values()):
+            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades', 'verified_native_resume', 'automatic_module_networks', 'log_export', 'syslog_controller', 'f12_controller', 'ocserv_controller'} or any(type(value) is not bool for value in features.values()):
                 fail('Unsupported core package features.')
+            if features.get('automatic_module_networks') and not all(features.get(name) for name in ('verified_native_resume', 'ocserv_controller')):
+                fail('Automatic module networks require the verified update worker and VPN controller.')
             if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
                 fail('Verified native resume requires the finite update and ICMP worker entrypoints.')
             if features.get('module_upgrades') and (not features.get('on_demand_modules') or 'module-upgrade.py' not in names):
@@ -708,7 +710,7 @@ def main(argv=None):
                         help='Private 0600 JSON HTTP proxy for HTTPS downloads and APT during installation.')
     parser.add_argument('--public-url')
     parser.add_argument('--bind-address')
-    parser.add_argument('--module-network-cidr', help='Additional RFC1918 /16 through /26; default module pool holds 8 networks; initial installation only.')
+    parser.add_argument('--module-network-cidr', help='Additional preferred RFC1918 /16 through /26; initial installation only.')
     parser.add_argument('--network-cidr', help='Explicit unused canonical RFC1918 IPv4 /24 for core bridges.')
     parser.add_argument('--integration-config', type=Path, help='Private 0600 JSON of explicit integration CIDRs, ports and secret files; first installation only; requires --network-cidr.')
     parser.add_argument('--icmp-allowed-cidr', action='append', help='Explicit canonical IPv4 CIDR for manual ICMP; repeat for several networks, empty denies all.')

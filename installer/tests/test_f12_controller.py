@@ -150,6 +150,24 @@ class StateTests(unittest.TestCase):
             origin.assert_not_called()
         self.assertEqual(self.c.state(INSTANCE), self.initial)
 
+    def test_publication_reports_bridge_failure_after_successful_port_check(self):
+        allocator = f12.load_network_helper()
+        for error, message in (
+            (allocator.PoolExhausted('exhausted'), 'PL не нашла свободную внутреннюю подсеть /28 для F12.'),
+            (ValueError('engine failed'), 'Не удалось подготовить службу публикации F12 в выбранной сети.'),
+        ):
+            with self.subTest(error=type(error).__name__), \
+                    patch.object(self.c, 'sync_networks', return_value={self.key: NET}), \
+                    patch.object(self.c, 'inspect', side_effect=[self.running, None]), \
+                    patch.object(self.c, 'container_id', return_value=''), patch.object(self.c, 'preflight_port') as port, \
+                    patch.object(self.c, 'resource', side_effect=[None, error, None]), \
+                    patch.object(self.c, 'prepare_runtime'), patch.object(self.c, 'forward') as origin:
+                result = self.c.request(request('publish', {'id': 'b' * 64, 'segments': [self.key]}))
+                self.assertEqual((result['status'], result['body']['error']), (409, message))
+                port.assert_called_once_with(NET['address'])
+                origin.assert_not_called()
+                self.assertEqual(self.c.state(INSTANCE), self.initial)
+
     def test_rejected_native_publication_removes_only_new_edge(self):
         item = {'Id': '1' * 64, 'State': {'Running': True}}
         bridge = {'Id': '2' * 64, 'IPAM': {'Config': [{'Subnet': '10.244.182.192/28'}]}}

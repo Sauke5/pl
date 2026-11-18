@@ -969,5 +969,5 @@ def validate_module_network(root, installation, obj, docker, *, prometheus=''):
 
 def module_network_error(error, fallback):
     if getattr(error, 'public_code', None) == 'module_network_pool_exhausted':
-        return 'module_network_pool_exhausted: Исчерпан диапазон сетей модулей. Дополнительный диапазон задаётся при установке через --module-network-cidr.'
+        return 'module_network_pool_exhausted: Для модуля не нашлось свободной частной подсети.'
     return fallback

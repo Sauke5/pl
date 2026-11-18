@@ -73,6 +73,25 @@ class VPNControllerTests(unittest.TestCase):
             self.c.ensure(self.instance)
         self.docker.assert_not_called()
 
+    def test_core_upgrade_can_carry_only_resource_free_initial_install(self):
+        self.docker.return_value = b''
+        self.assertFalse(self.c.has_unprovisioned_instance())
+        state = self.c.state(self.instance)
+        vpn.atomic(self.path / 'state.json', {**state, 'storage_created': False})
+        self.assertTrue(self.c.has_unprovisioned_instance())
+        with patch.object(self.c, 'container_id', return_value='a' * 64):
+            self.assertFalse(self.c.has_unprovisioned_instance())
+        with patch.object(self.c, 'resource', return_value={'Id': 'existing-network'}):
+            self.assertFalse(self.c.has_unprovisioned_instance())
+        def foreign_resource(*args):
+            if args[:2] == ('volume', 'ls') and 'label=pl.module=ocserv' in args:
+                return b'other-vpn-volume\n'
+            return b''
+        self.docker.side_effect = foreign_resource
+        self.assertFalse(self.c.has_unprovisioned_instance())
+        (self.path / 'unexpected-data').touch()
+        self.assertFalse(self.c.has_unprovisioned_instance())
+
     def test_removal_stops_before_deleting_an_unexpected_tree(self):
         (self.path / 'other').write_bytes(b'existing data')
         with self.assertRaisesRegex(ValueError, 'Unexpected private'):

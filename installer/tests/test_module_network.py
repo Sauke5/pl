@@ -39,8 +39,8 @@ class ModuleNetworkTests(unittest.TestCase):
             return json.dumps([next(v for v in self.networks if v['Id'] == args[2])]).encode()
         raise AssertionError(args)
 
-    def allocate(self):
-        return net.allocation_args(self.root, INSTALL, self.docker)
+    def allocate(self, prefixlen=29):
+        return net.allocation_args(self.root, INSTALL, self.docker, prefixlen=prefixlen)
 
     def network(self, cidr='10.90.1.192/29'):
         subnet = ipaddress.IPv4Network(cidr)
@@ -68,56 +68,78 @@ class ModuleNetworkTests(unittest.TestCase):
         args = self.allocate()
         self.assertEqual(args[args.index('--subnet') + 1], '10.90.1.192/29')
 
-    def test_explicit_extra_pool_extends_eight_slots_without_default_pool_fallback(self):
+    def test_automatic_pool_extends_occupied_configured_pool(self):
         self.networks = [dict(self.network(str(v)), Id=format(i + 1, '064x')) for i, v in enumerate(net.pools(self.config)[0].subnets(new_prefix=29))]
-        with self.assertRaisesRegex(ValueError, 'pool exhausted'):
-            self.allocate()
+        before = (self.root / 'state/installation.json').read_bytes()
+        args = self.allocate()
+        self.assertEqual(args[args.index('--subnet') + 1], '10.240.0.0/29')
+        self.assertIn('pl.module.network.version=2', args)
+        self.assertEqual((self.root / 'state/installation.json').read_bytes(), before)
         self.config['module_network_cidr'] = '10.90.2.0/24'
         self.save()
         args = self.allocate()
         self.assertEqual(args[args.index('--subnet') + 1], '10.90.2.0/29')
+        self.assertIn('pl.module.network.version=1', args)
 
     def test_routes_and_foreign_docker_networks_block_allocation(self):
-        self.routes = [{'dst': '10.90.1.192/26', 'dev': 'vpn0'}]
+        self.routes = [{'dst': '10.90.1.192/26', 'dev': 'vpn0'}, {'dst': '10.240.0.0/16', 'table': 100},
+                       {'dst': 'default', 'dev': 'eth0'}]
+        self.config.update(allowed_cidrs=['10.241.0.16/28'],
+                           integration_config={'allowed_cidrs': ['10.241.0.32/28']})
+        self.save()
+        self.networks = [dict(self.network('10.241.0.0/28'), Labels={})]
+        args = self.allocate(28)
+        self.assertEqual(args[args.index('--subnet') + 1], '10.241.0.48/28')
+        self.assertIn('pl.module.network.version=2', args)
+
+    def test_exhaustion_of_all_private_space_still_fails(self):
+        self.routes = [{'dst': str(block), 'table': 100} for block in net.PRIVATE]
         with self.assertRaisesRegex(ValueError, 'pool exhausted'):
             self.allocate()
-        self.routes = [{'dst': 'default', 'dev': 'eth0'}]
-        foreign = self.network('10.90.1.192/26')
-        foreign['Labels'] = {}
-        self.networks = [foreign]
-        with self.assertRaisesRegex(ValueError, 'pool exhausted'):
-            self.allocate()
+
+    def test_automatic_network_requires_private_cidr_outside_configured_space(self):
+        self.config['module_network_cidr'] = '10.90.2.0/24'
+        self.save()
+        network = self.network('10.240.0.0/29')
+        network['Labels']['pl.module.network.version'] = '2'
+        net.validate_existing(self.root, INSTALL, network, self.docker)
+        for cidr, version in (('10.240.0.0/29', '1'), ('10.90.1.0/29', '2'),
+                              ('10.90.2.0/29', '2'), ('8.8.8.0/29', '2')):
+            with self.subTest(cidr=cidr, version=version):
+                other = self.network(cidr)
+                other['Labels']['pl.module.network.version'] = version
+                with self.assertRaisesRegex(ValueError, 'IPAM or ownership drift'):
+                    net.validate_existing(self.root, INSTALL, other, self.docker)
 
     def test_owned_ipam_and_membership_reject_drift(self):
         obj = self.network()
-        pools = net.pools(self.config)
-        self.assertEqual(net.owned_network(obj, INSTALL, pools, lambda _: None), ipaddress.IPv4Network('10.90.1.192/29'))
+        self.assertEqual(net.owned_network(obj, INSTALL, self.config, lambda _: None), ipaddress.IPv4Network('10.90.1.192/29'))
         populated = copy.deepcopy(obj)
         adapter = INSTALL + '-forms-' + INSTANCE + '-adapter'
         populated['Containers'] = {'b' * 64: {'Name': adapter}}
         container = {'Id': 'b' * 64, 'Name': '/' + adapter, 'Config': {'Labels': {
             'pl.installation': INSTALL, 'pl.module': 'forms', 'pl.instance': INSTANCE, 'pl.module.role': 'adapter'}}}
-        self.assertEqual(net.owned_network(populated, INSTALL, pools, lambda _: container), ipaddress.IPv4Network('10.90.1.192/29'))
+        self.assertEqual(net.owned_network(populated, INSTALL, self.config, lambda _: container), ipaddress.IPv4Network('10.90.1.192/29'))
         container['Config']['Labels']['pl.module.role'] = 'engine'
-        self.assertIsNone(net.owned_network(populated, INSTALL, pools, lambda _: container))
+        self.assertIsNone(net.owned_network(populated, INSTALL, self.config, lambda _: container))
         for field, value in (('Internal', False), ('Name', 'foreign'), ('Options', {'bridge': 'foreign'})):
             changed = copy.deepcopy(obj); changed[field] = value
-            self.assertIsNone(net.owned_network(changed, INSTALL, pools, lambda _: None))
+            self.assertIsNone(net.owned_network(changed, INSTALL, self.config, lambda _: None))
         for key, value in (('pl.installation', 'foreign'), ('pl.module.network.version', '2'), ('pl.module.network.subnet', '10.90.1.200/29')):
             changed = copy.deepcopy(obj); changed['Labels'][key] = value
-            self.assertIsNone(net.owned_network(changed, INSTALL, pools, lambda _: None))
+            self.assertIsNone(net.owned_network(changed, INSTALL, self.config, lambda _: None))
         changed = copy.deepcopy(obj); changed['Containers'] = {'b' * 64: {'Name': 'foreign'}}
-        self.assertIsNone(net.owned_network(changed, INSTALL, pools, lambda _: {'Id': 'b' * 64, 'Name': '/foreign'}))
+        self.assertIsNone(net.owned_network(changed, INSTALL, self.config, lambda _: {'Id': 'b' * 64, 'Name': '/foreign'}))
         changed = copy.deepcopy(obj)
         related = INSTALL + '-forms-' + INSTANCE + '-adapter-foreign'
         changed['Containers'] = {'b' * 64: {'Name': related}}
         clone = {'Id': 'b' * 64, 'Name': '/' + related, 'Config': {'Labels': {
             'pl.installation': INSTALL, 'pl.module': 'forms', 'pl.instance': INSTANCE, 'pl.module.role': 'adapter'}}}
-        self.assertIsNone(net.owned_network(changed, INSTALL, pools, lambda _: clone))
+        self.assertIsNone(net.owned_network(changed, INSTALL, self.config, lambda _: clone))
         changed = copy.deepcopy(obj); changed['IPAM']['Config'][0]['Gateway'] = '10.90.1.194'
-        self.assertIsNone(net.owned_network(changed, INSTALL, pools, lambda _: None))
+        self.assertIsNone(net.owned_network(changed, INSTALL, self.config, lambda _: None))
         changed = copy.deepcopy(obj); changed['IPAM']['Options'] = {'foreign': 'value'}
-        self.assertIsNone(net.owned_network(changed, INSTALL, pools, lambda _: None))
+        self.assertIsNone(net.owned_network(changed, INSTALL, self.config, lambda _: None))
 
     def test_legacy_network_subnets_are_preserved_not_reallocated(self):
         obj = self.network('172.20.0.0/16')
@@ -145,14 +167,14 @@ class ModuleNetworkTests(unittest.TestCase):
     def test_grafana_explicit_selected_prometheus_survives_network_recheck(self):
         obj, prom, containers = self.grafana_network()
         inspect = containers.__getitem__
-        self.assertIsNone(net.owned_network(obj, INSTALL, net.pools(self.config), inspect))
-        self.assertEqual(net.owned_network(obj, INSTALL, net.pools(self.config), inspect, prometheus=prom),
+        self.assertIsNone(net.owned_network(obj, INSTALL, self.config, inspect))
+        self.assertEqual(net.owned_network(obj, INSTALL, self.config, inspect, prometheus=prom),
                          ipaddress.IPv4Network('10.90.1.192/29'))
         net.validate_existing(self.root, INSTALL, obj,
                               lambda *args: json.dumps([containers[args[2]]]).encode(), prometheus=prom)
         # Removing/disconnecting the source does not invalidate Grafana's own network.
         del obj['Containers']['c' * 64]
-        self.assertIsNotNone(net.owned_network(obj, INSTALL, net.pools(self.config), inspect, prometheus=prom))
+        self.assertIsNotNone(net.owned_network(obj, INSTALL, self.config, inspect, prometheus=prom))
 
     def test_grafana_source_exception_rejects_foreign_identity_and_ipam_drift(self):
         obj, prom, containers = self.grafana_network()
@@ -160,10 +182,10 @@ class ModuleNetworkTests(unittest.TestCase):
             with self.subTest(field=field):
                 changed = copy.deepcopy(containers)
                 changed['c' * 64]['Config']['Labels'][field] = value
-                self.assertIsNone(net.owned_network(obj, INSTALL, net.pools(self.config), changed.__getitem__, prometheus=prom))
+                self.assertIsNone(net.owned_network(obj, INSTALL, self.config, changed.__getitem__, prometheus=prom))
         for field, value in [('Id', 'd' * 64), ('Name', '/foreign')]:
             changed = copy.deepcopy(containers); changed['c' * 64][field] = value
-            self.assertIsNone(net.owned_network(obj, INSTALL, net.pools(self.config), changed.__getitem__, prometheus=prom))
+            self.assertIsNone(net.owned_network(obj, INSTALL, self.config, changed.__getitem__, prometheus=prom))
         for mutation in ('gateway', 'internal', 'extra_member'):
             with self.subTest(mutation=mutation):
                 changed = copy.deepcopy(obj)
@@ -171,14 +193,14 @@ class ModuleNetworkTests(unittest.TestCase):
                 elif mutation == 'internal': changed['Internal'] = True
                 else: changed['Containers']['d' * 64] = {'Name': 'foreign'}
                 extra = {**containers, 'd' * 64: {'Id': 'd' * 64, 'Name': '/foreign', 'Config': {'Labels': {}}}}
-                self.assertIsNone(net.owned_network(changed, INSTALL, net.pools(self.config), extra.__getitem__, prometheus=prom))
+                self.assertIsNone(net.owned_network(changed, INSTALL, self.config, extra.__getitem__, prometheus=prom))
 
     def test_prometheus_source_exception_is_only_for_selected_grafana(self):
         obj, prom, containers = self.grafana_network()
         for selected in ('', INSTANCE, 'invalid', 1):
-            self.assertIsNone(net.owned_network(obj, INSTALL, net.pools(self.config), containers.__getitem__, prometheus=selected))
+            self.assertIsNone(net.owned_network(obj, INSTALL, self.config, containers.__getitem__, prometheus=selected))
         other = self.network()
-        self.assertIsNone(net.owned_network(other, INSTALL, net.pools(self.config), containers.__getitem__, prometheus=prom))
+        self.assertIsNone(net.owned_network(other, INSTALL, self.config, containers.__getitem__, prometheus=prom))
 
     def test_partial_allocation_labels_do_not_downgrade_to_legacy(self):
         for missing in ('pl.module.network.version', 'pl.module.network.subnet'):

@@ -11,6 +11,7 @@ import uuid
 from unittest.mock import patch
 
 import test_grafana_controller as grafana_fixture
+import test_ocserv_controller as vpn_fixture
 
 
 BASE = Path(__file__).resolve().parents[1]
@@ -309,6 +310,88 @@ class BackupHistoryTests(unittest.TestCase):
                 dr.collect(self.rt, self.host)
             other.unlink()
             self.jobs.pop()
+
+
+class VPNBackupHistoryTests(unittest.TestCase):
+    def setUp(self):
+        fixture = vpn_fixture.VPNControllerTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        self.root, self.instance, self.controller = fixture.root, fixture.instance, fixture.c
+        self.native = {"ocserv": {"instances": [{"instance_id": self.instance, "running": True}]}}
+        self.current = [{"id": self.instance, "module_id": "ocserv", "desired_state": "enabled",
+                         "observed_state": "running"}]
+        self.jobs = []
+        self.rt = types.SimpleNamespace(root=self.root, sql=self.sql)
+        self.parent = types.SimpleNamespace(application=lambda kind: self.controller)
+        self.inspect = self.enterContext(patch.object(self.controller, "inspect", return_value={"State": {"Running": True}}))
+        self.health = self.enterContext(patch.object(self.controller, "call", return_value={"status": 200, "body": {"gateway": {}}}))
+
+    def sql(self, query):
+        if "count(*)" in query:
+            return b"0"
+        self.assertIn("FROM public.jobs", query)
+        return dr.encoded(self.jobs)
+
+    def failed_history(self, action):
+        operation = str(uuid.uuid4())
+        request = {"operation_id": operation, "instance_id": self.instance, "module_id": "ocserv", "action": action}
+        network = dr.helper("module-network")
+        with patch.object(self.controller, "ensure", side_effect=network.PoolExhausted("fixture exhausted")):
+            observed = self.controller.execute(request)
+        self.assertEqual(observed["state"], "error")
+        self.assertTrue(observed["error"].startswith("module_network_pool_exhausted:"))
+        self.jobs.append({"id": operation, "kind": "module", "status": "failed", "target": self.instance,
+            "body": {"id": operation, "kind": "module", "status": "failed",
+                "parameters": {"instance_id": self.instance, "action": action},
+                "result": {"instance": {"id": self.instance, "module_id": "ocserv", "mode": "local",
+                    "last_job_id": operation, "desired_state": "enabled", "observed_state": "unavailable", "error": observed["error"]}}}})
+        return self.controller.operations / (operation + ".json")
+
+    def validate(self):
+        dr.validate_lifecycle_history(self.rt, self.parent, self.native, self.current)
+
+    def test_exact_failed_vpn_setup_history_survives_a_healthy_retry_without_a_write(self):
+        journals = [self.failed_history(action) for action in ("install", "enable")]
+        before = [(p.read_bytes(), p.stat().st_ino) for p in journals]
+        self.validate()
+        self.health.assert_called_once()
+        self.assertEqual([(p.read_bytes(), p.stat().st_ino) for p in journals], before)
+
+    def test_vpn_history_rejects_other_errors_and_result_or_request_identity_drift(self):
+        journal = self.failed_history("install")
+        original = copy.deepcopy(self.jobs[0])
+        for key, value in (("error", "unavailable"), ("error", "prefix: module_network_pool_exhausted: message"),
+                           ("error", True), ("mode", "external"), ("id", str(uuid.uuid4())),
+                           ("module_id", "syslog"), ("last_job_id", str(uuid.uuid4())),
+                           ("desired_state", "disabled"), ("observed_state", "running")):
+            with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, "does not confirm"):
+                job = copy.deepcopy(original)
+                job["body"]["result"]["instance"][key] = value
+                self.jobs = [job]
+                self.validate()
+        self.jobs = [original]
+        dr.atomic(journal, {"phase": "running", "fingerprint": "f" * 64})
+        with self.assertRaisesRegex(ValueError, "exact stock request"):
+            self.validate()
+        self.health.assert_not_called()
+
+    def test_vpn_history_requires_fresh_native_readiness(self):
+        self.failed_history("install")
+        self.health.return_value = {"status": 503, "body": {}}
+        with self.assertRaisesRegex(ValueError, "VPN management unavailable"):
+            self.validate()
+
+    def test_failed_vpn_setup_history_allows_a_confirmed_disabled_instance(self):
+        self.failed_history("install")
+        self.current[0].update(desired_state="disabled", observed_state="disabled")
+        self.native["ocserv"]["instances"][0]["running"] = False
+        self.inspect.return_value = {"State": {"Running": False}}
+        self.validate()
+        self.health.assert_not_called()
+        self.inspect.return_value = None
+        with self.assertRaisesRegex(ValueError, "VPN container is missing"):
+            self.validate()
 
 
 if __name__ == "__main__":

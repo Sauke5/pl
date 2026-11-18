@@ -668,6 +668,24 @@ class UpgradeTransactionTests(unittest.TestCase):
         self.assertEqual(model['services']['api']['image'], self.old_manifest['images']['api']['id'])
         self.assertEqual(d.read(self.delivery.base / 'operation.json')['phase'], 'rolled_back')
 
+    def test_core_upgrade_can_preserve_pending_vpn_install_for_later_retry(self):
+        self.new_manifest['features'] = {'ocserv_controller': True, 'automatic_module_networks': True}
+        self.delivery.module_registry = Mock(return_value={'ocserv': {}})
+        standalone = self.root / 'modules/ocserv/instances' / str(uuid.uuid4())
+        standalone.mkdir(parents=True, mode=0o700)
+        d.atomic(standalone / 'state.json', {'storage_created': False})
+        self.parent.application = Mock(return_value=types.SimpleNamespace(has_unprovisioned_instance=lambda: True))
+        self.delivery.module_upgrade_helper = Mock()
+        self.delivery.perform_upgrade()
+        self.parent.application.assert_called_once_with('ocserv')
+        self.delivery.module_upgrade_helper.assert_not_called()
+        operation = d.read(self.delivery.base / 'operation.json')
+        self.assertEqual(operation['phase'], 'complete')
+        self.assertEqual(d.read(standalone / 'state.json'), {'storage_created': False})
+        with tarfile.open(Path(operation['snapshot']) / 'installation.tar') as archive:
+            self.assertEqual(d.load_json(archive.extractfile(str(standalone.relative_to(self.root) / 'state.json')).read()),
+                             {'storage_created': False})
+
     def test_partial_snapshot_never_restores_partial_data(self):
         folder = self.root / 'private/upgrade-backups'; folder.mkdir()
         partial = folder / self.operation_id; partial.mkdir()

@@ -732,7 +732,7 @@ def validate_networks(meta):
             if (module not in MODULES or str(uuid.UUID(instance)) != instance
                     or value["name"] != installation + "-" + module + "-" + instance + "-net"
                     or subnet.prefixlen != (28 if module in ("netmap", "f12") else 29)
-                    or value["labels"].get("pl.module.network.version") != "1"
+                    or value["labels"].get("pl.module.network.version") not in ("1", "2")
                     or value["labels"].get("pl.module.network.subnet") != str(subnet)
                     or value["internal"] is not (module == "forms")):
                 raise ValueError("Unsupported native recovery network")
@@ -848,14 +848,14 @@ def validate_package_tree(root, meta):
     if not bootstrap.managed_model_equal(load_json((root / "config/compose.json").read_bytes()), model) or "network_cidr" not in cfg:
         raise ValueError("Recovery Compose differs from its canonical finite recipe")
     subnets = bootstrap.network_subnets(cfg["network_cidr"])
-    pools = bootstrap.module_networks().pools(cfg)
+    module_networks = bootstrap.module_networks()
     for network in meta["networks"]:
         subnet = ipaddress.IPv4Network(network["subnet"])
         if network["name"] in {meta["installation"] + "_" + name for name in CORE_NETWORKS}:
             if subnet != subnets[network["name"].rsplit("_", 1)[1]]:
                 raise ValueError("Core recovery IPAM differs from configuration")
-        elif not any(subnet.subnet_of(pool) for pool in pools):
-            raise ValueError("Native recovery IPAM is outside its configured pools")
+        elif not module_networks.valid_allocation(cfg, subnet, network["labels"].get("pl.module.network.version")):
+            raise ValueError("Native recovery IPAM is outside its permitted ranges")
     for kind in meta["native"]:
         receipt = load_json((root / "state/delivery" / ("module-" + kind + ".json")).read_bytes())
         validate_module_receipt(receipt, kind)
@@ -916,23 +916,37 @@ def validate_lifecycle_history(rt, parent, native, rows):
                 or "recovered" in params and type(params["recovered"]) is not bool):
             raise ValueError("Failed native history does not match its stored job body")
         instance, action = params["instance_id"], params["action"]
+        grafana_install = kind == "grafana" and action == "install"
+        vpn_setup = kind == "ocserv" and action in ("install", "enable")
         if (not isinstance(instance, str) or str(uuid.UUID(instance)) != instance or job["target"] != instance
-                or not isinstance(action, str) or not (action == "refresh" or kind == "grafana" and action == "install")
+                or not (action == "refresh" or grafana_install or vpn_setup)
                 or (kind, instance) not in actual or current.get(instance, {}).get("module_id") != kind
                 or current[instance].get("observed_state") != ("running" if actual[(kind, instance)] else "disabled")):
             raise ValueError("Failed native history is outside the reconciled current graph")
+        if vpn_setup:
+            result = body.get("result")
+            failed = result.get("instance") if isinstance(result, dict) else None
+            if (not isinstance(failed, dict) or failed.get("id") != instance or failed.get("module_id") != kind
+                    or failed.get("mode") != "local" or failed.get("last_job_id") != operation
+                    or failed.get("desired_state") != "enabled" or failed.get("observed_state") != "unavailable"
+                    or not isinstance(failed.get("error"), str) or not failed["error"].startswith("module_network_pool_exhausted:")):
+                raise ValueError("Failed VPN setup history does not confirm module network exhaustion")
         request = {"operation_id": operation, "instance_id": instance, "module_id": kind, "action": action}
-        if action == "install":
-            if not actual[(kind, instance)]:
-                raise ValueError("A failed Grafana install requires a healthy current instance")
+        if grafana_install:
             request["public_url"] = rt.state["config"]["public_url"]
-            if instance not in healthy:
-                observation = parent.grafana().observe(instance)
-                if observation.get("state") != "running" or observation.get("error") != "":
-                    raise ValueError("A failed Grafana install requires fresh native readiness")
-                healthy.add(instance)
         if hashlib.sha256(encoded(request) + b"\n").hexdigest() != fingerprint:
             raise ValueError("Failed native history differs from its exact stock request")
+        if grafana_install or vpn_setup:
+            name = "Grafana install" if grafana_install else "VPN setup"
+            expected = "running" if actual[(kind, instance)] else "disabled"
+            if grafana_install and expected != "running":
+                raise ValueError(f"A failed {name} requires a healthy current instance")
+            if (kind, instance) not in healthy:
+                controller = parent.grafana() if grafana_install else parent.application(kind)
+                observation = controller.observe(instance)
+                if observation.get("state") != expected or observation.get("error") != "":
+                    raise ValueError(f"A failed {name} requires fresh confirmation of the current native state")
+                healthy.add((kind, instance))
         seen.add(operation)
 
 

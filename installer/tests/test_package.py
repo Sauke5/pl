@@ -25,11 +25,13 @@ class PackageTests(unittest.TestCase):
         fixture.execute(core)
         manifest, _ = fixture.read_manifest(core.output)
         self.assertIs(manifest['features'].get('verified_native_resume'), True)
+        self.assertIs(manifest['features'].get('automatic_module_networks'), True)
         bundled = fixture.args(bundled=True)
         bundled.output = fixture.root / 'legacy-bundled.tar.gz'
         fixture.execute(bundled)
         manifest, _ = fixture.read_manifest(bundled.output)
         self.assertNotIn('verified_native_resume', manifest['features'])
+        self.assertNotIn('automatic_module_networks', manifest['features'])
         for module in ('prometheus', 'xray', 'alertmanager', 'grafana', 'wayline', *package.APPLICATION_ROLES):
             with self.subTest(module=module):
                 args = fixture.args(module)

@@ -334,6 +334,8 @@ func (m *Manager) Execute(ctx context.Context, j model.Job) (map[string]any, err
 // concurrent poll or background config writer bypasses the durable lifecycle.
 func (m *Manager) Schedule(ctx context.Context) {
 	blockedModule := ""
+	retryVPNInstall := false
+	var completedCoreUpgradeStart time.Time
 	if m.DeliveryEnabled {
 		op, allowed := m.deliveryScheduleOperation(ctx)
 		if !allowed {
@@ -346,6 +348,10 @@ func (m *Manager) Schedule(ctx context.Context) {
 				blockedModule = op.ModuleID
 			}
 		}
+		if op != nil && op.Phase == "complete" && !op.RestoredSnapshot {
+			completedCoreUpgradeStart = coreUpgradeStart(op)
+		}
+		retryVPNInstall = op == nil || op.Phase == "complete" || op.Phase == "failed" || op.Phase == "rolled_back"
 	}
 	instances, err := store.List[model.ModuleInstance](ctx, m.Store, "module_instance")
 	if err != nil {
@@ -359,7 +365,17 @@ func (m *Manager) Schedule(ctx context.Context) {
 		if instance.ModuleID == "mailcow" {
 			continue
 		}
-		if instance.DesiredState != "enabled" || instance.ObservedState == "pending" || instance.LastAttempt != nil && now.Sub(*instance.LastAttempt) < 60*time.Second {
+		if instance.DesiredState != "enabled" || instance.ObservedState == "pending" {
+			continue
+		}
+		checkDue := instance.LastAttempt == nil || now.Sub(*instance.LastAttempt) >= 60*time.Second
+		if retryVPNInstall && (checkDue || instance.LastAttempt.Before(completedCoreUpgradeStart)) {
+			queued, _ := m.Store.QueueVPNNetworkRecovery(ctx, instance, completedCoreUpgradeStart)
+			if queued {
+				continue
+			}
+		}
+		if !checkDue {
 			continue
 		}
 		_, _, _ = m.Store.QueueModule(ctx, "system:modules", "poll:"+instance.ID+":"+now.Format("200601021504"), instance.ID, "refresh", model.ModuleRequest{})

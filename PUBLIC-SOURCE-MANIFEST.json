@@ -17114,6 +17114,11 @@
       "size": 2615
     },
     {
+      "path": "docs/releases/0.9.1.json",
+      "sha256": "32219553a40fdcb295902ba5ee42a5f3c30af26f5ddd0d287732ee797e76599e",
+      "size": 1677
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -17145,8 +17150,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "1e2ce1bbcdea4e14d9fe340f88e5f75f23da2d7d28b9fbe5cc7c0ebeb1180ed9",
-      "size": 98015
+      "sha256": "441450b4a30bcc17db162c174682caa0898d49422ab18d425d55a5378bb6cee9",
+      "size": 98148
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -17165,18 +17170,18 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "b9fefffc511dbc09406a6b5c509de14e6300f5c18a82a2f96d7a33b287bbc9e5",
-      "size": 128393
+      "sha256": "fe7fc0510ed669bbe4d39cc73d89ddc035c95c687be7b6130ba4265cd2a90708",
+      "size": 128703
     },
     {
       "path": "installer/delivery.ru.md",
-      "sha256": "09341cff52c57a93836222359111b041528880f010e82b1eb8ea853aa0dbb230",
-      "size": 20329
+      "sha256": "95d464e7e169ff66cf9e154c5a957e428491a7a1e02a3cc3b8a53805ff064143",
+      "size": 20835
     },
     {
       "path": "installer/disaster-recovery.py",
-      "sha256": "f9af0a23018bb59f30bf30dc327fdfed7a8e93039ccd823b6ab5ee5277496a87",
-      "size": 136119
+      "sha256": "46b059592e51af8e58ccc905d0e389c49a0dcfd44128e6bcb1a8bfa719b61e6a",
+      "size": 137292
     },
     {
       "path": "installer/disaster-recovery.ru.md",
@@ -17190,8 +17195,8 @@
     },
     {
       "path": "installer/f12-controller.py",
-      "sha256": "807a3d0fc2e5717776d619378c313feb622ff0cfa623ebb1b99fb8111bebe57a",
-      "size": 55641
+      "sha256": "57bab534565617d22f4c9148fd650eb3d1d01ae7da51a3e773d3b16acc4977cf",
+      "size": 55854
     },
     {
       "path": "installer/forms-controller.py",
@@ -17245,8 +17250,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "465a9df8882ed7fd2e1357567adca69fec6f81279c12f20a543831f23e8fa1af",
-      "size": 47659
+      "sha256": "5babaf7a614e89cc3e2f595b4813c96d07308df73bb549db3f16345701c7f399",
+      "size": 47915
     },
     {
       "path": "installer/installation-settings.py",
@@ -17280,8 +17285,8 @@
     },
     {
       "path": "installer/module-network.py",
-      "sha256": "73e8b1b00624b597c06bdc46bb396d54018c67b4f6b2b42e722f685cc387dc80",
-      "size": 7996
+      "sha256": "4d4a98fd85a64abcfbbdf0030c8b5b3987467ab9a07efa34516cd9f383aa2fa9",
+      "size": 9627
     },
     {
       "path": "installer/module-origin.py",
@@ -17320,13 +17325,13 @@
     },
     {
       "path": "installer/ocserv-controller.py",
-      "sha256": "56a0df52da6446c4c7c41ea163a7a217270d2007fcf5ffbaa35b17341e440422",
-      "size": 23502
+      "sha256": "427c39580f096ea3cc2504aa3ea7dde3e477ce24e3fdfc59fca7245a2d6b88bd",
+      "size": 24370
     },
     {
       "path": "installer/package.py",
-      "sha256": "474e4c6a4522bde201df30ddb60265b6eb8a39ba39b4bedee9177240ab37f306",
-      "size": 39675
+      "sha256": "cefb6ac81ca4cc9caf0635067853f06169a1b7347b264ca1aaa125c8f9a78b23",
+      "size": 39710
     },
     {
       "path": "installer/platform-guide.ru.md",
@@ -17410,8 +17415,8 @@
     },
     {
       "path": "installer/tests/test_delivery.py",
-      "sha256": "501497210a16fa2e4ded9492d535a8455c1a2e4ddae2d10904e2b92fe14c7027",
-      "size": 48332
+      "sha256": "a5d58cb26e88e805a54de62bffdad02f3aceb63dba75147af6c64902509dddee",
+      "size": 49615
     },
     {
       "path": "installer/tests/test_delivery_concurrency.py",
@@ -17425,13 +17430,13 @@
     },
     {
       "path": "installer/tests/test_disaster_recovery.py",
-      "sha256": "71831b6b65db6af907f5dcc0f589f1af3addd64d78970b7aaa0825fccd307fb1",
-      "size": 89118
+      "sha256": "dc7027ef09a358d9420f3cb1a714a437de11fda1204dbe81d956052ceef44dc9",
+      "size": 93200
     },
     {
       "path": "installer/tests/test_disaster_recovery_history.py",
-      "sha256": "de022ee74978b259a14eb0ad5b6e8c113ed0b3099d187bfbb4599772e236c0fd",
-      "size": 17276
+      "sha256": "8d1ee16b9f50ae2892ab97fa06c90e52842a06e74912b141ec61a414cad7ddcf",
+      "size": 22015
     },
     {
       "path": "installer/tests/test_doska_controller.py",
@@ -17445,8 +17450,8 @@
     },
     {
       "path": "installer/tests/test_f12_controller.py",
-      "sha256": "022331a7c6e349c0dcc531d1065db6d25d821cce31f954b5153046e3fc5ff798",
-      "size": 24037
+      "sha256": "4ad7a6f89dc7e1d176bbae0af2c13112a0f9b23b7d255dd93b43e0f6e6455219",
+      "size": 25444
     },
     {
       "path": "installer/tests/test_f12_package.py",
@@ -17505,8 +17510,8 @@
     },
     {
       "path": "installer/tests/test_icmp_upgrade.py",
-      "sha256": "1717a6693734570cd6ae79e9664ade39487a6bdb45950897b2d17b405a0a0cc5",
-      "size": 38802
+      "sha256": "78fa86ae690cda73454a031b0235e1cb12f1ad55345412acf5bd6de25df8ac9d",
+      "size": 40239
     },
     {
       "path": "installer/tests/test_install_proxy.py",
@@ -17575,8 +17580,8 @@
     },
     {
       "path": "installer/tests/test_minimal_package.py",
-      "sha256": "df5908f3e7c3db031e5d3c788d1bd75da62cff68b659e277e7eb7fe6dc6c136d",
-      "size": 18963
+      "sha256": "ab4f12757bf2dc3088c72402c0f0f55f90821b5a686c198cde0a6c10a74426e9",
+      "size": 19135
     },
     {
       "path": "installer/tests/test_module_controller.py",
@@ -17585,8 +17590,8 @@
     },
     {
       "path": "installer/tests/test_module_network.py",
-      "sha256": "79be5487716c5bdd63e6e332a52f01a7e68b2414c04c8d7dc3f05ae8eaebfca5",
-      "size": 11600
+      "sha256": "c80a8d114c1e549922533d2f4b4633e0f6a10c589e71ce19401855574d6214fa",
+      "size": 13052
     },
     {
       "path": "installer/tests/test_module_origin.py",
@@ -17700,8 +17705,8 @@
     },
     {
       "path": "installer/tests/test_ocserv_controller.py",
-      "sha256": "eff918cfe26d356f4e0896793d338c8a21d80d53ae8456fd2b3f1f86088c3d29",
-      "size": 8861
+      "sha256": "a1a6833f1bae6e3fd7ebe162b36f755e2de754e0870c244c45c6161356cba666",
+      "size": 9932
     },
     {
       "path": "installer/tests/test_ocserv_package.py",
@@ -17710,8 +17715,8 @@
     },
     {
       "path": "installer/tests/test_package.py",
-      "sha256": "ebcb85166418a66a5c79e8d9657233562db5de99ac4940b2c9f20388b8dbb959",
-      "size": 9403
+      "sha256": "b697690a20f9856250474075d6c3dc91600b07786a5c5559bfc97c4a7d6d35d9",
+      "size": 9562
     },
     {
       "path": "installer/tests/test_portable_ui_icmp.py",
@@ -17790,8 +17795,8 @@
     },
     {
       "path": "installer/xray-controller.py",
-      "sha256": "0e4633db2e5fc65a5ec57196b3b3edb1001b29f4193117831574242c02254e65",
-      "size": 53957
+      "sha256": "5b883cce1c7172dd17dced69fdc3f3f672f0f75b3860decfb91077aeb163c692",
+      "size": 53863
     },
     {
       "path": "monitoring/source/it-portal/.dockerignore",
@@ -19675,8 +19680,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_reconcile.go",
-      "sha256": "372c064609448b0c1ed653d3e29469bd567b6c19db112a0caed7d8ee39c6b5f6",
-      "size": 9408
+      "sha256": "d5c2ba7a98771d7ad28b2578473ceb51bcbc261901fbfc41baf16ad16f933028",
+      "size": 10271
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_reconcile_test.go",
@@ -19725,8 +19730,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/manager.go",
-      "sha256": "13d0f791b53bcfd251b9cd0955ca0d822e0b4a32753193efa5056f65edab4df5",
-      "size": 14910
+      "sha256": "86be3751bff1928501429138f5c54c3761769037756d2df75eba69cd2ca33b24",
+      "size": 15476
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/native_control.go",
@@ -21635,13 +21640,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules.go",
-      "sha256": "aa4d01b6d419d28b11cc16336b6b59f8be6d8f1a2b7210e6f6525f93fd6eb422",
-      "size": 18047
+      "sha256": "adeef8404255cec91fbaf4bec33afadcff6ce79077baefb7cc7b78ac5a5428d5",
+      "size": 18622
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules_integration_test.go",
-      "sha256": "f7ecd610288463b433b1c0ed12327b8da779da95b74788563a64b08c547f98ec",
-      "size": 16215
+      "sha256": "3de587fb2b62abe93054c055f05254f9653570460083f230d01a3df8c544524d",
+      "size": 18025
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules_projection.go",
@@ -21775,8 +21780,18 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/store/store_integration_test.go",
-      "sha256": "ebb8abcb20ec7ed9c0d08eac92135197284f8f717ea4884aceff64dd868ddbb8",
-      "size": 30814
+      "sha256": "bf653fd31ee589db4428a89bd60e70d1c5fa839dcbfb9e24ffd537037e190c4a",
+      "size": 30984
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/store/vpn_network_recovery.go",
+      "sha256": "18e5c2ef86abc36ab37cfdb438ed96d1c56b130956c07066b0fb0b60d2df38a5",
+      "size": 3554
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/store/vpn_network_recovery_test.go",
+      "sha256": "b9c607636c9e0bd090d79b2dd5d64501f8b7a82c5eebb814294183d9968230e5",
+      "size": 8771
     },
     {
       "path": "monitoring/source/it-portal/internal/store/xray_configuration.go",

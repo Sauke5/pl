@@ -388,3 +388,45 @@ func TestModuleBackfillDoesNotReinstallOrClaimData(t *testing.T) {
 		t.Fatalf("backfill not idempotent %+v %v", after, err)
 	}
 }
+
+func TestVPNNetworkRecoveryGuardRejectsNewerManualAction(t *testing.T) {
+	for _, action := range []string{"enable", "disable"} {
+		t.Run(action, func(t *testing.T) {
+			s := testStore(t)
+			ctx := context.Background()
+			instance, install, err := s.QueueModule(ctx, "local-admin", "install", "", "install", model.ModuleRequest{ModuleID: "ocserv", Mode: "local", Name: "VPN fixture"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			instance.ObservedState, instance.Error = "unavailable", "module_network_pool_exhausted: fixture"
+			install.Status, install.Result = "failed", map[string]any{"instance": instance}
+			if err = s.Finish(ctx, install); err != nil {
+				t.Fatal(err)
+			}
+			eligible, err := s.VPNInstallNeedsNetworkRecovery(ctx, instance, time.Now().Add(time.Second))
+			if err != nil || !eligible {
+				t.Fatalf("expected the original failed install to be eligible: %t %v", eligible, err)
+			}
+			// Simulate the operator winning the queue lock after the scheduler
+			// read its candidate and before it attempts to enqueue the recovery.
+			current, manual, err := s.QueueModule(ctx, "local-admin", "manual", instance.ID, action, model.ModuleRequest{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tryStaleRecovery := func() {
+				t.Helper()
+				_, _, err := s.queueModule(ctx, install.Actor, "vpn-network-recovery:"+install.ID, instance.ID, "enable", model.ModuleRequest{}, nil, install.ID)
+				if !errors.Is(err, ErrConflict) {
+					t.Fatalf("a stale recovery must not supersede the manual %s: %v", action, err)
+				}
+			}
+			tryStaleRecovery()
+			current.ObservedState, current.Error = "unavailable", instance.Error
+			manual.Status, manual.Result = "failed", map[string]any{"instance": current}
+			if err = s.Finish(ctx, manual); err != nil {
+				t.Fatal(err)
+			}
+			tryStaleRecovery()
+		})
+	}
+}

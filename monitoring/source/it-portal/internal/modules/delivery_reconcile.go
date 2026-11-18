@@ -124,6 +124,19 @@ func nativeReconcileInstance(instance model.ModuleInstance) bool {
 	return instance.Mode == "local" && instance.DesiredState == "enabled" && canonicalID(instance.ID) && deliveredModule(instance.ModuleID)
 }
 
+func coreUpgradeStart(op *DeliveryOperation) time.Time {
+	if op == nil || op.Scope != "" || op.Kind != "upgrade" {
+		return time.Time{}
+	}
+	startedAt, err := time.Parse(time.RFC3339, op.StartedAt)
+	if err != nil {
+		return time.Time{}
+	}
+	// The host reports whole seconds. Include an install recorded earlier in
+	// the same second, before the delivery barrier was acquired.
+	return startedAt.Add(time.Second)
+}
+
 func (m *Manager) deliveryReconcileFinished(ctx context.Context, id string, job model.Job) (bool, error) {
 	if job.Status == "queued" || job.Status == "running" {
 		return false, nil
@@ -150,7 +163,10 @@ func (m *Manager) deliveryReconcileFinished(ctx context.Context, id string, job 
 		}
 		return true, nil
 	}
-	if instance.Endpoint == "" || instance.IntegrationID == "" || observed.IntegrationID != instance.IntegrationID {
+	if instance.Endpoint == "" && instance.ModuleID != "ocserv" && instance.ModuleID != "syslog" && instance.ModuleID != "f12" {
+		return false, ErrDeliveryReconcileFailed
+	}
+	if instance.IntegrationID == "" || observed.IntegrationID != instance.IntegrationID {
 		return false, ErrDeliveryReconcileFailed
 	}
 	integration, err := store.Get[model.Integration](ctx, m.Store, "integration", instance.IntegrationID)
@@ -197,10 +213,21 @@ func (m *Manager) ReconcileDelivery(ctx context.Context, request DeliveryReconci
 		return result, ErrDeliveryReconcileFailed
 	}
 	ids := []string{}
+	upgradeStart := coreUpgradeStart(&op)
 	for _, instance := range instances {
-		if nativeReconcileInstance(instance) && (op.Scope != "module" || instance.ModuleID == op.ModuleID) {
-			ids = append(ids, instance.ID)
+		if !nativeReconcileInstance(instance) || op.Scope == "module" && instance.ModuleID != op.ModuleID {
+			continue
 		}
+		if !upgradeStart.IsZero() {
+			waitForNetworkRecovery, err := m.Store.VPNInstallNeedsNetworkRecovery(ctx, instance, upgradeStart)
+			if err != nil {
+				return result, ErrDeliveryReconcileFailed
+			}
+			if waitForNetworkRecovery {
+				continue
+			}
+		}
+		ids = append(ids, instance.ID)
 	}
 	sort.Strings(ids)
 	jobs := map[string]string{}

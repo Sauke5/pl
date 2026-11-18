@@ -11,6 +11,7 @@ ROLES = {'forms': ('mongo', 'keydb', 'engine', 'adapter', 'engine-bootstrap'),
          'netmap': ('database', 'cache', 'netbox', 'netbox-worker', 'oxidized', 'gitea', 'adapter'),
          'bookstack': ('database', 'web')}
 PRIVATE = tuple(ipaddress.IPv4Network(v) for v in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+AUTOMATIC_POOLS = (ipaddress.IPv4Network('10.240.0.0/12'), *PRIVATE[1:], PRIVATE[0])
 
 
 class PoolExhausted(ValueError):
@@ -39,7 +40,20 @@ def pools(config):
     return result
 
 
-def owned_network(obj, installation, available, inspect_container, *, prometheus=''):
+def reserved_networks(config):
+    return [ipaddress.IPv4Network(config[key]) for key in ('network_cidr', 'module_network_cidr') if config.get(key)]
+
+
+def valid_allocation(config, subnet, version):
+    available = pools(config)
+    if version == '1':
+        return any(subnet.subnet_of(pool) for pool in available)
+    return (version == '2' and bool(available)
+            and any(subnet.subnet_of(pool) for pool in PRIVATE)
+            and not any(subnet.overlaps(pool) for pool in reserved_networks(config)))
+
+
+def owned_network(obj, installation, config, inspect_container, *, prometheus=''):
     labels = obj.get('Labels') or {}
     module, instance = labels.get('pl.module'), labels.get('pl.instance', '')
     if labels.get('pl.installation') != installation or module not in MODULES:
@@ -64,8 +78,9 @@ def owned_network(obj, installation, available, inspect_container, *, prometheus
             or obj.get('IPAM', {}).get('Driver') != 'default' or obj.get('IPAM', {}).get('Options') or len(configs) != 1
             or configs[0].get('Gateway') != str(subnet.network_address + 1)
             or configs[0].get('IPRange') or configs[0].get('AuxiliaryAddresses')
-            or subnet.prefixlen != (28 if module in ('netmap', 'f12') else 29) or not any(subnet.subnet_of(p) for p in available)
-            or labels.get('pl.module.network.version') != '1' or labels.get('pl.module.network.subnet') != str(subnet)):
+            or subnet.prefixlen != (28 if module in ('netmap', 'f12') else 29)
+            or labels.get('pl.module.network.subnet') != str(subnet)
+            or not valid_allocation(config, subnet, labels.get('pl.module.network.version'))):
         return None
     allowed_names = {prefix + '-' + role for role in ROLES[module]} if module in ROLES else {prefix}
     prometheus_name = installation + '-prometheus-' + prometheus if prometheus else ''
@@ -90,6 +105,25 @@ def owned_network(obj, installation, available, inspect_container, *, prometheus
     return subnet
 
 
+def first_free(available, occupied, prefixlen):
+    blocked = sorted((int(net.network_address), int(net.broadcast_address)) for net in occupied if net.version == 4)
+    size = 1 << (32 - prefixlen)
+    for pool in available:
+        address = int(pool.network_address)
+        last = int(pool.broadcast_address) - size + 1
+        for start, end in blocked:
+            if start >= address + size:
+                break
+            if end >= address:
+                # Jump to the next aligned block after the occupied range.
+                address = (end // size + 1) * size
+                if address > last:
+                    break
+        if address <= last:
+            return ipaddress.IPv4Network((address, prefixlen))
+    return None
+
+
 def allocation_args(root, installation, docker, *, prefixlen=29):
     if prefixlen not in (28, 29):
         raise ValueError('Unsupported module network size')
@@ -97,7 +131,8 @@ def allocation_args(root, installation, docker, *, prefixlen=29):
     statepath = root / 'state/installation.json'
     if statepath.is_symlink():
         raise ValueError('Unsafe installation network configuration')
-    available = pools(json.loads(statepath.read_bytes()).get('config', {}))
+    config = json.loads(statepath.read_bytes()).get('config', {})
+    available = pools(config)
     # Legacy installations without explicit IPAM retain their existing contract.
     if not available:
         return []
@@ -122,11 +157,18 @@ def allocation_args(root, installation, docker, *, prefixlen=29):
         net = ipaddress.IPv4Network(route['dst'], strict=False)
         if net.prefixlen:
             occupied.append(net)
-    for pool in available:
-        for subnet in pool.subnets(new_prefix=prefixlen):
-            if not any(net.version == 4 and subnet.overlaps(net) for net in occupied):
-                return ['--subnet', str(subnet), '--gateway', str(subnet.network_address + 1), '--label', 'pl.module.network.version=1', '--label', 'pl.module.network.subnet=' + str(subnet)]
-    raise PoolExhausted('Module network pool exhausted; configure an additional module network CIDR')
+    version = '1'
+    subnet = first_free(available, occupied, prefixlen)
+    if subnet is None:
+        allowed = config.get('allowed_cidrs', []) + config.get('integration_config', {}).get('allowed_cidrs', [])
+        occupied.extend(ipaddress.ip_network(value, strict=True) for value in allowed)
+        occupied.extend(reserved_networks(config))
+        subnet = first_free(AUTOMATIC_POOLS, occupied, prefixlen)
+        version = '2'
+    if subnet is None:
+        raise PoolExhausted('Module network pool exhausted; no unused private subnet')
+    return ['--subnet', str(subnet), '--gateway', str(subnet.network_address + 1),
+            '--label', 'pl.module.network.version=' + version, '--label', 'pl.module.network.subnet=' + str(subnet)]
 
 
 def validate_existing(root, installation, obj, docker, *, prometheus=''):
@@ -134,6 +176,6 @@ def validate_existing(root, installation, obj, docker, *, prometheus=''):
     if not {'pl.module.network.version', 'pl.module.network.subnet'} & labels.keys():
         return  # Legacy subnet stays under the controller's existing ownership guard.
     config = json.loads((Path(root) / 'state/installation.json').read_bytes()).get('config', {})
-    if owned_network(obj, installation, pools(config), lambda identity: json.loads(docker('container', 'inspect', identity))[0],
+    if owned_network(obj, installation, config, lambda identity: json.loads(docker('container', 'inspect', identity))[0],
                      prometheus=prometheus) is None:
         raise ValueError('Managed module network IPAM or ownership drift')

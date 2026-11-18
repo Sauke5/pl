@@ -108,8 +108,10 @@ def manifest(package: Path) -> dict:
     if m.get("architecture") != arch:
         raise ValueError("Package CPU architecture does not match this host")
     features = m.get("features", {})
-    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume", "log_export", "syslog_controller", "f12_controller", "ocserv_controller"} or any(type(v) is not bool for v in features.values()):
+    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume", "automatic_module_networks", "log_export", "syslog_controller", "f12_controller", "ocserv_controller"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
+    if features.get('automatic_module_networks') and not all(features.get(name) for name in ('verified_native_resume', 'ocserv_controller')):
+        raise ValueError('Automatic module networks require the verified update worker and VPN controller')
     if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
         raise ValueError('Verified native resume requires the finite update and ICMP worker entrypoints')
     if features.get('module_upgrades') and (not features.get('on_demand_modules') or 'module-upgrade.py' not in m.get('files', {})):
@@ -180,7 +182,8 @@ def legacy_worker_handoff(package: Path, candidate: dict) -> None:
     """
     main = sys.modules.get('__main__')
     features = candidate.get('features', {})
-    required_capability = (3 if features.get('verified_native_resume') else
+    required_capability = (4 if features.get('automatic_module_networks') else
+                           3 if features.get('verified_native_resume') else
                            2 if features.get('upgrade_status') or features.get('module_upgrades') else 1)
     if (__name__ != 'pl_candidate_bootstrap' or not candidate.get('features', {}).get('icmp_probe')
             or getattr(main, 'HOST_FEATURE_API', 0) >= required_capability
@@ -824,11 +827,10 @@ class Runtime:
     def network_preflight(self, cfg: dict, installation: str | None = None) -> None:
         if "network_cidr" not in cfg and "module_network_cidr" not in cfg:
             return
-        selected = network_cidr(cfg["network_cidr"]) if "network_cidr" in cfg else None
-        expected = network_subnets(cfg["network_cidr"]) if selected else {}
+        expected = network_subnets(cfg["network_cidr"]) if "network_cidr" in cfg else {}
         helper = module_networks()
-        available = helper.pools(cfg)
-        reserved = ([selected] if selected else []) + ([helper.extra_pool(cfg["module_network_cidr"])] if cfg.get("module_network_cidr") else [])
+        helper.pools(cfg)
+        reserved = helper.reserved_networks(cfg)
         if not self.m.get("features", {}).get("module_controller") and not self.m.get("features", {}).get("connector_credentials") and "integration_config" not in cfg:
             expected.pop("egress", None)
         if installation is not None and not re.fullmatch(r"pl-[0-9a-f]{12}", installation):
@@ -855,7 +857,7 @@ class Runtime:
             logical = next((name for name in expected if installation and obj.get("Name") == installation + "_" + name), None)
             if logical is None:
                 if overlapping:
-                    subnet = helper.owned_network(obj, installation, available,
+                    subnet = helper.owned_network(obj, installation, cfg,
                         lambda container: json.loads(read(docker + ["container", "inspect", container]))[0]) if installation else None
                     if subnet is None:
                         raise ValueError("Network CIDR overlaps an existing Docker network")
@@ -1543,7 +1545,7 @@ def main() -> int:
     parser.add_argument("--package-dir", type=Path)
     parser.add_argument("--public-url")
     parser.add_argument("--bind-address", default="127.0.0.1")
-    parser.add_argument("--module-network-cidr", help="Additional unused RFC1918 /16 through /26; default module pool holds 8 networks; initial installation only")
+    parser.add_argument("--module-network-cidr", help="Additional preferred RFC1918 /16 through /26; initial installation only")
     parser.add_argument("--network-cidr", help="Explicit unused canonical RFC1918 IPv4 /24 for core bridge networks")
     parser.add_argument("--integration-config", type=Path, help="Private 0600 JSON of explicit integration CIDRs, ports and supplied secret files; first installation only; secrets are excluded from backup")
     parser.add_argument("--icmp-allowed-cidr", action="append", help="Explicit IPv4 CIDR for manual ICMP; repeat for several networks, none permits no destinations")

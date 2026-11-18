@@ -146,6 +146,63 @@ class FullRecoveryTests(unittest.TestCase):
         self.assertIn("syslog", dr.NETWORK_MODULES)
         self.assertTrue(any(not v["running"] for v in self.meta["containers"]))
 
+    def test_archived_automatic_vpn_network_is_validated_before_restore(self):
+        self.add_module("ocserv")
+        network = self.meta["networks"][-1]
+        network["labels"]["pl.module.network.version"] = "2"
+        self.meta.update(version="0.9.1", contract_version=2)
+        bootstrap = dr.helper("bootstrap")
+        config = bootstrap.configuration(self.meta["origin"], "127.0.0.1", "admin", "172.31.252.0/24")
+        image = next(iter(self.meta["images"].values()))
+        manifest = {"schema": 2, "architecture": "amd64", "database": {"major": 18, "pgdata": "/var/lib/postgresql/18/docker"},
+            "images": {name: image for name in ("api", "web", "db")},
+            "features": {"on_demand_modules": True, "module_controller": True, "ocserv_controller": True}}
+        for version in (self.meta["version"], self.meta["supervisor_version"]):
+            package = self.source / "releases" / version
+            package.mkdir(mode=0o700)
+            dr.atomic(package / "manifest.json", manifest)
+            (package / "release-signing-public.pem").write_bytes((BASE / "release-signing-public.pem").read_bytes())
+        manifest_sha = dr.checksum(self.source / "releases" / self.meta["version"] / "manifest.json")
+        self.meta["manifest_sha256"] = manifest_sha
+        self.meta["registry"].update(manifest_sha256=manifest_sha, ocserv={"server": image})
+        dr.atomic(self.source / "state/installation.json", {"install_id": self.installation, "version": self.meta["version"],
+            "manifest_sha256": manifest_sha, "phase": "ready", "config": config})
+        for filename, version in (("controller-active.json", self.meta["version"]),
+                                  ("controller-supervisor.json", self.meta["supervisor_version"])):
+            dr.atomic(self.source / "state" / filename, {"schema": 1, "version": version})
+        (self.source / "state/delivery").mkdir(mode=0o700)
+        dr.atomic(self.source / "state/delivery/module-ocserv.json",
+                  {"module_id": "ocserv", "version": "1.6.0", "core_api": 1, "sha256": "e" * 64})
+        dr.atomic(self.source / "private/module-images.json", self.meta["registry"])
+        dr.atomic(self.source / "config/delivery.json", {"schema": 1, "catalog_url": dr.helper("delivery").CATALOG_URL})
+        model = bootstrap.compose_model(self.source, manifest, config, self.installation)
+        for service in model["services"].values():
+            for mount in service["volumes"]:
+                if isinstance(mount, dict) and mount.get("type") == "bind":
+                    mount["source"] = str(self.root / Path(mount["source"]).relative_to(self.source))
+        dr.atomic(self.source / "config/compose.json", model)
+        backup = self.build_backup()
+        backup_sha = dr.checksum(backup)
+        host = types.SimpleNamespace(inspect_all=Mock(return_value=[]), run=Mock(return_value=b"[]"), docker=Mock())
+        helper = dr.helper
+
+        def verify_target(recovery):
+            recovery.preflight_target()
+            return recovery.meta["networks"][-1]
+
+        with patch.object(bootstrap, "manifest", return_value=manifest), \
+                patch.object(dr, "helper", side_effect=lambda name: bootstrap if name == "bootstrap" else helper(name)), \
+                patch.object(dr.Recovery, "execute", autospec=True, side_effect=verify_target):
+            self.assertEqual(dr.restore(self.root, self.installation, backup, backup_sha, host=host), network)
+            host.run.return_value = dr.encoded([{"dst": network["subnet"], "dev": "vpn0"}])
+            with self.assertRaisesRegex(ValueError, "overlaps a physical or VPN host route"):
+                dr.restore(self.root, self.installation, backup, backup_sha, host=host)
+            mislabeled = copy.deepcopy(self.meta)
+            mislabeled["networks"][-1]["labels"]["pl.module.network.version"] = "1"
+            with self.assertRaisesRegex(ValueError, "outside its permitted ranges"):
+                dr.validate_package_tree(self.source, mislabeled)
+        host.docker.assert_not_called()
+
     def test_f12_private_state_cannot_disappear_from_a_full_backup(self):
         source = self.source / "modules/f12/instances"
         source.mkdir(parents=True)

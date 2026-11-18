@@ -127,7 +127,8 @@ class MinimalBuildTests(unittest.TestCase):
         with patch.object(bootstrap.platform, "machine", return_value="x86_64"):
             self.assertEqual(bootstrap.manifest(extracted), manifest)
             invalid_manifests = [{"images": {**manifest["images"], "prometheus": manifest["images"]["db"]}},
-                                 {"features": {**manifest["features"], "forms_module": True}}]
+                                 {"features": {**manifest["features"], "forms_module": True}},
+                                 {"features": {**manifest["features"], "verified_native_resume": False}}]
             invalid_manifests.extend({"files": {name: value for name, value in manifest["files"].items() if name != payload}}
                                      for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py", "log-export.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py"))
             for index, changed in enumerate(invalid_manifests):
@@ -140,6 +141,7 @@ class MinimalBuildTests(unittest.TestCase):
                 with self.assertRaises(wrapper.InstallError):
                     wrapper.verify_package(invalid_archive, "amd64")
             previous = copy.deepcopy(manifest)
+            previous["features"].pop("automatic_module_networks")
             previous["features"].pop("log_export")
             previous["files"].pop("log-export.py")
             previous["features"].pop("ocserv_controller")

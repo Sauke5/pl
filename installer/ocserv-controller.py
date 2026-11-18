@@ -258,6 +258,21 @@ class OcservController:
         if obj and obj['State'].get('Running'):
             self.docker('container', 'stop', '--time', '8', obj['Id'], timeout=16)
 
+    def has_unprovisioned_instance(self):
+        """Allow a core update to carry a partial install that owns no resources."""
+        entries = list(self.instances.iterdir())
+        if len(entries) != 1:
+            return False
+        path, = entries
+        instance = identifier(path.name)
+        if self.state(instance)['storage_created'] or {p.name for p in path.iterdir()} != {'state.json'}:
+            return False
+        if self.container_id(instance) or self.resource(instance, 'network') or self.resource(instance, 'volume'):
+            return False
+        filters = ('--filter', 'label=pl.installation=' + self.installation, '--filter', 'label=pl.module=ocserv')
+        return not any(self.docker(kind, 'ls', *extra, *filters, '--quiet').strip()
+                       for kind, extra in (('container', ('-a',)), ('network', ()), ('volume', ())))
+
     def ensure(self, instance):
         path, desired = self.instances / instance, self.desired_ingress()
         others = [p for p in self.instances.iterdir() if p.name != instance]

@@ -348,6 +348,26 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual((self.delivery.base / 'operation.json').read_bytes(), before)
         self.execve.assert_not_called()
 
+    def test_host_api_three_hands_off_automatic_module_networks_before_snapshot(self):
+        self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True,
+                                          automatic_module_networks=True, ocserv_controller=True)
+        d.atomic(self.target / 'manifest.json', self.candidate)
+        before = (self.root / 'state/installation.json').read_bytes()
+        with patch.object(self.main, 'HOST_FEATURE_API', 3, create=True), \
+                patch.object(self.bootstrap.platform, 'machine', return_value='x86_64'), \
+                patch.object(self.bootstrap, 'validate_bundled_images'), \
+                self.assertRaisesRegex(SystemExit, 'verified exec'):
+            self.bootstrap.manifest(self.target)
+        journal = d.read(self.delivery.base / 'operation.json')
+        self.assertEqual(journal['worker_version'], self.target.name)
+        self.assertEqual(journal['worker_handoff']['capability'], 4)
+        self.assertEqual(journal['worker_unit'], self.unit)
+        self.assertNotIn('snapshot', journal)
+        self.assertEqual((self.root / 'state/installation.json').read_bytes(), before)
+        validator = d.Delivery(types.SimpleNamespace(root=self.root, installation=self.installation), package=self.target)
+        validator.supervisor = self.initial
+        self.assertEqual(validator.validate_worker_entry(journal), self.target)
+
     def test_resume_manifest_validation_is_pure_outside_verified_worker_entry(self):
         self.candidate['features'].update(upgrade_status=True, module_upgrades=True, verified_native_resume=True)
         d.atomic(self.target / 'manifest.json', self.candidate)

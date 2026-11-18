@@ -63,6 +63,10 @@ func (s *Store) QueueModule(ctx context.Context, actor, key, id, action string, 
 }
 
 func (s *Store) QueueModuleWithCredential(ctx context.Context, actor, key, id, action string, input model.ModuleRequest, credential *ModuleCredential) (model.ModuleInstance, model.Job, error) {
+	return s.queueModule(ctx, actor, key, id, action, input, credential, "")
+}
+
+func (s *Store) queueModule(ctx context.Context, actor, key, id, action string, input model.ModuleRequest, credential *ModuleCredential, failedVPNInstallID string) (model.ModuleInstance, model.Job, error) {
 	var instance model.ModuleInstance
 	var job model.Job
 	credentialFingerprint := ""
@@ -191,6 +195,15 @@ func (s *Store) QueueModuleWithCredential(ctx context.Context, actor, key, id, a
 		}
 		if instance.DesiredState == "removed" && action != "remove" {
 			return instance, job, ErrConflict
+		}
+		if failedVPNInstallID != "" {
+			failed, err := failedVPNNetworkInstall(ctx, tx, instance)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return instance, job, err
+			}
+			if failed.ID != failedVPNInstallID || failed.Actor != actor {
+				return instance, job, ErrConflict
+			}
 		}
 		switch action {
 		case "reconnect":

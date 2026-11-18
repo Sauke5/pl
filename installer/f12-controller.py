@@ -1015,7 +1015,9 @@ class F12Controller:
             self.rollback_edges(instance, state, additions, not had_network, current)
             if isinstance(error, Failure) and error.status == 409:
                 raise
-            raise Failure(409, 'Не удалось открыть порт 18080 в выбранной сети. Проверьте адрес и порт.') from None
+            if getattr(error, 'public_code', None) == 'module_network_pool_exhausted':
+                raise Failure(409, 'PL не нашла свободную внутреннюю подсеть /28 для F12.') from None
+            raise Failure(409, 'Не удалось подготовить службу публикации F12 в выбранной сети.') from None
         # Once native may have committed, keep a passive edge on an ambiguous
         # transport error. Native checks the committed publication on each read.
         status, body = self.forward(instance, main, request, request['action'], request['payload'], None)

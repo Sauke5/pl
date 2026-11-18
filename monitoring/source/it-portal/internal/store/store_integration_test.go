@@ -93,6 +93,11 @@ func testStore(t *testing.T) *Store {
 	}
 	return s
 }
+
+// OpenTestStore lets external-package tests exercise the real worker and Store
+// while sharing this isolated PostgreSQL schema fixture.
+var OpenTestStore = testStore
+
 func putResource(t *testing.T, s *Store, r model.Resource) model.Resource {
 	t.Helper()
 	if r.ID == "" {
