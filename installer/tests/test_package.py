@@ -122,7 +122,8 @@ class PackageTests(unittest.TestCase):
                                         "frontend/package-lock.json", "frontend/src/App.tsx"}
             excluded = {"deploy/secrets/key", "credentials/password", ".env", "docs/private.md",
                         "frontend/.env", "frontend/node_modules/x/index.js", "frontend/dist/app.js", "private/integration-credential-key"}
-            names = included | excluded
+            optional_syslog = {"deploy/images/syslog.Dockerfile", "deploy/images/syslog.sources.json", "deploy/images/syslog.LICENSE"}
+            names = included | excluded | optional_syslog
             for name in names:
                 p = root / package.PREFIX / name
                 p.parent.mkdir(parents=True, exist_ok=True)
@@ -131,9 +132,12 @@ class PackageTests(unittest.TestCase):
             with patch.object(package, "ROOT", root), patch.object(package, "run", return_value=listed):
                 package.source_context(root / "one.tar.gz")
                 package.source_context(root / "two.tar.gz")
+                package.source_context(root / "syslog.tar.gz", with_syslog=True)
             self.assertEqual(package.sha(root / "one.tar.gz"), package.sha(root / "two.tar.gz"))
             with tarfile.open(root / "one.tar.gz") as archive:
                 self.assertEqual(set(archive.getnames()), included)
+            with tarfile.open(root / "syslog.tar.gz") as archive:
+                self.assertEqual(set(archive.getnames()), included | optional_syslog)
 
     def test_remote_engine_rejected_without_build(self):
         with patch.dict(package.os.environ, {"DOCKER_HOST": "ssh://other-host"}), self.assertRaises(ValueError):

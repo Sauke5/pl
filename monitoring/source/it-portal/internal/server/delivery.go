@@ -76,7 +76,7 @@ func (s *Server) deliveryModuleUpgrade(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(request.OperationID)
 	allowed := false
 	switch request.ModuleID {
-	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack":
+	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "syslog", "ocserv", "f12", "netmap", "bookstack":
 		allowed = true
 	}
 	if err != nil || id.String() != request.OperationID || !allowed || !deliveryArtifactHash.MatchString(request.ArtifactSHA256) {

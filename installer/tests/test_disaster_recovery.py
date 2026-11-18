@@ -87,7 +87,8 @@ class FullRecoveryTests(unittest.TestCase):
             item["containers"].append({"name": name, "role": role})
             self.meta["containers"].append({"name": name, "id": digest(name), "running": item["running"], "core": False,
                 "service": "", "module_id": kind, "instance_id": instance, "role": role,
-                "image": next(iter(self.meta["images"])), "contract": "d" * 64, "bindings": {}})
+                "image": next(iter(self.meta["images"])), "contract": "d" * 64,
+                "bindings": {"9428/tcp": [{"HostIp": "127.0.0.1", "HostPort": ""}]} if kind == "syslog" else {}})
         labels = {"pl.installation": self.installation, "pl.module": kind, "pl.instance": instance}
         for volume in dr.VOLUMES[kind]: self.add_volume(prefix + ("-" + volume if volume else "") + "-data", labels)
         if kind in dr.NETWORK_MODULES:
@@ -132,12 +133,90 @@ class FullRecoveryTests(unittest.TestCase):
         recovery.write()
         return recovery
 
-    def test_all_ten_kinds_have_closed_complete_role_volume_and_network_sets(self):
+    def test_registered_kinds_have_closed_complete_role_volume_and_network_sets(self):
         for kind in sorted(dr.MODULES): self.add_module(kind)
         self.build_backup()
         dr.validate_networks(self.meta)
-        self.assertEqual(len(self.meta["native"]), 10)
+        self.assertEqual(len(self.meta["native"]), 13)
+        self.assertEqual(dr.ROLES["ocserv"], ("server",))
+        self.assertEqual(dr.VOLUMES["ocserv"], ("",))
+        self.assertIn("ocserv", dr.NETWORK_MODULES)
+        self.assertEqual(dr.ROLES["syslog"], ("server",))
+        self.assertEqual(dr.VOLUMES["syslog"], ("logs",))
+        self.assertIn("syslog", dr.NETWORK_MODULES)
         self.assertTrue(any(not v["running"] for v in self.meta["containers"]))
+
+    def test_f12_private_state_cannot_disappear_from_a_full_backup(self):
+        source = self.source / "modules/f12/instances"
+        source.mkdir(parents=True)
+        dr.require_native_registries(self.source, {})
+        (source / str(uuid.uuid4())).mkdir()
+        with self.assertRaisesRegex(ValueError, "registry"):
+            dr.require_native_registries(self.source, {})
+        dr.require_native_registries(self.source, {"f12": {}})
+
+    def test_f12_library_and_each_published_edge_are_bound_to_the_selected_instance(self):
+        instance = self.add_module("f12")
+        main = self.meta["containers"][-1]
+        prefix, segment = main["name"], "a" * 64
+        edge = {**main, "id": digest(prefix + "-edge"), "name": prefix + "-edge-" + segment,
+                "bindings": {"8080/tcp": [{"HostIp": "192.0.2.20", "HostPort": "18080"}]}}
+        self.meta["containers"].append(edge)
+        self.meta["native"]["f12"]["instances"][0]["containers"].append({"name": edge["name"], "role": "server"})
+        subnet = "172.30.240.0/28"
+        self.meta["networks"].append({"name": prefix + "-net", "id": digest(prefix), "subnet": subnet,
+            "labels": {"pl.installation": self.installation, "pl.module": "f12", "pl.instance": instance,
+                       "pl.module.network.version": "1", "pl.module.network.subnet": subnet},
+            "gateway": "172.30.240.1", "internal": False})
+        self.build_backup()
+        dr.validate_networks(self.meta)
+        self.assertIn(prefix + "-data", {v["name"] for v in self.meta["volumes"]})
+        for obj, key, value in ((edge, "bindings", {}), (edge, "name", prefix + "-edge-extra"),
+                                (edge, "bindings", {"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "18080"}]}),
+                                (main, "bindings", edge["bindings"]), (self.meta, "networks", self.meta["networks"][:-1])):
+            with self.subTest(key=key, value=value), patch.dict(obj, {key: value}), self.assertRaises(ValueError):
+                dr.validate_metadata(self.meta)
+
+    def test_syslog_recovery_checks_the_actual_receiver_transport_and_private_api(self):
+        self.add_module("syslog")
+        ports = self.meta["containers"][-1]["bindings"]
+        recovery = self.recovery()
+        recovery.host.run.return_value = b"[]"
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as occupied:
+            occupied.bind(("127.0.0.1", 0))
+            receiver = [{"HostIp": "127.0.0.1", "HostPort": str(occupied.getsockname()[1])}]
+            ports["1514/tcp"] = receiver
+            recovery.preflight_target()
+            ports["1514/udp"] = receiver
+            self.build_backup()
+            with self.assertRaisesRegex(ValueError, "port is unavailable"):
+                recovery.preflight_target()
+        recovery.preflight_target()
+        for changed in ({"9428/tcp": [{"HostIp": "0.0.0.0", "HostPort": ""}]},
+                        {"9428/tcp": receiver}, {"1514/tcp": [{"HostIp": "127.0.0.2", "HostPort": receiver[0]["HostPort"]}]},
+                        {"1514/udp": [{"HostIp": "0.0.0.0", "HostPort": "514"}]}, {"1515/udp": receiver}):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                dr.validate_bindings("syslog", {**ports, **changed})
+        with self.assertRaises(ValueError):
+            dr.validate_bindings("syslog", {"1514/udp": receiver})
+        with self.assertRaises(ValueError):
+            dr.validate_bindings("sftpgo", {"1514/udp": receiver})
+
+    def test_syslog_contract_keeps_fixed_tcp_and_udp_receivers_during_update_and_restore(self):
+        upgrade = dr.helper("module-upgrade")
+        ports = {"1514/tcp": [{"HostIp": "127.0.0.1", "HostPort": "514"}],
+                 "1514/udp": [{"HostIp": "127.0.0.1", "HostPort": "514"}],
+                 "9428/tcp": [{"HostIp": "127.0.0.1", "HostPort": ""}]}
+        obj = {"Id": "e" * 64, "Config": {"Labels": {"pl.module": "syslog"}}, "HostConfig": {"PortBindings": ports}}
+        for fingerprint in (dr.container_contract, lambda value: upgrade._fingerprint(value, "syslog")):
+            baseline = fingerprint(obj)
+            for port in ("1514/tcp", "1514/udp"):
+                changed = copy.deepcopy(obj)
+                changed["HostConfig"]["PortBindings"][port][0]["HostPort"] = "1514"
+                self.assertNotEqual(fingerprint(changed), baseline)
+            allocated = copy.deepcopy(obj)
+            allocated["NetworkSettings"] = {"Ports": {"9428/tcp": [{"HostIp": "127.0.0.1", "HostPort": "40000"}]}}
+            self.assertEqual(fingerprint(allocated), baseline)
 
     def test_core_network_set_includes_canonical_api_egress(self):
         self.build_backup()

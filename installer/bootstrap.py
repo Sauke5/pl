@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "disaster-recovery.py", "disaster-recovery.ru.md", "module-controller.py", "log-export.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
+FILES = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt", "source.tar.gz", "README.md", "maintenance.py", "disaster-recovery.py", "disaster-recovery.ru.md", "module-controller.py", "log-export.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "icmp-probe.py", "icmp-install.py", "install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem"}
 REQUIRED = {"bootstrap.py", "images.tar", "nginx.conf", "LICENSES.txt"}
 
 
@@ -108,7 +108,7 @@ def manifest(package: Path) -> dict:
     if m.get("architecture") != arch:
         raise ValueError("Package CPU architecture does not match this host")
     features = m.get("features", {})
-    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume", "log_export"} or any(type(v) is not bool for v in features.values()):
+    if not isinstance(features, dict) or set(features) - {"local_users", "module_controller", "xray_module", "alertmanager_module", "wayline_module", "grafana_module", "forms_module", "doska_module", "sftpgo_module", "netmap_module", "bookstack_module", "connector_credentials", "icmp_probe", "on_demand_modules", "upgrade_status", "module_upgrades", "verified_native_resume", "log_export", "syslog_controller", "f12_controller", "ocserv_controller"} or any(type(v) is not bool for v in features.values()):
         raise ValueError("Unsupported core package features")
     if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
         raise ValueError('Verified native resume requires the finite update and ICMP worker entrypoints')
@@ -116,9 +116,14 @@ def manifest(package: Path) -> dict:
         raise ValueError('Installed module upgrades require their finite host helper')
     if features.get("on_demand_modules"):
         payloads = {"install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "module-controller.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py"}
+        for module in ("syslog", "f12", "ocserv"):
+            if features.get(module + "_controller"):
+                payloads.add(module + "-controller.py")
         if (m.get("schema") != 2 or not features.get("module_controller") or not isinstance(m.get("files"), dict) or not payloads <= m["files"].keys()
                 or any(features.get(name + "_module") for name in ("xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack"))):
             raise ValueError("On-demand core requires its finite delivery controllers without bundled modules")
+    if any(features.get(module + "_controller") for module in ("syslog", "f12", "ocserv")) and not features.get("on_demand_modules"):
+        raise ValueError("Optional controller requires on-demand module delivery")
     if features.get("connector_credentials") and m.get("schema") != 2:
         raise ValueError("Connector credentials require a schema-2 package")
     files = m.get("files", {})
@@ -1238,7 +1243,7 @@ def prepare_module_image_descriptor(rt: Runtime) -> None:
         if path.exists():
             existing = read_json(path)
             if rt.m.get("features", {}).get("on_demand_modules"):
-                modules = {"prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack"}
+                modules = {"prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack", "syslog", "f12", "ocserv"}
                 if (any(existing.get(key) != value for key, value in descriptor.items())
                         or set(existing) - set(descriptor) - modules):
                     raise ValueError("Module image descriptor differs; upgrade is a separate operation")

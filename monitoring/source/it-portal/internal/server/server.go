@@ -153,6 +153,9 @@ func (s *Server) Handler() http.Handler {
 		}, false))
 	}
 	s.registerSFTPGoModuleRoutes(m)
+	s.registerSyslogModuleRoutes(m)
+	s.registerOcservRoutes(m)
+	s.registerF12Routes(m)
 	s.registerProviderBrowseRoutes(m)
 	s.RegisterSettingsWorkspace(m)
 	s.RegisterADSettingsRoutes(m)

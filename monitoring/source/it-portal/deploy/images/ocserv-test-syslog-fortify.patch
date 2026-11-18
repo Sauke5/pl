@@ -1,0 +1,47 @@
+Description: Capture fortified syslog calls in the test logging shim
+ Debian hardening redirects syslog to the glibc checked entry point.
+ Record both entry points and forward them to the original libc APIs.
+ This patch changes only the test shim.
+Origin: vendor, PL
+Forwarded: no
+Last-Update: 2026-11-18
+
+--- a/tests/syslog-shim.c
++++ b/tests/syslog-shim.c
+@@ -95 +95 @@
+-void syslog(int priority, const char *format, ...)
++static void record_message(int priority, const char *format, va_list args)
+@@ -100 +99,0 @@
+-	va_list args;
+@@ -105 +103,0 @@
+-		va_start(args, format);
+@@ -107 +104,0 @@
+-		va_end(args);
+@@ -120,0 +118,10 @@
++}
++
++void syslog(int priority, const char *format, ...)
++{
++	va_list args;
++
++	va_start(args, format);
++	record_message(priority, format, args);
++	va_end(args);
++
+@@ -125,0 +133,16 @@
++
++#if defined(__GLIBC__) && __USE_FORTIFY_LEVEL > 0
++/* glibc redirects calls from fortified binaries to this entry point. */
++void __syslog_chk(int priority, int flag, const char *format, ...)
++{
++	va_list args;
++
++	va_start(args, format);
++	record_message(priority, format, args);
++	va_end(args);
++
++	va_start(args, format);
++	__vsyslog_chk(priority, flag, format, args);
++	va_end(args);
++}
++#endif

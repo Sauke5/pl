@@ -260,6 +260,15 @@ func (s *Store) Delete(ctx context.Context, kind, id string, revision int64, act
 	return tx.Commit(ctx)
 }
 func record(ctx context.Context, db DB, kind, title, resource, actor string, details map[string]any, audit bool) error {
+	return recordEvent(ctx, db, "", kind, title, resource, actor, details, audit)
+}
+
+// AuditOnce identifies a retried operation by its stable server-derived ID.
+func (s *Store) AuditOnce(ctx context.Context, id, kind, title, resource, actor string, details map[string]any) error {
+	return recordEvent(ctx, s.Pool, id, kind, title, resource, actor, details, true)
+}
+
+func recordEvent(ctx context.Context, db DB, id, kind, title, resource, actor string, details map[string]any, audit bool) error {
 	if audit {
 		var err error
 		details, err = recordAuditContext(ctx, db, kind, resource, details)
@@ -267,7 +276,11 @@ func record(ctx context.Context, db DB, kind, title, resource, actor string, det
 			return err
 		}
 	}
-	ev := model.Event{ID: uuid.NewString(), Kind: kind, Title: title, ResourceID: resource, Actor: actor, CreatedAt: time.Now().UTC(), Details: details}
+	conflict := " ON CONFLICT (id) DO NOTHING"
+	if id == "" {
+		id, conflict = uuid.NewString(), ""
+	}
+	ev := model.Event{ID: id, Kind: kind, Title: title, ResourceID: resource, Actor: actor, CreatedAt: time.Now().UTC(), Details: details}
 	// Keep the stable actor ID for audit and a display-name snapshot for readers.
 	if actor != "" {
 		e := db.QueryRow(ctx, "SELECT user_name FROM sessions WHERE user_id=$1 ORDER BY expires_at DESC LIMIT 1", actor).Scan(&ev.ActorName)
@@ -279,7 +292,7 @@ func record(ctx context.Context, db DB, kind, title, resource, actor string, det
 	if audit {
 		table = "audit_events"
 	}
-	_, e := db.Exec(ctx, "INSERT INTO "+table+"(id,body) VALUES($1,$2)", ev.ID, encode(ev))
+	_, e := db.Exec(ctx, "INSERT INTO "+table+"(id,body) VALUES($1,$2)"+conflict, ev.ID, encode(ev))
 	return e
 }
 func (s *Store) Event(ctx context.Context, kind, title, resource, actor string, details map[string]any, audit bool) error {

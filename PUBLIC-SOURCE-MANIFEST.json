@@ -15889,6 +15889,111 @@
       "size": 3319
     },
     {
+      "path": "apps/f12/bootimus.py",
+      "sha256": "98bbd9169009fc68a145ed55ac8d34633565272ce65c65b1ba8e5882429b3680",
+      "size": 9085
+    },
+    {
+      "path": "apps/f12/gateway.py",
+      "sha256": "83f99944cddaf6eba4befe7c759471b0c94936e7c7f4913ca7a76fa4ec87702e",
+      "size": 14188
+    },
+    {
+      "path": "apps/f12/library.py",
+      "sha256": "186f9f19a4615bfe3531b19459f4c90cab76187aff84feda4dab90774a101617",
+      "size": 17749
+    },
+    {
+      "path": "apps/f12/media.py",
+      "sha256": "df98262dbf19cff593543855fc3aa36d26e3d0089da73d763e542d9d612a438a",
+      "size": 9668
+    },
+    {
+      "path": "apps/f12/native.py",
+      "sha256": "7cb698e3c3bbd51136a74f68ed947d2baf89d62ce36eaf8008aa102c89caf302",
+      "size": 12982
+    },
+    {
+      "path": "apps/f12/pxe/dhcp.go",
+      "sha256": "b1e82b49f0c8966c71bdc92de0b894faa7b5618235bc23468e0ed59091a144a1",
+      "size": 5212
+    },
+    {
+      "path": "apps/f12/pxe/main.go",
+      "sha256": "e21e9d59d88c35095f91187ba07087bb04059002d8d18e8f3e8f3fedb7fcbeb8",
+      "size": 4933
+    },
+    {
+      "path": "apps/f12/pxe/tftp.go",
+      "sha256": "3d3e692442920328f406436a70468ac0927d9499f39cbcdce7320acf96923d71",
+      "size": 5679
+    },
+    {
+      "path": "apps/f12/pxe/worker_test.go",
+      "sha256": "403ad5a88a02752dd54d37132cb613130579991d117a2436ddc856850ec56fba",
+      "size": 6649
+    },
+    {
+      "path": "apps/f12/pxe_control.py",
+      "sha256": "e7cbabf5811ac6ca9d8beda6832aa3f5f1280d152a97742c1207fd82f9b9f00e",
+      "size": 10844
+    },
+    {
+      "path": "apps/f12/strelec/build.sh",
+      "sha256": "9c1e718b546ecf14d3357c32f54316f6c69b0e92b5cb203b9b1b2b1a5aaf85ea",
+      "size": 521
+    },
+    {
+      "path": "apps/f12/strelec/iso_http.c",
+      "sha256": "2fd1419e585604411c78d6f79f6910cc235d191d589cbeb78e60d0e3f05881a9",
+      "size": 6623
+    },
+    {
+      "path": "apps/f12/strelec/iso_http.h",
+      "sha256": "82a55c4258a976479fcb6ca1ee45bdf2d13f84c3c70dff178331b48afae79c79",
+      "size": 494
+    },
+    {
+      "path": "apps/f12/strelec/media.c",
+      "sha256": "3077be1999cbbb42d699b251649f2bd758bfca78451c6e6a034aa129d90c2dab",
+      "size": 14665
+    },
+    {
+      "path": "apps/f12/strelec/winpeshl.ini",
+      "sha256": "eacc39adc7e171e51bb5519564192ea3d909315f54745735ade6e319889d01ec",
+      "size": 84
+    },
+    {
+      "path": "apps/f12/strelec_media.py",
+      "sha256": "834e828e029b64ddaf4fc7e5a1504e4100316301e84cd64c71f93945d5e5b288",
+      "size": 15595
+    },
+    {
+      "path": "apps/f12/uploads.py",
+      "sha256": "8f41b0e86e68b35fe401ab9cea50b651e0e64958308914741f7b4a5d2562bf8b",
+      "size": 14851
+    },
+    {
+      "path": "apps/f12/winpe/F12Media.cs",
+      "sha256": "c7eb10f3021b9ee38c64861744f1b4a646bca681dac5d872f76ac4c3d85d9d1f",
+      "size": 9510
+    },
+    {
+      "path": "apps/f12/winpe/pl-f12.cmd",
+      "sha256": "62c5168eb7628b01e1091ed6707962b2d3aa1d16f0b56bbdf2ff1c82ac6169e7",
+      "size": 368
+    },
+    {
+      "path": "apps/f12/winpe/winpeshl.ini",
+      "sha256": "f8bba2f05d5646fb4f2d51a0d667fca198509db022a7c236100dae5fa76677f3",
+      "size": 95
+    },
+    {
+      "path": "apps/f12/winpe_profile.py",
+      "sha256": "0efa1a2421532619af986f3d02c6b11a798e5df55f40d67da3700f3a7854dbaf",
+      "size": 4479
+    },
+    {
       "path": "apps/file-auditor/FileStructureAuditor.sln",
       "sha256": "aed9244fabb17fb0e199d961475c99fa57fadea333d853e300e85f1483629b37",
       "size": 3141
@@ -16589,6 +16694,31 @@
       "size": 1687
     },
     {
+      "path": "apps/ocserv/README.ru.md",
+      "sha256": "07c01a8e545e3eafed7aeb53a0807031ccab4fb6adf657a64d5177070874705e",
+      "size": 6167
+    },
+    {
+      "path": "apps/ocserv/gateway.py",
+      "sha256": "62abad7ad37f8fb120bba55abb6844b45f682ba19f4c9ed0c57df9dd93dfd67c",
+      "size": 11053
+    },
+    {
+      "path": "apps/ocserv/pl-ocserv",
+      "sha256": "a9e1ad044b7d45dbab50a194b32611c2952c636db806b58a856964cd96992a85",
+      "size": 66
+    },
+    {
+      "path": "apps/ocserv/policy.py",
+      "sha256": "1a421e430585563bee08fd22cb6054d34a56343878adcdd0c55ae9b7e17e4594",
+      "size": 9937
+    },
+    {
+      "path": "apps/ocserv/runtime.py",
+      "sha256": "f4d17a3a686a7126b495d4c2718e39761fc7c59af509d0e6f58e2ee65bafd063",
+      "size": 10373
+    },
+    {
       "path": "apps/wayline/backend/cmd/wayline-runner/main.go",
       "sha256": "5383bcde2bd2e4938fc690ddbadf407886a347cddad046c78b08c04fe8b71590",
       "size": 1686
@@ -16979,9 +17109,14 @@
       "size": 2714
     },
     {
+      "path": "docs/releases/0.9.0.json",
+      "sha256": "88d5ede1418bc338c357a52266a2cf9be89acc685b4ade04f7bfedbef4c33af3",
+      "size": 2615
+    },
+    {
       "path": "installer/LICENSES.txt",
-      "sha256": "44cdc7afa16f4683c601409bb2512ccb145e9e143811ac52c71fb0817e302505",
-      "size": 3327
+      "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
+      "size": 4618
     },
     {
       "path": "installer/README.package.ru.md",
@@ -17010,8 +17145,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "836b72af370e285451adb6aebdc196fbbfca20afcd401aeb135ac15dd0923382",
-      "size": 97482
+      "sha256": "1e2ce1bbcdea4e14d9fe340f88e5f75f23da2d7d28b9fbe5cc7c0ebeb1180ed9",
+      "size": 98015
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -17020,8 +17155,8 @@
     },
     {
       "path": "installer/core-modules.ru.md",
-      "sha256": "476948aff2a530e0d4c773fedb786900b9f698c4ed20e116e1544554e9ad06a1",
-      "size": 16039
+      "sha256": "ea11846cbad53db1dd3156e24c5f36c901fcf107c326650b5fec825e8009fc6d",
+      "size": 21925
     },
     {
       "path": "installer/delivery-proxy.py",
@@ -17030,8 +17165,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "1de173c0b0cc095afcc35ac4f2d6910770f9994eb91360fc5e217c23f5d2dab1",
-      "size": 122904
+      "sha256": "b9fefffc511dbc09406a6b5c509de14e6300f5c18a82a2f96d7a33b287bbc9e5",
+      "size": 128393
     },
     {
       "path": "installer/delivery.ru.md",
@@ -17040,18 +17175,23 @@
     },
     {
       "path": "installer/disaster-recovery.py",
-      "sha256": "c7f267238ab7044bbb6fff031570b18af3a5565d77102c8367e4d40ed46b012e",
-      "size": 129255
+      "sha256": "f9af0a23018bb59f30bf30dc327fdfed7a8e93039ccd823b6ab5ee5277496a87",
+      "size": 136119
     },
     {
       "path": "installer/disaster-recovery.ru.md",
-      "sha256": "549ca2279f9c240d35bccef5134958b5f427bed04675d33940228bbe6deae49f",
-      "size": 18420
+      "sha256": "1c892caa406f3606c76715408a62674f1ce7ae24f7d143b20fd28e4b4597b9c9",
+      "size": 19447
     },
     {
       "path": "installer/doska-controller.py",
       "sha256": "12be1041351d033c1fe2201ca25d0d8ffc3bbdf36e9d9ab99c624865b3d8b8fd",
       "size": 45770
+    },
+    {
+      "path": "installer/f12-controller.py",
+      "sha256": "807a3d0fc2e5717776d619378c313feb622ff0cfa623ebb1b99fb8111bebe57a",
+      "size": 55641
     },
     {
       "path": "installer/forms-controller.py",
@@ -17105,8 +17245,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "9aed31ccfeb097009e473604d7b6c0f44f2e4a951d53fa2f9e1f67d8ef029c4a",
-      "size": 47055
+      "sha256": "465a9df8882ed7fd2e1357567adca69fec6f81279c12f20a543831f23e8fa1af",
+      "size": 47659
     },
     {
       "path": "installer/installation-settings.py",
@@ -17120,8 +17260,8 @@
     },
     {
       "path": "installer/log-export.py",
-      "sha256": "b5e33083cf95fd93753fd0ee4fd00442cfd22167ff6b785aca79c56ad77790a2",
-      "size": 19213
+      "sha256": "b964bdcb8c2db322683c1d866f790139a3eac6023f5a0fedb9f089cf02a102e2",
+      "size": 19240
     },
     {
       "path": "installer/maintenance.py",
@@ -17135,13 +17275,13 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "24e5155b70c0b33fd3219b4a689b6fabfd79f8046fe2902fa1cbb0c2c08a42a4",
-      "size": 92452
+      "sha256": "76bebc93af79a66d59e4280017ee9db20027b0af79d22aaedf4233e7b0409ab8",
+      "size": 98405
     },
     {
       "path": "installer/module-network.py",
-      "sha256": "ecd4109cbf1328ab00f635da3c7326b2b22f4024df359a1dda26520a3ef24819",
-      "size": 7365
+      "sha256": "73e8b1b00624b597c06bdc46bb396d54018c67b4f6b2b42e722f685cc387dc80",
+      "size": 7996
     },
     {
       "path": "installer/module-origin.py",
@@ -17150,8 +17290,8 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "08692e40e8571543d75d9e169f9adeaf5867bc5f209bf1906fd38a226db758de",
-      "size": 41007
+      "sha256": "762debffd8497c9488fdae408e955157ac569f740386fb799e2836a8b2be9512",
+      "size": 47217
     },
     {
       "path": "installer/netmap-controller.py",
@@ -17179,9 +17319,14 @@
       "size": 18862
     },
     {
+      "path": "installer/ocserv-controller.py",
+      "sha256": "56a0df52da6446c4c7c41ea163a7a217270d2007fcf5ffbaa35b17341e440422",
+      "size": 23502
+    },
+    {
       "path": "installer/package.py",
-      "sha256": "bc69956de92b5175dbca7cac2e8813a938123f1d6fd32f737b74fd3856370c24",
-      "size": 37345
+      "sha256": "474e4c6a4522bde201df30ddb60265b6eb8a39ba39b4bedee9177240ab37f306",
+      "size": 39675
     },
     {
       "path": "installer/platform-guide.ru.md",
@@ -17190,13 +17335,13 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "98a0b9f71543ae60b6f86aa294d8b5b776175bac7134cc30c6961a8d2461122b",
-      "size": 35389
+      "sha256": "057dac6158137691ee45980e200190596bb8836999b2110deb8de8e7919daccf",
+      "size": 36062
     },
     {
       "path": "installer/release-catalog.py",
-      "sha256": "c97be8cf1a49db00262fd64d6d52e5dbc2a14351b486bfdfe705705ad7887433",
-      "size": 5655
+      "sha256": "150039fee0fd875024c88ef382f985626b8ac83d4cfd79d1cb4b229c0952883e",
+      "size": 5951
     },
     {
       "path": "installer/release-signing-public.pem",
@@ -17207,6 +17352,11 @@
       "path": "installer/sftpgo-controller.py",
       "sha256": "ddf77fc3b9192297a2ed404b364976e3810c6f1e2562c03d31f7d4ab27a7fb64",
       "size": 63776
+    },
+    {
+      "path": "installer/syslog-controller.py",
+      "sha256": "3bed2b9207b304e7ec0afedc896fb3d6872d9230dcd0fd84db9e802d8c33ea0e",
+      "size": 37094
     },
     {
       "path": "installer/tests/test_alertmanager_controller.py",
@@ -17260,8 +17410,8 @@
     },
     {
       "path": "installer/tests/test_delivery.py",
-      "sha256": "a662f17f325bf110ef688cff8ccf9cb96011135ed666e58a3d39f3a57d4dcb1d",
-      "size": 44237
+      "sha256": "501497210a16fa2e4ded9492d535a8455c1a2e4ddae2d10904e2b92fe14c7027",
+      "size": 48332
     },
     {
       "path": "installer/tests/test_delivery_concurrency.py",
@@ -17275,8 +17425,8 @@
     },
     {
       "path": "installer/tests/test_disaster_recovery.py",
-      "sha256": "1ac6087376ab6ba3f357f3dd529b93443947c1b82b132619d507b5a598572c55",
-      "size": 84067
+      "sha256": "71831b6b65db6af907f5dcc0f589f1af3addd64d78970b7aaa0825fccd307fb1",
+      "size": 89118
     },
     {
       "path": "installer/tests/test_disaster_recovery_history.py",
@@ -17292,6 +17442,16 @@
       "path": "installer/tests/test_doska_stream_cancellation.py",
       "sha256": "a0f01670efa9912f254a02e395c1e37ec936f3b7078e8623f13b9c0813b7a3bb",
       "size": 4812
+    },
+    {
+      "path": "installer/tests/test_f12_controller.py",
+      "sha256": "022331a7c6e349c0dcc531d1065db6d25d821cce31f954b5153046e3fc5ff798",
+      "size": 24037
+    },
+    {
+      "path": "installer/tests/test_f12_package.py",
+      "sha256": "186d8610110d10642cd7466ba4d546b905cba2b7cd3d593bf54c94e3fb25f73b",
+      "size": 6872
     },
     {
       "path": "installer/tests/test_forms_controller.py",
@@ -17395,8 +17555,8 @@
     },
     {
       "path": "installer/tests/test_log_export.py",
-      "sha256": "7e009e57d78197863619bb0809380f92f4a1dd0b4560182f4e20cc6d8f130d57",
-      "size": 13533
+      "sha256": "f4511ff9c6a435a1b4cc4c7a54a881fede62b7a06f05120e8932eb6f6f563eb4",
+      "size": 13827
     },
     {
       "path": "installer/tests/test_maintenance.py",
@@ -17415,8 +17575,8 @@
     },
     {
       "path": "installer/tests/test_minimal_package.py",
-      "sha256": "7447221b021c7a4ce2b620dcf168b972c3e35e11f3777b916afa22098f41c663",
-      "size": 16906
+      "sha256": "df5908f3e7c3db031e5d3c788d1bd75da62cff68b659e277e7eb7fe6dc6c136d",
+      "size": 18963
     },
     {
       "path": "installer/tests/test_module_controller.py",
@@ -17445,8 +17605,8 @@
     },
     {
       "path": "installer/tests/test_module_upgrade.py",
-      "sha256": "7c604e171445a53ce7fdd8337f10a687f02ffe76663d8be9bdc8f12ac99dc364",
-      "size": 44962
+      "sha256": "100fa6356e764414f4e94e25c6d4a413be4512864c06d747ea8160798dd83f5a",
+      "size": 48008
     },
     {
       "path": "installer/tests/test_native_initial_login.py",
@@ -17539,9 +17699,19 @@
       "size": 3188
     },
     {
+      "path": "installer/tests/test_ocserv_controller.py",
+      "sha256": "eff918cfe26d356f4e0896793d338c8a21d80d53ae8456fd2b3f1f86088c3d29",
+      "size": 8861
+    },
+    {
+      "path": "installer/tests/test_ocserv_package.py",
+      "sha256": "9f4b13dda715f4460b1347439d41fe5680e1167d219aef910b1ee4e3a944bc11",
+      "size": 3354
+    },
+    {
       "path": "installer/tests/test_package.py",
-      "sha256": "98ec6e587a70b8c1f817bd2061845e4b04fa8e040fd3187392eca48718885135",
-      "size": 9017
+      "sha256": "ebcb85166418a66a5c79e8d9657233562db5de99ac4940b2c9f20388b8dbb959",
+      "size": 9403
     },
     {
       "path": "installer/tests/test_portable_ui_icmp.py",
@@ -17555,8 +17725,8 @@
     },
     {
       "path": "installer/tests/test_public_export.py",
-      "sha256": "4ff50b6728519021fcfa11199750b28bfb6edc436506f72608cd68b42e6be01d",
-      "size": 15713
+      "sha256": "c5e13cb059c8a4c8341740e5da3451e638a06a43fe976261a3c320f8f2ebca0f",
+      "size": 16748
     },
     {
       "path": "installer/tests/test_reports_portability.py",
@@ -17577,6 +17747,11 @@
       "path": "installer/tests/test_sftpgo_package.py",
       "sha256": "d05bf65d60cbbee5bf1e3898306063702131e82ac92255b3ea0d31118d65b81a",
       "size": 14205
+    },
+    {
+      "path": "installer/tests/test_syslog_controller.py",
+      "sha256": "40e8c5a2fda0d9e9e583884acb7d4de7bbe8d25530f3253e99332c3574703c0b",
+      "size": 25424
     },
     {
       "path": "installer/tests/test_upgrade_status.py",
@@ -17804,6 +17979,51 @@
       "size": 1848
     },
     {
+      "path": "monitoring/source/it-portal/deploy/images/f12-origin.py",
+      "sha256": "585e2d0e3a56698855069bee641064b7353373e8530fcb86d7e7a9bf43d7df2c",
+      "size": 2725
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12-runtime.json",
+      "sha256": "a356e24b027fb632432605f4c2152d004091c08d65d7fd316cf59c922cb3cd6c",
+      "size": 27927
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12-source-lock.json",
+      "sha256": "9ad0b13fd725f618ba73f15b20a27f0a5f634f784670719085b9e797ccce44cf",
+      "size": 224412
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12-sources.py",
+      "sha256": "1f314b0e7939043a8434bf0f278af717c9ac779f9d64a229a95a2efb55ce0073",
+      "size": 3104
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12-wimboot-e587564.tar.gz",
+      "sha256": "7c1f0216ecf66e5a2e6afe0bcfa01bca82399a7c749e5a44f3495083a6b8b54d",
+      "size": 664293
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12-wimboot-sstr.patch",
+      "sha256": "a22422b4656b5a53dc6aed66ba999a160ebaec9291c1038aa1848821337133d8",
+      "size": 747
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12.Dockerfile",
+      "sha256": "bda3d96d0cd89bfd7ccb00579ba52126c8e15dd94765c813adbc23b72c282a1a",
+      "size": 7707
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12.LICENSE",
+      "sha256": "e3fe34e558b89af80e0c5763283c843981dc1e0c086c203a926945c2b049a7dd",
+      "size": 536625
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/f12.sources.json",
+      "sha256": "d1267ddfed53bf5f62f9ff9a86b643e04391ef1d333a6f903d11daf2af2e70fc",
+      "size": 1921
+    },
+    {
       "path": "monitoring/source/it-portal/deploy/images/forms.Dockerfile",
       "sha256": "d3e98928a408c916d0f6e55ba1c5d6c19fb3ab436195575196d67ad038aef518",
       "size": 4004
@@ -17832,6 +18052,31 @@
       "path": "monitoring/source/it-portal/deploy/images/netmap.sources.json",
       "sha256": "2003ef613e4e15820a2b89d732959dee291fcc95eb19e0898db7b3283e58b696",
       "size": 4667
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/ocserv-dex-id-token.patch",
+      "sha256": "cef09770d0574bfb7d2a873d90d11fb64ffceda5b5898c0afb13f80cfa9bc2ad",
+      "size": 1176
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/ocserv-test-syslog-fortify.patch",
+      "sha256": "7db13e23a900ba122af9bc43f16775babe45a3b9827f83a1bf938c4b0b74625a",
+      "size": 1221
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/ocserv.Dockerfile",
+      "sha256": "b09a1286da6d0e92cad5d86bddf295dc600f053ce0ef6dd7e1f2476fea73f44a",
+      "size": 5414
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/ocserv.LICENSE",
+      "sha256": "6ecf5def76c9eeb173fcd1bfeaf45d2259d6811513fbf3fac717089885ac35ca",
+      "size": 446
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/ocserv.sources.json",
+      "sha256": "5dab73305ceb1c1aeefb1ad67c2e87876f33d872c9086dd0c19a9ce1ecf2fbdf",
+      "size": 1216
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/postgres.Dockerfile",
@@ -17867,6 +18112,21 @@
       "path": "monitoring/source/it-portal/deploy/images/sftpgo.sources.json",
       "sha256": "0416ef79da9d0c64ca4088bc025bd315a3e7d8b2072fefd5d8c39cc94188eaba",
       "size": 2388
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/syslog.Dockerfile",
+      "sha256": "74bc56156217557e759eaf9bb5ca8665e48069133baeb61fb98aa3ff6c7f1a18",
+      "size": 666
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/syslog.LICENSE",
+      "sha256": "778f2412aa6e874bf0e2482e17a119ea53ba508ae6ddd924859a1f32f6e2740f",
+      "size": 10739
+    },
+    {
+      "path": "monitoring/source/it-portal/deploy/images/syslog.sources.json",
+      "sha256": "59f9f59006d88bca05e22da4c9ab6c2b03e0b1fd4d6df04ac12027cbd5425532",
+      "size": 1054
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/wayline.Dockerfile",
@@ -18159,6 +18419,11 @@
       "size": 42075
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/F12Module.tsx",
+      "sha256": "e10d1e06fc1b42995edc2180dcac41fb156b55bc90b7f4966d58dd4e9ec299e5",
+      "size": 25573
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/FilesModule.tsx",
       "sha256": "0fc0bd8a019250dcf8a5a1b9f0928eb698b782b7c3b04f5a2eab35ff8fa1bac8",
       "size": 2998
@@ -18225,8 +18490,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Modules.tsx",
-      "sha256": "11ceac608ec14807bb7841dfc270b6f89d64cbdca1d85acf03979f5f58b7bc69",
-      "size": 97731
+      "sha256": "32d6527f0dadb06f14350722fd127b753b9e22585a9653bc5c96e7e7799a75b8",
+      "size": 106587
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Monitoring.tsx",
@@ -18257,6 +18522,26 @@
       "path": "monitoring/source/it-portal/frontend/src/Observations.tsx",
       "sha256": "bb19ac26856721139759a3614ee39a9a19f30605a20bb38fb38d75e6c36cb33f",
       "size": 24414
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/OcservEditor.tsx",
+      "sha256": "b718822aaf332d0bc23e14b0765bc2a92852c28db00e0808773239a821ad29d3",
+      "size": 14536
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/OcservEmployees.tsx",
+      "sha256": "4cba72a439f2cfeca016ac52524231a36f1c473a472602029a735fff83ec2c31",
+      "size": 15609
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/OcservModule.tsx",
+      "sha256": "0436c5fa96ba094a269ecbb3b53210caa395637fd271b574243c6e059d86f82f",
+      "size": 11426
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/OcservProfiles.tsx",
+      "sha256": "33a216774650924e2c4b34dfe2ce89631ed6fe3def0ed3ef35ea5f3c8c1cb4fa",
+      "size": 10135
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Operations.tsx",
@@ -18305,8 +18590,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ResourceDetails.tsx",
-      "sha256": "10447cd3bf776b8b890d688d8670266874f170bfae8089c5ff6b9f4c90528819",
-      "size": 19226
+      "sha256": "ae18f827b714e827b4a84f71d82fc7977c093c3865b7b1dcd132e1cfec27adf4",
+      "size": 21439
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ResourceEditor.tsx",
@@ -18347,6 +18632,16 @@
       "path": "monitoring/source/it-portal/frontend/src/Settings.tsx",
       "sha256": "0ce663448615042411ca7a2472c1d50b48644ebdfb016121085abfed582b2c0d",
       "size": 21093
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/SyslogModule.tsx",
+      "sha256": "bdcf7d4cf40a9d93ef2fad8e9ab797b606eea3ff19d9f54022d80668d7eed00d",
+      "size": 18859
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/SyslogReceiver.tsx",
+      "sha256": "78ece3b89ab4630f75fa8629a926f026d38f9aafdf3ef3eeb31b7537c8938880",
+      "size": 12512
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Systems.tsx",
@@ -18410,8 +18705,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/WorkspaceProblems.tsx",
-      "sha256": "dd654d4c1411b4dd3a792ca088961b361e196411f1f23cea264159a0e6cc5135",
-      "size": 19118
+      "sha256": "2e98220e265b0e726f64736cf972f5356864c85cb0ecc1f51adcdb53d4ae91c5",
+      "size": 24097
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/XrayModule.tsx",
@@ -18435,8 +18730,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/api.ts",
-      "sha256": "b8485493919aeb6e3bed8b0b6f844f7e169c8b21dd6226c22e1da60b76b322d0",
-      "size": 4996
+      "sha256": "3bca2ccee11b97dcc358a18f13b9924ca0e1625eda258c3d11bfea142295bee5",
+      "size": 5204
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/auth-scenes.css",
@@ -18529,6 +18824,16 @@
       "size": 7436
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/f12-module.css",
+      "sha256": "ad2b3e06a4d5a5f66a03b34e7968b0bb4f1648a3727fea4722aee61cc0c88ce9",
+      "size": 2447
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/f12.ts",
+      "sha256": "ed69370ada4ecf63b8c4cd4962f3d1ac39a3d3d867aa03cbd5e86745a72a0d33",
+      "size": 3949
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/helpTopics.ts",
       "sha256": "9bbfaa61509fe3bc02ff081f43c7d60a2843615411ebe92945f00f231e70759e",
       "size": 20374
@@ -18570,8 +18875,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/modules.css",
-      "sha256": "460c9ca921703400bd50cf032024f8cca67d04150ea2c8c2513d64b87ece1d48",
-      "size": 13105
+      "sha256": "ad85ad9644282b42f37364078f5435de3ec330cd2d9cbeb47ab3a7a5c21ec856",
+      "size": 13231
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/monitoring-workspace.css",
@@ -18587,6 +18892,16 @@
       "path": "monitoring/source/it-portal/frontend/src/night-theme.css",
       "sha256": "890fe2c04a6228328dfe90fc387601a0a86e63e771a54dab9ba00555665ebf0b",
       "size": 51063
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/ocserv-module.css",
+      "sha256": "5481d06bdb6afb402c3f00fa4f8cf612bb0484801ce49cbad5964acc18cfe6e0",
+      "size": 6815
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/ocserv.ts",
+      "sha256": "9e0efcda2f57890711c1995d4854ff85e28efe31135c51ee437cd1a189229406",
+      "size": 3649
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/problemVisibility.ts",
@@ -18714,6 +19029,16 @@
       "size": 100107
     },
     {
+      "path": "monitoring/source/it-portal/frontend/src/syslog-module.css",
+      "sha256": "e4f333b7774dc1a0f32f38d5dae92477cd497621d6d8e99d1a585c6963f6543c",
+      "size": 4740
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/syslog.ts",
+      "sha256": "c21bf747a027f53e408f4eb5c04f31974d5c0e0b0cf227bcb77155f9f8d4ad01",
+      "size": 2219
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/src/types.ts",
       "sha256": "4d5717abe3a24d258c948aa9471bfd9465938b20376f8cfa973b693f55d7f571",
       "size": 6918
@@ -18785,8 +19110,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/catalog-resource-drawer.spec.ts",
-      "sha256": "6aa817ea840ad90c187eaa0bfe2c19a22a28fbdd0432a9cc2477220a207e301f",
-      "size": 17871
+      "sha256": "cdba6387f4a37523a40a37ed10df8e1d647e14acbed06311ed49d9b5c1abb06b",
+      "size": 20247
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/catalog-views.spec.ts",
@@ -18849,9 +19174,14 @@
       "size": 35238
     },
     {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/f12-module.spec.ts",
+      "sha256": "12eaf2e3600c49ac79c5eeef8fe4eea9f3943fb5b47b6f92c200aab6ad36e719",
+      "size": 21564
+    },
+    {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/favorites-layout.spec.ts",
-      "sha256": "4b6c8871a368592dc41e75fb8f5aee4b60811f873f4c56fd05ad363e6c6f6005",
-      "size": 23369
+      "sha256": "edc439a88922a4d2029ab8a43b5f798523d093dc0ed27ee47ee696b46bcf924f",
+      "size": 29986
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/help.spec.ts",
@@ -18900,8 +19230,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/module-catalog-install.spec.ts",
-      "sha256": "6a69c3e9efcb7c6e4927a6aa8153fc526046bdb810d66379272602f3ae893b6f",
-      "size": 9128
+      "sha256": "50d1aa3b2596812757676f77fe11a6f37e1b14ea39c0ce1df74f4199151140d0",
+      "size": 12897
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/module-initial-login.spec.ts",
@@ -18937,6 +19267,11 @@
       "path": "monitoring/source/it-portal/frontend/tests/e2e/night-theme.spec.ts",
       "sha256": "7796b03fc32b49c5a9b7161fa145e37e5e25b5d386b8400333c7c25bb988e27b",
       "size": 11368
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/ocserv-module.spec.ts",
+      "sha256": "462bc9ed6947cfbd2ef31653dca73166ca25bf5ce98c12099200a1330815343a",
+      "size": 15052
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/pl-merge.spec.ts",
@@ -19027,6 +19362,11 @@
       "path": "monitoring/source/it-portal/frontend/tests/e2e/shared-ui.spec.ts",
       "sha256": "ec5cb40e40d1461f3e5c5303d4ebf0cf51e214cfda6fbadf6c47febc35028924",
       "size": 10181
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/tests/e2e/syslog-module.spec.ts",
+      "sha256": "01a51e4ee7669d39ffb8ff6be4b3b00d62b016d7593f14f03d672f56f310e178",
+      "size": 14479
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/system-icons.spec.ts",
@@ -19180,8 +19520,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/model/module-catalog.json",
-      "sha256": "22ace121408da25f06c9be1b9ff97bf6c047c519d061e5a35bad7f5946881784",
-      "size": 8487
+      "sha256": "c3f10ada533ea11a4753171bb07ebd7f430e13410ae6bc2df28a288bb80ebaa5",
+      "size": 10782
     },
     {
       "path": "monitoring/source/it-portal/internal/model/module_catalog.go",
@@ -19195,8 +19535,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/model/module_timeouts.go",
-      "sha256": "b4162227c1d66dfbecb76d97c80f03aea057c1f8423ab35aa5493862e3007d2f",
-      "size": 994
+      "sha256": "0620e95489b3fcea8add4260d0a19e7673a7617c3d0859028a1e1612eeb032da",
+      "size": 1021
     },
     {
       "path": "monitoring/source/it-portal/internal/model/module_timeouts_test.go",
@@ -19320,8 +19660,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery.go",
-      "sha256": "057f971fca296b2076806b69a84f048697742d01fc730d50e83bdd7922d3b5fa",
-      "size": 6489
+      "sha256": "5f8e1351f3626e1076d94a936a4d3d84b3d17bf785627a1449e7fe439c9d0ab5",
+      "size": 6516
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/delivery_proxy.go",
@@ -19347,6 +19687,11 @@
       "path": "monitoring/source/it-portal/internal/modules/delivery_test.go",
       "sha256": "293fcecd3bc917531f018dfe69a2b493c0f81bfe03c035059175dd0e4bca75ab",
       "size": 8600
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/modules/f12.go",
+      "sha256": "c1f3b229676c6290d00dff0723097db3687312b786ab31e6b33dfc50e03d19c0",
+      "size": 3346
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/grafana.go",
@@ -19380,8 +19725,13 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/manager.go",
-      "sha256": "c72d1e610c85cf451b367fb7a53aafb6d9be4401735f2b0d30b5146c61baf4fa",
-      "size": 14749
+      "sha256": "13d0f791b53bcfd251b9cd0955ca0d822e0b4a32753193efa5056f65edab4df5",
+      "size": 14910
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/modules/native_control.go",
+      "sha256": "67a60d0c4124e7e4c04a310fbc3669d28a8be53a3751826293c964f2c0ce2830",
+      "size": 1282
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/native_login.go",
@@ -19414,6 +19764,11 @@
       "size": 9464
     },
     {
+      "path": "monitoring/source/it-portal/internal/modules/ocserv.go",
+      "sha256": "58a9c09d8006c793f6e3a2730e4eaa6fdb930d56742db8652914f741b3126d2f",
+      "size": 1777
+    },
+    {
       "path": "monitoring/source/it-portal/internal/modules/prometheus.go",
       "sha256": "7202284d429b6b6e47f9aeff6394ee0f43ea0c9d66af4e03e9d8a6622b39417c",
       "size": 6026
@@ -19437,6 +19792,11 @@
       "path": "monitoring/source/it-portal/internal/modules/sftpgo.go",
       "sha256": "e85ce438c9b2453ac7998782d3d68cee054d5d7ff09b2688664769c9aead8035",
       "size": 4453
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/modules/syslog.go",
+      "sha256": "a18023bfe60ae34ed4f0a8b5c9700751a14c862561d2f6235df7374bb0b607b4",
+      "size": 1425
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/wayline.go",
@@ -19735,8 +20095,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/settings_probe.go",
-      "sha256": "417e13c1d9d2d2393551a387fc30930b9bea8e1e4896c3f31ada9816e2d609e1",
-      "size": 13902
+      "sha256": "82dde342579c0581c8926e262e04170dcf8879a7a90db6da7c64c3cf67a73af8",
+      "size": 14028
     },
     {
       "path": "monitoring/source/it-portal/internal/providers/settings_probe_test.go",
@@ -19925,8 +20285,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/delivery.go",
-      "sha256": "ef2d7e8940a2d82e2837ccff7acafb5b934e1d8d17040d898bfe0b308da5c355",
-      "size": 8237
+      "sha256": "57f9ffea94bc68e43fbf9be52678594a0efc4900dbf9961f83e01c061cbad546",
+      "size": 8264
     },
     {
       "path": "monitoring/source/it-portal/internal/server/delivery_journal_test.go",
@@ -20227,6 +20587,16 @@
       "path": "monitoring/source/it-portal/internal/server/events_journal_test.go",
       "sha256": "1d28cfe7916f3eebd12a75dbaed9895453f44b2c8dddce734cbb10e7aea48940",
       "size": 9424
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/f12_module.go",
+      "sha256": "c11170d9026dbfce15a7c7e0a82c1417db32293ace48cf82770b7ff19611f86a",
+      "size": 9112
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/f12_module_test.go",
+      "sha256": "a58289b0863481c9c50b8b947a0f6881be689c322c727fa7271eafb97b87f930",
+      "size": 6356
     },
     {
       "path": "monitoring/source/it-portal/internal/server/forms_adapter_integration_test.go",
@@ -20560,8 +20930,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/modules.go",
-      "sha256": "0b4d1881b36a434d0efd1015e96cc5619e657450e6181b1a839c530fa1010393",
-      "size": 14759
+      "sha256": "12cb9afe81ec035120c7410c907a74315712ae715306fdeb688a4f44c7f4f275",
+      "size": 15023
     },
     {
       "path": "monitoring/source/it-portal/internal/server/modules_test.go",
@@ -20612,6 +20982,16 @@
       "path": "monitoring/source/it-portal/internal/server/netmap_startup_test.go",
       "sha256": "a0655d02e880e0b671e12f8402138e433dd5c24a5d08fe3fdbffe2cc032f50a4",
       "size": 5865
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/ocserv_module.go",
+      "sha256": "731f17f0c166541bd627a23f6299f8587396de457053f267889b383842c6e42f",
+      "size": 7459
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/ocserv_module_test.go",
+      "sha256": "ca508e188750250aa9e484c99de12f6cccd8b10b01b6e241ee05f6236cae228b",
+      "size": 5521
     },
     {
       "path": "monitoring/source/it-portal/internal/server/outbound_ca_test.go",
@@ -20765,8 +21145,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/server.go",
-      "sha256": "c293b5338503234dbfbca687e5a5cd4f200414f83f38c00c780710e98ab92043",
-      "size": 27930
+      "sha256": "f05f1a780e7bcb1cf7c543dbac8fdeb653d4ccd11ea66f122f93d2fd4adbba79",
+      "size": 28014
     },
     {
       "path": "monitoring/source/it-portal/internal/server/service_card_eligibility.go",
@@ -20907,6 +21287,16 @@
       "path": "monitoring/source/it-portal/internal/server/sse.go",
       "sha256": "3971a7c96a526f98ebaf08d95bd9fe61d4f8aa581fa17194f5dbf4a2a75034cd",
       "size": 1392
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/syslog_module.go",
+      "sha256": "2f87169e74bb54ca1e77e2eb3d7b70e6dcc602a25841124493e0b8a5420248db",
+      "size": 4593
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/syslog_module_test.go",
+      "sha256": "3d7c3a848787fd84b1baf28fcfee03d43bb8beecae535c9a4004c559f7fd19af",
+      "size": 2689
     },
     {
       "path": "monitoring/source/it-portal/internal/server/systems_workspace.go",
@@ -21245,8 +21635,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules.go",
-      "sha256": "1a7fa94e41d4a79d81c3c6e0ab9a4ee563ca0b155ef817107228c82a75736104",
-      "size": 17930
+      "sha256": "aa4d01b6d419d28b11cc16336b6b59f8be6d8f1a2b7210e6f6525f93fd6eb422",
+      "size": 18047
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules_integration_test.go",
@@ -21255,8 +21645,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/store/modules_projection.go",
-      "sha256": "f487237f316af111a15795330ddee2d9dfc98253d84ad3c5ff7ce615200188b0",
-      "size": 16495
+      "sha256": "b8c0c877e1d436e91769858885a78240f1936cf36faaf71acf11231355165e6b",
+      "size": 16852
     },
     {
       "path": "monitoring/source/it-portal/internal/store/netmap_external_test.go",
@@ -21380,8 +21770,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/store/store.go",
-      "sha256": "c04977447cbcfb34954c3e9df0a7f84283a2cce4294cfc95c4725272411f3397",
-      "size": 15911
+      "sha256": "52aa62de828d3cbc02b134b068a64b1350882c2e50c80bf588350e54213e541f",
+      "size": 16500
     },
     {
       "path": "monitoring/source/it-portal/internal/store/store_integration_test.go",

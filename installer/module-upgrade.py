@@ -28,10 +28,11 @@ ROLES = {'prometheus': ('',), 'xray': ('',), 'alertmanager': ('',),
          'wayline': ('runner', 'api', 'gateway'), 'grafana': ('',),
          'forms': ('mongo', 'keydb', 'engine', 'adapter'), 'doska': ('database', 'api', 'web'),
          'sftpgo': ('server',), 'netmap': ('database', 'cache', 'netbox', 'netbox-worker', 'gitea', 'adapter', 'oxidized'),
-         'bookstack': ('database', 'web')}
+         'bookstack': ('database', 'web'), 'syslog': ('server',), 'f12': ('server',), 'ocserv': ('server',)}
 STORAGE = {'forms': {'mongo', 'keydb'}, 'doska': {'database'},
            'netmap': {'database', 'cache'}, 'bookstack': {'database'}}
 IMAGE_FIELDS = {'id', 'architecture', 'ref', 'recipe', 'labels'}
+F12_PXE_LABEL = 'pl.f12.pxe.version'
 IMAGE_DEFAULTS = ('User', 'Env', 'Entrypoint', 'Cmd', 'WorkingDir', 'ExposedPorts', 'Volumes', 'Healthcheck', 'StopSignal')
 LEGACY_FINGERPRINT_CORES = {'0.5.0-rc.1', '0.5.1', '0.5.2'}
 NETMAP_TRANSITIONS = (
@@ -64,6 +65,14 @@ def _shape_versions(value):
     return pair if pair in NETMAP_TRANSITIONS else None
 
 
+def _pxe_transition(value):
+    if value.get('module_id') != 'f12':
+        return False
+    labels = [value.get(field, {}).get('server', {}).get('labels', {}) for field in ('old_descriptor', 'new_descriptor')]
+    return {row.get(F12_PXE_LABEL) for row in labels} == {None, '1'} and all(
+        row.get('pl.module.id') == 'f12' and row.get('pl.module.role') == 'server' for row in labels)
+
+
 def digest(value):
     return hashlib.sha256(files.encoded(value)).hexdigest()
 
@@ -90,7 +99,9 @@ def _roles(kind, descriptor):
 
 def _transition(parent, kind, old, new):
     previous, candidate = _roles(kind, old), _roles(kind, new)
-    pair = _shape_versions({'module_id': kind, 'old_descriptor': old, 'new_descriptor': new})
+    descriptors = {'module_id': kind, 'old_descriptor': old, 'new_descriptor': new}
+    pair = _shape_versions(descriptors)
+    pxe_transition = _pxe_transition(descriptors)
     changed = []
     for role in ROLES[kind]:
         left, right = previous[role], candidate[role]
@@ -100,13 +111,16 @@ def _transition(parent, kind, old, new):
         else:
             a, b = dict(left['labels']), dict(right['labels'])
             a.pop('pl.source.sha256', None); b.pop('pl.source.sha256', None)
+            if pxe_transition:
+                a.pop(F12_PXE_LABEL, None); b.pop(F12_PXE_LABEL, None)
             if pair:
                 if (a.get('org.opencontainers.image.version'), b.get('org.opencontainers.image.version')) != pair:
                     raise UnsupportedTransition('Mixed native module release versions')
                 a.pop('org.opencontainers.image.version'); b.pop('org.opencontainers.image.version')
                 if a.get('pl.module.config.version') != '1' or a.get('pl.module.role') != role:
                     raise UnsupportedTransition('NetMap configuration or role contract changed')
-            if (set(left['labels']) != set(right['labels']) or (not pair and not a.get('org.opencontainers.image.version')) or a != b
+            source_label_mismatch = ('pl.source.sha256' in left['labels']) != ('pl.source.sha256' in right['labels'])
+            if (source_label_mismatch or (not pair and not a.get('org.opencontainers.image.version')) or a != b
                     or left['architecture'] != right['architecture'] or left['recipe'] != right['recipe']):
                 raise UnsupportedTransition('Only identical upstream and native launch contracts are supported')
         if left['id'] != right['id']:
@@ -123,6 +137,9 @@ def _transition(parent, kind, old, new):
                     or any((config.get('Labels') or {}).get(k) != v for k, v in image['labels'].items())):
                 raise UnsupportedTransition('Native image identity differs')
             labels = dict(config.get('Labels') or {}); labels.pop('pl.source.sha256', None)
+            if pxe_transition:
+                if labels.pop(F12_PXE_LABEL, None) != image['labels'].get(F12_PXE_LABEL):
+                    raise UnsupportedTransition('F12 network boot image label differs from its descriptor')
             if pair and role not in STORAGE.get(kind, ()):
                 labels.pop('org.opencontainers.image.version', None)
             values.append({**{k: config.get(k) for k in IMAGE_DEFAULTS}, 'Labels': labels})
@@ -183,7 +200,7 @@ def _controller(parent, kind, descriptor):
     if kind in ('prometheus', 'xray', 'alertmanager'):
         c.image_contract = copy.deepcopy(descriptor); c.image = descriptor['id']
     elif kind == 'grafana': c.image = copy.deepcopy(descriptor)
-    elif kind == 'sftpgo': c.image = copy.deepcopy(descriptor['server'])
+    elif kind in ('sftpgo', 'syslog', 'f12', 'ocserv'): c.image = copy.deepcopy(descriptor['server'])
     else:
         c.images = copy.deepcopy(descriptor)
         if kind == 'netmap':
@@ -203,8 +220,19 @@ def _state(c, kind, instance):
     return state
 
 
-def _inspect(c, kind, instance, role):
-    return c.inspect(instance) if kind in ('prometheus', 'xray', 'alertmanager', 'grafana', 'sftpgo') else c.inspect(instance, role)
+def f12_segment(c, instance, name):
+    prefix = c.names(instance)
+    if name == prefix:
+        return None
+    if not name.startswith(prefix + '-edge-') or not re.fullmatch(r'[0-9a-f]{64}', name[len(prefix) + 6:]):
+        raise ValueError('Unexpected F12 container identity')
+    return name[len(prefix) + 6:]
+
+
+def _inspect(c, kind, instance, role, name=None):
+    if kind == 'f12':
+        return c.inspect(instance, f12_segment(c, instance, name))
+    return c.inspect(instance) if kind in ('prometheus', 'xray', 'alertmanager', 'grafana', 'sftpgo', 'syslog', 'ocserv') else c.inspect(instance, role)
 
 
 def _tree(path):
@@ -221,11 +249,28 @@ def _tree(path):
     raise ValueError('Native configuration is not an owned bounded regular tree')
 
 
+def f12_runtime_mount(parent, obj, mount):
+    # Live sockets and generated edge credentials are rebuilt from private state.
+    # Accept only an exact native mount on this installation's named container.
+    labels = obj.get('Config', {}).get('Labels') or {}
+    if labels.get('pl.module') != 'f12' or labels.get('pl.installation') != parent.installation or mount.get('Type') != 'bind':
+        return False
+    c = parent.application('f12')
+    instance = files.identifier(labels.get('pl.instance', ''))
+    segment = f12_segment(c, instance, obj.get('Name', '').removeprefix('/'))
+    source = Path(mount.get('Source', ''))
+    if mount.get('Destination') == '/run/pl-f12/pxe':
+        return (bool(segment) and labels.get(F12_PXE_LABEL) == '1' and labels.get('pl.f12.role') == 'edge'
+                and source == source.resolve() == c.runtime(instance) / 'edges' / segment / 'pxe' and mount.get('RW') is True)
+    return (source == source.resolve()
+            and ('bind', str(source), mount.get('Destination'), mount.get('RW')) in c.mounts(instance, segment))
+
+
 def _bind_sources(parent, objects):
     root = Path(parent.root); result = {}
     for obj in objects:
         for mount in obj.get('Mounts', []):
-            if mount.get('Type') != 'bind': continue
+            if mount.get('Type') != 'bind' or f12_runtime_mount(parent, obj, mount): continue
             path = Path(mount['Source'])
             if path != path.resolve() or not path.is_relative_to(root):
                 raise ValueError('Native bind is outside this installation')
@@ -244,7 +289,7 @@ def _snapshot_paths(parent, paths, objects):
         selected.append(str(path.relative_to(root)))
     for obj in objects:
         for mount in obj.get('Mounts', []):
-            if mount.get('Type') != 'bind': continue
+            if mount.get('Type') != 'bind' or f12_runtime_mount(parent, obj, mount): continue
             source = Path(mount['Source'])
             if source != source.resolve() or not source.is_relative_to(root):
                 raise ValueError('Native bind is outside this installation')
@@ -279,7 +324,38 @@ def _fingerprint_version(value):
     raise ValueError('Unsupported native module fingerprint version')
 
 
-def _fingerprint(obj, kind, *, shape=False, version=2, version_pair=None):
+def fixed_listener(kind, port):
+    return (kind == 'xray'
+            or (kind == 'sftpgo' and port == '2022/tcp')
+            or (kind == 'syslog' and port in ('1514/tcp', '1514/udp'))
+            or (kind == 'f12' and port == '8080/tcp')
+            or (kind == 'ocserv' and port in ('4443/tcp', '4443/udp')))
+
+
+def _normalize_pxe_mount(config, host, mounts):
+    labels = config.get('Labels', {})
+    if labels.get(F12_PXE_LABEL) != '1':
+        return
+    if labels.get('pl.f12.role') == 'edge':
+        settings = [m for m in mounts if m.get('Destination') == '/etc/pl-f12/edge.json']
+        if len(settings) != 1:
+            return
+        source = str(Path(settings[0]['Source']).with_name('pxe'))
+        target = '/run/pl-f12/pxe'
+        bound = [m for m in mounts if m.get('Destination') == target]
+        options = [m for m in host.get('Mounts', []) if m.get('Target') == target]
+        if (len(bound) != 1 or len(options) != 1 or bound[0].get('Type') != 'bind' or bound[0].get('Source') != source
+                or bound[0].get('RW') is not True or bound[0].get('Mode', '') not in ('', 'rw')
+                or bound[0].get('Propagation', 'rprivate') != 'rprivate'
+                or {k:v for k,v in options[0].items() if k != 'ReadOnly'} != {'Type':'bind', 'Source':source, 'Target':target}
+                or options[0].get('ReadOnly', False) is not False):
+            return
+        mounts.remove(bound[0])
+        host['Mounts'].remove(options[0])
+    labels.pop(F12_PXE_LABEL)
+
+
+def _fingerprint(obj, kind, *, shape=False, version=2, version_pair=None, pxe_transition=False):
     if type(version) is not int or version not in (1, 2):
         raise ValueError('Unsupported native module fingerprint version')
     config = copy.deepcopy(obj.get('Config', {})); host = copy.deepcopy(obj.get('HostConfig', {}))
@@ -297,20 +373,22 @@ def _fingerprint(obj, kind, *, shape=False, version=2, version_pair=None):
             if labels.get('org.opencontainers.image.version') in version_pair:
                 labels['org.opencontainers.image.version'] = '<netmap-compatible-version>'
     for port, bindings in (host.get('PortBindings') or {}).items():
-        if kind == 'xray' or kind == 'sftpgo' and port == '2022/tcp': continue
+        if fixed_listener(kind, port): continue
         for binding in bindings or []:
             if binding.get('HostIp') == '127.0.0.1': binding['HostPort'] = '*'
     generated = {obj.get('Id'), obj.get('Id', '')[:12], obj.get('Name', '').removeprefix('/')}
     networks = {name: sorted(set(value.get('Aliases') or []) - generated)
                 for name, value in obj.get('NetworkSettings', {}).get('Networks', {}).items()}
     mounts = sorted(obj.get('Mounts', []), key=lambda m: (m.get('Destination', ''), m.get('Source', '')))
+    if shape and kind == 'f12' and pxe_transition:
+        _normalize_pxe_mount(config, host, mounts)
     return digest({'image': '<native-image>' if shape else obj.get('Image'), 'config': config,
                    'host': host, 'mounts': mounts, 'networks': networks})
 
 
 def _fingerprint_matches(value, obj, expected, *, shape=False):
     version = _fingerprint_version(value); kind = value['module_id']
-    if _fingerprint(obj, kind, shape=shape, version=version, version_pair=_shape_versions(value)) == expected:
+    if _fingerprint(obj, kind, shape=shape, version=version, version_pair=_shape_versions(value), pxe_transition=_pxe_transition(value)) == expected:
         return True
     if version == 1:
         host = obj.get('HostConfig', {})
@@ -341,13 +419,15 @@ def _launch_contract(parent, c, kind, instance, role, native, obj):
     actual_env = obj.get('Config', {}).get('Env') or []
     labels = (c.labels(instance, native['current']) if kind == 'xray' else
               c.labels(instance, role) if kind in ('wayline', 'forms', 'doska', 'netmap', 'bookstack') else c.labels(instance))
-    if kind == 'sftpgo': labels = {**labels, 'pl.sftpgo.revision': str(native['revision'])}
+    if kind == 'f12':
+        labels = c.spec(instance, f12_segment(c, instance, obj['Name'].removeprefix('/')), native)['labels']
+    if kind in ('sftpgo', 'syslog'): labels = {**labels, 'pl.' + kind + '.revision': str(native['revision'])}
     expected_labels = {**(image.get('Config', {}).get('Labels') or {}), **labels}
     if (dict(value.split('=', 1) for value in actual_env) != expected_env or len(actual_env) != len(expected_env)
             or (obj.get('Config', {}).get('Labels') or {}) != expected_labels):
         raise UnsupportedTransition('Custom native environment or labels require an explicit migration')
     for port, bindings in (obj.get('HostConfig', {}).get('PortBindings') or {}).items():
-        if kind == 'xray' or kind == 'sftpgo' and port == '2022/tcp': continue
+        if fixed_listener(kind, port): continue
         if any(binding.get('HostPort') not in ('', '0') for binding in bindings or []):
             raise UnsupportedTransition('Custom fixed native API port requires an explicit migration')
     current = obj.get('State', {})
@@ -386,7 +466,18 @@ def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
     expected_ids = set()
     for path in paths:
         instance = files.identifier(path.name); native = _state(c, kind, instance)
-        objects = [_inspect(c, kind, instance, role) for role in ROLES[kind]]
+        roles = ROLES[kind]
+        if kind == 'f12':
+            if not native['storage_created'] or not c.resource(instance, 'volume'):
+                raise ValueError('F12 library volume is missing')
+            if bool(c.resource(instance, 'network')) != bool(native['edges']):
+                raise ValueError('F12 publication network differs from private state')
+            objects = [c.inspect(instance, segment, state=native) for segment in (None, *sorted(native['edges']))]
+            roles = ('server',) * len(objects)
+            if objects[0] is not None and c.busy(instance, objects[0]):
+                raise ValueError('F12 is importing an ISO; retry after import finishes')
+        else:
+            objects = [_inspect(c, kind, instance, role) for role in roles]
         if any(obj is None for obj in objects):
             raise ValueError('Incomplete native module must be reconciled before an update')
         if scoped:
@@ -399,17 +490,25 @@ def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
                 'binds_sha256': _binding_digest(parent, _bind_sources(parent, objects)),
                 'recreate': list(changed), 'containers': [],
                 'volumes': sorted({m['Name'] for obj in objects for m in obj.get('Mounts', []) if m.get('Type') == 'volume'})}
-        for role, obj in zip(ROLES[kind], objects):
+        for role, obj in zip(roles, objects):
             _owned(parent, kind, instance, obj)
             _launch_contract(parent, c, kind, instance, role, native, obj)
             expected_ids.add(obj['Id'])
             item['containers'].append({'role': role, 'id': obj['Id'], 'name': obj['Name'].removeprefix('/'), 'image': obj['Image'],
                 'running': all(running), 'fingerprint': _fingerprint(obj, kind),
-                'shape': _fingerprint(obj, kind, shape=True, version_pair=_shape_versions(result)),
+                'shape': _fingerprint(obj, kind, shape=True, version_pair=_shape_versions(result), pxe_transition=_pxe_transition(result)),
                 'env_sha256': digest(sorted(obj.get('Config', {}).get('Env') or [])), 'mounts_sha256': digest(obj.get('Mounts', []))})
         result['instances'].append(item)
     if {obj['Id'] for obj in _inventory(parent, kind=kind)} != expected_ids:
         raise ValueError('Unplanned or orphaned owned module containers exist')
+    if kind == 'f12':
+        resources = {'volume': {name for item in result['instances'] for name in item['volumes']},
+                     'network': {c.names(item['instance_id'], '-net') for item in result['instances'] if len(item['containers']) > 1}}
+        for resource, expected in resources.items():
+            names = parent.docker(resource, 'ls', '--filter', 'label=pl.installation=' + parent.installation,
+                                  '--filter', 'label=pl.module=f12', '--format', '{{.Name}}').decode().split()
+            if set(names) != expected:
+                raise ValueError('F12 owned resources differ from the saved library and selected networks')
     return result
 
 
@@ -505,7 +604,7 @@ def _classify(parent, value, item, spec, obj):
     if intent and intent['action'] == 'create':
         direction = intent['direction']; descriptor = value['new_descriptor'] if direction == 'apply' else value['old_descriptor']
         c = _controller(parent, value['module_id'], descriptor)
-        checked = _inspect(c, value['module_id'], item['instance_id'], spec['role'])
+        checked = _inspect(c, value['module_id'], item['instance_id'], spec['role'], spec['name'])
         if (checked is not None and checked['Id'] == obj['Id']
                 and obj['Image'] == _roles(value['module_id'], descriptor)[spec['role']]['id']
                 and _fingerprint_matches(value, obj, spec['shape'], shape=True)):
@@ -535,9 +634,17 @@ def _create(parent, value, item, spec, descriptor, direction):
     if kind == 'prometheus': c.create(instance)
     elif kind == 'xray': c.create_container(instance, c.active(instance)['current'], start=False)
     elif kind == 'alertmanager': c.create_container(instance, start=False)
-    elif kind == 'grafana': c.create(instance)
+    elif kind in ('grafana', 'ocserv'): c.create(instance)
     elif kind == 'forms': c.create(instance, role)
-    elif kind == 'sftpgo':
+    elif kind == 'f12':
+        segment = f12_segment(c, instance, spec['name'])
+        if segment and _pxe_transition(value):
+            state = c.state(instance)
+            c.sync_networks(state)
+            if not c.automatic_pxe:
+                c.clear_pxe_runtime(instance, segment)
+        c.create(instance, segment)
+    elif kind in ('sftpgo', 'syslog'):
         state = c.state(instance); c.create(instance, state['configuration'], state['revision'])
     else:
         c.create_container(instance, role)
@@ -546,7 +653,7 @@ def _create(parent, value, item, spec, descriptor, direction):
             ingress = parent.installation + '_ingress'
             if ingress not in obj.get('NetworkSettings', {}).get('Networks', {}):
                 c.docker('network', 'connect', '--alias', 'pl-bookstack-' + instance, ingress, obj['Id'])
-    obj = _inspect(c, kind, instance, role)
+    obj = _inspect(c, kind, instance, role, spec['name'])
     if (obj is None or obj.get('State', {}).get('Running')
             or obj.get('Name') != '/' + spec['name'] or obj['Image'] != _roles(kind, descriptor)[role]['id']
             or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
@@ -688,7 +795,7 @@ def verify(parent, value, *, direction='apply'):
             while True:
                 try:
                     for spec in item['containers']:
-                        obj = _inspect(c, kind, item['instance_id'], spec['role'])
+                        obj = _inspect(c, kind, item['instance_id'], spec['role'], spec['name'])
                         if obj is None: raise ValueError('Native verification container is absent')
                         _owned(parent, kind, item['instance_id'], obj)
                         records = value['ledger'].get(spec['name'], {}).get('replacements', [])
@@ -702,7 +809,7 @@ def verify(parent, value, *, direction='apply'):
                                 or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
                             raise ValueError('Native images, ownership or original running state were not preserved')
                     if item['running']:
-                        if kind in ('prometheus', 'xray', 'alertmanager'):
+                        if kind in ('prometheus', 'xray', 'alertmanager', 'syslog', 'f12', 'ocserv'):
                             if c.observe(item['instance_id']).get('state') != 'running':
                                 raise ValueError('Native module runtime is not ready')
                         else: c.ready(item['instance_id'])

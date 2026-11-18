@@ -1,0 +1,6 @@
+OpenConnect VPN Server (ocserv), Nikos Mavrogiannopoulos and contributors.
+The original copyright and license notices are in /usr/share/doc/ocserv/copyright
+and /usr/share/common-licenses in the image. The corresponding upstream source
+and Debian packaging for 1.6.0-3 are included in /usr/share/pl/provenance/ocserv/
+with the PL source patches for the 1.6.0-3+pl1 package.
+The distribution's package notices are installed under /usr/share/doc/.

@@ -1,0 +1,25 @@
+Description: Accept an omitted JOSE typ for browser-flow ID tokens
+ The type is optional in RFC 7519 section 5.1. Dex 2.46.1 omits it.
+ Preserve the expected type when present and in the bearer-token flow.
+Origin: vendor, PL
+Forwarded: no
+Last-Update: 2026-11-18
+
+--- a/src/auth/openidconnect.c
++++ b/src/auth/openidconnect.c
+@@ -1890 +1890,2 @@
+-static bool oidc_verify_signature(oidc_vctx_st *vctx, cjose_jws_t *jws)
++static bool oidc_verify_signature(oidc_vctx_st *vctx, cjose_jws_t *jws,
++				  bool browser_id_token)
+@@ -1930,2 +1931,6 @@
+-	if (token_typ == NULL || !json_string_value(token_typ) ||
+-	    strcmp(json_string_value(token_typ), "JWT")) {
++	/* RFC 7519 section 5.1 makes typ optional for the ID token returned
++	 * by the code exchange. Bearer tokens still require an explicit type.
++	 * json_string_length returns zero for a missing or non-string header. */
++	if ((token_typ != NULL || !browser_id_token) &&
++	    (json_string_length(token_typ) != sizeof("JWT") - 1 ||
++	     strcmp(json_string_value(token_typ), "JWT") != 0)) {
+@@ -2002 +2007 @@
+-	if (!oidc_verify_signature(vctx, jws)) {
++	if (!oidc_verify_signature(vctx, jws, expected_nonce != NULL)) {

@@ -203,6 +203,45 @@ test('catalog and home share resource lifecycle, metadata, relations and Doska t
   await expect(homeDetails).toBeFocused();
 });
 
+test('host shows explicit incoming relations and opens the source card', async ({ page }) => {
+  const { resources } = await fixture(page);
+  const [mail, host, files, neighbour] = resources;
+  host.name = 'hv-01';
+  mail.name = 'Почта';
+  const hostedOn = { resource_id: host.id, label: 'Размещено на' };
+  mail.relations = [hostedOn, hostedOn, { resource_id: host.id, label: 'Зависит от' }];
+  files.name = 'Файловый сервис';
+  files.relations = [hostedOn];
+  neighbour.name = 'Лабораторное устройство';
+  neighbour.type = 'Устройство';
+  neighbour.ip = host.ip;
+  resources.push(makeResource({
+    id: '55555555-5555-4555-8555-555555555555', name: 'Старая почта',
+    lifecycle: 'archived', relations: [hostedOn],
+  }));
+  await page.route('**/api/v1/systems', route => route.fulfill({ json: [{
+    id: '66666666-6666-4666-8666-666666666666', name: 'Офис', profile: 'custom',
+    resource_ids: [host.id, neighbour.id], metrics: [], revision: 1, planned: false,
+  }] }));
+  await page.goto('/#catalog?kind=infrastructure');
+  await page.getByRole('button', { name: host.name, exact: true }).click();
+  const hostCard = page.getByRole('dialog', { name: host.name, exact: true });
+  const incoming = hostCard.getByRole('region', { name: 'На этот ресурс ссылаются' });
+  const mailLink = incoming.getByRole('button', { name: /^Почта / });
+  await expect(incoming.getByRole('button')).toHaveCount(2);
+  await expect(mailLink.getByText('Размещено на → hv-01', { exact: true })).toHaveCount(1);
+  await expect(mailLink.getByText('Зависит от → hv-01', { exact: true })).toBeVisible();
+  await expect(incoming.getByRole('button', { name: 'Файловый сервис Размещено на → hv-01' })).toBeVisible();
+  await expect(incoming).not.toContainText(neighbour.name);
+  await expect(incoming).not.toContainText('Старая почта');
+  await mailLink.click();
+  const mailCard = page.getByRole('dialog', { name: mail.name, exact: true });
+  const outgoing = mailCard.getByRole('region', { name: 'Связи из этой карточки' });
+  await outgoing.getByRole('button', { name: 'Зависит от hv-01', exact: true }).click();
+  await expect(hostCard).toBeVisible();
+  await expect(mailLink).toBeVisible();
+});
+
 test('drawer traps focus and Escape or close returns focus to its trigger', async ({ page }) => {
   await fixture(page);
   await page.goto('/#catalog');

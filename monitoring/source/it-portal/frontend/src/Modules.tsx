@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Download,
+  Disc3,
   ArrowUpRight,
   Trash2,
   Link,
@@ -23,6 +24,8 @@ import {
   Radio,
   Route,
   Search,
+  ScrollText,
+  ShieldCheck,
 } from "lucide-react";
 import { APIError, api, date, errorText, queryClient } from "./api";
 import type { Job } from "./types";
@@ -37,6 +40,9 @@ import PrometheusConfig from "./PrometheusConfig";
 import XrayModule from "./XrayModule";
 import AlertmanagerModule from "./AlertmanagerModule";
 import NetMapModule from "./NetMapModule";
+import SyslogModule from "./SyslogModule";
+import OcservModule from "./OcservModule";
+import F12Module from "./F12Module";
 import MailcowModule from "./MailcowModule";
 import ModuleInitialLogin, { supportsInitialLogin } from "./ModuleInitialLogin";
 import { SFTPGo } from "./SFTPGo";
@@ -51,6 +57,7 @@ type ModuleDescriptor = {
   modes: ModuleMode[];
   data_preservation?: string;
   external_auth?: string;
+  direction?: string;
   public_path?: string;
 };
 type ModuleInstance = {
@@ -124,6 +131,9 @@ const modulePresentation: Record<
   alertmanager: { name: "Alertmanager", icon: Bell },
   xray: { name: "Xray", icon: Radio },
   sftpgo: { name: "SFTPGo", icon: FolderOpen },
+  f12: { name: "Сетевая загрузка F12", icon: Disc3 },
+  ocserv: { name: "Корпоративный VPN", icon: ShieldCheck },
+  syslog: { name: "Центральный syslog", icon: ScrollText },
   mailcow: { name: "Mailcow", icon: Mail },
   netmap: { name: "NetMap", icon: Network },
   grafana: { name: "Grafana", icon: LayoutDashboard },
@@ -168,6 +178,22 @@ function modulePrimaryLink(instance: ModuleInstance) {
       return { label: "Уведомления", href: `#notifications?instance=${id}` };
     case "xray":
       return { label: "Управлять прокси", href: `#proxy?instance=${id}` };
+    case "f12":
+      return {
+        label: "Открыть библиотеку ISO",
+        href: `#modules?instance=${id}&view=f12`,
+      };
+    case "ocserv":
+      return instance.mode === "local"
+        ? { label: "Открыть VPN", href: `#modules?instance=${id}&view=ocserv` }
+        : undefined;
+    case "syslog":
+      return instance.mode === "local"
+        ? {
+            label: "Открыть syslog",
+            href: `#modules?instance=${id}&view=syslog`,
+          }
+        : undefined;
     case "sftpgo":
       return { label: "Открыть файлы", href: "/sftpgo/" };
     case "mailcow":
@@ -292,6 +318,17 @@ export default function Modules({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [placement, setPlacement] = useState("all");
+  const [direction, setDirection] = useState(
+    () => new URLSearchParams(location.hash.split("?")[1]).get("direction") || "",
+  );
+  function chooseDirection(value: string) {
+    const query = new URLSearchParams(location.hash.split("?")[1]);
+    if (value) query.set("direction", value);
+    else query.delete("direction");
+    const search = query.toString();
+    location.hash = "module-catalog" + (search ? "?" + search : "");
+    setDirection(value);
+  }
   const [sort, setSort] = useState("problems");
   const [setupJobID, setSetupJobID] = useState(
     () =>
@@ -310,6 +347,9 @@ export default function Modules({
       "xray",
       "alertmanager",
       "sftpgo",
+      "syslog",
+      "f12",
+      "ocserv",
       "netmap",
       "mailcow",
     ].includes(route.get("view") || "")
@@ -324,6 +364,7 @@ export default function Modules({
         setStatusFilter("all");
         setPlacement("all");
       }
+      setDirection(route.get("direction") || "");
       setSetupJobID(route.get("setup") || "");
       setConfigurationView(route.get("view") === "configuration");
       setMonitoringID(
@@ -333,6 +374,9 @@ export default function Modules({
           "xray",
           "alertmanager",
           "sftpgo",
+          "syslog",
+          "f12",
+          "ocserv",
           "netmap",
           "mailcow",
         ].includes(route.get("view") || "")
@@ -394,7 +438,8 @@ export default function Modules({
   }, [instances.data]);
   const localAvailable = catalog.data?.local_available === true;
   const installed = instances.data?.items || [];
-  const localOffers = (catalog.data?.items || []).filter((descriptor) =>
+  const descriptors = catalog.data?.items || [];
+  const localOffers = descriptors.filter((descriptor) =>
     descriptor.modes.includes("local"),
   );
   const newLocalModules =
@@ -437,7 +482,26 @@ export default function Modules({
         left.name.localeCompare(right.name, "ru", { numeric: true }) ||
         left.id.localeCompare(right.id),
     );
-  const catalogItems = (catalog.data?.items || [])
+  const catalogWords = search.toLocaleLowerCase("ru-RU").match(/\S+/g) ?? [];
+  const catalogSearchInput = useRef<HTMLInputElement>(null);
+  const moduleCards = descriptors
+    .filter((descriptor) => {
+      const text = [
+        descriptor.name,
+        descriptor.id,
+        modulePresentation[descriptor.id]?.name,
+        descriptor.description,
+        descriptor.direction,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("ru-RU");
+      return (
+        (placement === "all" ||
+          descriptor.modes.some((mode) => mode === placement)) &&
+        (!direction || descriptor.direction === direction) &&
+        catalogWords.every((word) => text.includes(word))
+      );
+    })
     .map((descriptor, index) => {
       const confirmed = (instances.data?.items || []).filter(
         (instance) =>
@@ -453,7 +517,11 @@ export default function Modules({
       const connected = confirmed.filter(
         (item) => item.mode === "external",
       ).length;
-      return { descriptor, index, installed, connected };
+      const Icon = modulePresentation[descriptor.id]?.icon ?? Activity;
+      const nativeLibrary = ["syslog", "f12", "ocserv"].includes(descriptor.id)
+        ? confirmed.find((item) => item.mode === "local")
+        : undefined;
+      return { descriptor, index, installed, connected, Icon, nativeLibrary };
     })
     .sort(
       (left, right) =>
@@ -481,17 +549,28 @@ export default function Modules({
     const instance = instances.data?.items.find(
       (item) =>
         item.id === monitoringID &&
+        (!["syslog", "f12", "ocserv"].includes(item.module_id) ||
+          (item.mode === "local" && item.desired_state !== "removed")) &&
         [
           "prometheus",
           "xray",
           "alertmanager",
           "sftpgo",
+          "syslog",
+          "f12",
+          "ocserv",
           "netmap",
           "mailcow",
         ].includes(item.module_id),
     );
     return instance ? (
-      instance.module_id === "mailcow" ? (
+      instance.module_id === "ocserv" ? (
+        <OcservModule key={instance.id} instance={instance} />
+      ) : instance.module_id === "f12" ? (
+        <F12Module key={instance.id} instance={instance} />
+      ) : instance.module_id === "syslog" ? (
+        <SyslogModule key={instance.id} instance={instance} />
+      ) : instance.module_id === "mailcow" ? (
         <MailcowModule key={instance.id} instanceID={instance.id} />
       ) : instance.module_id === "netmap" ? (
         <NetMapModule key={instance.id} instance={instance} />
@@ -590,6 +669,64 @@ export default function Modules({
               retry={() => void instances.refetch()}
             />
           )}
+          {descriptors.length > 0 && !catalog.error && !instances.isPending && (
+            <>
+              <div
+                className="module-toolbar module-catalog-toolbar"
+                role="search"
+                aria-label="Фильтры каталога модулей"
+              >
+                <label className="module-search">
+                  <Search size={17} aria-hidden="true" />
+                  <input
+                    ref={catalogSearchInput}
+                    type="search"
+                    aria-label="Поиск по каталогу модулей"
+                    placeholder="Название или назначение модуля"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Размещение</span>
+                  <select
+                    value={placement}
+                    onChange={(event) => setPlacement(event.target.value)}
+                  >
+                    <option value="all">Любое размещение</option>
+                    <option value="local">На хосте PL</option>
+                    <option value="external">Внешний сервис</option>
+                  </select>
+                </label>
+                {descriptors.some((item) => item.direction) && (
+                  <label>
+                    <span>Направление</span>
+                    <select value={direction} onChange={(event) => chooseDirection(event.target.value)}>
+                      <option value="">Все направления</option>
+                      {[...new Set(descriptors.map((item) => item.direction).filter((value): value is string => !!value))]
+                        .sort((a, b) => a.localeCompare(b, "ru"))
+                        .map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </label>
+                )}
+                {(search || placement !== "all" || direction) && (
+                  <Button
+                    onClick={() => {
+                      setSearch("");
+                      setPlacement("all");
+                      chooseDirection("");
+                      catalogSearchInput.current?.focus();
+                    }}
+                  >
+                    Сбросить фильтры
+                  </Button>
+                )}
+              </div>
+              <p className="module-list-count" aria-live="polite">
+                Показано {moduleCards.length} из {descriptors.length}
+              </p>
+            </>
+          )}
           {catalog.error ? (
             <ErrorBox
               error={moduleError(catalog.error)}
@@ -599,76 +736,93 @@ export default function Modules({
             <p className="muted" role="status">
               Загружаем каталог…
             </p>
-          ) : catalog.data?.items.length ? (
+          ) : moduleCards.length ? (
             <div className="module-catalog">
-              {catalogItems.map(({ descriptor, installed, connected }) => (
-                <article
-                  className={`module-definition${installed ? " is-installed" : connected ? " is-connected" : ""}`}
-                  key={descriptor.id}
-                >
-                  <div className="module-definition-icon">
-                    <Activity size={21} />
-                  </div>
-                  <div className="module-definition-content">
-                    <div className="module-definition-heading">
-                      <h3>{descriptor.name}</h3>
+              {moduleCards.map(
+                ({ descriptor, installed, connected, Icon, nativeLibrary }) => (
+                  <article
+                    className={`module-definition${installed ? " is-installed" : connected ? " is-connected" : ""}`}
+                    key={descriptor.id}
+                  >
+                    <div className="module-definition-icon">
+                      <Icon size={21} aria-hidden="true" />
                     </div>
-                    <div className="module-definition-meta">
-                      {(descriptor.version ||
-                        descriptor.modes.includes("local")) && (
-                        <span className="tag">
-                          {descriptor.version || "Версия из пакета"}
-                        </span>
-                      )}
-                      {installed > 0 && (
-                        <span className="module-catalog-state is-installed">
-                          {installed === 1
-                            ? "Установлен"
-                            : `Установлено: ${installed}`}
-                        </span>
-                      )}
-                      {connected > 0 && (
-                        <span className="module-catalog-state is-connected">
-                          {connected === 1
-                            ? "Подключён"
-                            : `Подключено: ${connected}`}
-                        </span>
+                    <div className="module-definition-content">
+                      <div className="module-definition-heading">
+                        <h3>{descriptor.name}</h3>
+                      </div>
+                      <div className="module-definition-meta">
+                        {(descriptor.version ||
+                          descriptor.modes.includes("local")) && (
+                          <span className="tag">
+                            {descriptor.version || "Версия из пакета"}
+                          </span>
+                        )}
+                        {installed > 0 && (
+                          <span className="module-catalog-state is-installed">
+                            {installed === 1
+                              ? "Установлен"
+                              : `Установлено: ${installed}`}
+                          </span>
+                        )}
+                        {connected > 0 && (
+                          <span className="module-catalog-state is-connected">
+                            {connected === 1
+                              ? "Подключён"
+                              : `Подключено: ${connected}`}
+                          </span>
+                        )}
+                      </div>
+                      <p className="muted">{descriptor.description}</p>
+                      <div className="actions">
+                        {nativeLibrary ? (
+                          <a
+                            className="button button-secondary"
+                            href={modulePrimaryLink(nativeLibrary)?.href}
+                          >
+                            {modulePrimaryLink(nativeLibrary)?.label}
+                          </a>
+                        ) : (
+                          descriptor.modes.includes("local") && (
+                            <Button
+                              variant="default"
+                              disabled={!localAvailable}
+                              onClick={() =>
+                                setAdding({ descriptor, mode: "local" })
+                              }
+                            >
+                              <Download size={15} /> Установить на хост
+                            </Button>
+                          )
+                        )}
+                        {descriptor.modes.includes("external") && (
+                          <Button
+                            disabled={
+                              descriptor.id === "netmap" &&
+                              catalog.data?.managed_credentials_available !==
+                                true
+                            }
+                            onClick={() =>
+                              setAdding({ descriptor, mode: "external" })
+                            }
+                          >
+                            <Link size={15} /> Подключить существующий
+                          </Button>
+                        )}
+                      </div>
+                      {!descriptor.modes.length && (
+                        <span className="module-hint">Пакет недоступен</span>
                       )}
                     </div>
-                    <p className="muted">{descriptor.description}</p>
-                    <div className="actions">
-                      {descriptor.modes.includes("local") && (
-                        <Button
-                          variant="default"
-                          disabled={!localAvailable}
-                          onClick={() =>
-                            setAdding({ descriptor, mode: "local" })
-                          }
-                        >
-                          <Download size={15} /> Установить на хост
-                        </Button>
-                      )}
-                      {descriptor.modes.includes("external") && (
-                        <Button
-                          disabled={
-                            descriptor.id === "netmap" &&
-                            catalog.data?.managed_credentials_available !== true
-                          }
-                          onClick={() =>
-                            setAdding({ descriptor, mode: "external" })
-                          }
-                        >
-                          <Link size={15} /> Подключить существующий
-                        </Button>
-                      )}
-                    </div>
-                    {!descriptor.modes.length && (
-                      <span className="module-hint">Пакет недоступен</span>
-                    )}
-                  </div>
-                </article>
-              ))}
+                  </article>
+                ),
+              )}
             </div>
+          ) : descriptors.length ? (
+            <Empty
+              title="Модули не найдены"
+              detail="Измените поисковый запрос или фильтры каталога."
+            />
           ) : (
             <Empty title="В каталоге пока нет доступных модулей" />
           )}
@@ -1433,6 +1587,18 @@ function InstanceCard({
                     <ArrowUpRight size={14} />
                   </a>
                 )}
+              {["syslog", "f12", "ocserv"].includes(instance.module_id) &&
+                primary &&
+                !removalRequested && (
+                  <a
+                    className="button button-secondary button-sm"
+                    href={primary.href}
+                  >
+                    {instance.module_id === "f12"
+                      ? "Библиотека ISO"
+                      : instance.module_id === "ocserv" ? "Сотрудники VPN" : "Источники syslog"}
+                  </a>
+                )}
               {instance.module_id === "sftpgo" && !removalRequested && (
                 <a
                   className="button button-secondary button-sm"
@@ -1676,35 +1842,41 @@ function InstanceCard({
           }}
         >
           <p>
-            {instance.module_id === "netmap"
-              ? instance.mode === "external"
-                ? "Будут удалены подключение NetMap, ключ связи, интеграция и карточки сервисов в PL. Внешние NetBox, Oxidized, Gitea и все данные сохранятся на своём хосте."
-                : "Будут удалены все компоненты сетевого стека, инвентарь NetBox, конфигурации и история Gitea, профили опроса и четыре карточки сервисов. Восстановление возможно только из отдельной резервной копии."
-              : instance.module_id === "bookstack"
-                ? instance.mode === "external"
-                  ? "Будут удалены подключение Wiki, интеграция и карточка в PL. Внешний BookStack, его учётные записи, документы и вложения сохранятся на своём хосте."
-                  : "Будут удалены Wiki, её база данных, документы, изображения, вложения и настройки BookStack. Восстановление возможно только из отдельной резервной копии."
-                : instance.module_id === "sftpgo"
-                  ? "Будут удалены файловый сервер, его учётные записи, настройки и все принадлежащие экземпляру файлы. Восстановление возможно только из отдельной резервной копии."
-                  : instance.module_id === "forms"
-                    ? "Будут удалены контейнеры Forms, анкеты, ответы, аналитика, настройки и интеграция PL. Восстановление возможно только из отдельной резервной копии."
-                    : instance.module_id === "doska"
-                      ? "Будут удалены контейнеры Doska, проекты, задачи, вложения, настройки и интеграция PL. Восстановление возможно только из отдельной резервной копии."
-                      : instance.module_id === "grafana"
-                        ? "Будут удалены контейнер Grafana, панели, источники данных, локальные настройки и интеграция PL. Метрики Prometheus сохранятся."
-                        : instance.module_id === "wayline"
-                          ? instance.mode === "local"
-                            ? "Будут удалены контейнеры Wayline, цели, история проверок и интеграция PL."
-                            : "Будет удалено подключение Wayline в PL. Внешнее приложение и его данные сохранятся."
-                          : instance.module_id === "fileauditor"
-                            ? "Будет удалено только подключение File Auditor в PL. Windows-сервер, приложение и результаты сканирования сохранятся."
-                            : instance.module_id === "alertmanager"
-                              ? "Будут удалены контейнер Alertmanager, его конфигурация, секреты получателей и карточка сервиса. Доставка уведомлений этого экземпляра прекратится."
-                              : instance.module_id === "xray"
-                                ? "Будут удалены принадлежащие этому экземпляру контейнер Xray, конфигурация, секреты подключений и карточка сервиса. Выбранные proxy-порты будут закрыты."
-                                : instance.mode === "local"
-                                  ? "Будут удалены контейнер Prometheus, его конфигурация и хранилище метрик, а также интеграция, карточка сервиса и связанные данные обнаружения в Платформе."
-                                  : "Будут удалены подключение, интеграция, карточка сервиса и связанные данные обнаружения в Платформе. Внешний Prometheus и его данные останутся на своём хосте."}
+            {instance.module_id === "f12"
+              ? "Будут удалены библиотека ISO и настройки публикации этой установки F12."
+              : instance.module_id === "ocserv"
+                ? "Будут удалены локальный VPN-модуль, профили и назначения доступа."
+              : instance.module_id === "syslog"
+                ? "Будут удалены локальный модуль syslog и его журнал сообщений."
+                : instance.module_id === "netmap"
+                  ? instance.mode === "external"
+                    ? "Будут удалены подключение NetMap, ключ связи, интеграция и карточки сервисов в PL. Внешние NetBox, Oxidized, Gitea и все данные сохранятся на своём хосте."
+                    : "Будут удалены все компоненты сетевого стека, инвентарь NetBox, конфигурации и история Gitea, профили опроса и четыре карточки сервисов. Восстановление возможно только из отдельной резервной копии."
+                  : instance.module_id === "bookstack"
+                    ? instance.mode === "external"
+                      ? "Будут удалены подключение Wiki, интеграция и карточка в PL. Внешний BookStack, его учётные записи, документы и вложения сохранятся на своём хосте."
+                      : "Будут удалены Wiki, её база данных, документы, изображения, вложения и настройки BookStack. Восстановление возможно только из отдельной резервной копии."
+                    : instance.module_id === "sftpgo"
+                      ? "Будут удалены файловый сервер, его учётные записи, настройки и все принадлежащие экземпляру файлы. Восстановление возможно только из отдельной резервной копии."
+                      : instance.module_id === "forms"
+                        ? "Будут удалены контейнеры Forms, анкеты, ответы, аналитика, настройки и интеграция PL. Восстановление возможно только из отдельной резервной копии."
+                        : instance.module_id === "doska"
+                          ? "Будут удалены контейнеры Doska, проекты, задачи, вложения, настройки и интеграция PL. Восстановление возможно только из отдельной резервной копии."
+                          : instance.module_id === "grafana"
+                            ? "Будут удалены контейнер Grafana, панели, источники данных, локальные настройки и интеграция PL. Метрики Prometheus сохранятся."
+                            : instance.module_id === "wayline"
+                              ? instance.mode === "local"
+                                ? "Будут удалены контейнеры Wayline, цели, история проверок и интеграция PL."
+                                : "Будет удалено подключение Wayline в PL. Внешнее приложение и его данные сохранятся."
+                              : instance.module_id === "fileauditor"
+                                ? "Будет удалено только подключение File Auditor в PL. Windows-сервер, приложение и результаты сканирования сохранятся."
+                                : instance.module_id === "alertmanager"
+                                  ? "Будут удалены контейнер Alertmanager, его конфигурация, секреты получателей и карточка сервиса. Доставка уведомлений этого экземпляра прекратится."
+                                  : instance.module_id === "xray"
+                                    ? "Будут удалены принадлежащие этому экземпляру контейнер Xray, конфигурация, секреты подключений и карточка сервиса. Выбранные proxy-порты будут закрыты."
+                                    : instance.mode === "local"
+                                      ? "Будут удалены контейнер Prometheus, его конфигурация и хранилище метрик, а также интеграция, карточка сервиса и связанные данные обнаружения в Платформе."
+                                      : "Будут удалены подключение, интеграция, карточка сервиса и связанные данные обнаружения в Платформе. Внешний Prometheus и его данные останутся на своём хосте."}
           </p>
           <p className="muted">
             {instance.module_id === "prometheus" &&
@@ -2038,6 +2210,9 @@ function AddModule({
                 "forms",
                 "doska",
                 "sftpgo",
+                "syslog",
+                "f12",
+                "ocserv",
                 "netmap",
                 "bookstack",
               ].includes(descriptor.id) ? (
@@ -2065,6 +2240,9 @@ function AddModule({
               "forms",
               "doska",
               "sftpgo",
+              "syslog",
+              "f12",
+              "ocserv",
               "netmap",
               "bookstack",
             ].includes(descriptor.id) && (
@@ -2301,25 +2479,31 @@ function AddModule({
               </>
             ) : (
               <p className="muted">
-                {descriptor.id === "sftpgo"
-                  ? `Будет установлен SFTPGo ${descriptor.version} с отдельным хранилищем. Пароли и SSH-ключи настраиваются для каждой учётной записи. По умолчанию SFTP доступен только с хоста; адрес и порт выбираются в настройках модуля. Веб-доступ идёт через PL.`
-                  : descriptor.id === "netmap"
-                    ? `Будет установлен единый стек NetMap ${descriptor.version} с NetBox, Oxidized и Gitea. Сервисы доступны через PL; опрос сети запускается отдельно после настройки профиля доступа.`
-                    : descriptor.id === "bookstack"
-                      ? `Будет установлена Wiki на BookStack ${descriptor.version} с отдельной базой данных и собственным входом.`
-                      : descriptor.id === "forms"
-                        ? "Будут установлены Forms, приватный движок анкет и отдельные хранилища. Новая установка пустая. Анкеты и агрегаты доступны администратору, участие в опубликованных анкетах — пользователям PL. Служебные порты не публикуются в LAN."
-                        : descriptor.id === "doska"
-                          ? "Будут установлены Doska и отдельная база проектов и задач. Учётные записи синхронизируются из PL; доступ к доскам определяется правами приложения. Служебные порты не публикуются в LAN."
-                          : descriptor.id === "grafana"
-                            ? "Будет установлена Grafana с собственным входом и отдельным хранилищем данных. Начальная учётная запись: admin / admin. Пользователи, права и источники настраиваются в Grafana. Доступ — через прокси PL."
-                            : descriptor.id === "wayline"
-                              ? "Будут установлены Wayline и изолированный исполнитель сетевых проверок. Цели, интервалы и история хранятся отдельно. Вход — через Платформу, без публикации служебных портов в LAN."
-                              : descriptor.id === "alertmanager"
-                                ? `Будет установлен Alertmanager${descriptor.version ? ` ${descriptor.version}` : " из подготовленного пакета"}. Получателей и proxy доставки можно настроить в Платформе. По умолчанию уведомления выключены; API сервиса не публикуется в LAN.`
-                                : descriptor.id === "xray"
-                                  ? `Будет установлен Xray${descriptor.version ? ` ${descriptor.version}` : " из подготовленного пакета"}. После установки добавьте SOCKS/HTTP inbound и выберите прямой выход или импорт подключения по ссылке. По умолчанию proxy доступен только на loopback; авторизация для LAN опциональна. Управление доступно через Платформу.`
-                                  : `Будет установлен Prometheus ${descriptor.version} с отдельным хранилищем и сбором собственных метрик. Сервис появится в интеграциях и каталоге. Jobs и targets доступны в редакторе конфигурации.`}
+                {descriptor.id === "f12"
+                  ? "PL создаст библиотеку ISO. После установки добавьте образ и выберите сеть для загрузки компьютера."
+                  : descriptor.id === "ocserv"
+                    ? "PL установит шлюз ocserv. В настройках хоста задаются публикация VPN, сертификат и способ входа. Сети и доступ сотрудников назначаются в модуле."
+                  : descriptor.id === "syslog"
+                    ? "Будет установлено локальное хранилище syslog. После установки выберите адрес и порт приёмника для сетевых устройств."
+                    : descriptor.id === "sftpgo"
+                      ? `Будет установлен SFTPGo ${descriptor.version} с отдельным хранилищем. Пароли и SSH-ключи настраиваются для каждой учётной записи. По умолчанию SFTP доступен только с хоста; адрес и порт выбираются в настройках модуля. Веб-доступ идёт через PL.`
+                      : descriptor.id === "netmap"
+                        ? `Будет установлен единый стек NetMap ${descriptor.version} с NetBox, Oxidized и Gitea. Сервисы доступны через PL; опрос сети запускается отдельно после настройки профиля доступа.`
+                        : descriptor.id === "bookstack"
+                          ? `Будет установлена Wiki на BookStack ${descriptor.version} с отдельной базой данных и собственным входом.`
+                          : descriptor.id === "forms"
+                            ? "Будут установлены Forms, приватный движок анкет и отдельные хранилища. Новая установка пустая. Анкеты и агрегаты доступны администратору, участие в опубликованных анкетах — пользователям PL. Служебные порты не публикуются в LAN."
+                            : descriptor.id === "doska"
+                              ? "Будут установлены Doska и отдельная база проектов и задач. Учётные записи синхронизируются из PL; доступ к доскам определяется правами приложения. Служебные порты не публикуются в LAN."
+                              : descriptor.id === "grafana"
+                                ? "Будет установлена Grafana с собственным входом и отдельным хранилищем данных. Начальная учётная запись: admin / admin. Пользователи, права и источники настраиваются в Grafana. Доступ — через прокси PL."
+                                : descriptor.id === "wayline"
+                                  ? "Будут установлены Wayline и изолированный исполнитель сетевых проверок. Цели, интервалы и история хранятся отдельно. Вход — через Платформу, без публикации служебных портов в LAN."
+                                  : descriptor.id === "alertmanager"
+                                    ? `Будет установлен Alertmanager${descriptor.version ? ` ${descriptor.version}` : " из подготовленного пакета"}. Получателей и proxy доставки можно настроить в Платформе. По умолчанию уведомления выключены; API сервиса не публикуется в LAN.`
+                                    : descriptor.id === "xray"
+                                      ? `Будет установлен Xray${descriptor.version ? ` ${descriptor.version}` : " из подготовленного пакета"}. После установки добавьте SOCKS/HTTP inbound и выберите прямой выход или импорт подключения по ссылке. По умолчанию proxy доступен только на loopback; авторизация для LAN опциональна. Управление доступно через Платформу.`
+                                      : `Будет установлен Prometheus ${descriptor.version} с отдельным хранилищем и сбором собственных метрик. Сервис появится в интеграциях и каталоге. Jobs и targets доступны в редакторе конфигурации.`}
               </p>
             )}
           </fieldset>

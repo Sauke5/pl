@@ -52,17 +52,17 @@ PRESERVE = {"state/install.lock", "state/delivery/delivery.lock", "state/deliver
 EXCLUDE = PRESERVE | {"private/upgrade-backups", "private/icmp-helper.json", "private/icmp-runtime-owner.json",
                       "state/delivery/operation.json", "modules/transfers"}
 TERMINAL = {"complete", "failed", "rolled_back"}
-MODULES = {"prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack"}
+MODULES = {"prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack", "syslog", "f12", "ocserv"}
 STORAGE = {"forms": {"mongo", "keydb"}, "doska": {"database"}, "netmap": {"database", "cache"}, "bookstack": {"database"}}
 ROLES = {"prometheus": ("",), "xray": ("",), "alertmanager": ("",), "grafana": ("",),
          "wayline": ("runner", "api", "gateway"), "forms": ("mongo", "keydb", "engine", "adapter"),
-         "doska": ("database", "api", "web"), "sftpgo": ("server",),
+         "doska": ("database", "api", "web"), "sftpgo": ("server",), "syslog": ("server",), "f12": ("server",), "ocserv": ("server",),
          "netmap": ("database", "cache", "netbox", "netbox-worker", "gitea", "adapter", "oxidized"), "bookstack": ("database", "web")}
 VOLUMES = {"prometheus": ("",), "alertmanager": ("",), "wayline": ("",), "grafana": ("",), "xray": (),
            "forms": ("mongo", "mongo-config", "keydb", "assets", "adapter"), "doska": ("database", "attachments"),
            "sftpgo": ("state", "files"), "netmap": ("database", "cache", "media", "gitea", "adapter", "oxidized"),
-           "bookstack": ("database", "config")}
-NETWORK_MODULES = {"wayline", "forms", "doska", "sftpgo", "netmap", "bookstack"}
+           "bookstack": ("database", "config"), "syslog": ("logs",), "f12": ("",), "ocserv": ("",)}
+NETWORK_MODULES = {"wayline", "forms", "doska", "sftpgo", "netmap", "bookstack", "syslog", "ocserv"}
 CORE_NETWORKS = ("backend", "ingress", "egress")
 DNS_DEFAULTS = ("Dns", "DnsOptions", "DnsSearch")
 MAX_LEGACY_DIGESTS = 11520  # 720 mount orders × 2 OOM defaults × 8 DNS defaults.
@@ -241,6 +241,52 @@ def verify_tree(archive_path, destination, overrides=None):
                 raise ValueError("Restored extended attributes differ")
 
 
+def validate_bindings(module, ports):
+    if not isinstance(ports, dict):
+        raise ValueError("Invalid preserved recovery bindings")
+    if module == "syslog" and "9428/tcp" not in ports:
+        raise ValueError("Missing private syslog API binding")
+    if module == "ocserv" and ports and set(ports) != {"4443/tcp", "4443/udp"}:
+        raise ValueError("VPN ingress requires the TLS and DTLS listeners")
+    receivers = set()
+    for port, bindings in ports.items():
+        if module == "syslog":
+            valid_port = port in ("1514/udp", "1514/tcp", "9428/tcp")
+        elif module == "ocserv":
+            valid_port = port in ("4443/tcp", "4443/udp")
+        else:
+            valid_port = bool(re.fullmatch(r"[1-9][0-9]{0,4}/tcp", port)) and int(port.split("/")[0]) <= 65535
+        if not valid_port or not isinstance(bindings, list) or len(bindings) != 1:
+            raise ValueError("Unsupported recovery host binding")
+        binding = bindings[0]
+        if (not isinstance(binding, dict) or set(binding) != {"HostIp", "HostPort"}
+                or not isinstance(binding["HostIp"], str) or not isinstance(binding["HostPort"], str)):
+            raise ValueError("Invalid preserved host binding")
+        address = ipaddress.ip_address(binding["HostIp"] or "0.0.0.0")
+        host_port = binding["HostPort"]
+        dynamic = host_port in ("", "0")
+        if not dynamic and (not host_port.isdigit() or not 1 <= int(host_port) <= 65535):
+            raise ValueError("Invalid preserved host binding")
+        if module == "ocserv":
+            if (dynamic or address.version != 4 or address.is_unspecified or address.is_multicast
+                    or address.is_reserved or address.is_link_local):
+                raise ValueError("Invalid preserved VPN listener")
+            receivers.add((address, host_port))
+        if module == "f12" and (port != "8080/tcp" or host_port != "18080" or address.version != 4
+                or address.is_loopback or address.is_unspecified or address.is_multicast or address.is_reserved):
+            raise ValueError("Invalid F12 segment listener")
+        if module == "syslog":
+            if port == "9428/tcp":
+                if str(address) != "127.0.0.1" or not dynamic:
+                    raise ValueError("Invalid private syslog API binding")
+            else:
+                if dynamic or address.version != 4 or address.is_unspecified or address.is_multicast or address.is_reserved:
+                    raise ValueError("Invalid preserved syslog receiver")
+                receivers.add((address, host_port))
+    if len(receivers) > 1:
+        raise ValueError("Receiver addresses or ports differ across transports")
+
+
 def validate_metadata(meta):
     fields = {"schema", "product", "backup_id", "created_unix", "installation", "root", "origin", "architecture",
               "version", "manifest_sha256", "supervisor_version", "marker", "schema_contract", "live_auth_sha256",
@@ -289,6 +335,15 @@ def validate_metadata(meta):
             instance = item["instance_id"]; seen.add(instance)
             prefix = meta["installation"] + "-" + kind + "-" + instance
             expected_names = {prefix + ("-" + role if len(ROLES[kind]) > 1 else ""): role for role in ROLES[kind]}
+            if kind == "f12":
+                if not isinstance(item["containers"], list) or len(item["containers"]) > 129:
+                    raise ValueError("Invalid F12 recovery publication count")
+                for record in item["containers"]:
+                    name = record.get("name") if isinstance(record, dict) else None
+                    if isinstance(name, str) and re.fullmatch(re.escape(prefix) + r"-edge-[0-9a-f]{64}", name):
+                        expected_names[name] = "server"
+                if len(expected_names) > 1:
+                    expected_networks.add(prefix + "-net")
             if (not isinstance(item["containers"], list) or len(item["containers"]) != len(expected_names)
                     or any(set(v) != {"name", "role"} for v in item["containers"])
                     or {v["name"]: v["role"] for v in item["containers"]} != expected_names):
@@ -310,16 +365,11 @@ def validate_metadata(meta):
             raise ValueError("Invalid recovery native identity")
         elif expected_native.get(item["name"]) != (item["module_id"], item["instance_id"], item["role"], item["running"]):
             raise ValueError("Native recovery container is outside its registered plan")
-        if not isinstance(item["bindings"], dict):
-            raise ValueError("Invalid preserved recovery bindings")
-        for port, bindings in item["bindings"].items():
-            if not re.fullmatch(r"[1-9][0-9]{0,4}/tcp", port) or int(port.split("/")[0]) > 65535 or not isinstance(bindings, list) or len(bindings) != 1:
-                raise ValueError("Unsupported recovery host binding")
-            binding = bindings[0]
-            if (set(binding) != {"HostIp", "HostPort"} or not isinstance(binding["HostIp"], str) or not isinstance(binding["HostPort"], str)
-                    or binding["HostPort"] not in ("", "0") and (not binding["HostPort"].isdigit() or not 1 <= int(binding["HostPort"]) <= 65535)):
-                raise ValueError("Invalid preserved host binding")
-            ipaddress.ip_address(binding["HostIp"] or "0.0.0.0")
+        if item["module_id"] == "f12":
+            edge = item["name"] != meta["installation"] + "-f12-" + item["instance_id"]
+            if not isinstance(item["bindings"], dict) or set(item["bindings"]) != ({"8080/tcp"} if edge else set()):
+                raise ValueError("Unexpected F12 recovery port graph")
+        validate_bindings(item["module_id"], item["bindings"])
     if {v["name"] for v in meta["containers"] if not v["core"]} != set(expected_native):
         raise ValueError("Incomplete recovery native role inventory")
     if {v["service"] for v in meta["containers"] if v["core"]} != {"db", "api", "web"} or sum(v["core"] for v in meta["containers"]) != 3:
@@ -491,7 +541,9 @@ def _container_projection(obj, *, canonical_mount_order=True):
         config["Env"].sort()
     module = (obj.get("Config", {}).get("Labels") or {}).get("pl.module", "")
     for port, bindings in (host.get("PortBindings") or {}).items():
-        if module == "xray" or module == "sftpgo" and port == "2022/tcp" or not module:
+        if (not module or module == "xray" or (module == "sftpgo" and port == "2022/tcp")
+                or (module == "syslog" and port in ("1514/tcp", "1514/udp")) or (module == "f12" and port == "8080/tcp")
+                or (module == "ocserv" and port in ("4443/tcp", "4443/udp"))):
             continue
         for binding in bindings or []:
             if binding.get("HostIp") == "127.0.0.1":
@@ -679,7 +731,7 @@ def validate_networks(meta):
             module, instance = value["labels"].get("pl.module"), value["labels"].get("pl.instance")
             if (module not in MODULES or str(uuid.UUID(instance)) != instance
                     or value["name"] != installation + "-" + module + "-" + instance + "-net"
-                    or subnet.prefixlen != (28 if module == "netmap" else 29)
+                    or subnet.prefixlen != (28 if module in ("netmap", "f12") else 29)
                     or value["labels"].get("pl.module.network.version") != "1"
                     or value["labels"].get("pl.module.network.subnet") != str(subnet)
                     or value["internal"] is not (module == "forms")):
@@ -704,6 +756,37 @@ def validate_module_receipt(receipt, kind):
             or not VERSION.fullmatch(receipt["version"]) or not HEX.fullmatch(receipt["sha256"])
             or "package_version" in receipt and (not isinstance(receipt["package_version"], str) or not VERSION.fullmatch(receipt["package_version"]))):
         raise ValueError("Delivered module receipt is missing or invalid")
+
+
+def require_native_registries(root, registry):
+    for kind in ("f12", "ocserv"):
+        instances = root / "modules" / kind / "instances"
+        if kind not in registry and (instances.is_symlink() or instances.exists() and
+                                      (not instances.is_dir() or any(instances.iterdir()))):
+            raise ValueError(kind + " private instances have no recovery image registry")
+
+
+def verify_f12_files(root, meta):
+    # Only the trusted local controller reads the staged, private state. It checks
+    # each segment identity and derives the exact container names and bindings.
+    instances = meta["native"]["f12"]["instances"]
+    if not instances and not (root / "modules/f12").exists():
+        return  # The image has been downloaded, with no native instance created.
+    native = helper("f12-controller").F12Controller(types.SimpleNamespace(root=root, installation=meta["installation"], docker=None))
+    if {path.name for path in native.instances.iterdir()} != {item["instance_id"] for item in instances}:
+        raise ValueError("F12 private instance set differs from its recovery inventory")
+    for item in instances:
+        instance = item["instance_id"]
+        state = native.state(instance)
+        expected = {native.container_name(instance, segment): native.spec(instance, segment, state)["ports"]
+                    for segment in (None, *state["edges"])}
+        bindings = {v["name"]: v["bindings"] for v in meta["containers"] if v["module_id"] == "f12" and v["instance_id"] == instance}
+        networks = native.host_networks(state) if state["edges"] else {}
+        if any(networks.get(key) != record for key, record in state["edges"].items()):
+            raise ValueError("A selected F12 interface, address or subnet is unavailable")
+        if (not state["storage_created"] or hashlib.sha256(encoded(state) + b"\n").hexdigest() != item["state_sha256"] or bindings != expected
+                or {v["name"] for v in item["containers"]} != set(expected)):
+            raise ValueError("F12 recovery bindings or private state differ")
 
 
 def validate_package_tree(root, meta):
@@ -731,7 +814,14 @@ def validate_package_tree(root, meta):
             or checksum(root / "releases" / meta["version"] / "manifest.json") != meta["manifest_sha256"]):
         raise ValueError("Full recovery currently requires the minimal schema-2 on-demand core")
     registry = controller_records(root, meta)
+    require_native_registries(root, registry)
     validate_delivery_configuration(root)
+    if "ocserv" in registry and not manifest.get("features", {}).get("ocserv_controller"):
+        raise ValueError("Recovery core lacks the VPN controller")
+    if "f12" in registry:
+        if not manifest.get("features", {}).get("f12_controller"):
+            raise ValueError("Recovery core lacks the F12 controller")
+        verify_f12_files(root, meta)
     upgrade = helper("module-upgrade")
     if image_set(manifest, registry, upgrade) != meta["images"]:
         raise ValueError("Recovery images are not the exact registered role set")
@@ -852,6 +942,7 @@ def collect(rt, host, prior=None):
     delivery = delivery_module.Delivery(parent, rt.package)
     state = rt.state
     registry = load_json((rt.private / "module-images.json").read_bytes())
+    require_native_registries(rt.root, registry)
     plans = {kind: upgrade.plan(parent, kind, registry[kind], registry[kind]) for kind in sorted(MODULES & registry.keys())}
     native = {kind: {"instances": [{"instance_id": item["instance_id"], "running": item["running"],
         "state_sha256": item["state_sha256"], "containers": [{"name": v["name"], "role": v["role"]} for v in item["containers"]]}
@@ -895,15 +986,19 @@ def collect(rt, host, prior=None):
         paths[item["name"]] = Path(item["path"])
     if {v["name"] for v in volumes} != {m["Name"] for obj in objects for m in obj.get("Mounts", []) if m.get("Type") == "volume"}:
         raise ValueError("Orphaned or unowned installation data volume")
-    used_networks = {name for obj in objects for name in obj.get("NetworkSettings", {}).get("Networks", {})} - {"bridge"}
+    used_networks = {name for obj in objects for name in obj.get("NetworkSettings", {}).get("Networks", {})
+                     if not (name == "none" and obj["Id"] in known_native and known_native[obj["Id"]][0] == "f12")} - {"bridge"}
     networks = []
     for obj in host.inspect_all("network"):
         owned = (obj.get("Labels") or {}).get("pl.installation") == rt.install_id
         if not owned and obj.get("Name") not in used_networks:
             continue
         configs = obj.get("IPAM", {}).get("Config") or []
+        options = obj.get("Options") or {}
+        default_bridge = ((obj.get("Labels") or {}).get("pl.module") in ("syslog", "f12", "ocserv")
+            and options == {"com.docker.network.enable_ipv4": "true", "com.docker.network.enable_ipv6": "false"})
         if (not owned or obj["Name"] not in used_networks or obj.get("Driver") != "bridge" or obj.get("Scope") != "local"
-                or obj.get("Ingress") or obj.get("EnableIPv6") or obj.get("Options") or len(configs) != 1
+                or obj.get("Ingress") or obj.get("EnableIPv6") or (options and not default_bridge) or len(configs) != 1
                 or configs[0].get("IPRange") or configs[0].get("AuxiliaryAddresses")
                 or set(obj.get("Containers") or {}) - {v["id"] for v in containers}):
             raise ValueError("Foreign, orphaned or unsupported installation network")
@@ -1289,7 +1384,7 @@ class Recovery:
         if not (self.operation or {}).get("created", {}).get("container"):
             requested = set()
             for container in self.meta["containers"]:
-                for bindings in container["bindings"].values():
+                for container_port, bindings in container["bindings"].items():
                     for binding in bindings or []:
                         port = binding.get("HostPort", "")
                         if port in ("", "0"):
@@ -1297,10 +1392,11 @@ class Recovery:
                         address = binding.get("HostIp", "") or "0.0.0.0"
                         if not port.isdigit() or not 1 <= int(port) <= 65535:
                             raise ValueError("Invalid preserved host port")
-                        requested.add((str(ipaddress.ip_address(address)), int(port)))
-            for address, port in requested:
+                        socket_type = socket.SOCK_DGRAM if container_port.endswith("/udp") else socket.SOCK_STREAM
+                        requested.add((str(ipaddress.ip_address(address)), int(port), socket_type))
+            for address, port, socket_type in requested:
                 try:
-                    with socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET) as probe:
+                    with socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET, socket_type) as probe:
                         probe.bind((address, port))
                 except OSError:
                     raise ValueError("A preserved recovery bind address or host port is unavailable") from None
@@ -1528,6 +1624,12 @@ class Recovery:
             for item in plan["instances"]:
                 instance = item["instance_id"]
                 c = upgrade._controller(parent, kind, self.meta["registry"][kind])
+                if kind == "f12":
+                    state = c.state(instance)
+                    networks = c.host_networks(state)
+                    if any(networks.get(key) != record for key, record in state["edges"].items()):
+                        raise ValueError("A selected F12 network is unavailable on this recovery host")
+                    c.prepare_runtime(state, networks)
                 for source_spec in item["containers"]:
                     spec = next(v for v in self.meta["containers"] if v["name"] == source_spec["name"])
                     if spec["name"] in self.operation["created"]["container"]:
@@ -1539,9 +1641,10 @@ class Recovery:
                     if kind == "prometheus": c.create(instance)
                     elif kind == "xray": c.create_container(instance, c.active(instance)["current"], start=False)
                     elif kind == "alertmanager": c.create_container(instance, start=False)
-                    elif kind == "grafana": c.create(instance)
+                    elif kind in ("grafana", "ocserv"): c.create(instance)
                     elif kind == "forms": c.create(instance, role)
-                    elif kind == "sftpgo":
+                    elif kind == "f12": c.create(instance, upgrade.f12_segment(c, instance, spec["name"]), state=state)
+                    elif kind in ("sftpgo", "syslog"):
                         state = c.state(instance); c.create(instance, state["configuration"], state["revision"])
                     else:
                         c.create_container(instance, role)
@@ -1870,7 +1973,7 @@ class Recovery:
                 while True:
                     try:
                         for source_spec in item["containers"]:
-                            obj = upgrade._inspect(c, kind, item["instance_id"], source_spec["role"])
+                            obj = upgrade._inspect(c, kind, item["instance_id"], source_spec["role"], source_spec["name"])
                             if obj is None or obj["Id"] != records[source_spec["name"]]["id"] or bool(obj["State"].get("Running")) is not item["running"]:
                                 raise ValueError("Native recovered role state differs")
                         if item["running"]:

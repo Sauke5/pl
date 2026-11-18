@@ -47,12 +47,12 @@ def wayline_source_allowed(name: str) -> bool:
         return bool(UI_VENDOR_NAME.fullmatch(Path(name).name)) and len(Path(name).parts) == 5
     return False
 
-APPLICATION_ROLES = {"forms": ("adapter", "engine", "mongo", "keydb"), "doska": ("api", "web"), "sftpgo": ("server",),
+APPLICATION_ROLES = {"forms": ("adapter", "engine", "mongo", "keydb"), "doska": ("api", "web"), "sftpgo": ("server",), "syslog": ("server",), "f12": ("server",), "ocserv": ("server",),
                      "netmap": ("database", "cache", "netbox", "netbox-worker", "oxidized", "gitea", "adapter"),
                      "bookstack": ("web", "database")}
 APPLICATION_UPSTREAM_ROLES = {"forms": {"engine", "mongo", "keydb"},
                               "netmap": {"database", "cache", "netbox", "netbox-worker", "oxidized", "gitea"},
-                              "bookstack": {"web", "database"}}
+                              "bookstack": {"web", "database"}, "syslog": {"server"}, "f12": {"server"}, "ocserv": {"server"}}
 APPLICATION_RECIPES = {name: "deploy/images/" + name + ".Dockerfile" for name in APPLICATION_ROLES}
 APPLICATION_METADATA = {name: "deploy/images/" + name + ".sources.json" for name in APPLICATION_ROLES}
 FORMS_REQUIRED = {"apps/forms/" + name for name in ("app.py", "gateway.py", "engine.py", "json_import.py", "analytics.py", "engine-launcher.cjs", "static/index.html", "static/app.js", "static/styles.css", "static/theme.js")}
@@ -61,8 +61,16 @@ NETMAP_STACK_REQUIRED = {"apps/netmap-stack/" + name for name in (
     "cache-start.sh", "gateway.py", "gitea-start.sh", "known-hosts-source.rb", "netbox-bootstrap.py",
     "netbox-extra.py", "netbox-start.sh", "oxidized-start.rb", "service.py", "inventory_collectors.py",
     "inventory_netbox.py", "inventory_jobs.py", "inventory_topology.py", "inventory-requirements.txt", "inventory-LICENSES.txt")}
-APPLICATION_REQUIRED = {"forms": FORMS_REQUIRED, "doska": DOSKA_REQUIRED, "sftpgo": set(),
-                        "bookstack": {"apps/wiki/bootstrap-admin.php"},
+F12_RUNTIME = {"apps/f12/" + name for name in (
+    "native.py", "bootimus.py", "media.py", "library.py", "uploads.py", "gateway.py", "winpe_profile.py", "strelec_media.py", "pxe_control.py",
+    "winpe/winpeshl.ini", "winpe/pl-f12.cmd", "winpe/F12Media.cs",
+)}
+F12_PXE = {"apps/f12/pxe/" + name for name in ("main.go", "dhcp.go", "tftp.go", "worker_test.go")}
+F12_STRELEC = {"apps/f12/strelec/" + name for name in ("media.c", "iso_http.c", "iso_http.h", "build.sh", "winpeshl.ini")}
+F12_BUILD = {"deploy/images/" + name for name in ("f12-origin.py", "f12-runtime.json", "f12.LICENSE", "f12-sources.py", "f12-source-lock.json", "f12-wimboot-sstr.patch", "f12-wimboot-e587564.tar.gz")}
+OCSERV_RUNTIME = {"apps/ocserv/" + name for name in ("pl-ocserv", "gateway.py", "policy.py", "runtime.py", "README.ru.md")}
+APPLICATION_REQUIRED = {"ocserv": OCSERV_RUNTIME | {"deploy/images/ocserv.LICENSE", "deploy/images/ocserv-dex-id-token.patch", "deploy/images/ocserv-test-syslog-fortify.patch"}, "forms": FORMS_REQUIRED, "doska": DOSKA_REQUIRED, "sftpgo": set(), "syslog": {"deploy/images/syslog.LICENSE"},
+                        "bookstack": {"apps/wiki/bootstrap-admin.php"}, "f12": F12_RUNTIME | F12_BUILD | F12_PXE | F12_STRELEC,
                         "netmap": NETMAP_STACK_REQUIRED | {"apps/netmap/app.py", "apps/netmap/web/index.html", "apps/netmap/web/app.js", "apps/netmap/web/office-view.js", "apps/netmap/web/style.css", "apps/netmap/web/theme-init.js"}}
 APPLICATION_SOURCE_PREFIXES = {"bookstack": ("apps/wiki/",), "netmap": ("apps/netmap/", "apps/netmap-stack/")}
 
@@ -77,7 +85,7 @@ def application_source_allowed(module: str, name: str) -> bool:
         return False
     if module == "forms":
         return name in FORMS_REQUIRED
-    if module == "bookstack":
+    if module in ("bookstack", "f12", "ocserv"):
         return name in APPLICATION_REQUIRED[module]
     if module == "netmap":
         if name.startswith("apps/netmap-stack/"):
@@ -121,10 +129,16 @@ def application_metadata(context: Path, module: str) -> dict:
         labels = image.get("labels", {})
         upstream = role in APPLICATION_UPSTREAM_ROLES.get(module, set())
         fields = {"pl.module.id", "pl.module.role", "pl.module.config.version", "org.opencontainers.image.version", "pl.build.variant"} | ({"pl.upstream.version"} if upstream else set())
+        if module == "f12" and "pl.f12.pxe.version" in labels:
+            fields.add("pl.f12.pxe.version")
+            if labels["pl.f12.pxe.version"] != "1":
+                raise ValueError("Unknown F12 PXE worker contract")
         if (set(labels) != fields or labels.get("pl.module.id") != module or labels.get("pl.module.role") != role
                 or labels.get("pl.module.config.version") != "1" or labels.get("org.opencontainers.image.version") != version
                 or labels.get("pl.build.variant") != ("upstream-pinned" if upstream or module == "sftpgo" else "source-build")
                 or (upstream and not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", labels.get("pl.upstream.version", "")))
+                or (module == "f12" and (version != "0.1.81" or labels.get("pl.upstream.version") != version))
+                or (module == "ocserv" and (version != "1.6.0" or labels.get("pl.upstream.version") != version))
                 or image.get("target", role) != role):
             raise ValueError("Invalid application image role metadata")
     return metadata
@@ -235,11 +249,12 @@ def grafana_build_arguments(metadata: dict, args, context: Path) -> list[str]:
     return ["--secret", "id=pl-grafana-signing-key,src=" + str(key), "--build-arg", "PL_SIGNING_FINGERPRINT=" + fingerprint]
 
 
-def source_context(destination: Path, with_wayline: bool = False, with_grafana: bool = False, with_forms: bool = False, with_doska: bool = False, with_sftpgo: bool = False, with_netmap: bool = False, with_bookstack: bool = False) -> None:
+def source_context(destination: Path, with_wayline: bool = False, with_grafana: bool = False, with_forms: bool = False, with_doska: bool = False, with_sftpgo: bool = False, with_netmap: bool = False, with_bookstack: bool = False, with_syslog: bool = False, with_f12: bool = False, with_ocserv: bool = False) -> None:
     if destination.exists():
         raise ValueError("Source snapshot already exists")
-    applications = [name for name, enabled in (("forms", with_forms), ("doska", with_doska), ("sftpgo", with_sftpgo), ("netmap", with_netmap), ("bookstack", with_bookstack)) if enabled]
+    applications = [name for name, enabled in (("forms", with_forms), ("doska", with_doska), ("sftpgo", with_sftpgo), ("netmap", with_netmap), ("bookstack", with_bookstack), ("syslog", with_syslog), ("f12", with_f12), ("ocserv", with_ocserv)) if enabled]
     application_exact = {value for name in applications for value in (APPLICATION_RECIPES[name], APPLICATION_METADATA[name])}
+    application_exact.update(path for name in applications for path in APPLICATION_REQUIRED[name] if path.startswith("deploy/images/"))
     names = run(["git", "ls-files", "-z", PREFIX]).split("\0")
     selected = {}
     for name in sorted(set(names)):
@@ -461,7 +476,7 @@ def build(args) -> None:
             return
         payloads = ("bootstrap.py", "nginx.conf", "LICENSES.txt", "maintenance.py", "module-controller.py", "log-export.py", "xray-controller.py", "alertmanager-controller.py", "module-network.py")
         if not bundled:
-            payloads += ("install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "disaster-recovery.py", "disaster-recovery.ru.md")
+            payloads += ("install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "disaster-recovery.py", "disaster-recovery.ru.md")
         files = {name: (ROOT / "installer" / name) for name in payloads}
         if with_icmp:
             files.update({name: ROOT / "installer" / name for name in ("icmp-probe.py", "icmp-install.py")})
@@ -481,7 +496,7 @@ def build(args) -> None:
                 raise ValueError("Image reference moved during packaging")
         m = {"schema": 2, "product": "PL", "version": args.version, "core_api": 1,
              "installation_counter_url": INSTALLATION_COUNTER_URL,
-             "features": {"local_users": True, "module_controller": True, "connector_credentials": True, "log_export": True, **({"on_demand_modules": True, "upgrade_status": True, "module_upgrades": True, "verified_native_resume": True} if not bundled else {"xray_module": True, "alertmanager_module": True}), **({"icmp_probe": True} if with_icmp else {}), **({"wayline_module": True} if with_wayline else {}), **({"grafana_module": True} if with_grafana else {}), **{module + "_module": True for module in applications}},
+             "features": {"local_users": True, "module_controller": True, "connector_credentials": True, "log_export": True, **({"on_demand_modules": True, "syslog_controller": True, "f12_controller": True, "ocserv_controller": True, "upgrade_status": True, "module_upgrades": True, "verified_native_resume": True} if not bundled else {"xray_module": True, "alertmanager_module": True}), **({"icmp_probe": True} if with_icmp else {}), **({"wayline_module": True} if with_wayline else {}), **({"grafana_module": True} if with_grafana else {}), **{module + "_module": True for module in applications}},
              "architecture": images["api"]["architecture"], "source_sha256": source_hash,
              "database": {"major": 18, "version": "18.6", "volume_target": "/var/lib/postgresql", "pgdata": "/var/lib/postgresql/18/docker"},
              "images": images, "files": {n: sha(p) for n, p in files.items()}}
@@ -499,6 +514,9 @@ def main() -> int:
     context.add_argument("--output", type=Path, required=True)
     context.add_argument("--with-wayline", action="store_true")
     context.add_argument("--with-grafana", action="store_true")
+    context.add_argument("--with-syslog", action="store_true")
+    context.add_argument("--with-f12", action="store_true")
+    context.add_argument("--with-ocserv", action="store_true")
     package = sub.add_parser("build")
     package.add_argument("--source-archive", type=Path, required=True)
     package.add_argument("--version", required=True)
@@ -531,7 +549,7 @@ def main() -> int:
     if args.action == "module":
         setattr(args, "with_" + args.module_id, True)
     try:
-        source_context(args.output, args.with_wayline, args.with_grafana, args.with_forms, args.with_doska, args.with_sftpgo, args.with_netmap, args.with_bookstack) if args.action == "context" else build(args)
+        source_context(args.output, args.with_wayline, args.with_grafana, args.with_forms, args.with_doska, args.with_sftpgo, args.with_netmap, args.with_bookstack, args.with_syslog, args.with_f12, args.with_ocserv) if args.action == "context" else build(args)
         return 0
     except (ValueError, OSError, KeyError, tarfile.TarError) as e:
         print("Packaging failed: " + str(e), file=sys.stderr)

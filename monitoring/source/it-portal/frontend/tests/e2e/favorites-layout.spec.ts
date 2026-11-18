@@ -94,7 +94,7 @@ const legacyIDs = [host.id, bmcHost.id, unsafeApp.id];
 const allResources = [...resources, host, bmcHost, newHost, unsafeApp, bmcApp];
 const groupID = "favorite-group_7932ee00-7156-4b18-998a-11bd95db3694";
 
-async function fixture(page: Page) {
+async function fixture(page: Page, beforeOpen?: () => Promise<void>) {
   let revision = 1;
   let tiles = [
     { id: "favorites", width: 8, height: 0, heightRows: 0, pinned: false },
@@ -275,6 +275,7 @@ async function fixture(page: Page) {
       json: { message: "Источник в изолированной проверке не подключён" },
     });
   });
+  await beforeOpen?.();
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
@@ -293,6 +294,168 @@ async function fixture(page: Page) {
     },
   };
 }
+
+test("problem indicator distinguishes a pending check from an unconfigured office", async ({
+  page,
+}) => {
+  let releaseSources!: () => void;
+  const sourcesReady = new Promise<void>((resolve) => {
+    releaseSources = resolve;
+  });
+  await fixture(page, async () => {
+    await page.route("**/api/v1/workspace-problems", (route) =>
+      route.fulfill({ json: [] }),
+    );
+    await page.route("**/api/v1/integrations", async (route) => {
+      await sourcesReady;
+      await route.fulfill({ json: [] });
+    });
+  });
+  const dialog = page.getByRole("dialog", { name: "Текущие неисправности" });
+  try {
+    await page.getByRole("button", { name: "Загружаем состояние…" }).click();
+    await expect(dialog.getByRole("status")).toContainText("Загружаем");
+    await expect(
+      dialog.getByText("Нет записей, требующих внимания"),
+    ).toHaveCount(0);
+  } finally {
+    releaseSources();
+  }
+  await expect(
+    page.getByRole("button", { name: "Alertmanager не подключён" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: "Открыть каталог модулей" }),
+  ).toHaveAttribute("href", "/#module-catalog");
+  await dialog
+    .getByRole("link", { name: "Подключить существующий Alertmanager" })
+    .click();
+  await expect(page).toHaveURL(/#settings\?section=integrations$/);
+  await expect(
+    page.getByRole("region", { name: "Настройки подключений" }),
+  ).toBeVisible();
+  await expect(dialog).toBeHidden();
+});
+
+for (const [endpoint, message] of [
+  ["integrations", "Не удалось загрузить источники"],
+  ["workspace-problems", "Не удалось загрузить неисправности"],
+] as const)
+  test(`problem indicator retries failed ${endpoint} before reporting zero`, async ({
+    page,
+  }) => {
+    let healthy = false;
+    await fixture(page, async () => {
+      await page.route("**/api/v1/workspace-problems", (route) =>
+        route.fulfill({ json: [] }),
+      );
+      await page.route(`**/api/v1/${endpoint}`, (route) =>
+        healthy
+          ? route.fallback()
+          : route.fulfill({
+              status: 503,
+              json: { message: "Список временно недоступен" },
+            }),
+      );
+    });
+    await page
+      .getByRole("button", { name: "Не удалось получить состояние" })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Текущие неисправности" });
+    await expect(dialog.getByRole("alert")).toContainText(message);
+    await expect(
+      dialog.getByText("Нет записей, требующих внимания"),
+    ).toHaveCount(0);
+    healthy = true;
+    await dialog.getByRole("button", { name: "Повторить" }).click();
+    await expect(
+      page.getByRole("button", { name: "Нет текущих неисправностей" }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText("Нет записей, требующих внимания"),
+    ).toBeVisible();
+  });
+
+test("disabled and stale Alertmanager connections retain a route and known problems", async ({
+  page,
+}) => {
+  const source = {
+    id: "fixture-alerts",
+    name: "Оповещения офиса",
+    kind: "alertmanager",
+    enabled: false,
+    status: "disabled",
+    poll_seconds: 60,
+    last_success: "2020-04-25T09:00:00Z",
+    managed_module_id: "e575aec1-694e-4896-8e9e-60c742410763" as
+      string | undefined,
+  };
+  await fixture(page, async () => {
+    await page.route("**/api/v1/integrations", (route) =>
+      route.fulfill({ json: [source] }),
+    );
+  });
+  await page.getByRole("button", { name: "Известные проблемы: 1" }).click();
+  const dialog = page.getByRole("dialog", { name: "Текущие неисправности" });
+  await expect(dialog).toContainText("Alertmanager отключён");
+  await expect(
+    dialog.getByRole("link", { name: "Открыть модуль" }),
+  ).toHaveAttribute("href", "/#modules?instance=" + source.managed_module_id);
+  await expect(
+    dialog.getByRole("button", { name: /Сервис недоступен/ }),
+  ).toBeVisible();
+  source.enabled = true;
+  source.status = "connected";
+  source.managed_module_id = undefined;
+  await page.reload();
+  await page.getByRole("button", { name: "Известные проблемы: 1" }).click();
+  await expect(dialog).toContainText("Данные Alertmanager требуют проверки");
+  await expect(dialog).toContainText("Оповещения офиса");
+  await expect(
+    dialog.getByRole("link", { name: "Открыть подключение" }),
+  ).toHaveAttribute(
+    "href",
+    "/#settings?section=integrations&integration=fixture-alerts",
+  );
+  await dialog.getByRole("button", { name: /Сервис недоступен/ }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Сервис недоступен", exact: true }),
+  ).toBeVisible();
+});
+
+test("a failed refresh keeps previously observed problems available", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date() });
+  let failRefresh = false;
+  await fixture(page, () =>
+    page.route("**/api/v1/workspace-problems", (route) =>
+      failRefresh
+        ? route.fulfill({
+            status: 503,
+            json: { message: "Не удалось прочитать список" },
+          })
+        : route.fallback(),
+    ),
+  );
+  await page.getByRole("button", { name: "Проблемы: 1", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Текущие неисправности" });
+  failRefresh = true;
+  await page.clock.fastForward(60000);
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Не удалось загрузить неисправности",
+  );
+  await expect(dialog).toContainText("Показаны последние полученные записи");
+  const item = dialog.getByRole("button", { name: /Сервис недоступен/ });
+  await expect(item).toBeVisible();
+  await dialog.getByRole("button", { name: "Скрытые и приглушённые" }).click();
+  await expect(item).toBeHidden();
+  await dialog.getByRole("button", { name: "Требуют внимания" }).click();
+  await item.click();
+  await expect(
+    page.getByRole("dialog", { name: "Сервис недоступен", exact: true }),
+  ).toBeVisible();
+});
 
 async function geometry(page: Page) {
   return page

@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 
-MODULES = {'forms', 'doska', 'wayline', 'grafana', 'sftpgo', 'netmap', 'bookstack'}
+MODULES = {'forms', 'doska', 'wayline', 'grafana', 'sftpgo', 'syslog', 'f12', 'ocserv', 'netmap', 'bookstack'}
 ROLES = {'forms': ('mongo', 'keydb', 'engine', 'adapter', 'engine-bootstrap'),
          'doska': ('database', 'api', 'web'), 'wayline': ('runner', 'api', 'gateway'),
          'netmap': ('database', 'cache', 'netbox', 'netbox-worker', 'oxidized', 'gitea', 'adapter'),
@@ -55,12 +55,16 @@ def owned_network(obj, installation, available, inspect_container, *, prometheus
         subnet = ipaddress.IPv4Network(configs[0]['Subnet'], strict=True)
     except (ValueError, IndexError, KeyError, TypeError):
         return None
+    # Docker 29 can materialize the IPv4-only bridge defaults on network create.
+    options = obj.get('Options') or {}
+    default_bridge = {'com.docker.network.enable_ipv4': 'true', 'com.docker.network.enable_ipv6': 'false'}
     if (not re.fullmatch(r'[0-9a-f]{64}', obj.get('Id', '')) or obj.get('Name') != prefix + '-net' or obj.get('Driver') != 'bridge' or obj.get('Scope') != 'local'
-            or obj.get('Ingress') or obj.get('Internal', False) != (module == 'forms') or obj.get('Options')
+            or obj.get('Ingress') or obj.get('Internal', False) != (module == 'forms')
+            or options and (module not in ('syslog', 'f12', 'ocserv') or options != default_bridge)
             or obj.get('IPAM', {}).get('Driver') != 'default' or obj.get('IPAM', {}).get('Options') or len(configs) != 1
             or configs[0].get('Gateway') != str(subnet.network_address + 1)
             or configs[0].get('IPRange') or configs[0].get('AuxiliaryAddresses')
-            or subnet.prefixlen != (28 if module == 'netmap' else 29) or not any(subnet.subnet_of(p) for p in available)
+            or subnet.prefixlen != (28 if module in ('netmap', 'f12') else 29) or not any(subnet.subnet_of(p) for p in available)
             or labels.get('pl.module.network.version') != '1' or labels.get('pl.module.network.subnet') != str(subnet)):
         return None
     allowed_names = {prefix + '-' + role for role in ROLES[module]} if module in ROLES else {prefix}
@@ -73,6 +77,11 @@ def owned_network(obj, installation, available, inspect_container, *, prometheus
         selected_prometheus = member.get('Name') == prometheus_name
         expected_labels = ({'pl.installation': installation, 'pl.module': 'prometheus', 'pl.instance': prometheus}
                            if selected_prometheus else {key: labels.get(key) for key in ('pl.installation', 'pl.module', 'pl.instance')})
+        if module == 'f12':
+            segment = cl.get('pl.f12.segment', '')
+            if cl.get('pl.f12.role') != 'edge' or not isinstance(segment, str) or not re.fullmatch('[0-9a-f]{64}', segment):
+                return None
+            allowed_names = {prefix + '-edge-' + segment}
         if (container.get('Id') != identity or container.get('Name', '').lstrip('/') != member.get('Name')
                 or member.get('Name') not in allowed_names
                 or any(cl.get(k) != value for k, value in expected_labels.items())

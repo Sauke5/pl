@@ -1,0 +1,534 @@
+{
+  "origin": {
+    "bootimus-c1b3328.tar.gz": {
+      "bytes": 19793447,
+      "sha256": "1e9fc1c10d411cf3b898c989783401560c6748f642a502a8c291c16fa6e3b049",
+      "urls": [
+        "https://codeload.github.com/garybowers/bootimus/tar.gz/c1b33282c695cff79cb348c80d303a101db7b8b3"
+      ]
+    },
+    "ipxeboot-v2.0.0.tar.gz": {
+      "bytes": 12002760,
+      "sha256": "01a526d4cc791fc30362259c609d6c506cc64a7bdff51b9a5eb788354e17eee1",
+      "urls": [
+        "https://github.com/ipxe/ipxe/releases/download/v2.0.0/ipxeboot.tar.gz"
+      ]
+    },
+    "shimx64-dual-16.1.efi": {
+      "bytes": 1048424,
+      "sha256": "5eecca2780bd49c900565e124516a1bd666ec5e012825f34991b6ba1ef2fa6cf",
+      "urls": [
+        "https://github.com/ipxe/shim/releases/download/ipxe-16.1/ipxe-shimx64.efi"
+      ]
+    },
+    "wimboot-2.9.0": {
+      "bytes": 76064,
+      "sha256": "5f067ccdc4d084d5bf77b6c853bd0f8402dfc2b4cd1b103d358993ae97fae8e3",
+      "urls": [
+        "https://github.com/ipxe/wimboot/releases/download/v2.9.0/wimboot"
+      ]
+    }
+  },
+  "packages": {
+    "amd64": {
+      "libburn4t64_1.5.6-1.1+b1_amd64.deb": {
+        "bytes": 164240,
+        "sha256": "59edae2bc41ec2319d1569157b82c49f54b64e7459ce57c7ff443029fa8bb82f",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libb/libburn/libburn4t64_1.5.6-1.1+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libb/libburn/libburn4t64_1.5.6-1.1+b1_amd64.deb"
+        ]
+      },
+      "libexpat1_2.9.0-1~deb13u1_amd64.deb": {
+        "bytes": 125744,
+        "sha256": "feff874772cae904ae4d24e917b35664952bec4b4ae9100a4edda5a7fa746832",
+        "urls": [
+          "https://deb.debian.org/debian-security/pool/updates/main/e/expat/libexpat1_2.9.0-1~deb13u1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian-security/20261115T090000Z/pool/updates/main/e/expat/libexpat1_2.9.0-1~deb13u1_amd64.deb"
+        ]
+      },
+      "libhivex0_1.3.24-1+b10_amd64.deb": {
+        "bytes": 27172,
+        "sha256": "e10e09e8977f3e596b2f17cdb1f587e54efe6e59a9bef45356ec0f0aaf499176",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/h/hivex/libhivex0_1.3.24-1+b10_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/h/hivex/libhivex0_1.3.24-1+b10_amd64.deb"
+        ]
+      },
+      "libisoburn1t64_1.5.6-1.2+b1_amd64.deb": {
+        "bytes": 410400,
+        "sha256": "b80bb60269492aaf4a7dd316b238db0e1fc34647f59bc0d86aeb9d298089931d",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libi/libisoburn/libisoburn1t64_1.5.6-1.2+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libi/libisoburn/libisoburn1t64_1.5.6-1.2+b1_amd64.deb"
+        ]
+      },
+      "libisofs6t64_1.5.6.pl01-1.1+b1_amd64.deb": {
+        "bytes": 218604,
+        "sha256": "52e9b19b888ff9af70299068ccd2bad790583da54ef8b6b6d8cb16b55d16aa88",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libi/libisofs/libisofs6t64_1.5.6.pl01-1.1+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libi/libisofs/libisofs6t64_1.5.6.pl01-1.1+b1_amd64.deb"
+        ]
+      },
+      "libjte2_1.22-4+b2_amd64.deb": {
+        "bytes": 29592,
+        "sha256": "2e7799a28deac613ffaa75bb131046e8f9311fc211b747a10cf6760f15f0c4ae",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/j/jigit/libjte2_1.22-4+b2_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/j/jigit/libjte2_1.22-4+b2_amd64.deb"
+        ]
+      },
+      "libpython3-stdlib_3.13.5-1_amd64.deb": {
+        "bytes": 10180,
+        "sha256": "7e142ed64a81ccdd39714f213467bd365736ef341adb2be11be981f638b9175f",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3-defaults/libpython3-stdlib_3.13.5-1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3-defaults/libpython3-stdlib_3.13.5-1_amd64.deb"
+        ]
+      },
+      "libpython3.13-minimal_3.13.5-2+deb13u5_amd64.deb": {
+        "bytes": 863168,
+        "sha256": "a4aa6a9a8c77f87bfe545e1d14ec42c001d189ace90e3aa75deec882b39dee49",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/libpython3.13-minimal_3.13.5-2+deb13u5_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/libpython3.13-minimal_3.13.5-2+deb13u5_amd64.deb"
+        ]
+      },
+      "libpython3.13-stdlib_3.13.5-2+deb13u5_amd64.deb": {
+        "bytes": 1958624,
+        "sha256": "db161322a3481d2c0c3b9a3b9a03c3ab0e2b1718f54b88755fb4a3f939165b84",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/libpython3.13-stdlib_3.13.5-2+deb13u5_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/libpython3.13-stdlib_3.13.5-2+deb13u5_amd64.deb"
+        ]
+      },
+      "media-types_13.0.0_all.deb": {
+        "bytes": 29336,
+        "sha256": "0788e4b0b72db1bcf74a19cb24c3511e7770ad0b341f0f30e361701c3072f53e",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/media-types/media-types_13.0.0_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/media-types/media-types_13.0.0_all.deb"
+        ]
+      },
+      "python3-hivex_1.3.24-1+b10_amd64.deb": {
+        "bytes": 11360,
+        "sha256": "6a8d2eae089b1edd814318e13a8e7d47c37db8a682e03ee73541e1b522f9873f",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/h/hivex/python3-hivex_1.3.24-1+b10_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/h/hivex/python3-hivex_1.3.24-1+b10_amd64.deb"
+        ]
+      },
+      "python3-minimal_3.13.5-1_amd64.deb": {
+        "bytes": 27248,
+        "sha256": "a5d2371bebf3689f676e3f3bae800371bcc4392a8a51269e23d528249b399615",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3-defaults/python3-minimal_3.13.5-1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3-defaults/python3-minimal_3.13.5-1_amd64.deb"
+        ]
+      },
+      "python3.13-minimal_3.13.5-2+deb13u5_amd64.deb": {
+        "bytes": 2224552,
+        "sha256": "c1fda9e7b1bf15b2fa75a238d8a8710e142fe14c722fc650c5fc614f078c9073",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/python3.13-minimal_3.13.5-2+deb13u5_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/python3.13-minimal_3.13.5-2+deb13u5_amd64.deb"
+        ]
+      },
+      "python3.13_3.13.5-2+deb13u5_amd64.deb": {
+        "bytes": 757492,
+        "sha256": "460c1fd72845516ac3ce9d1686916f3ab2e4c86f8a9746e14d26243a47e2b98d",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/python3.13_3.13.5-2+deb13u5_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/python3.13_3.13.5-2+deb13u5_amd64.deb"
+        ]
+      },
+      "python3_3.13.5-1_amd64.deb": {
+        "bytes": 28244,
+        "sha256": "c1388174dc7140e6c19a6dd39f8a0dcb38a835cd66c65644e0dded43d5223cb0",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3-defaults/python3_3.13.5-1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3-defaults/python3_3.13.5-1_amd64.deb"
+        ]
+      },
+      "xorriso_1.5.6-1.2+b1_amd64.deb": {
+        "bytes": 323180,
+        "sha256": "9ee40b0f45479283c1c69e5d914f69c44051c61b6efb3f86994238a62ceddd1a",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libi/libisoburn/xorriso_1.5.6-1.2+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libi/libisoburn/xorriso_1.5.6-1.2+b1_amd64.deb"
+        ]
+      }
+    },
+    "arm64": {
+      "libburn4t64_1.5.6-1.1+b1_arm64.deb": {
+        "bytes": 152384,
+        "sha256": "e7269202044e7d00bd3d4729f5b76400d2a5f1a1957052efe9007d26aecc5d4b",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libb/libburn/libburn4t64_1.5.6-1.1+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libb/libburn/libburn4t64_1.5.6-1.1+b1_arm64.deb"
+        ]
+      },
+      "libexpat1_2.9.0-1~deb13u1_arm64.deb": {
+        "bytes": 113920,
+        "sha256": "d9e1c50fcdad079fe16d77f1578adcc763be1bf7f2da7fa8adca7010b0c84c83",
+        "urls": [
+          "https://deb.debian.org/debian-security/pool/updates/main/e/expat/libexpat1_2.9.0-1~deb13u1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian-security/20261115T090000Z/pool/updates/main/e/expat/libexpat1_2.9.0-1~deb13u1_arm64.deb"
+        ]
+      },
+      "libhivex0_1.3.24-1+b10_arm64.deb": {
+        "bytes": 25252,
+        "sha256": "27430be71f8f42f8a6b865033e19037f3e7855c4d6f12f35cf5660913756149f",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/h/hivex/libhivex0_1.3.24-1+b10_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/h/hivex/libhivex0_1.3.24-1+b10_arm64.deb"
+        ]
+      },
+      "libisoburn1t64_1.5.6-1.2+b1_arm64.deb": {
+        "bytes": 378504,
+        "sha256": "42cffac76a91925e3c8f4f56969cebca1b3bed359dc8dfe73f2a9b05de16db59",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libi/libisoburn/libisoburn1t64_1.5.6-1.2+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libi/libisoburn/libisoburn1t64_1.5.6-1.2+b1_arm64.deb"
+        ]
+      },
+      "libisofs6t64_1.5.6.pl01-1.1+b1_arm64.deb": {
+        "bytes": 203504,
+        "sha256": "7bca3d6df56a7758d951bff63fedd7c66cf213c00c9661ecac19902ff8be931c",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libi/libisofs/libisofs6t64_1.5.6.pl01-1.1+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libi/libisofs/libisofs6t64_1.5.6.pl01-1.1+b1_arm64.deb"
+        ]
+      },
+      "libjte2_1.22-4+b2_arm64.deb": {
+        "bytes": 28024,
+        "sha256": "79583f0d1811c368adb7bcd5fd3ebf1e8739d2b1c7a4321a2541670114f23bff",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/j/jigit/libjte2_1.22-4+b2_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/j/jigit/libjte2_1.22-4+b2_arm64.deb"
+        ]
+      },
+      "libpython3-stdlib_3.13.5-1_arm64.deb": {
+        "bytes": 10180,
+        "sha256": "0e5b09b3c90f34399a357c32e1be08a3f31b39d3c615464f00354b309f82e732",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3-defaults/libpython3-stdlib_3.13.5-1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3-defaults/libpython3-stdlib_3.13.5-1_arm64.deb"
+        ]
+      },
+      "libpython3.13-minimal_3.13.5-2+deb13u5_arm64.deb": {
+        "bytes": 856328,
+        "sha256": "3655ef258b19142cf6fe38ef89731d5c630b2cf3309632494a720b28c1cfcd85",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/libpython3.13-minimal_3.13.5-2+deb13u5_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/libpython3.13-minimal_3.13.5-2+deb13u5_arm64.deb"
+        ]
+      },
+      "libpython3.13-stdlib_3.13.5-2+deb13u5_arm64.deb": {
+        "bytes": 1894712,
+        "sha256": "d1178d24e4d143cc6c577d9dc0f26dd982efccc2e600d25ce86361f168a22be0",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/libpython3.13-stdlib_3.13.5-2+deb13u5_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/libpython3.13-stdlib_3.13.5-2+deb13u5_arm64.deb"
+        ]
+      },
+      "media-types_13.0.0_all.deb": {
+        "bytes": 29336,
+        "sha256": "0788e4b0b72db1bcf74a19cb24c3511e7770ad0b341f0f30e361701c3072f53e",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/media-types/media-types_13.0.0_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/media-types/media-types_13.0.0_all.deb"
+        ]
+      },
+      "python3-hivex_1.3.24-1+b10_arm64.deb": {
+        "bytes": 11328,
+        "sha256": "6e353118d8da7b43fa41c7a89700a3650e4e26162a9250494b568a0614e4ea52",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/h/hivex/python3-hivex_1.3.24-1+b10_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/h/hivex/python3-hivex_1.3.24-1+b10_arm64.deb"
+        ]
+      },
+      "python3-minimal_3.13.5-1_arm64.deb": {
+        "bytes": 27244,
+        "sha256": "b1dff61d3e68c83c747b03399356ba707d491bcaf6e495b575d46be3143cdec8",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3-defaults/python3-minimal_3.13.5-1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3-defaults/python3-minimal_3.13.5-1_arm64.deb"
+        ]
+      },
+      "python3.13-minimal_3.13.5-2+deb13u5_arm64.deb": {
+        "bytes": 2008016,
+        "sha256": "95237a3ad99bf9366308e16f7c79449c9371c4cff9c883772fb7c254652467eb",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/python3.13-minimal_3.13.5-2+deb13u5_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/python3.13-minimal_3.13.5-2+deb13u5_arm64.deb"
+        ]
+      },
+      "python3.13_3.13.5-2+deb13u5_arm64.deb": {
+        "bytes": 757492,
+        "sha256": "3d027394c6afd08a2663c3da588824aa9ee0c54e3c2b4382bb9f644584bc99a1",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3.13/python3.13_3.13.5-2+deb13u5_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3.13/python3.13_3.13.5-2+deb13u5_arm64.deb"
+        ]
+      },
+      "python3_3.13.5-1_arm64.deb": {
+        "bytes": 28244,
+        "sha256": "8d5be256bf3bb4f07afce1aa86f0595c6939e1a6c2ea939bdcb7b36351cbe021",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/p/python3-defaults/python3_3.13.5-1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/p/python3-defaults/python3_3.13.5-1_arm64.deb"
+        ]
+      },
+      "xorriso_1.5.6-1.2+b1_arm64.deb": {
+        "bytes": 323180,
+        "sha256": "3fa3e4b84a37e1a6ae3cd0913f91a713ed55e16272d21ce1e710bdd81c7cf201",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/libi/libisoburn/xorriso_1.5.6-1.2+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/libi/libisoburn/xorriso_1.5.6-1.2+b1_arm64.deb"
+        ]
+      }
+    }
+  },
+  "python": {
+    "pycdlib-1.22.0-py3-none-any.whl": {
+      "bytes": 238118,
+      "sha256": "bfa0b3631345a14b2741fe088398b6b8dc2838442ea607fd07d027dcc67b9e94",
+      "urls": [
+        "https://files.pythonhosted.org/packages/7c/64/5a5912a3f3ba47dba3eb7f707e51f91926b26be4bde25fe2da483f3c4a9b/pycdlib-1.22.0-py3-none-any.whl"
+      ]
+    }
+  },
+  "schema": 1,
+  "windows_build": {
+    "amd64": {
+      "binutils-common_2.44-3_amd64.deb": {
+        "bytes": 2508768,
+        "sha256": "002da5d23f8757dee97a2c0a40e0e1d4d85a43da094488ee2ee7068d4d3691f9",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/b/binutils/binutils-common_2.44-3_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/b/binutils/binutils-common_2.44-3_amd64.deb"
+        ]
+      },
+      "binutils-mingw-w64-i686_2.44-3+12+b1_amd64.deb": {
+        "bytes": 2859432,
+        "sha256": "a8b90b43c53371e436e804a2335bfef77824dbd3d40c74e01acbed04ad333310",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-i686_2.44-3+12+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-i686_2.44-3+12+b1_amd64.deb"
+        ]
+      },
+      "binutils-mingw-w64-x86-64_2.44-3+12+b1_amd64.deb": {
+        "bytes": 3473344,
+        "sha256": "b53f4a091b16a0d0952b8e3bd6027931641386258f96b37db1f0c62c787221d3",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-x86-64_2.44-3+12+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-x86-64_2.44-3+12+b1_amd64.deb"
+        ]
+      },
+      "gcc-mingw-w64-base_14.2.0-19+27+b1_amd64.deb": {
+        "bytes": 194268,
+        "sha256": "8d2c64b886ab4a435a78ddc4cd3b510f149b65fbd6be8472e8f460627562718a",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-base_14.2.0-19+27+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-base_14.2.0-19+27+b1_amd64.deb"
+        ]
+      },
+      "gcc-mingw-w64-i686-posix-runtime_14.2.0-19+27+b1_amd64.deb": {
+        "bytes": 12267596,
+        "sha256": "17a77024da685e0a56aac485afc518f9fba4d9ad557bce5d09ba2bf70c56bbb7",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix-runtime_14.2.0-19+27+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix-runtime_14.2.0-19+27+b1_amd64.deb"
+        ]
+      },
+      "gcc-mingw-w64-i686-posix_14.2.0-19+27+b1_amd64.deb": {
+        "bytes": 37155800,
+        "sha256": "31bbc7a215925deb972df1f5a8923e4b9ce3633903e0b30a908eb11dc82cdba6",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix_14.2.0-19+27+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix_14.2.0-19+27+b1_amd64.deb"
+        ]
+      },
+      "gcc-mingw-w64-x86-64-posix-runtime_14.2.0-19+27+b1_amd64.deb": {
+        "bytes": 13037152,
+        "sha256": "c898d96177574a8a7238564a1e799d8ddfed5a3d2ea005510305f9ad466a6f59",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix-runtime_14.2.0-19+27+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix-runtime_14.2.0-19+27+b1_amd64.deb"
+        ]
+      },
+      "gcc-mingw-w64-x86-64-posix_14.2.0-19+27+b1_amd64.deb": {
+        "bytes": 37567656,
+        "sha256": "e32d24cfd1482394f16d9a84c1d0a9f5aa08ee826a79acc383c70cc8c23c4fe5",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix_14.2.0-19+27+b1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix_14.2.0-19+27+b1_amd64.deb"
+        ]
+      },
+      "libisl23_0.27-1_amd64.deb": {
+        "bytes": 659152,
+        "sha256": "ac8518042e81c00de1effb72bba7e88ac4ecd488f7ea8b9e3ebc63159cb53b35",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/i/isl/libisl23_0.27-1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/i/isl/libisl23_0.27-1_amd64.deb"
+        ]
+      },
+      "libmpc3_1.3.1-1+b3_amd64.deb": {
+        "bytes": 52244,
+        "sha256": "2af0a5c128e03694a41c0b011bd8a958b7297436cdb3a15ddad7866dae8c300b",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mpclib3/libmpc3_1.3.1-1+b3_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mpclib3/libmpc3_1.3.1-1+b3_amd64.deb"
+        ]
+      },
+      "libmpfr6_4.2.2-1_amd64.deb": {
+        "bytes": 729320,
+        "sha256": "75dddce11dabc7fc543712c33dc27b7f2ee66a111763eb5eac654d010b42cd92",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mpfr4/libmpfr6_4.2.2-1_amd64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mpfr4/libmpfr6_4.2.2-1_amd64.deb"
+        ]
+      },
+      "mingw-w64-common_12.0.0-5_all.deb": {
+        "bytes": 5792084,
+        "sha256": "97dce5d0d8aff1cade4786ad4ef5078345477a598829afcac2e7f2fbc5399990",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mingw-w64/mingw-w64-common_12.0.0-5_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mingw-w64/mingw-w64-common_12.0.0-5_all.deb"
+        ]
+      },
+      "mingw-w64-i686-dev_12.0.0-5_all.deb": {
+        "bytes": 4180268,
+        "sha256": "ddd5f65c29014ae67b89df146a8016f38056a9d8eadbccd17cae4c00ccd01528",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mingw-w64/mingw-w64-i686-dev_12.0.0-5_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mingw-w64/mingw-w64-i686-dev_12.0.0-5_all.deb"
+        ]
+      },
+      "mingw-w64-x86-64-dev_12.0.0-5_all.deb": {
+        "bytes": 4871860,
+        "sha256": "0bf89cf7454cccb49cd2a46a6f7b33896f6ae3a1a2fe33e02c40be6155bbb385",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mingw-w64/mingw-w64-x86-64-dev_12.0.0-5_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mingw-w64/mingw-w64-x86-64-dev_12.0.0-5_all.deb"
+        ]
+      }
+    },
+    "arm64": {
+      "binutils-common_2.44-3_arm64.deb": {
+        "bytes": 2508772,
+        "sha256": "f2d6b7d0b5521c4c90fc105e32819cd5268c1aa69104173b3fb856595f898249",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/b/binutils/binutils-common_2.44-3_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/b/binutils/binutils-common_2.44-3_arm64.deb"
+        ]
+      },
+      "binutils-mingw-w64-i686_2.44-3+12+b1_arm64.deb": {
+        "bytes": 2696004,
+        "sha256": "2fff7dd52879d839cbf5850064238865a81104ff5e83edf21a9a20095f1a94a6",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-i686_2.44-3+12+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-i686_2.44-3+12+b1_arm64.deb"
+        ]
+      },
+      "binutils-mingw-w64-x86-64_2.44-3+12+b1_arm64.deb": {
+        "bytes": 3262516,
+        "sha256": "3ee17106b274e6da41d19e4328ea6b927dfc79ff829bf70bcfe0754e7b02ceb7",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-x86-64_2.44-3+12+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/b/binutils-mingw-w64/binutils-mingw-w64-x86-64_2.44-3+12+b1_arm64.deb"
+        ]
+      },
+      "gcc-mingw-w64-base_14.2.0-19+27+b1_arm64.deb": {
+        "bytes": 194236,
+        "sha256": "ef9457d2aefd72d227d1b1d2be740cd1e9a5c2582e0494d5fca92912ec4b682f",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-base_14.2.0-19+27+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-base_14.2.0-19+27+b1_arm64.deb"
+        ]
+      },
+      "gcc-mingw-w64-i686-posix-runtime_14.2.0-19+27+b1_arm64.deb": {
+        "bytes": 12267956,
+        "sha256": "d366dc093d8abab917b56b4864b5e898c5168c98f1a108f8d00967fa2666423d",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix-runtime_14.2.0-19+27+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix-runtime_14.2.0-19+27+b1_arm64.deb"
+        ]
+      },
+      "gcc-mingw-w64-i686-posix_14.2.0-19+27+b1_arm64.deb": {
+        "bytes": 34078204,
+        "sha256": "2b5869a8bb2998d0f56b9a3c393d55e785fdcd0cdc33585eb4cdb4167aae346a",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix_14.2.0-19+27+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-i686-posix_14.2.0-19+27+b1_arm64.deb"
+        ]
+      },
+      "gcc-mingw-w64-x86-64-posix-runtime_14.2.0-19+27+b1_arm64.deb": {
+        "bytes": 13036988,
+        "sha256": "d0ca61d0daf7d8a9741a4435b4d26bdc55b75d92c36b4a1a2ac97c962272ba91",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix-runtime_14.2.0-19+27+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix-runtime_14.2.0-19+27+b1_arm64.deb"
+        ]
+      },
+      "gcc-mingw-w64-x86-64-posix_14.2.0-19+27+b1_arm64.deb": {
+        "bytes": 34306392,
+        "sha256": "8c29ed610e24250f3bf024093a63ca3a3530ac21871ffb792ac86e64044310a2",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix_14.2.0-19+27+b1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix_14.2.0-19+27+b1_arm64.deb"
+        ]
+      },
+      "libisl23_0.27-1_arm64.deb": {
+        "bytes": 600836,
+        "sha256": "21c490db3fa5f0a517c55090a199334da6164589772ebd922dff1e569c78515d",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/i/isl/libisl23_0.27-1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/i/isl/libisl23_0.27-1_arm64.deb"
+        ]
+      },
+      "libmpc3_1.3.1-1+b3_arm64.deb": {
+        "bytes": 50480,
+        "sha256": "d4cfe026a624e51641c80ef2af77387185714f62f3b5c87035e62d9ed8d9eec1",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mpclib3/libmpc3_1.3.1-1+b3_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mpclib3/libmpc3_1.3.1-1+b3_arm64.deb"
+        ]
+      },
+      "libmpfr6_4.2.2-1_arm64.deb": {
+        "bytes": 685000,
+        "sha256": "628a4ef58cc6815880f72e9d3953984a379a017e4042bc575f1fcbf3954d79ac",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mpfr4/libmpfr6_4.2.2-1_arm64.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mpfr4/libmpfr6_4.2.2-1_arm64.deb"
+        ]
+      },
+      "mingw-w64-common_12.0.0-5_all.deb": {
+        "bytes": 5792084,
+        "sha256": "97dce5d0d8aff1cade4786ad4ef5078345477a598829afcac2e7f2fbc5399990",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mingw-w64/mingw-w64-common_12.0.0-5_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mingw-w64/mingw-w64-common_12.0.0-5_all.deb"
+        ]
+      },
+      "mingw-w64-i686-dev_12.0.0-5_all.deb": {
+        "bytes": 4180268,
+        "sha256": "ddd5f65c29014ae67b89df146a8016f38056a9d8eadbccd17cae4c00ccd01528",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mingw-w64/mingw-w64-i686-dev_12.0.0-5_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mingw-w64/mingw-w64-i686-dev_12.0.0-5_all.deb"
+        ]
+      },
+      "mingw-w64-x86-64-dev_12.0.0-5_all.deb": {
+        "bytes": 4871860,
+        "sha256": "0bf89cf7454cccb49cd2a46a6f7b33896f6ae3a1a2fe33e02c40be6155bbb385",
+        "urls": [
+          "https://deb.debian.org/debian/pool/main/m/mingw-w64/mingw-w64-x86-64-dev_12.0.0-5_all.deb",
+          "https://snapshot.debian.org/archive/debian/20261115T090000Z/pool/main/m/mingw-w64/mingw-w64-x86-64-dev_12.0.0-5_all.deb"
+        ]
+      }
+    }
+  }
+}

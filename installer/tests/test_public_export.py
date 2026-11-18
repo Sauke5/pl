@@ -15,6 +15,15 @@ spec.loader.exec_module(export)
 
 
 class PublicExportTests(unittest.TestCase):
+    def test_public_wimboot_source_archive_must_match_its_upstream_digest(self):
+        name = export.UPSTREAM_WIMBOOT_SOURCE
+        body = (BASE.parent / name).read_bytes()
+        self.assertEqual(export.audit_files({name: body}), [])
+        findings = export.audit_files({name: body + b"altered"})
+        self.assertEqual([finding["rule"] for finding in findings], ["upstream-source-digest"])
+        self.assertEqual([finding["rule"] for finding in export.audit_files({"archive.tar.gz": body})],
+                         ["unexpected-binary"])
+
     def test_context_preserves_public_source_structure_and_rejects_traversal(self):
         for name, expected in {
             "cmd/portal/main.go": "monitoring/source/it-portal/cmd/portal/main.go",
@@ -28,17 +37,22 @@ class PublicExportTests(unittest.TestCase):
                 export.source_name(name)
 
     def test_runtime_context_uses_every_supported_module_flag(self):
-        def source_context(destination, with_forms=False, with_doska=False):
+        def source_context(destination, with_forms=False, with_doska=False, with_syslog=False):
             self.assertTrue(with_forms)
             self.assertTrue(with_doska)
+            self.assertTrue(with_syslog)
             with tarfile.open(destination, "w:gz") as archive:
-                for name in ("internal/main.go", "apps/forms/app.py", "apps/doska/apps/web/src/main.tsx", "apps/netmap/SOURCE-SNAPSHOT.json"):
+                for name in ("internal/main.go", "apps/forms/app.py", "apps/doska/apps/web/src/main.tsx", "apps/netmap/SOURCE-SNAPSHOT.json",
+                             "deploy/images/syslog.Dockerfile", "deploy/images/syslog.sources.json", "deploy/images/syslog.LICENSE"):
                     value = b"public source"
                     member = tarfile.TarInfo(name)
                     member.size = len(value)
                     archive.addfile(member, io.BytesIO(value))
         files = export.source_context_files(Path("unused"), types.SimpleNamespace(source_context=source_context))
-        self.assertEqual(set(files), {"monitoring/source/it-portal/internal/main.go", "apps/forms/app.py", "apps/doska/apps/web/src/main.tsx"})
+        self.assertEqual(set(files), {"monitoring/source/it-portal/internal/main.go", "apps/forms/app.py", "apps/doska/apps/web/src/main.tsx",
+                                     *(export.CORE + "deploy/images/syslog." + suffix for suffix in ("Dockerfile", "sources.json", "LICENSE"))})
+        self.assertIn("syslog-controller.py", export.INSTALLER_FILES)
+        self.assertIn("test_syslog_controller.py", export.UNIT_TEST_NAMES)
 
     def test_allowlist_excludes_runtime_metadata_receipts_and_build_outputs(self):
         allowed = (

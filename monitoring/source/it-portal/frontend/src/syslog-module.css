@@ -1,0 +1,254 @@
+.syslog-page {
+  display: grid;
+  gap: 16px;
+}
+.syslog-page .page-title {
+  margin: 0;
+  align-items: center;
+}
+.syslog-page .page-title h1 {
+  margin-top: 5px;
+}
+.syslog-page .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pl-ui-muted);
+  text-decoration: none;
+}
+.syslog-page .back-link:hover {
+  color: var(--pl-ui-accent);
+}
+.syslog-toolbar,
+.syslog-period,
+.syslog-custom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.syslog-toolbar {
+  justify-content: space-between;
+}
+.syslog-period,
+.syslog-custom {
+  align-items: end;
+}
+.syslog-period .field,
+.syslog-page .syslog-filters .field,
+.syslog-fields .field {
+  margin: 0;
+  min-width: 0;
+}
+.syslog-range {
+  align-self: end;
+  padding-block: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.syslog-period select {
+  min-width: 170px;
+}
+.syslog-layout {
+  display: grid;
+  grid-template-columns: minmax(225px, 0.72fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+.syslog-page .panel {
+  min-width: 0;
+  margin: 0;
+}
+.syslog-filters {
+  display: grid;
+  grid-template-columns: minmax(135px, 1.6fr) minmax(130px, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.syslog-sources {
+  list-style: none;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 2px;
+  max-height: 58vh;
+  overflow: auto;
+}
+.syslog-sources button {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  text-align: left;
+  padding: 11px 12px;
+  font: inherit;
+  color: var(--pl-ui-text);
+  background: transparent;
+  border: 1px solid var(--pl-ui-border);
+  border-radius: 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.syslog-sources button[aria-pressed="true"] {
+  border-color: var(--pl-ui-accent);
+  background: var(--pl-ui-hover);
+}
+.syslog-sources button:hover,
+.syslog-table tr:hover td {
+  background: var(--pl-ui-hover);
+}
+.syslog-sources button span,
+.syslog-sources small,
+.syslog-table td small {
+  color: var(--pl-ui-muted);
+}
+.syslog-sources small {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.syslog-table-wrap {
+  overflow: auto;
+  max-height: 62vh;
+}
+.syslog-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-solid);
+  z-index: 1;
+  color: var(--pl-ui-muted);
+  border-color: var(--pl-ui-border);
+}
+.syslog-table td {
+  color: var(--pl-ui-text);
+  border-color: var(--pl-ui-border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.syslog-table th,
+.syslog-table td {
+  padding: 10px;
+}
+.syslog-table time {
+  font-variant-numeric: tabular-nums;
+}
+.syslog-message-link {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: start;
+  color: var(--pl-ui-accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.syslog-message-link:hover {
+  text-decoration: underline;
+}
+.syslog-context {
+  border-top: 1px solid var(--pl-ui-border);
+  text-align: end;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+.syslog-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.syslog-form-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.syslog-protocols {
+  display: flex;
+  gap: 14px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.syslog-protocols legend {
+  margin-bottom: 6px;
+  color: var(--pl-ui-muted);
+  font-size: 13px;
+}
+.syslog-protocols label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.syslog-protocols input {
+  width: auto;
+  min-height: 0;
+}
+.syslog-destination {
+  grid-template-columns: 1.4fr 1fr 1fr;
+}
+.syslog-facts,
+.syslog-destination {
+  margin: 14px 0 20px;
+}
+.syslog-destination dd,
+.syslog-facts dd {
+  font-size: 14px;
+}
+.syslog-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 38vh;
+  overflow: auto;
+  border: 1px solid var(--pl-ui-border);
+  border-radius: 8px;
+  background: var(--pl-ui-hover);
+  color: var(--pl-ui-text);
+  padding: 12px;
+}
+.syslog-arrival {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+.syslog-arrival > div {
+  min-width: 0;
+}
+.syslog-arrival > svg {
+  flex: none;
+  color: var(--green);
+}
+@media (max-width: 1000px) {
+  .syslog-layout {
+    grid-template-columns: 1fr;
+  }
+  .syslog-sources {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    max-height: 280px;
+  }
+}
+@media (max-width: 650px) {
+  .syslog-filters,
+  .syslog-form-pair {
+    grid-template-columns: 1fr;
+  }
+  .syslog-table {
+    min-width: 430px;
+  }
+  .syslog-page .page-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .syslog-page .actions {
+    flex-wrap: wrap;
+  }
+  .syslog-range {
+    padding: 0;
+  }
+  .syslog-destination {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -110,7 +110,7 @@ func (s *Store) QueueModuleWithCredential(ctx context.Context, actor, key, id, a
 		return instance, job, err
 	}
 	if id == "" {
-		if !model.ModuleModeSupported(input.ModuleID, input.Mode) {
+		if !model.ModuleModeSupported(input.ModuleID, input.Mode) || (input.ModuleID == "syslog" || input.ModuleID == "ocserv" || input.ModuleID == "f12") && input.AdditionalInstance {
 			return instance, job, ErrInvalid
 		}
 		if action != "install" {

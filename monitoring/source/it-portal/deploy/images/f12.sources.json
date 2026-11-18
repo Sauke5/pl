@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "version": "0.1.81",
+  "recipe": "deploy/images/f12.Dockerfile",
+  "images": {
+    "f12-server": {
+      "target": "server",
+      "labels": {
+        "org.opencontainers.image.version": "0.1.81",
+        "pl.upstream.version": "0.1.81",
+        "pl.module.id": "f12",
+        "pl.module.role": "server",
+        "pl.module.config.version": "1",
+        "pl.f12.pxe.version": "1",
+        "pl.build.variant": "upstream-pinned"
+      }
+    }
+  },
+  "upstream": {
+    "source": "https://github.com/garybowers/bootimus/tree/c1b33282c695cff79cb348c80d303a101db7b8b3",
+    "revision": "c1b33282c695cff79cb348c80d303a101db7b8b3",
+    "image": "docker.io/garybowers/bootimus:0.1.81@sha256:dae7b9a4eaf796a3586aabed71cdf7bfddd6058f8b43d54992e836aa9836bdc8",
+    "bootimus_binary_sha256": {
+      "amd64": "077f4fddfa8be8737367af5085d8071812b04f0572426fa259c76cbccb8fa584",
+      "arm64": "0a2bff9c818323ca2ee0bf212f38ee5a33623bd0ca5a6c261a06b9afe7289604"
+    },
+    "go": "1.27.3",
+    "license": "Apache-2.0",
+    "runtime_inputs": "f12-runtime.json",
+    "corresponding_sources": "f12-source-lock.json",
+    "wimboot_bios": {
+      "source": "https://github.com/ipxe/wimboot/tree/e5875648bd52a3b915ae54933d9adf8ac763baca",
+      "version": "2.9.0",
+      "archive": "firmware/wimboot-e587564.tar.gz",
+      "patch": "f12-wimboot-sstr.patch",
+      "target": "wimboot.i386.unsigned",
+      "builder": "docker.io/library/golang:1.27.3-bookworm@sha256:dc0963f32053e4bc451d24d87e3892d42d01021b61f093e98eb95c0352bb84b0",
+      "builder_platform": "linux/amd64",
+      "toolchain": {
+        "gcc-12": "12.2.0-14+deb12u1",
+        "binutils": "2.40-2",
+        "make": "4.3-4.1",
+        "git": "1:2.39.5-0+deb12u3",
+        "libc6-dev": "2.36-9+deb12u14"
+      },
+      "sha256": "271893cde39b617da7c833748bc2e1ae416f70d9bc930d58860aa9c167644930",
+      "packaged_source": "f12-wimboot-e587564.tar.gz"
+    }
+  }
+}

@@ -35,7 +35,7 @@ IMAGE = 'prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f
 VERSION = '3.15.0'
 MODULE_PRIMARY_ROLES = {
     'prometheus': None, 'xray': None, 'alertmanager': None, 'grafana': None,
-    'wayline': 'api', 'forms': 'adapter', 'doska': 'api', 'sftpgo': 'server',
+    'wayline': 'api', 'forms': 'adapter', 'doska': 'api', 'sftpgo': 'server', 'syslog': 'server', 'ocserv': 'server', 'f12': 'server',
     'netmap': 'adapter', 'bookstack': 'web',
 }
 OS_RELEASE = Path('/etc/os-release')
@@ -347,10 +347,10 @@ class Controller:
                        for k, v in contract['labels'].items())):
             raise ValueError('Bundled Prometheus image identity/provenance mismatch')
 
-    def docker(self, *args, timeout=30):
+    def docker(self, *args, timeout=30, input_bytes=None):
         try:
             result = subprocess.run(['docker', '--host', 'unix:///var/run/docker.sock', *args],
-                                    cwd=self.root, env=self.env, capture_output=True, timeout=timeout)
+                                    cwd=self.root, env=self.env, input=input_bytes, capture_output=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             raise ValueError('Module engine operation timed out; reconcile the same operation') from None
         if result.returncode:
@@ -909,7 +909,7 @@ class Controller:
         return self._grafana_controller
 
     def application(self, kind):
-        if kind not in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+        if kind not in ('forms', 'doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'netmap', 'bookstack'):
             raise ValueError('Unsupported application module')
         attribute = '_' + kind + '_controller'
         if not hasattr(self, attribute):
@@ -959,14 +959,14 @@ class Controller:
 
     def instance_kind(self, instance):
         identifier(instance)
-        for kind in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack', 'grafana', 'wayline', 'alertmanager', 'xray'):
+        for kind in ('forms', 'doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'netmap', 'bookstack', 'grafana', 'wayline', 'alertmanager', 'xray'):
             path = self.base / kind / 'instances' / instance
             if path.exists() or path.is_symlink():
                 return kind
         return 'prometheus'
 
     def refresh_module_descriptor(self, kind):
-        if kind not in ('prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+        if kind not in ('prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'netmap', 'bookstack'):
             return
         selected = self.delivery().module_registry().get(kind)
         identities = getattr(self, '_module_descriptor_identities', {})
@@ -1010,7 +1010,7 @@ class Controller:
         return self._execute(body)
 
     def _execute(self, body):
-        if isinstance(body, dict) and body.get('module_id') in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+        if isinstance(body, dict) and body.get('module_id') in ('forms', 'doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'netmap', 'bookstack'):
             return self.application(body['module_id']).execute(body)
         if isinstance(body, dict) and body.get('module_id') == 'xray':
             return self.xray().execute(body)
@@ -1076,7 +1076,7 @@ class Controller:
 
     def get(self, instance):
         identifier(instance)
-        for kind in ('forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+        for kind in ('forms', 'doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'netmap', 'bookstack'):
             path = self.base / kind / 'instances' / instance
             if path.exists() or path.is_symlink():
                 return self.application(kind).get(instance)
@@ -1332,7 +1332,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         try:
             sources = {'module-controller.py', 'delivery.py', 'module-network.py', 'log-export.py',
-                       *[kind + '-controller.py' for kind in ('doska', 'sftpgo', 'wayline', 'forms',
+                       *[kind + '-controller.py' for kind in ('doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'wayline', 'forms',
                            'grafana', 'netmap', 'bookstack', 'xray', 'alertmanager')]}
             frames, frame, examined = [], error.__traceback__, 0
             while frame is not None and examined < 64:
@@ -1344,7 +1344,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 frame = frame.tb_next
             known = {'ValueError', 'OSError', 'KeyError', 'TypeError', 'TimeoutError', 'BrokenPipeError',
                      'ConnectionResetError', 'BlockingIOError', 'PermissionError', 'FileNotFoundError'}
-            routes = {'/v1/doska/transport', '/v1/sftpgo/stream', '/v1/read', '/v1/operations',
+            routes = {'/v1/f12/request', '/v1/f12/stream', '/v1/syslog', '/v1/ocserv', '/v1/doska/transport', '/v1/sftpgo/stream', '/v1/read', '/v1/operations',
                       '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request', '/v1/host/log-export'}
             record = {'event': 'controller_failure', 'time_ns': time.time_ns(),
                       'rpc': self.path if self.path in routes else 'other',
@@ -1367,7 +1367,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # native streams may outlive the request that stops the core API. They
         # are rejected while an upgrade is active and closed by quiescence.
         if (self.path.startswith(('/v1/delivery/', '/v1/installation/')) or self.path == '/v1/operations'
-                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream', '/v1/native/initial-login', '/v1/host/log-export')
+                or self.path in ('/v1/doska/transport', '/v1/sftpgo/stream', '/v1/f12/stream', '/v1/native/initial-login', '/v1/host/log-export')
                 or self.command == 'POST' and self.path in (
                     '/v1/read', '/v1/alertmanager/status', '/v1/alertmanager/read', '/v1/wayline/request')):
             self._handle_request()
@@ -1383,7 +1383,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def rpc_module(self):
         parts = self.path.split('/')
-        if len(parts) >= 3 and parts[2] in ('xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'):
+        if len(parts) >= 3 and parts[2] in ('xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'syslog', 'ocserv', 'f12', 'netmap', 'bookstack'):
             return parts[2]
         if self.path in ('/v1/read', '/v1/configuration/validate'):
             return 'prometheus'
@@ -1396,11 +1396,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _handle_request(self):
         self._response_started = False
         try:
-            if self.command == 'POST' and self.path in ('/v1/doska/transport', '/v1/sftpgo/stream'):
+            if self.command == 'POST' and self.path in ('/v1/doska/transport', '/v1/sftpgo/stream', '/v1/f12/stream'):
                 if getattr(self.server.controller, 'on_demand', False) is True:
                     self.server.controller.delivery().require_idle(module_id=self.rpc_module())
                 if self.path == '/v1/doska/transport':
                     self.handle_doska_transport()
+                elif self.path == '/v1/f12/stream':
+                    self.handle_application_stream('f12', 4 * 1024**2)
                 else:
                     self.handle_application_stream('sftpgo', 1024**3)
                 return
@@ -1409,9 +1411,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 single_headers(self.headers, ('Content-Length',))
             if self.headers.get('Transfer-Encoding'):
                 raise ValueError('Transfer encoding refused')
+            if self.path == '/v1/f12/request':
+                self.connection.settimeout(15)
             length = int(self.headers.get('Content-Length', '0'))
             # Forms embeds up to 3 MiB in base64 plus signed JSON metadata.
             limit = (256 if self.command == 'POST' and self.path == '/v1/host/log-export' else
+                     16384 if self.command == 'POST' and self.path == '/v1/f12/request' else
+                     16384 if self.command == 'POST' and self.path == '/v1/ocserv' else
+                     4096 if self.command == 'POST' and self.path == '/v1/syslog' else
                      96 * 1024 if self.command == 'POST' and self.path.startswith('/v1/delivery/proxy/') else
                      384 * 1024 if self.command == 'POST' and self.path == '/v1/installation/configure' else
                      5 * 1024 * 1024 if self.command == 'POST' and self.path == '/v1/forms/request' else
@@ -1437,6 +1444,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             elif self.command == 'POST' and self.path == '/v1/host/status':
                 result = self.server.controller.host_status(json.loads(raw))
+            elif self.command == 'POST' and self.path == '/v1/ocserv':
+                request = json.loads(raw)
+                instance = identifier(request.get('instance_id') if isinstance(request, dict) else None)
+                native = self.server.controller
+                if not (native.base / 'ocserv/instances' / instance).is_dir():
+                    result = {'instance_id': instance, 'status': 404, 'body': {'error': {
+                        'code': 'ocserv_not_installed', 'message': 'Корпоративный VPN не установлен.'}}}
+                else:
+                    result = native.application('ocserv').request(request)
+            elif self.command == 'POST' and self.path == '/v1/syslog':
+                request = json.loads(raw)
+                instance = identifier(request.get('instance_id') if isinstance(request, dict) else None)
+                native = self.server.controller
+                if not (native.base / 'syslog/instances' / instance).exists():
+                    result = {'instance_id': instance, 'status': 404, 'body': {'error': {
+                        'code': 'syslog_not_installed', 'message': 'Сервер журналов не установлен.'}}}
+                else:
+                    result = native.application('syslog').request(request)
+            elif self.command == 'POST' and self.path == '/v1/f12/request':
+                result = self.f12_request(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/sftpgo/request':
                 result = self.server.controller.application('sftpgo').request(json.loads(raw))
             elif self.command == 'POST' and self.path == '/v1/netmap/request':
@@ -1484,8 +1511,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if self._response_started:
                 self.close_connection = True
                 return
-            if self.path in ('/v1/sftpgo/stream', '/v1/doska/transport'):
+            if self.path in ('/v1/sftpgo/stream', '/v1/doska/transport', '/v1/f12/stream'):
                 self.close_connection = True
+            if self.path == '/v1/f12/stream' and hasattr(self, 'f12_instance') and (
+                    isinstance(error, TimeoutError) or isinstance(error, TransferRefused)):
+                status = getattr(error, 'status', 503)
+                message = 'Параметры или контрольная сумма блока неверны.' if status == 400 else 'Передача временно недоступна. Повторите запрос.'
+                self.reply(200, {'instance_id': self.f12_instance, 'status': status, 'body': {'error': message}})
+                return
             if self.path == '/v1/sftpgo/stream' and getattr(error, 'status', None) in (400, 401, 403, 404, 409, 429, 503):
                 self.reply(error.status, {'error': {'code': 'sftpgo_operation_failed', 'message': 'Операция файлового сервера не выполнена'}})
                 return
@@ -1562,21 +1595,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 result = getattr(controller.alertmanager(), self.path.rsplit('/', 1)[1])(payload)
             self.reply(200, result)
 
+    def f12_request(self, metadata, spool=None):
+        instance = identifier(metadata.get('instance_id') if isinstance(metadata, dict) else None)
+        parent = self.server.controller
+        if not (parent.base / 'f12' / 'instances' / instance).is_dir():
+            return {'instance_id': instance, 'status': 404, 'body': {'error': 'Сетевая загрузка не установлена.'}}
+        controller = parent.application('f12')
+        return controller.request(metadata, spool)
+
     def handle_doska_transport(self):
         return self.handle_application_stream('doska', 26 * 1024 * 1024)
 
     def handle_application_stream(self, kind, limit):
+        if kind == 'f12':
+            self.connection.settimeout(30)
         single_headers(self.headers, ('Content-Length', 'Content-Type', 'X-PL-Transport-Meta', 'X-PL-Timestamp', 'X-PL-Signature'))
         if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type') != 'application/octet-stream':
             raise ValueError('Invalid transport framing')
         encoded = self.headers.get('X-PL-Transport-Meta', '')
-        if not encoded or len(encoded) > 65536:
+        if not encoded or len(encoded) > (4096 if kind == 'f12' else 65536):
             raise ValueError('Invalid transport metadata')
         raw = base64.b64decode(encoded, validate=True)
         if not authenticated(self.server.key, self.headers, 'POST', self.path, raw):
             self.reply(403, {'error': 'Controller authentication refused'})
             return
         metadata = json.loads(raw)
+        if kind == 'f12':
+            self.f12_instance = identifier(metadata.get('instance_id') if isinstance(metadata, dict) else None)
+            if not (self.server.controller.base / 'f12/instances' / self.f12_instance).is_dir():
+                self.close_connection = True
+                self.reply(200, {'instance_id': self.f12_instance, 'status': 404, 'body': {'error': 'Сетевая загрузка не установлена.'}})
+                return
+            if metadata.get('action') != 'upload-chunk':
+                raise TransferRefused(400)
         raw_length = self.headers.get('Content-Length', '')
         if not re.fullmatch(r'0|[1-9][0-9]{0,10}', raw_length):
             raise ValueError('Invalid transport content length')
@@ -1590,17 +1641,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                      application_spool(self.server.controller, length, kind, metadata.get('action')))
         with admission as spool:
             remaining, checksum = length, hashlib.sha256()
-            deadline = time.monotonic() + 300
+            deadline = time.monotonic() + (35 if kind == 'f12' else 300)
             while remaining:
                 if time.monotonic() > deadline:
                     raise TransferRefused(503)
-                chunk = self.rfile.read(min(remaining, 65536))
+                if kind == 'f12':
+                    self.connection.settimeout(max(.1, deadline - time.monotonic()))
+                    chunk = self.rfile.read1(min(remaining, 65536))
+                else:
+                    chunk = self.rfile.read(min(remaining, 65536))
                 if not chunk:
                     raise ValueError('Incomplete transport body')
                 checksum.update(chunk)
                 spool.write(chunk)
                 remaining -= len(chunk)
             if not hmac.compare_digest(checksum.hexdigest(), expected):
+                if kind == 'f12':
+                    raise TransferRefused(400)
                 raise ValueError('Transport body digest mismatch')
             spool.seek(0)
             parent = self.server.controller
@@ -1609,6 +1666,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # streams; stopping the selected native containers closes those.
             guard = parent.delivery_guard(module_id=kind) if getattr(parent, 'on_demand', False) is True else nullcontext()
             with guard:
+                if kind == 'f12':
+                    self.reply(200, self.f12_request(metadata, spool))
+                    return
                 controller = parent.application(kind)
             if kind == 'doska':
                 controller.transport(metadata, spool, self)
@@ -1629,6 +1689,42 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     # before the independent 4/8/32 native lanes can apply their own admission.
     request_queue_size = 128
     daemon_threads = True
+
+
+@contextmanager
+def f12_interface_monitor(controller):
+    stop = threading.Event()
+
+    def watch():
+        reported = set()
+        while not stop.is_set():
+            try:
+                base = controller.base / 'f12/instances'
+                paths = list(base.iterdir()) if base.is_dir() and not base.is_symlink() else []
+                for path in paths:
+                    if stop.is_set():
+                        break
+                    try:
+                        identifier(path.name)
+                        guard = controller.delivery_guard(module_id='f12') if controller.on_demand else nullcontext()
+                        with guard:
+                            controller.application('f12').reconcile_interfaces(path.name)
+                        reported.discard(path.name)
+                    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+                        if path.name not in reported:
+                            os.write(2, b'F12 interface reconciliation postponed.\n')
+                            reported.add(path.name)
+            except OSError:
+                pass
+            stop.wait(30)
+
+    worker = threading.Thread(target=watch, name='f12-interfaces', daemon=True)
+    worker.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        worker.join(timeout=1)
 
 
 def main():
@@ -1661,7 +1757,7 @@ def main():
         server.controller, server.key = controller, key
         delivery = controller.delivery() if controller.on_demand else None
         monitor = delivery.status_monitor() if delivery is not None else nullcontext()
-        with monitor, installation_counter(args.root, controller.installation) as request_report:
+        with monitor, f12_interface_monitor(controller), installation_counter(args.root, controller.installation) as request_report:
             if delivery is not None:
                 delivery.request_installation_report = request_report
             server.serve_forever(poll_interval=0.5)

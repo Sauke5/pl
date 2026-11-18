@@ -1,5 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Archive,
@@ -62,6 +62,17 @@ function ResourceDetailsPanel({
   const helpOpen = useHelpOpen();
   useHelpTopic("resource-details", 10);
   const resources = useAPI<Resource[]>("/resources");
+  const incoming = useMemo(
+    () =>
+      (resources.data ?? []).flatMap((source) => {
+        if (source.id === r.id || source.lifecycle === "archived") return [];
+        const labels = (source.relations ?? [])
+          .filter((relation) => relation.resource_id === r.id)
+          .map((relation) => relation.label?.trim() || "");
+        return labels.length ? [{ source, labels: [...new Set(labels)] }] : [];
+      }),
+    [resources.data, r.id],
+  );
   const [error, setError] = useState<unknown>();
   const [archive, setArchive] = useState(false);
   const [pending, setPending] = useState(false);
@@ -321,9 +332,11 @@ function ResourceDetailsPanel({
               )}
             </section>
             {!!r.relations?.length && (
-              <section className="resource-details-section">
-                <h3>Связи</h3>
-                {resources.error && <ErrorBox error={resources.error} />}
+              <section
+                className="resource-details-section"
+                aria-labelledby="resource-outgoing-relations"
+              >
+                <h3 id="resource-outgoing-relations">Связи из этой карточки</h3>
                 <div className="resource-details-relations">
                   {r.relations.map((relation, index) => {
                     const related = resources.data?.find(
@@ -344,9 +357,9 @@ function ResourceDetailsPanel({
                           {relation.label && <small>{relation.label}</small>}
                           <strong>
                             {related?.name ||
-                              (resources.data
-                                ? "Ресурс недоступен"
-                                : "Загрузка ресурса…")}
+                              (resources.isPending
+                                ? "Загрузка ресурса…"
+                                : "Ресурс недоступен")}
                           </strong>
                         </span>
                         <ChevronRight size={18} />
@@ -356,6 +369,45 @@ function ResourceDetailsPanel({
                 </div>
               </section>
             )}
+            <section
+              className="resource-details-section"
+              aria-labelledby="resource-incoming-relations"
+            >
+              <h3 id="resource-incoming-relations">На этот ресурс ссылаются</h3>
+              {resources.error && <ErrorBox error={resources.error} />}
+              {incoming.length > 0 ? (
+                <div className="resource-details-relations">
+                  {incoming.map(({ source, labels }) => (
+                    <button
+                      key={source.id}
+                      type="button"
+                      className="resource-details-relation"
+                      disabled={!onDetails || pending}
+                      onClick={() => onDetails?.(source)}
+                    >
+                      <Network size={19} />
+                      <span>
+                        <strong>{source.name}</strong>
+                        {labels.map((label) => (
+                          <small key={label}>
+                            {label || "Связь"} → {r.name}
+                          </small>
+                        ))}
+                      </span>
+                      <ChevronRight size={18} />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                !resources.error && (
+                  <p className="muted">
+                    {resources.isPending
+                      ? "Загрузка связей…"
+                      : "В активном каталоге таких ссылок нет."}
+                  </p>
+                )
+              )}
+            </section>
             <section className="resource-details-section resource-details-integrations">
               <DoskaResourceTasks key={r.id} resourceId={r.id} />
               <ResourceInventory resourceID={r.id} />

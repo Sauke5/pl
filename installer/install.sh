@@ -82,8 +82,8 @@ MAX_PACKAGE = 8 * 1024**3
 MIN_DISK = 20 * 1024**3
 # A VM assigned 4 GiB exposes less MemTotal after kernel reservations.
 MIN_MEMORY_KIB = 3584 * 1024
-ALLOWED = {'log-export.py', 'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
-REQUIRED = ALLOWED - {'log-export.py', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
+ALLOWED = {'log-export.py', 'bootstrap.py', 'manifest.json', 'images.tar', 'nginx.conf', 'LICENSES.txt', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'syslog-controller.py', 'f12-controller.py', 'ocserv-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
+REQUIRED = ALLOWED - {'log-export.py', 'README.md', 'source.tar.gz', 'maintenance.py', 'disaster-recovery.py', 'disaster-recovery.ru.md', 'module-controller.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'syslog-controller.py', 'f12-controller.py', 'ocserv-controller.py', 'module-network.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py', 'module-upgrade.py', 'icmp-probe.py', 'icmp-install.py', 'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem'}
 DOCKER_FINGERPRINT = '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
 
 
@@ -400,14 +400,19 @@ def verify_package(package, arch):
             if manifest.get('schema') not in (1, 2) or manifest.get('product') not in ('PL', 'Pl') or manifest.get('architecture') != arch:
                 fail('Package schema, product or architecture mismatch.')
             features = manifest.get('features', {})
-            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades', 'verified_native_resume', 'log_export'} or any(type(value) is not bool for value in features.values()):
+            if not isinstance(features, dict) or set(features) - {'local_users', 'module_controller', 'xray_module', 'alertmanager_module', 'wayline_module', 'grafana_module', 'forms_module', 'doska_module', 'sftpgo_module', 'netmap_module', 'bookstack_module', 'connector_credentials', 'icmp_probe', 'on_demand_modules', 'upgrade_status', 'module_upgrades', 'verified_native_resume', 'log_export', 'syslog_controller', 'f12_controller', 'ocserv_controller'} or any(type(value) is not bool for value in features.values()):
                 fail('Unsupported core package features.')
             if features.get('verified_native_resume') and not all(features.get(name) for name in ('on_demand_modules', 'module_upgrades', 'upgrade_status', 'icmp_probe')):
                 fail('Verified native resume requires the finite update and ICMP worker entrypoints.')
             if features.get('module_upgrades') and (not features.get('on_demand_modules') or 'module-upgrade.py' not in names):
                 fail('Installed module updates require their finite host helper.')
+            if any(features.get(module + '_controller') for module in ('syslog', 'f12', 'ocserv')) and not features.get('on_demand_modules'):
+                fail('Optional controller requires on-demand module delivery.')
             if features.get('on_demand_modules'):
                 payloads = {'install.sh', 'delivery.py', 'delivery-proxy.py', 'release-signing-public.pem', 'module-controller.py', 'module-network.py', 'xray-controller.py', 'alertmanager-controller.py', 'wayline-controller.py', 'grafana-controller.py', 'forms-controller.py', 'doska-controller.py', 'sftpgo-controller.py', 'netmap-controller.py', 'bookstack-controller.py', 'controller-supervisor.py', 'installation-settings.py', 'module-origin.py'}
+                for module in ('syslog', 'f12', 'ocserv'):
+                    if features.get(module + '_controller'):
+                        payloads.add(module + '-controller.py')
                 if (manifest.get('schema') != 2 or not features.get('module_controller')
                         or not payloads <= set(names) or set(manifest.get('images', {})) != {'api', 'web', 'db'}
                         or any(features.get(name + '_module') for name in ('xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'))):

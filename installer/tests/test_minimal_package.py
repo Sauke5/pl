@@ -107,7 +107,13 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertTrue(manifest["features"]["on_demand_modules"])
         self.assertTrue(manifest["features"]["icmp_probe"])
         self.assertTrue(manifest["features"]["log_export"])
+        self.assertTrue(manifest["features"]["syslog_controller"])
+        self.assertTrue(manifest["features"]["f12_controller"])
+        self.assertTrue(manifest["features"]["ocserv_controller"])
+        self.assertIn("ocserv-controller.py", files)
+        self.assertIn("f12-controller.py", files)
         self.assertIn("log-export.py", files)
+        self.assertIn("syslog-controller.py", files)
         self.assertEqual(manifest["installation_counter_url"], package.INSTALLATION_COUNTER_URL)
         self.assertTrue({"delivery.py", "delivery-proxy.py", "installation-settings.py", "release-signing-public.pem", "forms-controller.py", "netmap-controller.py", "icmp-probe.py", "icmp-install.py"} <= files)
         self.assertFalse(any(key.endswith("_module") for key in manifest["features"]))
@@ -123,7 +129,7 @@ class MinimalBuildTests(unittest.TestCase):
             invalid_manifests = [{"images": {**manifest["images"], "prometheus": manifest["images"]["db"]}},
                                  {"features": {**manifest["features"], "forms_module": True}}]
             invalid_manifests.extend({"files": {name: value for name, value in manifest["files"].items() if name != payload}}
-                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py", "log-export.py"))
+                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py", "log-export.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py"))
             for index, changed in enumerate(invalid_manifests):
                 invalid = {**manifest, **changed}
                 (extracted / "manifest.json").write_text(json.dumps(invalid))
@@ -136,6 +142,12 @@ class MinimalBuildTests(unittest.TestCase):
             previous = copy.deepcopy(manifest)
             previous["features"].pop("log_export")
             previous["files"].pop("log-export.py")
+            previous["features"].pop("ocserv_controller")
+            previous["files"].pop("ocserv-controller.py")
+            previous["features"].pop("f12_controller")
+            previous["files"].pop("f12-controller.py")
+            previous["features"].pop("syslog_controller")
+            previous["files"].pop("syslog-controller.py")
             (extracted / "manifest.json").write_text(json.dumps(previous))
             self.assertEqual(bootstrap.manifest(extracted), previous)
             previous_archive = self.root / "previous.tar.gz"
@@ -159,6 +171,10 @@ class MinimalBuildTests(unittest.TestCase):
         manifest, files = self.read_manifest(args.output)
         self.assertEqual(set(manifest["images"]), {"api", "web", "db", "prometheus", "xray", "alertmanager"})
         self.assertNotIn("on_demand_modules", manifest["features"])
+        self.assertNotIn("f12_controller", manifest["features"])
+        self.assertNotIn("f12-controller.py", files)
+        self.assertNotIn("syslog_controller", manifest["features"])
+        self.assertNotIn("syslog-controller.py", files)
         self.assertTrue(manifest["features"]["xray_module"])
         self.assertTrue(manifest["features"]["icmp_probe"])
         self.assertTrue({"icmp-probe.py", "icmp-install.py"} <= files)
@@ -189,7 +205,7 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertFalse(self.commands)
 
     def test_each_module_build_contains_only_its_own_roles(self):
-        self.assertEqual(set(package.APPLICATION_ROLES), {"forms", "doska", "sftpgo", "netmap", "bookstack"})
+        self.assertEqual(set(package.APPLICATION_ROLES), {"forms", "doska", "sftpgo", "netmap", "bookstack", "syslog", "f12", "ocserv"})
         for module in ("prometheus", "xray", "alertmanager", "grafana", "wayline", *package.APPLICATION_ROLES):
             with self.subTest(module=module):
                 args = self.args(module)
@@ -202,6 +218,18 @@ class MinimalBuildTests(unittest.TestCase):
                 self.assertEqual((manifest["kind"], manifest["module_id"], manifest["core_api"]), ("module", module, 1))
                 self.assertEqual(manifest["package_version"], "0.3.0")
                 self.assertEqual(manifest["version"], next(iter(manifest["images"].values()))["labels"]["org.opencontainers.image.version"])
+                if module == "ocserv":
+                    image = manifest["images"]["ocserv-server"]
+                    self.assertEqual(image["recipe"], "deploy/images/ocserv.Dockerfile")
+                    self.assertEqual(image["labels"]["pl.upstream.version"], "1.6.0")
+                if module == "f12":
+                    image = manifest["images"]["f12-server"]
+                    self.assertEqual(image["recipe"], "deploy/images/f12.Dockerfile")
+                    self.assertEqual(image["labels"]["pl.upstream.version"], "0.1.81")
+                if module == "syslog":
+                    server = manifest["images"]["syslog-server"]
+                    self.assertEqual(server["recipe"], "deploy/images/syslog.Dockerfile")
+                    self.assertEqual((server["labels"]["pl.module.role"], server["labels"]["pl.upstream.version"]), ("server", "1.54.0"))
 
     def test_optional_flags_do_not_silently_restore_a_large_core(self):
         with self.assertRaisesRegex(ValueError, "independent module"):
@@ -259,6 +287,8 @@ class MinimalBootstrapTests(unittest.TestCase):
             path = private / "module-images.json"
             current = json.loads(path.read_text())
             current["forms"] = {"adapter": {"id": "sha256:" + "a" * 64}}
+            current["f12"] = {"server": {"id": "sha256:" + "c" * 64}}
+            current["syslog"] = {"server": {"id": "sha256:" + "b" * 64}}
             path.write_text(json.dumps(current))
             before = path.read_bytes()
             bootstrap.prepare_module_image_descriptor(runtime)

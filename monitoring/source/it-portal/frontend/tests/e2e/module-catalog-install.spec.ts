@@ -119,13 +119,16 @@ async function fixture(
           ...offers.map((module) => ({
             ...module,
             description: module.name,
-            modes: catalogReady ? ["local"] : [],
+            modes: [
+              ...(catalogReady ? ["local"] : []),
+              ...(module.id === "bookstack" ? ["external"] : []),
+            ],
             version: catalogReady ? module.version : "",
           })),
           {
             id: "mailcow",
             name: "Почта",
-            description: "Работающий Mailcow",
+            description: "Почтовые ящики и очередь сообщений",
             modes: ["external"],
             version: "",
           },
@@ -148,6 +151,89 @@ async function openSelection(page: Page) {
   return page.getByRole("dialog", { name: "Установить несколько модулей" });
 }
 
+test("catalog finds modules by product, title and purpose and combines placement with search", async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  const search = page.getByRole("searchbox", {
+    name: "Поиск по каталогу модулей",
+  });
+  const placement = page.getByRole("combobox", { name: "Размещение" });
+  const cards = page.getByRole("article").getByRole("heading", { level: 3 });
+  await expect(cards).toHaveText([
+    "Forms",
+    "Doska",
+    "Wayline",
+    "Почта",
+    "Wiki",
+  ]);
+
+  await search.fill(" ОЧЕРЕДЬ ");
+  await expect(cards).toHaveText(["Почта"]);
+  await search.fill("mailcow");
+  await expect(cards).toHaveText(["Почта"]);
+  await placement.selectOption({ label: "На хосте PL" });
+  await expect(cards).toHaveCount(0);
+  await expect(
+    page.getByText("Модули не найдены", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Сбросить фильтры" }).click();
+  await expect(search).toBeEmpty();
+  await expect(search).toBeFocused();
+  await expect(placement).toHaveValue("all");
+
+  await placement.selectOption({ label: "Внешний сервис" });
+  await expect(cards).toHaveText(["Почта", "Wiki"]);
+  await search.fill("Wiki");
+  await expect(cards).toHaveText(["Wiki"]);
+  await placement.selectOption({ label: "На хосте PL" });
+  await search.fill("BookStack");
+  await expect(cards).toHaveText(["Wiki"]);
+  const dialog = await openSelection(page);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(3);
+  await expect(dialog.getByRole("checkbox", { name: /Forms/ })).toBeEnabled();
+  expect(f.writes).toHaveLength(0);
+});
+
+test("catalog keeps the source error and the empty source distinct from an empty search", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page
+    .getByRole("searchbox", { name: "Поиск по каталогу модулей" })
+    .fill("Mailcow");
+  let unavailable = true;
+  await page.route("**/api/v1/modules/catalog", (route) =>
+    unavailable
+      ? route.fulfill({
+          status: 503,
+          json: {
+            error: "modules_unavailable",
+            message: "Каталог модулей не настроен",
+          },
+        })
+      : route.fulfill({ json: { local_available: true, items: [] } }),
+  );
+  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  const error = page
+    .getByRole("alert")
+    .filter({ hasText: "Каталог модулей не настроен" });
+  await expect(error).toBeVisible();
+  const filters = page.getByRole("search", {
+    name: "Фильтры каталога модулей",
+  });
+  await expect(filters).toHaveCount(0);
+  unavailable = false;
+  await error.getByRole("button", { name: "Повторить" }).click();
+  await expect(
+    page.getByText("В каталоге пока нет доступных модулей"),
+  ).toBeVisible();
+  await expect(filters).toHaveCount(0);
+  await expect(
+    page.getByText("Модули не найдены", { exact: true }),
+  ).toHaveCount(0);
+});
+
 test("catalog explains missing packages and makes installation available after a successful check", async ({
   page,
 }) => {
@@ -158,8 +244,16 @@ test("catalog explains missing packages and makes installation available after a
     source.getByRole("link", { name: "Настроить прокси для GitHub" }),
   ).toHaveAttribute("href", "#settings?section=delivery");
   await expect(
-    page.getByRole("button", { name: "Подключить существующий" }),
+    page
+      .getByRole("article")
+      .filter({ has: page.getByRole("heading", { name: "Почта" }) })
+      .getByRole("button", { name: "Подключить существующий" }),
   ).toBeEnabled();
+  const placement = page.getByRole("combobox", { name: "Размещение" });
+  await placement.selectOption({ label: "На хосте PL" });
+  await expect(
+    page.getByText("Модули не найдены", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Установить несколько" }),
   ).toHaveCount(0);
@@ -170,6 +264,9 @@ test("catalog explains missing packages and makes installation available after a
   await expect(
     page.getByRole("button", { name: "Установить несколько" }),
   ).toBeEnabled();
+  await expect(
+    page.getByRole("article").getByRole("heading", { level: 3 }),
+  ).toHaveText(["Forms", "Doska", "Wayline", "Wiki"]);
 });
 
 test("one launch queues only the selected new modules and their jobs survive a page reload", async ({

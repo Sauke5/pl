@@ -32,10 +32,14 @@ import urllib.request
 import uuid
 
 CATALOG_URL = 'https://github.com/Sauke5/pl/releases/download/channel-stable/catalog.json'
-MODULES = {'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'}
+LEGACY_CATALOG_MODULES = {'prometheus', 'xray', 'alertmanager', 'wayline', 'grafana', 'forms', 'doska', 'sftpgo', 'netmap', 'bookstack'}
+CATALOG_EXTENSIONS = {'syslog', 'f12', 'ocserv'}
+SYSLOG_VERSION = '1.54.0'
+PINNED_SERVERS = {'syslog': SYSLOG_VERSION, 'f12': '0.1.81', 'ocserv': '1.6.0'}
+MODULES = LEGACY_CATALOG_MODULES | CATALOG_EXTENSIONS
 ROLES = {'wayline': ('api', 'gateway', 'runner'), 'forms': ('adapter', 'engine', 'mongo', 'keydb'),
          'doska': ('api', 'web'), 'sftpgo': ('server',), 'netmap': ('database', 'cache', 'netbox', 'netbox-worker', 'oxidized', 'gitea', 'adapter'),
-         'bookstack': ('web', 'database')}
+         'bookstack': ('web', 'database'), 'syslog': ('server',), 'f12': ('server',), 'ocserv': ('server',)}
 VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9][A-Za-z0-9.-]*)?\Z')
 HEX = re.compile(r'[0-9a-f]{64}\Z')
 MAX_PACKAGE = 8 * 1024**3
@@ -256,6 +260,55 @@ def validate_release_notes(value, version):
     return value
 
 
+def module_archive_identities(path, image):
+    with tarfile.open(path, "r:") as archive:
+        def small(name, expected=None):
+            member = archive.getmember(name)
+            if not member.isfile() or member.size > 4 * 1024**2:
+                raise ValueError("Invalid module image metadata")
+            body = archive.extractfile(member).read()
+            if expected and "sha256:" + hashlib.sha256(body).hexdigest() != expected:
+                raise ValueError("module image descriptor digest mismatch")
+            return load_json(body)
+
+        def blob(ref):
+            digest = ref.get("digest", "")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                raise ValueError("Invalid module image digest")
+            return small("blobs/sha256/" + digest[7:], digest)
+
+        roots = small("index.json").get("manifests")
+        if not isinstance(roots, list) or len(roots) != 1:
+            raise ValueError("Expected one signed module OCI root")
+        root = roots[0]
+        manifest = blob(root)
+        chain = [root["digest"]]
+        if "manifests" in manifest:
+            candidates = [entry for entry in manifest["manifests"]
+                          if entry.get("platform", {}).get("os") == "linux" and entry["platform"].get("architecture") == image["architecture"]]
+            if len(candidates) != 1:
+                raise ValueError("Ambiguous module OCI architecture")
+            manifest = blob(candidates[0])
+            chain.append(candidates[0]["digest"])
+        config = blob(manifest["config"])
+        chain.append(manifest["config"]["digest"])
+        if (image["id"] not in chain or config.get("os") != "linux" or config.get("architecture") != image["architecture"]
+                or any((config.get("config", {}).get("Labels") or {}).get(k) != v for k, v in image["labels"].items())):
+            raise ValueError("module OCI content differs from its signed module descriptor")
+        return chain[::-1]
+
+
+# Compatibility with the original F12 helper name.
+f12_archive_identities = module_archive_identities
+
+
+def catalog_modules(value):
+    # Older updaters reject unknown IDs inside "modules". New IDs travel in a
+    # signed extension and become actionable only with a matching host controller.
+    extensions = value.get('module_extensions', {})
+    return {**value['modules'], **{key: extensions[key] for key in CATALOG_EXTENSIONS if key in extensions}}
+
+
 def verify_catalog(envelope, key, previous=None, *, allow_expired=False):
     if not isinstance(envelope, dict) or set(envelope) != {'payload', 'signature'}:
         raise ValueError('Invalid signed catalog envelope')
@@ -281,12 +334,17 @@ def verify_catalog(envelope, key, previous=None, *, allow_expired=False):
             or value.get('core_api') != 1 or type(value.get('sequence')) is not int or value['sequence'] < 1
             or not VERSION.fullmatch(value.get('version', '')) or not isinstance(value.get('core'), dict)
             or not value['core'] or set(value['core']) - {'amd64', 'arm64'} or not isinstance(value.get('modules'), dict)
-            or set(value['modules']) - MODULES):
+            or set(value['modules']) - LEGACY_CATALOG_MODULES):
         raise ValueError('Unsupported signed release catalog')
+    extensions = value.get('module_extensions', {})
+    if (not isinstance(extensions, dict) or len(extensions) > 64
+            or any(not re.fullmatch(r'[a-z][a-z0-9-]{0,62}', key) or key in LEGACY_CATALOG_MODULES for key in extensions)):
+        raise ValueError('Invalid signed module extension inventory')
     for info in value['core'].values():
         artifact(info)
-    for module in value['modules'].values():
-        if (not isinstance(module, dict) or module.get('core_api') != 1 or not VERSION.fullmatch(module.get('version', ''))
+    for module in catalog_modules(value).values():
+        if (not isinstance(module, dict) or module.get('core_api') != 1
+                or not isinstance(module.get('version'), str) or not VERSION.fullmatch(module['version'])
                 or not isinstance(module.get('artifacts'), dict) or not module['artifacts'] or set(module['artifacts']) - {'amd64', 'arm64'}):
             raise ValueError('Incompatible module release')
         for info in module['artifacts'].values():
@@ -421,7 +479,7 @@ class Delivery:
         registry = self.module_registry()
         result = []
         capable = self.module_upgrade_capable()
-        for kind, selected in sorted(catalog['modules'].items()):
+        for kind, selected in sorted(catalog_modules(catalog).items()):
             if self.architecture() not in selected['artifacts']:
                 continue
             target = selected['artifacts'][self.architecture()]
@@ -550,9 +608,12 @@ class Delivery:
             if kind in registry:
                 return False
             catalog = self.catalog()
-            if not catalog or kind not in catalog['modules'] or self.architecture() not in catalog['modules'][kind]['artifacts']:
+            available = catalog_modules(catalog) if catalog else {}
+            if kind not in available or self.architecture() not in available[kind]['artifacts']:
                 raise ValueError('Модуль отсутствует в подтверждённом каталоге для этой архитектуры')
-            selected = catalog['modules'][kind]
+            selected = available[kind]
+            if kind in PINNED_SERVERS and selected['version'] != PINNED_SERVERS[kind]:
+                raise ValueError('Для этой версии модуля требуется обновить Платформу.')
             info = selected['artifacts'][self.architecture()]
             with tempfile.TemporaryDirectory(prefix='.module-', dir=self.root / 'releases') as tmp:
                 tmp = Path(tmp)
@@ -562,7 +623,7 @@ class Delivery:
                 meta = read(tmp / 'module.json')
                 self.validate_module(meta, kind, selected['version'], tmp)
                 self.parent.docker('image', 'load', '--input', str(tmp / 'images.tar'), timeout=900)
-                self.verify_images(meta['images'])
+                self.verify_module_images(meta, tmp)
                 # Build only this module's descriptor outside the registry
                 # commit. Another module may have completed during staging.
                 if kind in ROLES:
@@ -612,6 +673,36 @@ class Delivery:
                     or labels.get('pl.module.config.version') != '1' or labels.get('org.opencontainers.image.version') != version
                     or labels.get('pl.source.sha256') != meta['source_sha256']):
                 raise ValueError('Module image provenance mismatch')
+            if kind in PINNED_SERVERS and (version != PINNED_SERVERS[kind] or labels.get('pl.module.role') != 'server'
+                    or labels.get('pl.build.variant') != 'upstream-pinned' or labels.get('pl.upstream.version') != version):
+                raise ValueError('Unexpected ' + kind + ' upstream image identity')
+
+    def verify_module_images(self, meta, folder):
+        kind = meta["module_id"]
+        if kind not in ("f12", "ocserv", "syslog"):
+            self.verify_images(meta["images"])
+            return
+        role = kind + "-server"
+        image = meta["images"][role]
+        try:
+            self.verify_images(meta["images"])
+            return
+        except ValueError:
+            pass
+        # Docker's classic image store addresses the config, containerd may address
+        # its OCI manifest or index. Follow only the authenticated archive's exact
+        # digest chain. Tags and searches by matching labels are never identities.
+        for identity in module_archive_identities(folder / "images.tar", image):
+            if identity == image["id"]:
+                continue
+            installed = {**image, "id": identity}
+            try:
+                self.verify_images({role: installed})
+            except ValueError:
+                continue
+            meta["images"][role] = installed
+            return
+        raise ValueError("Loaded module image identity differs from its signed archive")
 
     def verify_images(self, images):
         for image in images.values():
@@ -829,7 +920,7 @@ class Delivery:
                     or offer['artifact_sha256'] != body['artifact_sha256']):
                 raise ValueError('Module update is not the selected compatible signed artifact')
             state = self.state()
-            selected = catalog['modules'][body['module_id']]
+            selected = catalog_modules(catalog)[body['module_id']]
             operation = {'operation_id': body['operation_id'], 'kind': 'module_upgrade', 'module_id': body['module_id'], 'scope': 'module',
                          'version': state['version'], 'from_version': state['version'], 'module_version': selected['version'],
                          'phase': 'queued', 'started_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'error': '',
@@ -1129,7 +1220,7 @@ class Delivery:
             meta = read(folder / 'module.json')
             self.validate_module(meta, kind, operation['module_version'], folder)
             self.parent.docker('image', 'load', '--input', str(folder / 'images.tar'), timeout=900)
-            self.verify_images(meta['images'])
+            self.verify_module_images(meta, folder)
         if kind in ROLES:
             descriptor = {role: meta['images'][kind + '-' + role] for role in ROLES[kind]}
             if kind == 'doska':
@@ -1472,7 +1563,9 @@ class Delivery:
             for mount in obj.get('Mounts', []):
                 if mount.get('RW') and mount.get('Type') == 'bind':
                     source = Path(mount.get('Source', ''))
-                    if not source.is_relative_to(self.root / 'modules') or source != source.resolve():
+                    f12_mount = (not core and labels.get('pl.module') == 'f12'
+                                 and self.module_upgrade_helper().f12_runtime_mount(self.parent, obj, mount))
+                    if (not f12_mount and not source.is_relative_to(self.root / 'modules')) or source != source.resolve():
                         raise ValueError('Owned container has data outside the managed installation')
             kind = labels.get('pl.module', '')
             if not core and kind not in MODULES:
@@ -1543,7 +1636,7 @@ class Delivery:
         self.compose('up', '--detach', '--pull', 'never', '--no-build', '--no-deps', '--force-recreate',
                      '--wait', '--wait-timeout', '180', 'web')
     def resume_native(self, containers, *, safe_only=False):
-        names = [c['name'] for c in containers if c['running'] and not c['core'] and (not safe_only or c.get('module_id') != 'sftpgo')]
+        names = [c['name'] for c in containers if c['running'] and not c['core'] and (not safe_only or c.get('module_id') not in ('sftpgo', 'f12', 'ocserv'))]
         if names:
             self.parent.docker('container', 'start', *names, timeout=180)
             deadline = time.monotonic() + 120
@@ -1740,6 +1833,12 @@ class Delivery:
             state = self.state()
             icmp = self.prepare_icmp(destination, manifest, state['config'])
             model = self.upgraded_model(destination, manifest, state)
+            registry = self.module_registry()
+            for kind in ('f12', 'ocserv'):
+                if kind in registry:
+                    if not manifest.get('features', {}).get(kind + '_controller'):
+                        raise ValueError('Target core does not support the installed ' + kind + ' module')
+                    self.module_upgrade_helper().plan(self.parent, kind, registry[kind], registry[kind])
             containers = self.inventory()
             self.check_snapshot_capacity()
             self.operation('quiescing', containers=containers)

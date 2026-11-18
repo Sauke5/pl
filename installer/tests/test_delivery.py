@@ -56,7 +56,7 @@ class TrustTests(unittest.TestCase):
         sig = subprocess.run(['openssl', 'pkeyutl', '-sign', '-inkey', str(self.private), '-rawin', '-in', str(source)], check=True, capture_output=True).stdout
         return {'payload': base64.b64encode(raw).decode(), 'signature': base64.b64encode(sig).decode()}
 
-    def signer_cli(self, notes=None, raw_notes=None):
+    def signer_cli(self, notes=None, raw_notes=None, module_ids=()):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             installer = root / 'installer'; installer.mkdir()
@@ -72,6 +72,16 @@ class TrustTests(unittest.TestCase):
             output = root / 'catalog.json'
             command = [sys.executable, str(installer / 'release-catalog.py'), '--version', '0.4.0', '--sequence', '11',
                        '--core', str(archive), '--signing-key-file', str(self.private), '--output', str(output)]
+            for kind in module_ids:
+                module = root / (kind + '.tar.gz')
+                body = d.json_bytes({'product': 'PL', 'kind': 'module', 'module_id': kind, 'core_api': 1,
+                                     'architecture': 'amd64', 'version': d.PINNED_SERVERS.get(kind, '3.15.0'),
+                                     'package_version': '0.4.0'})
+                with tarfile.open(module, 'w:gz') as tar:
+                    member = tarfile.TarInfo('module.json')
+                    member.size = len(body)
+                    tar.addfile(member, io.BytesIO(body))
+                command.extend(['--module', str(module)])
             if notes is not None or raw_notes is not None:
                 path = root / 'notes.json'
                 path.write_bytes(raw_notes if raw_notes is not None else d.json_bytes(notes))
@@ -141,6 +151,45 @@ class TrustTests(unittest.TestCase):
     def test_catalogs_without_notes_and_unknown_top_level_metadata_remain_compatible(self):
         payload = {**self.payload(), 'future_metadata': {'value': 'compatible extension'}}
         self.assertEqual(d.verify_catalog(self.signed(payload), self.public), payload)
+
+    def test_signed_independent_extensions_with_legacy_and_single_extension_readers(self):
+        for optional in ((), ('f12',), ('syslog',), ('f12', 'syslog')):
+            with self.subTest(optional=optional):
+                completed, envelope = self.signer_cli(module_ids=('prometheus', *optional))
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                value = d.verify_catalog(envelope, self.public)
+                self.assertEqual(set(value['modules']), {'prometheus'})
+                self.assertEqual(set(d.catalog_modules(value)), {'prometheus', *optional})
+                for known in (set(), {'syslog'}):
+                    with patch.object(d, 'CATALOG_EXTENSIONS', known):
+                        checked = d.verify_catalog(envelope, self.public)
+                        self.assertEqual(set(d.catalog_modules(checked)), {'prometheus'} | (known & set(optional)))
+
+    def test_signer_places_syslog_outside_the_legacy_inventory_and_checks_its_signature(self):
+        completed, envelope = self.signer_cli(module_ids=('prometheus', 'syslog'))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        value = d.verify_catalog(envelope, self.public)
+        self.assertEqual(set(value['modules']), {'prometheus'})
+        self.assertEqual(set(value['module_extensions']), {'syslog'})
+        self.assertEqual(set(d.catalog_modules(value)), {'prometheus', 'syslog'})
+        self.assertEqual(d.verify_catalog(envelope, self.public, value), value)
+        value['module_extensions']['syslog']['artifacts']['amd64']['sha256'] = 'b' * 64
+        tampered = {**envelope, 'payload': base64.b64encode(d.json_bytes(value)).decode()}
+        with self.assertRaisesRegex(ValueError, 'signature'):
+            d.verify_catalog(tampered, self.public)
+
+    def test_signed_extensions_require_known_valid_artifacts_to_become_actionable(self):
+        legacy = self.payload()
+        self.assertEqual(d.catalog_modules(d.verify_catalog(self.signed(legacy), self.public)), legacy['modules'])
+        future = {**legacy, 'module_extensions': {'future-module': {'new_format': 2}}}
+        self.assertEqual(d.catalog_modules(d.verify_catalog(self.signed(future), self.public)), legacy['modules'])
+        with self.assertRaisesRegex(ValueError, 'conflicting'):
+            d.verify_catalog(self.signed(future), self.public, legacy)
+        for invalid in ({'module_extensions': {'prometheus': legacy['modules']['prometheus']}},
+                        {'module_extensions': {'../module': {}}}, {'module_extensions': {'syslog': {}}},
+                        {'modules': {**legacy['modules'], 'syslog': legacy['modules']['prometheus']}}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                d.verify_catalog(self.signed({**legacy, **invalid}), self.public)
 
     def test_status_projects_notes_only_from_a_verified_cached_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -335,6 +384,15 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Incompatible'):
             self.delivery.validate_module(meta, 'prometheus', '3.15.0', self.root)
         self.parent.docker.assert_not_called()
+
+    def test_newer_syslog_requires_a_matching_controller_before_installation(self):
+        self.delivery.catalog = lambda: {'modules': {}, 'module_extensions': {
+            'syslog': {'version': '2.0.0', 'artifacts': {'amd64': {}}}}}
+        with patch.object(self.delivery, 'download') as download, self.assertRaisesRegex(ValueError, 'обновить Платформу'):
+            self.delivery.ensure_module('syslog')
+        download.assert_not_called()
+        self.parent.docker.assert_not_called()
+        self.assertNotIn('syslog', self.delivery.module_registry())
 
     def test_upgrade_requires_trusted_newer_release_and_module_compatibility(self):
         op = {'operation_id': str(uuid.uuid4()), 'version': '0.2.0'}

@@ -19,6 +19,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = "monitoring/source/it-portal/"
+UPSTREAM_WIMBOOT_SOURCE = CORE + "deploy/images/f12-wimboot-e587564.tar.gz"
+UPSTREAM_WIMBOOT_SHA256 = "7c1f0216ecf66e5a2e6afe0bcfa01bca82399a7c749e5a44f3495083a6b8b54d"
 FORBIDDEN_PARTS = {".git", ".private", "private", "node_modules", "__pycache__", "bin", "obj", "dist", "artifacts", "backups", "credentials", "secrets", "logs", "state", ".venv", "test-results", "playwright-report"}
 TEXT_SUFFIXES = {".py", ".go", ".sql", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".css", ".svg", ".html", ".md", ".txt", ".toml", ".ini", ".sh", ".ps1", ".yaml", ".yml", ".cs", ".csproj", ".sln", ".props", ".targets", ".mako", ".lock"}
 ASSET_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".webmanifest", ".tgz"}
@@ -26,7 +28,7 @@ INSTALLER_FILES = {
     "package.py", "public-export.py", "release-catalog.py", "get-pl.sh", "install.sh", "bootstrap.py", "delivery.py", "delivery-proxy.py", "delivery.ru.md", "maintenance.py",
     "module-controller.py", "log-export.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "module-network.py", "xray-controller.py", "alertmanager-controller.py",
     "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py",
-    "sftpgo-controller.py", "netmap-controller.py", "bookstack-controller.py",
+    "sftpgo-controller.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py", "netmap-controller.py", "bookstack-controller.py",
     "icmp-install.py", "icmp-probe.py", "nginx.conf", "release-signing-public.pem", "LICENSES.txt",
     "README.package.ru.md", "README.public.ru.md", "platform-guide.ru.md", "core-modules.ru.md", "maintenance.ru.md", "disaster-recovery.py", "disaster-recovery.ru.md", "license-notices.py",
     "grafana-build.py", "grafana-plugins.json", "grafana-trust.patch", "grafana-signing/main.go", "grafana-signing/main_test.go",
@@ -44,7 +46,7 @@ UNIT_TEST_NAMES = {
     "test_netmap_controller.py", "test_netmap_access_profiles.py", "test_netmap_device_access.py", "test_netmap_device_gateway.py", "test_netmap_gitea_routing.py", "test_netmap_gitea_startup.py", "test_netmap_host_discovery.py",
     "test_netmap_instance_descriptor.py", "test_netmap_enrollment.py", "test_netmap_netbox_bootstrap.py", "test_netmap_netbox_startup.py", "test_netmap_package.py",
     "test_netmap_request_errors.py", "test_netmap_standalone.py", "test_netmap_store.py", "test_network_stack_install.py", "test_package.py",
-    "test_portable_ui_icmp.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
+    "test_portable_ui_icmp.py", "test_syslog_controller.py", "test_f12_controller.py", "test_f12_package.py", "test_ocserv_controller.py", "test_ocserv_package.py", "test_sftpgo_controller.py", "test_sftpgo_package.py", "test_wayline_controller.py",
     "test_wayline_package.py", "test_xray_bundle.py", "test_xray_controller.py", "test_xray_dispatch.py",
     "test_public_export.py", "test_reports_portability.py", "test_get_pl.py", "test_get_pl_proxy.py", "test_scoped_module_delivery.py", "test_installation_settings.py", "test_module_origin.py",
     "test_maintenance_concurrency.py", "test_managed_compose.py", "test_module_update_delivery.py", "test_module_upgrade.py", "test_production_bootstrap.py", "test_upgrade_status.py", "test_disaster_recovery.py", "test_disaster_recovery_history.py",
@@ -251,6 +253,11 @@ def allowed_match(name: str, line: str, rule: str, value: str) -> str | None:
 def audit_file(name: str, body: bytes, findings: list[dict], *, nested: bool = False) -> None:
     if not nested:
         source_name(name)
+    if name == UPSTREAM_WIMBOOT_SOURCE:
+        # This is the exact public iPXE source archive, including its test fixtures.
+        if digest(body) != UPSTREAM_WIMBOOT_SHA256:
+            findings.append({"path": name, "line": 0, "rule": "upstream-source-digest", "severity": "error"})
+        return
     for match in PRIVATE_KEY.finditer(body):
         number = body[:match.start()].count(b"\n") + 1
         line = body.splitlines()[number-1]

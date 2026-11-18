@@ -1,0 +1,15 @@
+diff --git a/src/vdisk.c b/src/vdisk.c
+index 4fe82248ab4b578a8247056a8c4bfae91039adb1..2ce77dcd8a413e77c79e6eab66f6e3a16be8ec0e 100644
+--- a/src/vdisk.c
++++ b/src/vdisk.c
+@@ -269,4 +269,6 @@ static void vdisk_root ( uint64_t lba __unused, unsigned int count __unused,
+-	/* Construct subdirectories */
+-	dirent = vdisk_empty_dir ( dir );
+-	dirent = vdisk_directory_entry ( dirent, "BOOT", 0, VDISK_DIRECTORY,
+-					 VDISK_BOOT_CLUSTER );
++	/* PL, 2026-11-18: Strelec bootmgr opens its BCD via the SSTR alias. */
++	dirent = vdisk_empty_dir ( dir );
++	dirent = vdisk_directory_entry ( dirent, "BOOT", 0, VDISK_DIRECTORY,
++					 VDISK_BOOT_CLUSTER );
++	dirent = vdisk_directory_entry ( dirent, "SSTR", 0, VDISK_DIRECTORY,
++					 VDISK_BOOT_CLUSTER );

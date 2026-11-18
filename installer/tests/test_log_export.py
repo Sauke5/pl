@@ -63,7 +63,7 @@ class LogExportTests(unittest.TestCase):
         self.assertEqual(run("raise SystemExit(1)", 128, 2), (b'', 'command_failed'))
 
     def test_archive_scopes_sources_and_records_partial_outcomes(self):
-        core_api, core_db, native, other = ('a' * 64, 'b' * 64, 'c' * 64, 'd' * 64)
+        core_api, core_db, native, other, syslog = (letter * 64 for letter in 'abcde')
         self.root.joinpath('state/delivery').mkdir(parents=True, exist_ok=True)
         self.root.joinpath('state/installation.json').write_text(json.dumps(
             {'install_id': INSTALLATION, 'product': 'PL', 'version': '0.8.6', 'phase': 'ready', 'env': 'sensitive-install-value'}))
@@ -91,7 +91,7 @@ class LogExportTests(unittest.TestCase):
                     self.assertIn('--all', args)
                     self.assertIn('--no-trunc', args)
                     label = args[args.index('--filter') + 1]
-                    ids = [core_api, core_db] if label == 'label=com.docker.compose.project=' + INSTALLATION else [native, other]
+                    ids = [core_api, core_db] if label == 'label=com.docker.compose.project=' + INSTALLATION else [native, other, syslog]
                     return ('\n'.join(ids) + '\n').encode(), ''
                 if args[3:5] == ('container', 'inspect'):
                     self.assertNotIn('.Config.Env', args[6])
@@ -100,6 +100,7 @@ class LogExportTests(unittest.TestCase):
                         (core_db, '/owned-db-1', INSTALLATION, 'db', '', '', ''),
                         (native, '/owned-netmap-adapter', '', '', INSTALLATION, 'netmap', ID),
                         (other, '/foreign-container', '', '', 'pl-654321abcdef', 'netmap', ID),
+                        (syslog, '/owned-syslog', '', '', INSTALLATION, 'syslog', ID),
                     ]
                     return ('\n'.join('\t'.join(item) for item in values) + '\n').encode(), ''
                 self.assertEqual(args[3:5], ('container', 'logs'))
@@ -112,6 +113,8 @@ class LogExportTests(unittest.TestCase):
                                        '"headers":{"Cookie":"sensitive-cookie"},"other":"first line\\nsensitive-continuation"}'), ''
                 if args[-1] == core_db:
                     return b'CLI error with sensitive-docker-stderr\n', 'command_failed'
+                if args[-1] == syslog:
+                    return docker_line('VictoriaLogs server is ready'), ''
                 self.assertEqual(args[-1], native)
                 return docker_line('upstream refused https://user:sensitive-password@example.test/hook-token?sig=sensitive-query'), ''
             self.assertEqual(args[0], 'journalctl')
@@ -144,6 +147,7 @@ class LogExportTests(unittest.TestCase):
             self.assertEqual(sources['docker:db:owned-db-1']['status'], 'unavailable')
             self.assertEqual(sources['docker:api:owned-api-1']['records'], 1)
             self.assertEqual(sources['docker:api:owned-api-1']['first_record_at'], self.stamp)
+            self.assertEqual(sources['docker:syslog:owned-syslog']['records'], 1)
             self.assertEqual(sources['systemd:icmp-probe']['status'], 'collected')
             self.assertEqual(sources['systemd:delivery-workers']['status'], 'truncated')
             entries = b''.join(archive.read(name) for name in archive.namelist())

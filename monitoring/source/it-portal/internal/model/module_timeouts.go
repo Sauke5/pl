@@ -16,7 +16,7 @@ func ModuleStartupControllerTimeout(moduleID, action string) time.Duration {
 	switch moduleID {
 	case "netmap":
 		return delivery + 22*time.Minute // Existing first-schema-migration budget.
-	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "bookstack":
+	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "syslog", "ocserv", "f12", "bookstack":
 		return delivery + 310*time.Second // Existing native lifecycle RPC budget.
 	}
 	return 0

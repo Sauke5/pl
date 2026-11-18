@@ -81,7 +81,11 @@ def main():
         m = metadata(path, "module.json")
         if m.get("product") != "PL" or m.get("kind") != "module" or m.get("core_api") != 1:
             raise ValueError("Catalog module must use the compatible module contract")
-        entry = value["modules"].setdefault(m["module_id"], {"version": m["version"], "core_api": 1, "artifacts": {}})
+        module_id = m.get("module_id")
+        if not isinstance(module_id, str) or module_id not in validator.MODULES:
+            raise ValueError("Unsupported module release")
+        inventory = value.setdefault("module_extensions", {}) if module_id in validator.CATALOG_EXTENSIONS else value["modules"]
+        entry = inventory.setdefault(module_id, {"version": m["version"], "core_api": 1, "artifacts": {}})
         if entry["version"] != m["version"] or m["architecture"] in entry["artifacts"]:
             raise ValueError("Duplicate or incompatible module versions")
         entry["artifacts"][m["architecture"]] = artifact(path, m["package_version"])

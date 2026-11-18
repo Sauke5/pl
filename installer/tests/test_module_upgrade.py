@@ -619,6 +619,51 @@ class NativeRebuildTests(unittest.TestCase):
         self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
 
 
+class F12EdgeUpgradeTests(unittest.TestCase):
+    def test_only_the_owned_pxe_control_mount_can_change_on_a_declared_transition(self):
+        source = '/run/pl-host/f12/edges/workshop'
+        config = {'Type': 'bind', 'Source': source + '/edge.json', 'Target': '/etc/pl-f12/edge.json', 'ReadOnly': True}
+        mounted = {'Type': 'bind', 'Source': config['Source'], 'Destination': config['Target'],
+                   'Mode': 'ro', 'RW': False, 'Propagation': 'rprivate'}
+        before = {'Config': {'Labels': {'pl.f12.role': 'edge'}}, 'Mounts': [mounted],
+                  'HostConfig': {'NetworkMode': 'bridge', 'Mounts': [config], 'CapDrop': ['ALL']}}
+        after = copy.deepcopy(before)
+        after['Config']['Labels'][upgrade.F12_PXE_LABEL] = '1'
+        runtime = {'Type': 'bind', 'Source': source + '/pxe', 'Target': '/run/pl-f12/pxe'}
+        after['HostConfig']['Mounts'].append(runtime)
+        after['Mounts'].append({'Type': 'bind', 'Source': runtime['Source'], 'Destination': runtime['Target'],
+                                'Mode': '', 'RW': True, 'Propagation': 'rprivate'})
+        def shape(obj, transition=True):
+            return upgrade._fingerprint(obj, 'f12', shape=True, pxe_transition=transition)
+        self.assertEqual(shape(before), shape(after))
+        self.assertNotEqual(shape(before, False), shape(after, False))
+        self.assertNotEqual(upgrade._fingerprint(before, 'f12'), upgrade._fingerprint(after, 'f12'))
+        for field, value in (('Source', '/tmp/pxe'), ('Propagation', 'shared'), ('Mode', 'ro'), ('RW', False)):
+            with self.subTest(field=field):
+                drift = copy.deepcopy(after)
+                drift['Mounts'][1][field] = value
+                self.assertNotEqual(shape(before), shape(drift))
+        for field, value in (('NetworkMode', 'host'), ('CapAdd', ['NET_ADMIN'])):
+            drift = copy.deepcopy(after)
+            drift['HostConfig'][field] = value
+            self.assertNotEqual(shape(before), shape(drift))
+        drift = copy.deepcopy(after)
+        drift['HostConfig']['Mounts'][1]['BindOptions'] = {'Propagation': 'rshared'}
+        self.assertNotEqual(shape(before), shape(drift))
+
+    def test_only_known_f12_server_labels_declare_a_pxe_transition(self):
+        previous = {'server': {'labels': {'pl.module.id': 'f12', 'pl.module.role': 'server'}}}
+        candidate = copy.deepcopy(previous)
+        candidate['server']['labels'][upgrade.F12_PXE_LABEL] = '1'
+        evidence = {'module_id': 'f12', 'old_descriptor': previous, 'new_descriptor': candidate}
+        self.assertTrue(upgrade._pxe_transition(evidence))
+        self.assertTrue(upgrade._pxe_transition({**evidence, 'old_descriptor': candidate, 'new_descriptor': previous}))
+        for key, value in ((upgrade.F12_PXE_LABEL, '2'), ('pl.module.role', 'web'), ('pl.module.id', 'syslog')):
+            drift = copy.deepcopy(candidate)
+            drift['server']['labels'][key] = value
+            self.assertFalse(upgrade._pxe_transition({**evidence, 'new_descriptor': drift}))
+
+
 class CreateOnlyAPITests(unittest.TestCase):
     def test_xray_and_alertmanager_create_default_start_remains_compatible(self):
         for name, cls in (('xray-controller', 'XrayController'), ('alertmanager-controller', 'AlertmanagerController')):

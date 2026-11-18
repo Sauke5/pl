@@ -217,6 +217,42 @@
       "data_preservation": "Отключение сохраняет файлы и настройки. Полное удаление удаляет только данные выбранного экземпляра."
     },
     {
+      "id": "syslog",
+      "name": "Центральный syslog",
+      "description": "Приём сообщений от сетевых устройств и серверов по UDP и TCP. Источники и поиск по времени, уровню и тексту.",
+      "modes": ["local"],
+      "actions": ["enable", "disable", "refresh", "remove"],
+      "integration_kind": "syslog",
+      "capabilities": ["health"],
+      "direction": "Мониторинг",
+      "view": "syslog",
+      "data_preservation": "Отключение останавливает приём сообщений и сохраняет журнал и настройки. Удаление экземпляра удаляет его журнал."
+    },
+    {
+      "id": "ocserv",
+      "name": "Корпоративный VPN",
+      "description": "Удалённый доступ сотрудников к разрешённым сетям через ocserv. Профили, сроки доступа и активные VPN-сессии.",
+      "modes": ["local"],
+      "actions": ["enable", "disable", "refresh", "remove"],
+      "integration_kind": "ocserv",
+      "capabilities": ["health"],
+      "direction": "Сети",
+      "view": "ocserv",
+      "data_preservation": "Отключение завершает сессии и сохраняет назначения и профили. Удаление экземпляра удаляет его назначения, профили и журнал VPN."
+    },
+    {
+      "id": "f12",
+      "name": "Сетевая загрузка F12",
+      "description": "Библиотека загрузочных ISO для установки и восстановления компьютеров. Для каждого образа можно выбрать сети, в которых он будет доступен.",
+      "modes": ["local"],
+      "actions": ["enable", "disable", "refresh", "remove"],
+      "integration_kind": "f12",
+      "capabilities": ["health"],
+      "direction": "Сети",
+      "view": "f12",
+      "data_preservation": "Отключение сохраняет образы и выбранные сети. Удаление экземпляра удаляет его библиотеку."
+    },
+    {
       "id": "netmap",
       "name": "NetMap",
       "description": "Карта сети, инвентарь NetBox, сбор конфигураций Oxidized и история в Gitea.",

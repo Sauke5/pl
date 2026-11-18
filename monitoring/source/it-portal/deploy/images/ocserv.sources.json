@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "version": "1.6.0",
+  "recipe": "deploy/images/ocserv.Dockerfile",
+  "images": {
+    "ocserv-server": {"target": "server", "labels": {
+      "org.opencontainers.image.version": "1.6.0",
+      "pl.upstream.version": "1.6.0",
+      "pl.module.id": "ocserv",
+      "pl.module.role": "server",
+      "pl.module.config.version": "1",
+      "pl.build.variant": "upstream-pinned"
+    }}
+  },
+  "upstream": {
+    "source": "https://gitlab.com/openconnect/ocserv",
+    "release": "https://gitlab.com/openconnect/ocserv/-/tags/1.6.0",
+    "debian_package": "ocserv=1.6.0-3",
+    "pl_debian_package": "ocserv=1.6.0-3+pl1",
+    "pl_patch": "deploy/images/ocserv-dex-id-token.patch",
+    "pl_patch_sha256": "cef09770d0574bfb7d2a873d90d11fb64ffceda5b5898c0afb13f80cfa9bc2ad",
+    "pl_test_patch": "deploy/images/ocserv-test-syslog-fortify.patch",
+    "pl_test_patch_sha256": "7db13e23a900ba122af9bc43f16775babe45a3b9827f83a1bf938c4b0b74625a",
+    "debian_snapshot": "20261115T000000Z",
+    "license": "GPL-2.0-or-later",
+    "source_sha256": "2d3303a0d9e06eabfa08694b9dca3c558fef36418857bebf1b8de57ece5f9f32",
+    "debian_source_sha256": "9d193c90df4eb029be71ff947dfce9d80a813a11c2d542112ab5fa20828119c1"
+  }
+}

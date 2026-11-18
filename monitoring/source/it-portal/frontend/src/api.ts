@@ -39,6 +39,7 @@ export async function apiResponse(
   headers: Record<string, string> = {},
   signal?: AbortSignal,
 ): Promise<Response> {
+  const binary = body instanceof Blob;
   const response = await fetch(
     path.startsWith("/auth/") || path.startsWith("/doska/api/doska/")
       ? path
@@ -48,11 +49,21 @@ export async function apiResponse(
       credentials: "same-origin",
       signal,
       headers: {
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(body === undefined
+          ? {}
+          : {
+              "Content-Type": binary
+                ? "application/octet-stream"
+                : "application/json",
+            }),
         ...(method === "GET" ? {} : { "X-CSRF-Token": csrf }),
         ...headers,
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: binary
+        ? body
+        : body === undefined
+          ? undefined
+          : JSON.stringify(body),
     },
   );
   if (!response.ok) {

@@ -1,0 +1,147 @@
+.f12-page,
+.f12-form,
+.f12-networks,
+.f12-progress {
+  display: grid;
+  gap: 16px;
+}
+.f12-page .page-title {
+  align-items: center;
+  margin: 0;
+}
+.f12-page .page-title h1 {
+  margin-top: 5px;
+}
+.f12-page .back-link,
+.f12-menu li,
+.f12-networks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.f12-page .back-link {
+  color: var(--pl-ui-muted);
+  text-decoration: none;
+}
+.f12-page .panel,
+.f12-form .field {
+  margin: 0;
+  min-width: 0;
+}
+.f12-page .panel > .field {
+  max-width: 26rem;
+  margin-bottom: 12px;
+}
+.f12-table-wrap {
+  overflow-x: auto;
+}
+.f12-table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+.f12-table-wrap td,
+.f12-table-wrap th {
+  border-bottom: 1px solid var(--pl-ui-border);
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+.f12-table-wrap th {
+  color: var(--pl-ui-muted);
+  font-size: 0.875em;
+}
+.f12-table-wrap td:nth-child(2) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.f12-table-wrap small {
+  display: block;
+  margin-top: 4px;
+}
+.f12-image-link {
+  color: var(--pl-ui-accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.f12-image-link:hover,
+.f12-page .back-link:hover {
+  text-decoration: underline;
+}
+.f12-networks {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  gap: 8px;
+  border: 1px solid var(--pl-ui-border);
+  border-radius: var(--pl-ui-radius, 8px);
+}
+.f12-networks legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.f12-networks input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+.f12-progress {
+  gap: 5px;
+}
+.f12-progress progress {
+  width: 100%;
+  accent-color: var(--pl-ui-accent);
+}
+.f12-facts dd,
+.pl-ui-dialog:has(.f12-form) .dialog-title,
+.f12-menu li,
+.f12-form details code {
+  overflow-wrap: anywhere;
+}
+.f12-menu svg {
+  flex: none;
+}
+.f12-sources ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.f12-sources li span {
+  display: block;
+  font-size: 0.875em;
+}
+.f12-form details code {
+  display: block;
+  margin-top: 8px;
+}
+.f12-menu {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.f12-notice {
+  color: var(--pl-ui-text);
+  margin: 0 0 12px;
+}
+
+.f12-pending {
+  margin-bottom: 16px;
+}
+.f12-pending p {
+  margin: 0 0 8px;
+}
+.f12-form details summary {
+  cursor: pointer;
+}
+.f12-form .f12-facts {
+  margin-top: 12px;
+}

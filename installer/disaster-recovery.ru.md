@@ -17,7 +17,7 @@ release receipt.
 нет queued/running jobs, незавершённого upgrade/configuration/module lifecycle
 или private pending plan. Состав private state, записей PL и Docker совпадает.
 Поддерживаются конечные managed recipes Prometheus, Xray, Alertmanager, Wayline,
-Grafana native schema 2, Forms, Doska, SFTPGo, NetMap и BookStack. Выключенные
+Grafana native schema 2, Forms, Doska, SFTPGo, NetMap, BookStack, Syslog и F12. Выключенные
 экземпляры и их данные тоже включаются. Unknown/orphaned/foreign resources,
 custom runtime drift, внешние data mounts/tablespaces и volume drivers с options
 вызывают отказ; архив не объявляется полным при пропуске такого объекта.
@@ -205,6 +205,18 @@ CLI/receipt не выводят private values и subprocess bodies. `failed_ste
 `error_kind` указывают этап; systemd и container identity/state проверяются отдельно.
 Если ошибка произошла при возобновлении source после backup, готовый sealed файл
 уже может существовать: не перезаписывайте его повторной командой.
+
+## Библиотека сетевой загрузки
+
+Для F12 полная копия сохраняет ISO, каталог и состояние загрузок в томе
+`<installation>-f12-<uuid>-data`, приватные настройки экземпляра и выбранные
+сети. Дождитесь завершения текущего импорта перед началом копирования.
+
+При восстановлении PL сверяет имена интерфейсов, IPv4-адреса и CIDR с исходной
+конфигурацией. Для выбранных сетей требуется прежний адрес с доступным портом
+TCP 18080. PL создаёт заново служебные сокеты, файлы конфигурации и по одному
+обработчику HTTP на выбранную сеть. Библиотека восстанавливается и у выключенного
+экземпляра.
 
 ## Границы первой версии
 

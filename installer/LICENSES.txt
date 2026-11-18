@@ -51,3 +51,22 @@ deploy/images/sftpgo.sources.json in source.tar.gz and
 /usr/share/pl/provenance/sftpgo/sources.json in the module image.
 PL gateway and interface sources are included in source.tar.gz. The controller
 is supplied as the readable Python payload sftpgo-controller.py in the package.
+
+The optional syslog module uses VictoriaLogs 1.54.0 under the Apache License 2.0.
+The image includes the license and source provenance in /usr/share/pl/provenance/syslog/.
+The source archive includes them in deploy/images/syslog.LICENSE and deploy/images/syslog.sources.json.
+Official source https://github.com/VictoriaMetrics/VictoriaLogs/tree/6433dae586cc15921b4b9c50a805a49553c9d761
+
+F12 uses Bootimus 0.1.81 (Apache-2.0), upstream iPXE, shim, wimboot, Debian Python
+and ISO tools. The complete third-party notices and pinned source inventories
+are under /usr/share/pl/provenance/f12; Debian notices are in /usr/share/doc.
+The PL adapter, build instructions and corresponding-source downloader ship in
+source.tar.gz. Run python3 deploy/images/f12-sources.py sources --output SOURCES
+to materialize and verify the upstream sources for both shipped architectures.
+The Strelec BIOS loader includes the PL SSTR patch to wimboot 2.9.0. Its source
+archive, patch and build metadata are in /usr/share/pl/provenance/f12/.
+
+The optional corporate VPN module includes OpenConnect VPN Server (ocserv) 1.6.0.
+The upstream sources, Debian packaging, PL browser OIDC patch and test logging
+patch are in /usr/share/pl/provenance/ocserv/. Package license notices are
+in /usr/share/doc/ocserv/copyright.

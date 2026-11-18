@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "version": "1.54.0",
+  "recipe": "deploy/images/syslog.Dockerfile",
+  "images": {
+    "syslog-server": {
+      "target": "server",
+      "labels": {
+        "org.opencontainers.image.version": "1.54.0",
+        "pl.upstream.version": "1.54.0",
+        "pl.module.id": "syslog",
+        "pl.module.role": "server",
+        "pl.module.config.version": "1",
+        "pl.build.variant": "upstream-pinned"
+      }
+    }
+  },
+  "upstream": {
+    "source": "https://github.com/VictoriaMetrics/VictoriaLogs",
+    "revision": "6433dae586cc15921b4b9c50a805a49553c9d761",
+    "release": "https://github.com/VictoriaMetrics/VictoriaLogs/releases/tag/v1.54.0",
+    "license": "Apache-2.0",
+    "image": "docker.io/victoriametrics/victoria-logs:v1.54.0@sha256:ee4e820cac3721f5f5d91641b950c22439593adc4224f9655e5333d5a84c1dfe",
+    "manifests": {
+      "linux/amd64": "sha256:cfe25bbded16c3ad6c5d15685abab5c3342f4b5602fba72fe6ec202015bf63e3",
+      "linux/arm64": "sha256:f7ebcf5e8cf07d78a918ae282dfd7d1a08437ee5cd152403a962a987d922f602"
+    }
+  }
+}

@@ -71,7 +71,7 @@ func (s *Server) moduleCatalog(w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		}
-		if (items[index].ID == "wayline" || items[index].ID == "grafana" || items[index].ID == "forms" || items[index].ID == "doska" || items[index].ID == "sftpgo" || items[index].ID == "netmap" || items[index].ID == "bookstack") && items[index].Version == "" {
+		if (items[index].ID == "wayline" || items[index].ID == "grafana" || items[index].ID == "forms" || items[index].ID == "doska" || items[index].ID == "sftpgo" || items[index].ID == "syslog" || items[index].ID == "ocserv" || items[index].ID == "f12" || items[index].ID == "netmap" || items[index].ID == "bookstack") && items[index].Version == "" {
 			if items[index].ID == "wayline" {
 				items[index].Modes = []string{"external"}
 			} else {
@@ -124,11 +124,11 @@ func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 		problem(w, 503, "module_updating", "Модуль обновляется. Повторите действие после завершения обновления.")
 		return
 	}
-	if input.Mode == "local" && (s.Config.OnDemandModules || input.ModuleID == "wayline" || input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack") && s.availableModuleVersions(r.Context())[input.ModuleID] == "" {
+	if input.Mode == "local" && (s.Config.OnDemandModules || input.ModuleID == "wayline" || input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack" || input.ModuleID == "syslog" || input.ModuleID == "ocserv" || input.ModuleID == "f12") && s.availableModuleVersions(r.Context())[input.ModuleID] == "" {
 		problem(w, 409, "module_unavailable", "В каталоге поставки нет совместимой версии модуля. Проверьте обновления в настройках PL.")
 		return
 	}
-	if (input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack") && input.AdditionalInstance {
+	if (input.ModuleID == "grafana" || input.ModuleID == "forms" || input.ModuleID == "doska" || input.ModuleID == "sftpgo" || input.ModuleID == "netmap" || input.ModuleID == "bookstack" || input.ModuleID == "syslog" || input.ModuleID == "ocserv" || input.ModuleID == "f12") && input.AdditionalInstance {
 		problem(w, 400, "additional_instance_unsupported", "На этой установке поддерживается один экземпляр этого приложения")
 		return
 	}

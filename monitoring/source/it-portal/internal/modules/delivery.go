@@ -152,7 +152,7 @@ func (c *HostController) Delivery(ctx context.Context, action string, upgrade *D
 
 func deliveredModule(id string) bool {
 	switch id {
-	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "netmap", "bookstack":
+	case "prometheus", "xray", "alertmanager", "wayline", "grafana", "forms", "doska", "sftpgo", "syslog", "ocserv", "f12", "netmap", "bookstack":
 		return true
 	default:
 		return false

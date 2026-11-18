@@ -446,6 +446,13 @@
   align-items: end;
   gap: 12px;
 }
+.module-catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+}
+.module-catalog-toolbar .module-search {
+  flex: 1 1 240px;
+}
 .module-toolbar > label {
   min-width: 0;
   display: grid;

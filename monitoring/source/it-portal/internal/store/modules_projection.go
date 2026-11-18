@@ -50,7 +50,7 @@ func syncModuleLinks(ctx context.Context, tx pgx.Tx, instance *model.ModuleInsta
 		if instance.ModuleID != "prometheus" && integration.Config == nil {
 			integration.Config = map[string]string{}
 		}
-		if instance.ModuleID == "alertmanager" {
+		if instance.ModuleID == "alertmanager" || instance.ModuleID == "syslog" || instance.ModuleID == "ocserv" || instance.ModuleID == "f12" {
 			integration.Config = map[string]string{}
 		}
 	}
@@ -92,7 +92,7 @@ func syncModuleLinks(ctx context.Context, tx pgx.Tx, instance *model.ModuleInsta
 		integration.Status = "error"
 		integration.Error = instance.Error
 	}
-	if instance.ModuleID == "wayline" || instance.ModuleID == "grafana" || instance.ModuleID == "fileauditor" || instance.ModuleID == "forms" || instance.ModuleID == "doska" || instance.ModuleID == "sftpgo" || instance.ModuleID == "netmap" || instance.ModuleID == "bookstack" {
+	if instance.ModuleID == "wayline" || instance.ModuleID == "grafana" || instance.ModuleID == "fileauditor" || instance.ModuleID == "forms" || instance.ModuleID == "doska" || instance.ModuleID == "sftpgo" || instance.ModuleID == "netmap" || instance.ModuleID == "bookstack" || instance.ModuleID == "syslog" || instance.ModuleID == "ocserv" || instance.ModuleID == "f12" {
 		integration.LastSuccess = instance.LastSuccess
 	}
 	if _, err = save(ctx, tx, "integration", integration.ID, integration.Revision, integration); err != nil {
@@ -114,12 +114,13 @@ func syncModuleLinks(ctx context.Context, tx pgx.Tx, instance *model.ModuleInsta
 	} else {
 		return err
 	}
-	if instance.ModuleID == "alertmanager" {
-		resource.URL = "/#modules?instance=" + instance.ID + "&view=alertmanager"
-	} else if instance.ModuleID == "mailcow" {
-		resource.URL = "/#modules?instance=" + instance.ID + "&view=mailcow"
+	if instance.ModuleID == "alertmanager" || instance.ModuleID == "mailcow" || instance.ModuleID == "syslog" || instance.ModuleID == "ocserv" || instance.ModuleID == "f12" {
+		resource.URL = "/#modules?instance=" + instance.ID + "&view=" + instance.ModuleID
 	} else {
 		resource.URL = "/#modules?instance=" + instance.ID + "&view=monitoring"
+	}
+	if (instance.ModuleID == "f12" || instance.ModuleID == "ocserv") && resource.Revision == 0 {
+		resource.Directions = []string{"Сети"}
 	}
 	if instance.ModuleID == "grafana" {
 		resource.URL = "/grafana/"
