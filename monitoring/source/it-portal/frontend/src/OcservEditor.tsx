@@ -1,10 +1,12 @@
 import { useRef, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { APIError, api, errorText } from "./api";
-import { Field } from "./components/common";
+import { ErrorBox, Field } from "./components/common";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
 import { cidrRange, expiryInput, formatTime, vpnTimezone } from "./ocserv";
 import type { VPNDialog, VPNPayload, VPNState } from "./ocserv";
+import type { LocalUser } from "./types";
 
 type Props = {
   base: string;
@@ -33,6 +35,22 @@ export default function OcservEditor({
     model.kind === "grant" || model.kind === "revoke"
       ? snapshot.grants.find((g) => g.subject === model.subject)
       : undefined;
+  const native =
+    model.kind === "grant" &&
+    (!snapshot.gateway.auth_mode ||
+      (snapshot.gateway.auth_mode === "certificate" &&
+        !!snapshot.gateway.managed_certificates));
+  const directory = useQuery({
+    queryKey: ["/local-users"],
+    queryFn: ({ signal }) =>
+      api<{ items: LocalUser[] }>("/local-users", "GET", undefined, {}, signal),
+    enabled: native && !grant,
+    refetchInterval: false,
+    retry: false,
+  });
+  const employees = (directory.data?.items || []).filter(
+    (user) => !user.disabled && !user.builtin,
+  );
   const [id, setId] = useState(priorProfile?.id || ""),
     [name, setName] = useState(priorProfile?.name || grant?.display_name || "");
   const [networks, setNetworks] = useState(
@@ -102,6 +120,12 @@ export default function OcservEditor({
         throw new Error("Уберите повторяющиеся подсети.");
       return { id, name: name.trim(), networks: routes };
     }
+    if (
+      native &&
+      !grant &&
+      (!subject || !employees.some((user) => user.id === subject))
+    )
+      throw new Error("Выберите действующую учётную запись сотрудника PL.");
     if (!subject.trim() || !name.trim() || !currentProfile)
       throw new Error(
         "Укажите идентификатор сотрудника, имя и профиль доступа.",
@@ -260,39 +284,99 @@ export default function OcservEditor({
           )}
           {model.kind === "grant" && (
             <>
-              <Field label="Имя сотрудника">
-                <input
-                  required
-                  maxLength={128}
-                  value={name}
-                  autoFocus
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </Field>
-              <Field
-                label={
-                  snapshot.gateway.auth_mode === "oidc"
-                    ? "Идентификатор OIDC (sub)"
-                    : snapshot.gateway.auth_mode === "certificate"
-                      ? "Имя в сертификате (CN)"
-                      : "Идентификатор сотрудника на шлюзе"
-                }
-                hint={
-                  grant
-                    ? undefined
-                    : "Укажите точное значение, которое шлюз получает при входе."
-                }
-              >
-                <input
-                  required
-                  maxLength={62}
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  readOnly={!!grant}
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
-              </Field>
+              {native && !grant ? (
+                <>
+                  <Field label="Сотрудник PL">
+                    <select
+                      required
+                      autoFocus
+                      value={subject}
+                      disabled={
+                        directory.isPending ||
+                        directory.isError ||
+                        !employees.length
+                      }
+                      onChange={(event) => {
+                        const user = employees.find(
+                          (item) => item.id === event.target.value,
+                        );
+                        setSubject(user?.id || "");
+                        setName(user?.name || user?.username || "");
+                      }}
+                    >
+                      <option value="">
+                        {directory.isPending
+                          ? "Загружаем сотрудников…"
+                          : "Выберите сотрудника"}
+                      </option>
+                      {employees.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name || user.username}
+                          {user.name && user.name !== user.username
+                            ? " · " + user.username
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {directory.isError ? (
+                    <ErrorBox
+                      error={directory.error}
+                      retry={() => void directory.refetch()}
+                    />
+                  ) : (
+                    !directory.isPending &&
+                    !employees.length && (
+                      <p className="muted">
+                        Добавьте сотрудника в разделе{" "}
+                        <a href="#settings?section=users">
+                          Локальные пользователи
+                        </a>
+                        .
+                      </p>
+                    )
+                  )}
+                </>
+              ) : native && grant ? (
+                <div className="vpn-note">
+                  <strong>Сотрудник PL</strong>
+                  <span>{grant.display_name || grant.subject}</span>
+                </div>
+              ) : (
+                <>
+                  <Field label="Имя сотрудника">
+                    <input
+                      required
+                      maxLength={128}
+                      value={name}
+                      autoFocus
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    label={
+                      snapshot.gateway.auth_mode === "oidc"
+                        ? "Идентификатор OIDC (sub)"
+                        : "Имя в сертификате (CN)"
+                    }
+                    hint={
+                      grant
+                        ? undefined
+                        : "Укажите точное значение, которое шлюз получает при входе."
+                    }
+                  >
+                    <input
+                      required
+                      maxLength={62}
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      readOnly={!!grant}
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                    />
+                  </Field>
+                </>
+              )}
               <div className="vpn-form-grid">
                 <Field label="Профиль доступа">
                   <select
@@ -376,7 +460,13 @@ export default function OcservEditor({
           ) : (
             <Button
               type="submit"
-              disabled={busy || !!unchanged}
+              disabled={
+                busy ||
+                !!unchanged ||
+                (native &&
+                  !grant &&
+                  (!subject || directory.isError || directory.isPending))
+              }
               variant={
                 model.kind === "revoke" || model.kind === "terminate"
                   ? "destructive"

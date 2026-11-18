@@ -10,16 +10,23 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import threading
 import time
 
 
-_helper = Path(__file__).with_name('xray-controller.py')
-if _helper.is_symlink() or not _helper.is_file():
-    raise ValueError('Trusted module file primitives unavailable')
-_spec = importlib.util.spec_from_file_location('pl_ocserv_files', _helper)
-_files = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_files)
+def helper(name):
+    path = Path(__file__).with_name(name + '.py')
+    if path.is_symlink() or not path.is_file():
+        raise ValueError('Trusted module helper unavailable')
+    spec = importlib.util.spec_from_file_location('pl_' + name.replace('-', '_'), path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_files = helper('xray-controller')
+_setup = helper('ocserv-setup')
 identifier, directory, read_file = _files.identifier, _files.directory, _files.read_file
 atomic, encoded = _files.atomic, _files.encoded
 
@@ -32,7 +39,7 @@ SYSCTLS = {'net.ipv4.ip_forward': '1'}
 LOGS = {'Type': 'local', 'Config': {'max-size': '1m', 'max-file': '2'}}
 BRIDGE_DEFAULTS = {'com.docker.network.enable_ipv4': 'true', 'com.docker.network.enable_ipv6': 'false'}
 ROUTES = {
-    'state': set(),
+    'state': set(), 'setup': set(), 'discover': set(), 'connection': None, 'configure': None,
     'profile': {'revision', 'actor', 'id', 'name', 'networks'},
     'grant': {'revision', 'actor', 'subject', 'display_name', 'profile_id', 'expires_at'},
     'revoke': {'revision', 'actor', 'subject'},
@@ -40,10 +47,7 @@ ROUTES = {
 }
 
 
-class Failure(ValueError):
-    def __init__(self, status, code, message):
-        super().__init__(message)
-        self.status, self.code = status, code
+Failure = _setup.Failure
 
 
 def bindings(value):
@@ -95,6 +99,7 @@ class OcservController:
                 or labels.get('pl.module.config.version') != '1' or labels.get('pl.build.variant') != 'upstream-pinned'):
             raise ValueError('Invalid VPN image contract')
         self.slots = threading.BoundedSemaphore(4)
+        self.wizard = _setup.GatewaySetup(self, _files, lambda: helper('ocserv-discovery'))
 
     def names(self, instance, suffix=''):
         return self.installation + '-ocserv-' + identifier(instance) + suffix
@@ -355,8 +360,31 @@ class OcservController:
                 raise ValueError('VPN management unavailable')
         return {**result, 'state': 'running' if running else 'disabled', 'version': self.version}
 
+    @contextmanager
+    def transaction_lock(self, instance, mutable=False, host=False):
+        # A writer can leave a durable journal if its process is interrupted.
+        # Inspect it under the instance lock before letting a reader see the gateway.
+        if not mutable:
+            with self.locked(instance):
+                if not self.wizard.pending(instance).exists() and not self.wizard.stage_path(instance).exists():
+                    yield
+                    return
+        with self.locked(instance, exclusive=True):
+            recover = self.wizard.pending(instance).exists() or self.wizard.stage_path(instance).exists()
+            with (lock(self.root / 'modules/controller.lock') if host or recover else nullcontext()):
+                if recover:
+                    self.wizard.recover(instance)
+                yield
+
+    def recover_setup(self):
+        for path in self.operations.glob('setup-*'):
+            match = re.fullmatch(r'setup-([0-9a-f-]{36})\.(?:pending|stage)', path.name)
+            if match:
+                with self.transaction_lock(identifier(match[1]), mutable=True):
+                    pass
+
     def get(self, instance):
-        with self.locked(instance):
+        with self.transaction_lock(instance):
             return self.observe(instance)
 
     def execute(self, body):
@@ -366,8 +394,7 @@ class OcservController:
         instance, operation, action = identifier(body['instance_id']), identifier(body['operation_id']), body['action']
         journal, fingerprint = self.operations / (operation + '.json'), hashlib.sha256(encoded(body)).hexdigest()
         mutable = action != 'refresh'
-        with _files.operation_lock(self.operations, operation), self.locked(instance, exclusive=mutable), \
-                (lock(self.root / 'modules/controller.lock') if mutable else nullcontext()):
+        with _files.operation_lock(self.operations, operation), self.transaction_lock(instance, mutable=mutable, host=mutable):
             if journal.exists() or journal.is_symlink():
                 stored = json.loads(read_file(journal))
                 if stored['fingerprint'] != fingerprint:
@@ -389,29 +416,63 @@ class OcservController:
             atomic(journal, {'fingerprint': fingerprint, 'phase': 'complete'})
             return {**result, 'operation_id': operation}
 
+    @staticmethod
+    def fields(action, payload):
+        fields = set(payload)
+        if action == 'configure':
+            mandatory = _setup.REQUIRED - {'issuer', 'client_id'} if payload.get('auth_mode') == 'certificate' else _setup.REQUIRED
+            return mandatory <= fields <= (_setup.REQUIRED | _setup.OPTIONAL | {'auth_mode'})
+        if action == 'connection':
+            if 'status_only' in fields:
+                if payload['status_only'] is not True:
+                    return False
+                fields.remove('status_only')
+            if fields == {'subject'}:
+                return isinstance(payload['subject'], str) and _setup.SUBJECT.fullmatch(payload['subject']) is not None
+            return fields == {'portal_user_id'} and _setup.valid_portal_id(payload['portal_user_id'])
+        return fields == ROUTES[action]
+
     def request(self, request):
         instance = identifier(request.get('instance_id') if isinstance(request, dict) else None)
         try:
             action, payload = request.get('action'), request.get('payload')
             if (set(request) != {'instance_id', 'action', 'payload'} or not isinstance(action, str) or action not in ROUTES
-                    or not isinstance(payload, dict) or set(payload) != ROUTES[action] or len(encoded(request)) > 16384):
+                    or not isinstance(payload, dict) or not self.fields(action, payload)
+                    or len(encoded(request)) > (300 * 1024 if action == 'configure' else 16384)):
                 raise Failure(400, 'ocserv_invalid', 'Проверьте параметры запроса VPN.')
             if not self.slots.acquire(blocking=False):
                 raise Failure(429, 'ocserv_limit', 'Шлюз VPN обрабатывает другие запросы.')
             try:
-                with self.locked(instance, exclusive=action != 'state'):
+                with self.transaction_lock(instance, mutable=action not in ('state', 'setup', 'discover', 'connection'),
+                                           host=action == 'configure'):
                     if not (self.instances / instance).is_dir():
+                        if action == 'connection':
+                            raise _setup.unavailable()
                         raise Failure(404, 'ocserv_not_installed', 'Корпоративный VPN не установлен.')
+                    if action == 'discover':
+                        body = self.wizard.discovery().discover()
+                        return {'instance_id': instance, 'status': 200, 'body': body}
                     obj = self.inspect(instance)
-                    if obj and not obj['State'].get('Running'):
-                        raise Failure(409, 'ocserv_disabled', 'Модуль VPN отключён.')
-                    reply = self.call(obj, action, payload)
-                    if reply['status'] == 200 and self.state(instance)['ingress'] is None:
-                        reply['body']['gateway']['ready'] = False
+                    if action == 'connection':
+                        body = self.wizard.connection(instance, payload, obj)
+                    elif action == 'setup':
+                        live = self.wizard.snapshot(obj) if obj and obj['State'].get('Running') else {}
+                        body = self.wizard.describe(instance, self.wizard.entries(), live)
+                    else:
+                        if obj and not obj['State'].get('Running'):
+                            raise Failure(409, 'ocserv_disabled', 'Включите модуль VPN в PL.')
+                        if action == 'configure':
+                            body = self.wizard.configure(instance, payload, obj)
+                        else:
+                            reply = self.call(obj, action, payload)
+                            if reply['status'] == 200 and self.state(instance)['ingress'] is None:
+                                reply['body']['gateway']['ready'] = False
+                            return {'instance_id': instance, **reply}
+                    reply = {'status': 200, 'body': body}
             finally:
                 self.slots.release()
         except Failure as exc:
             reply = {'status': exc.status, 'body': {'error': {'code': exc.code, 'message': str(exc)}}}
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
             reply = {'status': 503, 'body': {'error': {'code': 'ocserv_unavailable', 'message': 'Шлюз VPN недоступен.'}}}
         return {'instance_id': instance, **reply}

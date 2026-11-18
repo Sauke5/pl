@@ -40,12 +40,15 @@ func (m *Manager) OcservRequest(ctx context.Context, id, action string, payload 
 }
 
 func (c *HostController) OcservRequest(ctx context.Context, id, action string, payload any) (NativeControlReply, error) {
+	limit := 16384
 	switch action {
-	case "state", "profile", "grant", "revoke", "terminate":
+	case "state", "profile", "grant", "revoke", "terminate", "setup", "discover", "connection":
+	case "configure":
+		limit = 300 << 10
 	default:
 		return NativeControlReply{}, ErrApplicationUnavailable
 	}
-	out, err := c.nativeControl(ctx, "/v1/ocserv", id, action, payload, 16384)
+	out, err := c.nativeControl(ctx, "/v1/ocserv", id, action, payload, limit)
 	if err != nil {
 		return NativeControlReply{}, err
 	}

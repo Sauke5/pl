@@ -11,7 +11,14 @@ import {
 } from "lucide-react";
 import { Badge, Empty, Field, Panel } from "./components/common";
 import { Button } from "./components/ui/button";
-import { formatTime, grantLabels, isExpiring, vpnTimezone } from "./ocserv";
+import OcservProfileDownload from "./OcservProfileDownload";
+import {
+  formatTime,
+  grantLabels,
+  isExpiring,
+  profileAvailable,
+  vpnTimezone,
+} from "./ocserv";
 import type { VPNDialog, VPNGrant, VPNProfile, VPNState } from "./ocserv";
 
 export function GrantStatus({ value }: { value: string }) {
@@ -94,6 +101,7 @@ export function SessionCount({
 }
 function GrantDetail({
   grant,
+  base,
   profile,
   data,
   disabled,
@@ -101,6 +109,7 @@ function GrantDetail({
   onProfile,
 }: {
   grant: VPNGrant;
+  base: string;
   profile?: VPNProfile;
   data: VPNState;
   disabled: boolean;
@@ -110,7 +119,10 @@ function GrantDetail({
   const sessions = data.sessions.filter(
     (session) => session.subject === grant.subject,
   );
-  const effective = grant.status === "active" && data.gateway.ready;
+  const effective =
+    grant.status === "active" &&
+    data.gateway.ready &&
+    (!grant.expires_at || Date.parse(grant.expires_at) > Date.now());
   return (
     <Panel
       title="Карточка доступа"
@@ -144,6 +156,17 @@ function GrantDetail({
           </dd>
         </div>
       </dl>
+      {profile && profileAvailable(data.gateway, grant) && (
+        <OcservProfileDownload
+          key={grant.subject}
+          mode={data.gateway.auth_mode}
+          path={
+            base +
+            "/client-profile?" +
+            new URLSearchParams({ subject: grant.subject })
+          }
+        />
+      )}
       <div className="vpn-detail-section">
         <h3>
           <Network size={16} />
@@ -229,6 +252,7 @@ type Filter =
   | "expired";
 export default function OcservEmployees({
   data,
+  base,
   selectedSubject,
   onSelect,
   onProfile,
@@ -236,6 +260,7 @@ export default function OcservEmployees({
   disabled,
 }: {
   data: VPNState;
+  base: string;
   selectedSubject: string;
   onSelect: (subject: string) => void;
   onProfile: (id: string) => void;
@@ -494,6 +519,7 @@ export default function OcservEmployees({
         {picked && (
           <GrantDetail
             grant={picked}
+            base={base}
             profile={profiles.get(picked.profile_id)}
             data={data}
             onProfile={onProfile}

@@ -476,7 +476,7 @@ def build(args) -> None:
             return
         payloads = ("bootstrap.py", "nginx.conf", "LICENSES.txt", "maintenance.py", "module-controller.py", "log-export.py", "xray-controller.py", "alertmanager-controller.py", "module-network.py")
         if not bundled:
-            payloads += ("install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "disaster-recovery.py", "disaster-recovery.ru.md")
+            payloads += ("install.sh", "delivery.py", "delivery-proxy.py", "release-signing-public.pem", "wayline-controller.py", "grafana-controller.py", "forms-controller.py", "doska-controller.py", "sftpgo-controller.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py", "ocserv-setup.py", "ocserv-discovery.py", "netmap-controller.py", "bookstack-controller.py", "controller-supervisor.py", "installation-settings.py", "module-origin.py", "module-upgrade.py", "disaster-recovery.py", "disaster-recovery.ru.md")
         files = {name: (ROOT / "installer" / name) for name in payloads}
         if with_icmp:
             files.update({name: ROOT / "installer" / name for name in ("icmp-probe.py", "icmp-install.py")})
@@ -496,7 +496,7 @@ def build(args) -> None:
                 raise ValueError("Image reference moved during packaging")
         m = {"schema": 2, "product": "PL", "version": args.version, "core_api": 1,
              "installation_counter_url": INSTALLATION_COUNTER_URL,
-             "features": {"local_users": True, "module_controller": True, "connector_credentials": True, "log_export": True, **({"on_demand_modules": True, "syslog_controller": True, "f12_controller": True, "ocserv_controller": True, "upgrade_status": True, "module_upgrades": True, "verified_native_resume": True, "automatic_module_networks": True} if not bundled else {"xray_module": True, "alertmanager_module": True}), **({"icmp_probe": True} if with_icmp else {}), **({"wayline_module": True} if with_wayline else {}), **({"grafana_module": True} if with_grafana else {}), **{module + "_module": True for module in applications}},
+             "features": {"local_users": True, "module_controller": True, "connector_credentials": True, "log_export": True, **({"on_demand_modules": True, "syslog_controller": True, "f12_controller": True, "ocserv_controller": True, "ocserv_setup": True, "upgrade_status": True, "module_upgrades": True, "verified_native_resume": True, "automatic_module_networks": True} if not bundled else {"xray_module": True, "alertmanager_module": True}), **({"icmp_probe": True} if with_icmp else {}), **({"wayline_module": True} if with_wayline else {}), **({"grafana_module": True} if with_grafana else {}), **{module + "_module": True for module in applications}},
              "architecture": images["api"]["architecture"], "source_sha256": source_hash,
              "database": {"major": 18, "version": "18.6", "volume_target": "/var/lib/postgresql", "pgdata": "/var/lib/postgresql/18/docker"},
              "images": images, "files": {n: sha(p) for n, p in files.items()}}

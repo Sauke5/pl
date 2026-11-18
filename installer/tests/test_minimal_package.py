@@ -110,7 +110,8 @@ class MinimalBuildTests(unittest.TestCase):
         self.assertTrue(manifest["features"]["syslog_controller"])
         self.assertTrue(manifest["features"]["f12_controller"])
         self.assertTrue(manifest["features"]["ocserv_controller"])
-        self.assertIn("ocserv-controller.py", files)
+        self.assertTrue(manifest["features"]["ocserv_setup"])
+        self.assertTrue({"ocserv-controller.py", "ocserv-setup.py", "ocserv-discovery.py"} <= files)
         self.assertIn("f12-controller.py", files)
         self.assertIn("log-export.py", files)
         self.assertIn("syslog-controller.py", files)
@@ -130,7 +131,7 @@ class MinimalBuildTests(unittest.TestCase):
                                  {"features": {**manifest["features"], "forms_module": True}},
                                  {"features": {**manifest["features"], "verified_native_resume": False}}]
             invalid_manifests.extend({"files": {name: value for name, value in manifest["files"].items() if name != payload}}
-                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py", "log-export.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py"))
+                                     for payload in ("delivery-proxy.py", "icmp-probe.py", "icmp-install.py", "log-export.py", "syslog-controller.py", "f12-controller.py", "ocserv-controller.py", "ocserv-setup.py", "ocserv-discovery.py"))
             for index, changed in enumerate(invalid_manifests):
                 invalid = {**manifest, **changed}
                 (extracted / "manifest.json").write_text(json.dumps(invalid))
@@ -144,6 +145,9 @@ class MinimalBuildTests(unittest.TestCase):
             previous["features"].pop("automatic_module_networks")
             previous["features"].pop("log_export")
             previous["files"].pop("log-export.py")
+            previous["features"].pop("ocserv_setup")
+            previous["files"].pop("ocserv-setup.py")
+            previous["files"].pop("ocserv-discovery.py")
             previous["features"].pop("ocserv_controller")
             previous["files"].pop("ocserv-controller.py")
             previous["features"].pop("f12_controller")

@@ -23,6 +23,7 @@ import {
   Search,
   Server,
   Shield,
+  ShieldCheck,
   Users,
   RefreshCw,
   X,
@@ -61,6 +62,7 @@ import {
 } from "./settings/model";
 import "./settings/settings.css";
 import { SettingsOverview } from "./settings/Overview";
+import { VPNSettings } from "./settings/VPN";
 
 const sectionIcons = {
   overview: LayoutDashboard,
@@ -74,11 +76,13 @@ const sectionIcons = {
   updates: RefreshCw,
   installation: Server,
   delivery: Network,
+  vpn: ShieldCheck,
   users: Users,
   ad: Shield,
 };
 export default function Settings() {
   const session = useAPI<Session>("/session");
+  const admin = session.data?.user?.admin === true;
   const [place, setPlace] = useState(settingsLocation);
   const [search, setSearch] = useState("");
   const [leaving, setLeaving] = useState(false);
@@ -251,7 +255,7 @@ export default function Settings() {
   const entries: SearchEntry[] = [
     ...searchEntries.filter(
       (entry) =>
-        (entry.section !== "ad" || session.data?.user?.admin) &&
+        ((entry.section !== "ad" && entry.section !== "vpn") || admin) &&
         (entry.section !== "users" ||
           session.data?.local_users_enabled ||
           session.data?.local_password_change_enabled),
@@ -294,7 +298,7 @@ export default function Settings() {
   const results = matches.slice(0, 24);
   const visibleSections = sections.filter(
     (section) =>
-      (section.id !== "ad" || session.data?.user?.admin) &&
+      ((section.id !== "ad" && section.id !== "vpn") || admin) &&
       (section.id !== "users" ||
         session.data?.local_users_enabled ||
         session.data?.local_password_change_enabled),
@@ -429,6 +433,12 @@ export default function Settings() {
               <InstallationSettings />
             ) : place.section === "delivery" ? (
               <DeliveryProxySettings />
+            ) : place.section === "vpn" ? (
+              admin ? (
+                <VPNSettings />
+              ) : (
+                <Empty title="Доступно администратору" />
+              )
             ) : place.section === "ad" ? (
               <ADSettings />
             ) : place.section === "users" ? (

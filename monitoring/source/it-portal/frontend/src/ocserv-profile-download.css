@@ -1,0 +1,19 @@
+.vpn-profile-download {
+  margin-block-start: 16px;
+}
+.vpn-profile-download details {
+  max-width: 65ch;
+  margin-block-start: 8px;
+  font-size: 0.9rem;
+}
+.vpn-profile-download summary {
+  width: fit-content;
+  color: var(--pl-ui-accent);
+  cursor: pointer;
+}
+.vpn-profile-download p {
+  margin: 8px 0 2px;
+}
+.vpn-profile-download code {
+  overflow-wrap: anywhere;
+}

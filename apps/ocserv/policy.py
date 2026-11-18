@@ -88,6 +88,9 @@ class Policy:
             CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY, name TEXT NOT NULL, networks TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS grants(subject TEXT PRIMARY KEY, display_name TEXT NOT NULL,
                 profile_id TEXT NOT NULL REFERENCES profiles(id), end INTEGER NOT NULL, revoked INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS certificate_names(cn TEXT PRIMARY KEY, subject TEXT NOT NULL REFERENCES grants(subject),
+                current INTEGER NOT NULL);
+            CREATE UNIQUE INDEX IF NOT EXISTS active_certificate_name ON certificate_names(subject) WHERE current=1;
             CREATE TABLE IF NOT EXISTS pending(subject TEXT PRIMARY KEY);
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY, at TEXT, actor TEXT, action TEXT, subject TEXT);
         """)
@@ -98,6 +101,21 @@ class Policy:
     def grant(self, subject):
         return self.db.execute("""SELECT g.*, p.networks FROM grants g JOIN profiles p ON p.id=g.profile_id
                                   WHERE g.subject=?""", (subject,)).fetchone()
+
+    def ensure_certificate_names(self):
+        # An installation may already have grants when the gateway is first configured.
+        self.db.execute("""INSERT INTO certificate_names(cn, subject, current)
+                           SELECT 'plc-' || lower(hex(randomblob(16))), g.subject, 1 FROM grants g
+                           WHERE g.revoked=0 AND NOT EXISTS (SELECT 1 FROM certificate_names c
+                           WHERE c.current=1 AND c.subject=g.subject)""")
+
+    def certificate_owner(self, cn, current_only=False):
+        row = self.db.execute("SELECT subject FROM certificate_names WHERE cn=? AND (current=1 OR ?=0)",
+                              (cn, current_only)).fetchone()
+        return row[0] if row else None
+
+    def certificate_names(self, subject):
+        return self.db.execute("SELECT cn, current FROM certificate_names WHERE subject=?", (subject,)).fetchall()
 
     def subjects(self):
         return [r[0] for r in self.db.execute("SELECT subject FROM grants ORDER BY subject")]
@@ -125,7 +143,7 @@ class Policy:
             raise Error(409, "ocserv_conflict", "Состояние VPN изменилось. Обновите страницу.")
         label(body["actor"], 256, "администратор")
 
-    def mutate(self, action, body, pool, now):
+    def mutate(self, action, body, pool, now, managed_certificates=False):
         """Durably record intent and identities whose active sessions must be invalidated."""
         actor = body["actor"]
         affected = []
@@ -156,6 +174,11 @@ class Policy:
                 self.db.execute("""INSERT INTO grants VALUES (?,?,?,?,0) ON CONFLICT(subject) DO UPDATE SET
                     display_name=excluded.display_name,profile_id=excluded.profile_id,end=excluded.end,revoked=0""",
                     (target, name, profile, end))
+                if managed_certificates and (not current or current["revoked"] or current["end"] and current["end"] <= now):
+                    self.db.execute("UPDATE certificate_names SET current=0 WHERE subject=?", (target,))
+                    self.ensure_certificate_names()
+                    if target not in affected:
+                        affected.append(target)
             else:
                 if not current:
                     raise Error(404, "ocserv_grant", "Назначение доступа не найдено.")
@@ -171,15 +194,18 @@ class Policy:
         self.db.execute("DELETE FROM events WHERE seq <= (SELECT MAX(seq)-1000 FROM events)")
         self.db.execute("UPDATE meta SET revision=revision+1")
 
-    def snapshot(self, now):
+    def snapshot(self, now, managed_certificates=False):
         profiles = [{"id": r["id"], "name": r["name"], "networks": json.loads(r["networks"])}
                     for r in self.db.execute("SELECT * FROM profiles ORDER BY name,id")]
         grants = []
         pending = self.pending()
-        for r in self.db.execute("SELECT * FROM grants ORDER BY display_name,subject"):
+        for r in self.db.execute("""SELECT g.*, c.cn FROM grants g LEFT JOIN certificate_names c
+                                    ON c.subject=g.subject AND c.current=1 ORDER BY g.display_name,g.subject"""):
             active = r["revoked"] == 0 and (not r["end"] or r["end"] > now)
             status = "pending" if r["subject"] in pending else "active" if active else "revoked" if r["revoked"] == 1 else "expired"
             grants.append({"subject": r["subject"], "display_name": r["display_name"], "profile_id": r["profile_id"],
                            "expires_at": stamp(r["end"]) if r["end"] else "", "status": status})
+            if managed_certificates and status == "active":
+                grants[-1]["certificate_subject"] = r["cn"]
         events = [dict(r) for r in self.db.execute("SELECT at,actor,action,subject FROM events ORDER BY seq DESC LIMIT 100")]
         return {"revision": self.revision(), "profiles": profiles, "grants": grants, "events": events}

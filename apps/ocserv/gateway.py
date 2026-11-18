@@ -38,8 +38,11 @@ class Gateway:
         for row in self.policy.db.execute("SELECT networks FROM profiles"):
             networks(json.loads(row[0]), self.pool)
         runtime.USERS.mkdir(mode=0o700, exist_ok=True)
+        if self.managed_certificates():
+            with self.policy.db:
+                self.policy.ensure_certificate_names()
         for subject in self.policy.subjects():
-            runtime.write_user(self.policy, subject, self.pool, time.time())
+            self.write_routes(subject)
         self.enforce()
         conf = runtime.RUN / "ocserv.conf"
         conf.write_text(runtime.server_config(self.config))
@@ -77,6 +80,22 @@ class Gateway:
             os.chown(runtime.CTL, 0, 0)
         return True
 
+    def managed_certificates(self):
+        return bool(self.config and self.config.get("managed_certificates"))
+
+    def write_routes(self, subject):
+        if not self.managed_certificates():
+            runtime.write_user(self.policy, subject, self.pool, time.time())
+            return {subject}
+        names = set()
+        for cn, current in self.policy.certificate_names(subject):
+            names.add(cn)
+            if current:
+                runtime.write_user(self.policy, subject, self.pool, time.time(), cn)
+            else:
+                (runtime.USERS / cn).unlink(missing_ok=True)
+        return names
+
     def reconcile(self):
         pending = self.policy.pending()
         if not pending:
@@ -84,12 +103,14 @@ class Gateway:
         if self.config:
             self.leases = {sid: lease for sid, lease in self.leases.items() if lease[0] not in pending}
             self.enforce()
+            identities = set()
             for subject in pending:
-                runtime.write_user(self.policy, subject, self.pool, time.time())
+                identities.update(self.write_routes(subject))
             if not self.live():
                 raise RuntimeError("VPN control socket unavailable")
-            runtime.close_subjects(pending)
+            runtime.close_subjects(identities)
         with self.policy.db:
+            self.policy.db.execute("DELETE FROM certificate_names WHERE current=0 AND subject IN (SELECT subject FROM pending)")
             self.policy.db.executemany("DELETE FROM pending WHERE subject=?", [(s,) for s in pending])
 
     def tick(self):
@@ -114,7 +135,10 @@ class Gateway:
                 known = True
             except UNAVAILABLE:
                 pass
-        state = self.policy.snapshot(now)
+        if self.managed_certificates():
+            for row in rows:
+                row["subject"] = self.policy.certificate_owner(row["subject"]) or row["subject"]
+        state = self.policy.snapshot(now, self.managed_certificates())
         state["gateway"] = {**(self.config or {"name": "Корпоративный VPN", "auth_mode": "", "pool": ""}),
                             "ready": known, "sessions_known": known, "observed_at": stamp(now)}
         state["sessions"] = rows
@@ -134,10 +158,12 @@ class Gateway:
             if not subject:
                 raise Error(404, "ocserv_session", "Сессия уже завершена.")
             with self.policy.db:
+                if self.managed_certificates():
+                    subject = self.policy.certificate_owner(subject) or subject
                 self.policy.audit(action, subject, body["actor"], time.time())
         else:
             with self.policy.db:
-                self.policy.mutate(action, body, self.pool, time.time())
+                self.policy.mutate(action, body, self.pool, time.time(), self.managed_certificates())
             self.reconcile()
         return self.snapshot()
 
@@ -145,6 +171,13 @@ class Gateway:
         reason, subject, dev, sid, address = (env[k] for k in ("REASON", "USERNAME", "DEVICE", "ID", "IP_REMOTE"))
         token(sid, SESSION, "сессии")
         token(dev, DEVICE, "интерфейса")
+        if self.managed_certificates():
+            owner = self.policy.certificate_owner(subject, current_only=reason == "connect")
+            if owner is None:
+                if reason == "disconnect":
+                    return {}
+                raise invalid("Сертификат этого подключения отозван.")
+            subject = owner
         if reason == "disconnect":
             previous = self.leases.get(sid)
             if previous and previous[:3] == (subject, dev, address):

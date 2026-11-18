@@ -18,6 +18,7 @@ export type VPNState = {
   gateway: {
     name: string;
     auth_mode: string;
+    managed_certificates?: boolean;
     ready: boolean;
     pool: string;
     observed_at: string;
@@ -36,10 +37,11 @@ export type VPNDialog =
 export type VPNTab = "employees" | "networks";
 export type VPNPayload = Record<string, string | string[]>;
 
-export const authLabel = (mode: string) =>
-  ({ certificate: "Клиентский сертификат", oidc: "Корпоративный OIDC" })[
-    mode
-  ] || "Не настроен";
+export const authLabel = (mode: string, managed = false) =>
+  managed && mode === "certificate"
+    ? "Встроенный доступ PL"
+    : { certificate: "Вход по сертификату", oidc: "Внешний Dex" }[mode] ||
+      "Не настроен";
 export const grantLabels: Record<string, string> = {
   active: "Действует",
   revoked: "Отозван",
@@ -52,6 +54,18 @@ export const eventLabels: Record<string, string> = {
   terminate: "Завершение сессии",
   revoke: "Отзыв доступа",
 };
+export function profileAvailable(
+  gateway: VPNState["gateway"],
+  grant: VPNGrant,
+) {
+  return (
+    gateway.ready &&
+    (gateway.auth_mode === "oidc" ||
+      (gateway.auth_mode === "certificate" && gateway.managed_certificates)) &&
+    grant.status === "active" &&
+    (!grant.expires_at || Date.parse(grant.expires_at) > Date.now())
+  );
+}
 export const isExpiring = (grant: VPNGrant, now: number) => {
   const expiry = Date.parse(grant.expires_at);
   return (

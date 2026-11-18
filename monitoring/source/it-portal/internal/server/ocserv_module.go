@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/netip"
 	"regexp"
@@ -10,9 +9,6 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
-
-	"pl/portal/internal/modules"
-	"pl/portal/internal/store"
 )
 
 var (
@@ -24,6 +20,12 @@ var (
 func (s *Server) registerOcservRoutes(m *http.ServeMux) {
 	const base = "/api/v1/modules/{id}/ocserv/"
 	m.HandleFunc("GET "+base+"state", s.moduleAuth(s.ocservAction("state")))
+	m.HandleFunc("GET "+base+"setup", s.moduleAuth(s.vpnSetup("setup")))
+	m.HandleFunc("GET "+base+"discovery", s.moduleAuth(s.vpnSetup("discover")))
+	m.HandleFunc("POST "+base+"setup", s.moduleAuth(s.vpnSetup("configure")))
+	m.HandleFunc("GET "+base+"client-profile", s.moduleAuth(s.vpnAdminDownload))
+	m.HandleFunc("GET /api/v1/me/vpn-profile", s.vpnSelf(false))
+	m.HandleFunc("GET /api/v1/me/vpn-profile/status", s.vpnSelf(true))
 	for _, action := range []string{"profile", "grant", "revoke", "terminate"} {
 		m.HandleFunc("POST "+base+action, s.moduleAuth(s.ocservAction(action)))
 	}
@@ -149,12 +151,13 @@ func vpnInput(w http.ResponseWriter, r *http.Request, action, actor string) (map
 type vpnSnapshot struct {
 	Revision *int64 `json:"revision"`
 	Gateway  *struct {
-		Name          string `json:"name"`
-		AuthMode      string `json:"auth_mode"`
-		Ready         bool   `json:"ready"`
-		Pool          string `json:"pool"`
-		ObservedAt    string `json:"observed_at"`
-		SessionsKnown bool   `json:"sessions_known"`
+		ManagedCertificates bool   `json:"managed_certificates,omitempty"`
+		Name                string `json:"name"`
+		AuthMode            string `json:"auth_mode"`
+		Ready               bool   `json:"ready"`
+		Pool                string `json:"pool"`
+		ObservedAt          string `json:"observed_at"`
+		SessionsKnown       bool   `json:"sessions_known"`
 	} `json:"gateway"`
 	Profiles []struct {
 		ID       string   `json:"id"`
@@ -190,27 +193,8 @@ func (s *Server) ocservAction(action string) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		reply, err := s.Modules.OcservRequest(r.Context(), r.PathValue("id"), action, payload)
-		if err != nil {
-			switch {
-			case errors.Is(err, store.ErrNotFound):
-				problem(w, 404, "ocserv_not_installed", "Корпоративный VPN не установлен.")
-			case errors.Is(err, modules.ErrOcservDisabled):
-				problem(w, 409, "ocserv_disabled", "Модуль VPN отключён.")
-			default:
-				problem(w, 503, "ocserv_unavailable", "Шлюз VPN недоступен. Проверьте состояние модуля.")
-			}
-			return
-		}
-		if reply.Status != http.StatusOK {
-			var failure struct {
-				Error struct{ Code, Message string }
-			}
-			if json.Unmarshal(reply.Body, &failure) != nil || failure.Error.Message == "" || len(failure.Error.Message) > 1024 {
-				problem(w, 503, "ocserv_unavailable", "Контроллер VPN вернул неизвестную ошибку")
-				return
-			}
-			problem(w, reply.Status, failure.Error.Code, failure.Error.Message)
+		reply, ok := s.vpnRequest(w, r, r.PathValue("id"), action, payload)
+		if !ok {
 			return
 		}
 		var state vpnSnapshot

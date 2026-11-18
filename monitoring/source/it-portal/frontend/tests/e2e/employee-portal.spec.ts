@@ -84,6 +84,12 @@ async function fixture(
     }
     if (path.endsWith("/help-state"))
       return route.fulfill({ json: { disabled: true, seen: [] } });
+    if (path === "/api/v1/me/vpn-profile/status")
+      return route.fulfill({ json: { available: false } });
+    if (path === "/api/v1/upgrade-status")
+      return route.fulfill({
+        json: { active: false, ready: true, current_version: "fixture" },
+      });
     throw new Error(`Unexpected employee request: ${path}`);
   });
 }
@@ -179,7 +185,9 @@ test("favorites are per user and removed publications are pruned", async ({
   await expect(page.locator(".employee-card")).toHaveCount(3);
   await expect
     .poll(() =>
-      page.evaluate(() => localStorage.getItem("pl-ui-employee-favorites:first")),
+      page.evaluate(() =>
+        localStorage.getItem("pl-ui-employee-favorites:first"),
+      ),
     )
     .toBe("[]");
 });
@@ -279,7 +287,7 @@ test("admin saves employee metadata without changing publication", async ({
   await page.goto("/");
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "Каталог", exact: true })
+    .getByRole("link", { name: "Каталог", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Добавить ресурс", exact: true })

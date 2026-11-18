@@ -12,6 +12,7 @@ export type SettingsSection =
   | "updates"
   | "installation"
   | "delivery"
+  | "vpn"
   | "users"
   | "ad";
 export const sections: {
@@ -80,6 +81,12 @@ export const sections: {
     group: "Обслуживание",
   },
   {
+    id: "vpn",
+    label: "Корпоративный VPN",
+    description: "Адрес шлюза, вход и сертификаты VPN",
+    group: "Обслуживание",
+  },
+  {
     id: "operations",
     label: "Состояние сервера",
     description: "Память, диск, нагрузка и диагностика PL",
@@ -139,6 +146,12 @@ export const searchEntries: SearchEntry[] = [
     description: "Прокси, Xray и проверка загрузки обновлений",
     keywords:
       "HTTP CONNECT SOCKS5 прокси proxy github модули релиз обновления CA",
+  },
+  {
+    section: "vpn",
+    title: "Корпоративный VPN",
+    description: "Адрес шлюза, вход и сертификаты VPN",
+    keywords: "удалённый доступ ocserv OpenConnect Dex пул адресов",
   },
   {
     section: "installation",

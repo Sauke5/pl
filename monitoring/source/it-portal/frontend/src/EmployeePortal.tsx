@@ -2,6 +2,7 @@ import { withSettingsNavigation } from "./settings/navigation";
 import { LocalAdminPassword } from "./LocalAdminPassword";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Headphones, Search, Star } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { ErrorSceneContent, SceneArt } from "./AuthScenes";
 import { PlatformShell } from "@pl/ui/react";
 import { api, queryClient, useAPI } from "./api";
@@ -11,6 +12,7 @@ import type { Board, BoardItem, Session } from "./types";
 import { employeeURL, readEmployeeFavorites } from "./employeeServices";
 import { SystemIcon } from "./components/SystemIcon";
 import { DashboardLayout } from "./DashboardLayout";
+import OcservProfileDownload from "./OcservProfileDownload";
 import "./employee-portal.css";
 
 export default function EmployeePortal({ session }: { session: Session }) {
@@ -22,6 +24,18 @@ export default function EmployeePortal({ session }: { session: Session }) {
   const logoutPending = useRef(false);
   const search = useRef<HTMLInputElement>(null);
   const user = session.user!;
+  const vpn = useQuery({
+    queryKey: ["/me/vpn-profile/status", user.id],
+    queryFn: ({ signal }) =>
+      api<{ available: boolean }>(
+        "/me/vpn-profile/status",
+        "GET",
+        undefined,
+        {},
+        signal,
+      ),
+    retry: false,
+  });
   const favoriteKey = `pl-ui-employee-favorites:${encodeURIComponent(user.id)}`;
   const [favorites, setFavorites] = useState<string[]>(() =>
     readEmployeeFavorites(favoriteKey),
@@ -243,6 +257,12 @@ export default function EmployeePortal({ session }: { session: Session }) {
                   </button>
                 ))}
               </nav>
+              {!vpn.isError && vpn.data?.available && (
+                <OcservProfileDownload
+                  path="/me/vpn-profile"
+                  onUnavailable={() => void vpn.refetch()}
+                />
+              )}
             </div>
             <aside className="employee-support">
               <span className="employee-service-icon">

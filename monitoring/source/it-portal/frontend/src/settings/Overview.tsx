@@ -331,6 +331,11 @@ export function SettingsOverview({
         <Button onClick={() => onNavigate({ section: "delivery" })}>
           Прокси для загрузок <ArrowRight size={15} />
         </Button>
+        {session?.user?.admin && (
+          <Button onClick={() => onNavigate({ section: "vpn" })}>
+            Корпоративный VPN <ArrowRight size={15} />
+          </Button>
+        )}
         <Button onClick={() => onNavigate({ section: "publication" })}>
           <Shield size={16} /> Страница для пользователей{" "}
           <ArrowRight size={15} />

@@ -1417,7 +1417,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # Forms embeds up to 3 MiB in base64 plus signed JSON metadata.
             limit = (256 if self.command == 'POST' and self.path == '/v1/host/log-export' else
                      16384 if self.command == 'POST' and self.path == '/v1/f12/request' else
-                     16384 if self.command == 'POST' and self.path == '/v1/ocserv' else
+                     300 * 1024 if self.command == 'POST' and self.path == '/v1/ocserv' else
                      4096 if self.command == 'POST' and self.path == '/v1/syslog' else
                      96 * 1024 if self.command == 'POST' and self.path.startswith('/v1/delivery/proxy/') else
                      384 * 1024 if self.command == 'POST' and self.path == '/v1/installation/configure' else
@@ -1760,6 +1760,13 @@ def main():
         with monitor, f12_interface_monitor(controller), installation_counter(args.root, controller.installation) as request_report:
             if delivery is not None:
                 delivery.request_installation_report = request_report
+            vpn_operations = args.root / 'modules/ocserv/operations'
+            if any(vpn_operations.glob('setup-*.pending')) or any(vpn_operations.glob('setup-*.stage')):
+                try:
+                    controller.application('ocserv').recover_setup()
+                except (ValueError, OSError, subprocess.SubprocessError):
+                    # A later VPN request retries the journal under its instance lock.
+                    os.write(2, b'VPN setup recovery postponed.\n')
             server.serve_forever(poll_interval=0.5)
 
 

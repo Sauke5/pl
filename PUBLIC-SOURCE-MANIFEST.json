@@ -16695,13 +16695,13 @@
     },
     {
       "path": "apps/ocserv/README.ru.md",
-      "sha256": "07c01a8e545e3eafed7aeb53a0807031ccab4fb6adf657a64d5177070874705e",
-      "size": 6167
+      "sha256": "ca97886600c6dabcc858933ba534f3470044c782b4cd54be66571db4e6dbe851",
+      "size": 8452
     },
     {
       "path": "apps/ocserv/gateway.py",
-      "sha256": "62abad7ad37f8fb120bba55abb6844b45f682ba19f4c9ed0c57df9dd93dfd67c",
-      "size": 11053
+      "sha256": "3a5bc81d4f7ba43f1c7328ab78c818767c15f3aeb2f4461914f62f12b38886b3",
+      "size": 12633
     },
     {
       "path": "apps/ocserv/pl-ocserv",
@@ -16710,13 +16710,13 @@
     },
     {
       "path": "apps/ocserv/policy.py",
-      "sha256": "1a421e430585563bee08fd22cb6054d34a56343878adcdd0c55ae9b7e17e4594",
-      "size": 9937
+      "sha256": "ee367c34a5f46dba4dd22a77d890f376fae01d1b13a2fc9fa5ebe6898153f2fc",
+      "size": 11798
     },
     {
       "path": "apps/ocserv/runtime.py",
-      "sha256": "f4d17a3a686a7126b495d4c2718e39761fc7c59af509d0e6f58e2ee65bafd063",
-      "size": 10373
+      "sha256": "6b2b440e72b8c5357a9844cfb6c03e8140c51d9a3b5e853250dd7fc290a9e8a1",
+      "size": 10602
     },
     {
       "path": "apps/wayline/backend/cmd/wayline-runner/main.go",
@@ -17119,6 +17119,11 @@
       "size": 1677
     },
     {
+      "path": "docs/releases/0.9.2.json",
+      "sha256": "b524fa5b187cfabc1ed50f23842643dbafa2f6a02532b4f5d6a096ce61617979",
+      "size": 1424
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -17150,8 +17155,8 @@
     },
     {
       "path": "installer/bootstrap.py",
-      "sha256": "441450b4a30bcc17db162c174682caa0898d49422ab18d425d55a5378bb6cee9",
-      "size": 98148
+      "sha256": "0a6e930342e4319a257d0d9e330561203b62fee0fa010a7c5a5489628aca2037",
+      "size": 98461
     },
     {
       "path": "installer/controller-supervisor.py",
@@ -17160,8 +17165,8 @@
     },
     {
       "path": "installer/core-modules.ru.md",
-      "sha256": "ea11846cbad53db1dd3156e24c5f36c901fcf107c326650b5fec825e8009fc6d",
-      "size": 21925
+      "sha256": "0c411c1083da5fd60b17f1f01960fac249912900e255068b0ed9fc9cb707d8d4",
+      "size": 24169
     },
     {
       "path": "installer/delivery-proxy.py",
@@ -17250,8 +17255,8 @@
     },
     {
       "path": "installer/install.sh",
-      "sha256": "5babaf7a614e89cc3e2f595b4813c96d07308df73bb549db3f16345701c7f399",
-      "size": 47915
+      "sha256": "e15c8785582fa16e316897846088b96570fe4a99057d57abc6c840b68d330ad6",
+      "size": 48270
     },
     {
       "path": "installer/installation-settings.py",
@@ -17280,8 +17285,8 @@
     },
     {
       "path": "installer/module-controller.py",
-      "sha256": "76bebc93af79a66d59e4280017ee9db20027b0af79d22aaedf4233e7b0409ab8",
-      "size": 98405
+      "sha256": "27e5a5f6a581f561fede62c37246fba92712dd5ba91bf49d67006f36f7c29663",
+      "size": 98903
     },
     {
       "path": "installer/module-network.py",
@@ -17320,18 +17325,28 @@
     },
     {
       "path": "installer/nginx.conf",
-      "sha256": "baff978680ab3be47dd755fac364d5ded078c4b1a8167dbc843bc76d48377070",
-      "size": 18862
+      "sha256": "cec2223d944e5a844b0551020d375770ed1697714b27ea97c4a7df146627ed4a",
+      "size": 19414
     },
     {
       "path": "installer/ocserv-controller.py",
-      "sha256": "427c39580f096ea3cc2504aa3ea7dde3e477ce24e3fdfc59fca7245a2d6b88bd",
-      "size": 24370
+      "sha256": "1f47e811d56c31d9cc5de3b7d70bd33b9047ffdb478ad87f3f4449c5c35d5e86",
+      "size": 27698
+    },
+    {
+      "path": "installer/ocserv-discovery.py",
+      "sha256": "f7f8f2efa4627b5ca997a88b7034be7eba97d87763ed1c022fe5c1a22796de32",
+      "size": 3616
+    },
+    {
+      "path": "installer/ocserv-setup.py",
+      "sha256": "43735c270e0534f09c2cf2b7636b47a963f9cedf80f642f0a7ad7057edc3ad89",
+      "size": 34299
     },
     {
       "path": "installer/package.py",
-      "sha256": "cefb6ac81ca4cc9caf0635067853f06169a1b7347b264ca1aaa125c8f9a78b23",
-      "size": 39710
+      "sha256": "bd880a045eec0c2dde350152aef6e07eb886991826bcb5a6595873ce7f58de9c",
+      "size": 39774
     },
     {
       "path": "installer/platform-guide.ru.md",
@@ -17340,8 +17355,8 @@
     },
     {
       "path": "installer/public-export.py",
-      "sha256": "057dac6158137691ee45980e200190596bb8836999b2110deb8de8e7919daccf",
-      "size": 36062
+      "sha256": "f951ec856897f522af73aef3a55828f5476431e8c0c9c76b1dbd82dd559cda32",
+      "size": 36156
     },
     {
       "path": "installer/release-catalog.py",
@@ -17580,8 +17595,8 @@
     },
     {
       "path": "installer/tests/test_minimal_package.py",
-      "sha256": "ab4f12757bf2dc3088c72402c0f0f55f90821b5a686c198cde0a6c10a74426e9",
-      "size": 19135
+      "sha256": "f30c2aaacfc9f4f83abc982bd0c36f8680bdbf86fa6e5bfe07be13345d92137b",
+      "size": 19450
     },
     {
       "path": "installer/tests/test_module_controller.py",
@@ -17709,9 +17724,19 @@
       "size": 9932
     },
     {
+      "path": "installer/tests/test_ocserv_discovery.py",
+      "sha256": "d1f0173013e8af387ebf0f6996754fcb0bad07f0fadb7cda94fd5dab11857f3d",
+      "size": 4521
+    },
+    {
       "path": "installer/tests/test_ocserv_package.py",
       "sha256": "9f4b13dda715f4460b1347439d41fe5680e1167d219aef910b1ee4e3a944bc11",
       "size": 3354
+    },
+    {
+      "path": "installer/tests/test_ocserv_setup.py",
+      "sha256": "b12bc65f8f3a441baadf033812937d8bb6c4bb4d6f9b7ed86fe0687eeeb30a61",
+      "size": 19108
     },
     {
       "path": "installer/tests/test_package.py",
@@ -18415,8 +18440,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/EmployeePortal.tsx",
-      "sha256": "04e151f91858f8a6ed66ac654d6facb1d86ca70115ebd4a4e3e1ff623f314c2c",
-      "size": 13361
+      "sha256": "fba538f20e68930144c6e3fb74354701caa6e30ed60d5725c48760537deec464",
+      "size": 13972
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Events.tsx",
@@ -18530,18 +18555,28 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/OcservEditor.tsx",
-      "sha256": "b718822aaf332d0bc23e14b0765bc2a92852c28db00e0808773239a821ad29d3",
-      "size": 14536
+      "sha256": "4ba62ec5537d3ab4f4abfd0f96d5290c63b7fb460d701310f0d022920f0c08ea",
+      "size": 18084
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/OcservEmployees.tsx",
-      "sha256": "4cba72a439f2cfeca016ac52524231a36f1c473a472602029a735fff83ec2c31",
-      "size": 15609
+      "sha256": "d5386ad62b6c7bccb147deff8c106ce59b4cc75765bea4f17d40ee4b0d8f23bd",
+      "size": 16174
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/OcservGateway.tsx",
+      "sha256": "314645198695f9deafc4fb5efae7880aa71ade5bf5a79ab92dccc3141cf95089",
+      "size": 26931
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/OcservModule.tsx",
-      "sha256": "0436c5fa96ba094a269ecbb3b53210caa395637fd271b574243c6e059d86f82f",
-      "size": 11426
+      "sha256": "64e10410e0a9167d120fa36b5ce691ba474e4a4785a3417269422710f246795d",
+      "size": 11007
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/OcservProfileDownload.tsx",
+      "sha256": "e390b8fbf1c22f8344daf93cc2d3610d9ca84e6e789642cce8279ee33e810d0a",
+      "size": 3546
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/OcservProfiles.tsx",
@@ -18635,8 +18670,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/Settings.tsx",
-      "sha256": "0ce663448615042411ca7a2472c1d50b48644ebdfb016121085abfed582b2c0d",
-      "size": 21093
+      "sha256": "18f5b0a82aec5588264aca2e683b30781c909cfa178149fd7744f3b07fc22bae",
+      "size": 21457
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/SyslogModule.tsx",
@@ -18900,13 +18935,18 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ocserv-module.css",
-      "sha256": "5481d06bdb6afb402c3f00fa4f8cf612bb0484801ce49cbad5964acc18cfe6e0",
-      "size": 6815
+      "sha256": "8e9d69f573a7e78ce4d69e10493801023d2edc4dd1087c4f9e94fccfc1061358",
+      "size": 8406
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/ocserv-profile-download.css",
+      "sha256": "34c07aab22128beb37b19a2493029031b420ac3d75cd9a36ec7e29cfb765a216",
+      "size": 367
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/ocserv.ts",
-      "sha256": "9e0efcda2f57890711c1995d4854ff85e28efe31135c51ee437cd1a189229406",
-      "size": 3649
+      "sha256": "6d00e33c6f4fbcad82bdfbbd2747b9696229e3024764b9263f1def946dedcedc",
+      "size": 4112
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/problemVisibility.ts",
@@ -19005,13 +19045,18 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/Overview.tsx",
-      "sha256": "67bf911a6d737814e8cfc821e375e9f2f4a7a00207bd29e15bdd8e018b279ec0",
-      "size": 12221
+      "sha256": "2b266ac68b056990dc481a7ee52461c737622e3952f0f35e6a23041cd7f27d7d",
+      "size": 12421
+    },
+    {
+      "path": "monitoring/source/it-portal/frontend/src/settings/VPN.tsx",
+      "sha256": "12f441f3ca0fe16ceebcbb227a663a504048006b27260379f39a0727baddbd36",
+      "size": 2736
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/model.ts",
-      "sha256": "7e9ee2f479c34b9b30c1310e5c1c90df989370ba8d51c369c064245852c65be0",
-      "size": 22156
+      "sha256": "8022f3ff98118ceffb23c0026c85b0763bf51c01271c337f18f8a2d4b4b1d89f",
+      "size": 22606
     },
     {
       "path": "monitoring/source/it-portal/frontend/src/settings/navigation.ts",
@@ -19170,8 +19215,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/employee-portal.spec.ts",
-      "sha256": "67ca3792d8bcd9b8cd4bdaa75beb4663a394abcdffe70b19334b8ec1445423b5",
-      "size": 11719
+      "sha256": "62dceb42573024cd936d159ac267e57d780816fbca6aa68af8b5c5d4db6b14c9",
+      "size": 11999
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/events-journal.spec.ts",
@@ -19275,8 +19320,8 @@
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/ocserv-module.spec.ts",
-      "sha256": "462bc9ed6947cfbd2ef31653dca73166ca25bf5ce98c12099200a1330815343a",
-      "size": 15052
+      "sha256": "d76ee7dec8ecd7d304d81ee4084e14daff2a5c68e147cf0653dea0defbbee5b1",
+      "size": 34065
     },
     {
       "path": "monitoring/source/it-portal/frontend/tests/e2e/pl-merge.spec.ts",
@@ -19735,8 +19780,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/native_control.go",
-      "sha256": "67a60d0c4124e7e4c04a310fbc3669d28a8be53a3751826293c964f2c0ce2830",
-      "size": 1282
+      "sha256": "97f5d08bc737d3eb3edd7c7442820b7022dac1cfa6edba0446e32cec63016d53",
+      "size": 1393
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/native_login.go",
@@ -19770,8 +19815,8 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/ocserv.go",
-      "sha256": "58a9c09d8006c793f6e3a2730e4eaa6fdb930d56742db8652914f741b3126d2f",
-      "size": 1777
+      "sha256": "c58b4618c0bc8dcb144a4939a6e4d7b615bf5d37fa8fb70dfe6bd493d44e17a4",
+      "size": 1867
     },
     {
       "path": "monitoring/source/it-portal/internal/modules/prometheus.go",
@@ -20990,13 +21035,23 @@
     },
     {
       "path": "monitoring/source/it-portal/internal/server/ocserv_module.go",
-      "sha256": "731f17f0c166541bd627a23f6299f8587396de457053f267889b383842c6e42f",
-      "size": 7459
+      "sha256": "86b45f21352fd98d3b101434ecac62cd444660762d1b97547efcfb163c573ab9",
+      "size": 7015
     },
     {
       "path": "monitoring/source/it-portal/internal/server/ocserv_module_test.go",
       "sha256": "ca508e188750250aa9e484c99de12f6cccd8b10b01b6e241ee05f6236cae228b",
       "size": 5521
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/ocserv_setup.go",
+      "sha256": "e1b6b77a793e19810c066c55f0aa949a1c7e429b05e129a0e000ddca6defd4d8",
+      "size": 12788
+    },
+    {
+      "path": "monitoring/source/it-portal/internal/server/ocserv_setup_test.go",
+      "sha256": "5749e1fe0f128531f5a6653f5a090590a0302dde886625dbba2a2e89e1b48c97",
+      "size": 6249
     },
     {
       "path": "monitoring/source/it-portal/internal/server/outbound_ca_test.go",

@@ -11,13 +11,20 @@ import {
   UsersRound,
 } from "lucide-react";
 import { APIError, api, queryClient } from "./api";
-import { Badge, Empty, ErrorBox } from "./components/common";
+import { Empty, ErrorBox } from "./components/common";
 import { Button } from "./components/ui/button";
 import { Dialog } from "./components/ui/dialog";
 import OcservEditor from "./OcservEditor";
 import OcservEmployees from "./OcservEmployees";
+import OcservGateway from "./OcservGateway";
 import OcservProfiles from "./OcservProfiles";
-import { authLabel, eventLabels, formatTime, vpnTimezone } from "./ocserv";
+import {
+  authLabel,
+  eventLabels,
+  formatTime,
+  profileAvailable,
+  vpnTimezone,
+} from "./ocserv";
 import type { VPNDialog, VPNPayload, VPNState, VPNTab } from "./ocserv";
 import "./ocserv-module.css";
 
@@ -39,55 +46,7 @@ const success: Record<VPNDialog["kind"], string> = {
   terminate: "Сессия завершена.",
 };
 
-function Details({
-  kind,
-  state,
-  onClose,
-}: {
-  kind: "gateway" | "events";
-  state: VPNState;
-  onClose: () => void;
-}) {
-  const gateway = state.gateway;
-  if (kind === "gateway")
-    return (
-      <Dialog title="Шлюз VPN" onClose={onClose}>
-        <dl className="vpn-facts">
-          <div>
-            <dt>Шлюз</dt>
-            <dd>{gateway.name || "Не настроен"}</dd>
-          </div>
-          <div>
-            <dt>Состояние</dt>
-            <dd>
-              <Badge value={gateway.ready ? "healthy" : "warning"}>
-                {gateway.ready ? "Готов" : "Ожидает настройки"}
-              </Badge>
-            </dd>
-          </div>
-          <div>
-            <dt>Способ входа</dt>
-            <dd>{authLabel(gateway.auth_mode)}</dd>
-          </div>
-          <div>
-            <dt>Пул адресов VPN</dt>
-            <dd>
-              {gateway.pool ? <code>{gateway.pool}</code> : "Не настроен"}
-            </dd>
-          </div>
-          {gateway.observed_at && (
-            <div>
-              <dt>Проверено</dt>
-              <dd>
-                <time dateTime={gateway.observed_at}>
-                  {formatTime(gateway.observed_at)}
-                </time>
-              </dd>
-            </div>
-          )}
-        </dl>
-      </Dialog>
-    );
+function Events({ state, onClose }: { state: VPNState; onClose: () => void }) {
   return (
     <Dialog title="Журнал VPN" wide onClose={onClose}>
       {state.events.length ? (
@@ -144,8 +103,8 @@ export default function OcservModule({ instance }: { instance: Instance }) {
     queryFn: ({ signal }) => api<VPNState>(path, "GET", undefined, {}, signal),
     enabled: online,
     retry: false,
-    refetchInterval: editor ? false : 15000,
-    refetchOnWindowFocus: !editor,
+    refetchInterval: editor || info === "gateway" ? false : 15000,
+    refetchOnWindowFocus: !editor && info !== "gateway",
   });
   useEffect(() => {
     const changed = () => {
@@ -186,7 +145,18 @@ export default function OcservModule({ instance }: { instance: Instance }) {
         }
         break;
     }
-    setNotice(success[editor.model.kind]);
+    const issued =
+      editor.model.kind === "grant" &&
+      response.grants.some(
+        (grant) =>
+          grant.subject === payload.subject &&
+          profileAvailable(response.gateway, grant),
+      );
+    setNotice(
+      issued
+        ? "Доступ выдан. Профиль OpenConnect готов к скачиванию в карточке сотрудника."
+        : success[editor.model.kind],
+    );
     setEditor(undefined);
   }
   async function review() {
@@ -218,7 +188,10 @@ export default function OcservModule({ instance }: { instance: Instance }) {
           {data && (
             <p className="vpn-gateway-summary">
               {data.gateway.name || instance.name} ·{" "}
-              {authLabel(data.gateway.auth_mode)}
+              {authLabel(
+                data.gateway.auth_mode,
+                data.gateway.managed_certificates,
+              )}
             </p>
           )}
         </div>
@@ -306,8 +279,10 @@ export default function OcservModule({ instance }: { instance: Instance }) {
           {!data.gateway.ready && (
             <div className="notice compact" role="status">
               <ShieldCheck size={16} />
-              Шлюз ожидает настройки. Профили и назначения можно подготовить
-              заранее.
+              Шлюз ожидает настройки.
+              <button className="vpn-link" onClick={() => setInfo("gateway")}>
+                Настроить шлюз
+              </button>
             </div>
           )}
           {notice && (
@@ -328,6 +303,7 @@ export default function OcservModule({ instance }: { instance: Instance }) {
             <OcservEmployees
               key={listVersion}
               data={data}
+              base={base}
               selectedSubject={subject}
               onSelect={selectSubject}
               onProfile={showProfile}
@@ -335,14 +311,18 @@ export default function OcservModule({ instance }: { instance: Instance }) {
               disabled={!!editor}
             />
           )}
-          {info && (
-            <Details
-              kind={info}
-              state={data}
-              onClose={() => setInfo(undefined)}
-            />
+          {info === "events" && (
+            <Events state={data} onClose={() => setInfo(undefined)} />
           )}
         </>
+      )}
+      {online && !forbidden && info === "gateway" && (
+        <OcservGateway
+          base={base}
+          observedAt={state.data?.gateway.observed_at}
+          onClose={() => setInfo(undefined)}
+          onApplied={() => void state.refetch()}
+        />
       )}
       {online && !forbidden && editor && (
         <OcservEditor

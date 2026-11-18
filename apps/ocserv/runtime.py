@@ -69,7 +69,9 @@ def config(folder=OPERATOR):
     if not (folder / "gateway.json").exists():
         return None
     item = json.loads(operator_file(folder, "gateway.json").read_text())
-    if not isinstance(item, dict) or set(item) != {"name", "auth_mode", "pool"}:
+    required = {"name", "auth_mode", "pool"}
+    if (not isinstance(item, dict) or not required <= set(item) <= required | {"managed_certificates"}
+            or "managed_certificates" in item and (item["managed_certificates"] is not True or item["auth_mode"] != "certificate")):
         raise ValueError("Invalid gateway.json fields")
     label(item["name"], 128, "название шлюза")
     pool = ipaddress.IPv4Network(item["pool"])
@@ -132,8 +134,8 @@ tls-priorities = "NORMAL:%SERVER_PRECEDENCE:%COMPAT:-VERS-SSL3.0:-VERS-TLS1.0:-V
 """
 
 
-def write_user(policy, subject, pool, now):
-    path = USERS / subject
+def write_user(policy, subject, pool, now, identity=None):
+    path = USERS / (identity or subject)
     grant = policy.grant(subject)
     if not grant or grant["revoked"] or (grant["end"] and grant["end"] <= now):
         path.unlink(missing_ok=True)

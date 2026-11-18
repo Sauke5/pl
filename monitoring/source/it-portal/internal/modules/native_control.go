@@ -20,7 +20,11 @@ func (c *HostController) nativeControl(ctx context.Context, endpoint, id, action
 	if err != nil || !canonicalID(id) || len(body) > limit {
 		return NativeControlReply{}, ErrApplicationUnavailable
 	}
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	timeout := 60 * time.Second
+	if endpoint == "/v1/ocserv" && action == "configure" {
+		timeout = 110 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	response, err := c.applicationRequest(ctx, endpoint, body, bytes.NewReader(body), int64(len(body)), false)
 	if err != nil {
