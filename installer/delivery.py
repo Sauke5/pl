@@ -56,20 +56,32 @@ FORMS_STORAGE_METADATA_PAIRS = {
     'keydb': ('sha256:c87e4aef35c9c97793697a32c2f58b91e0d76501d97a293e935b0f8d00fc94d5',
               'sha256:47f92549d53e95386be14e052f9cc4ae9efdc015a3ab3f57e0612151fa3242a2'),
 }
+# BookStack's published amd64 database image and the nginx 1.31.9 rebuild
+# differ only in the final COPY of /usr/local/share/pl/bookstack/sources.json.
+BOOKSTACK_STORAGE_METADATA_PAIR = (
+    'sha256:38edd2e18268b5af7d0d0ccefff8a6931e7d087621b719d0237efe1f5e4a1e52',
+    'sha256:e83ad22eafbdf6359420e1ed9c8019fbc5873dcfffefe080f3121f44e432d975',
+)
 _threads = threading.Lock()
 
 
-def forms_storage_metadata_equivalent(role, old, new, values):
-    pair = FORMS_STORAGE_METADATA_PAIRS.get(role)
+def storage_metadata_equivalent(kind, role, old, new, values):
+    if kind == 'forms':
+        pair, version = FORMS_STORAGE_METADATA_PAIRS.get(role), '0.1.0'
+    elif kind == 'bookstack' and role == 'database' and old['architecture'] == 'amd64':
+        pair, version = BOOKSTACK_STORAGE_METADATA_PAIR, '26.09.2'
+    else:
+        return False
     if pair is None or len(values) != 2:
         return False
     labels = []
     for image in (old, new):
         selected = dict(image['labels']); selected.pop('pl.source.sha256', None)
-        if (image['recipe'] != 'deploy/images/forms.Dockerfile'
-                or selected.get('org.opencontainers.image.version') != '0.1.0'
+        if (image['recipe'] != f'deploy/images/{kind}.Dockerfile'
+                or selected.get('org.opencontainers.image.version') != version
                 or selected.get('pl.module.config.version') != '1'
-                or selected.get('pl.module.id') != 'forms' or selected.get('pl.module.role') != role
+                or selected.get('pl.module.id') != kind or selected.get('pl.module.role') != role
+                or kind == 'bookstack' and selected.get('pl.upstream.version') != '13.0.2'
                 or selected.get('pl.build.variant') != 'upstream-pinned'):
             return False
         labels.append(selected)
@@ -1199,8 +1211,8 @@ class Delivery:
                     equivalent = (values[0][:2], values[0][3]) == (values[1][:2], values[1][3])
                 else:
                     equivalent = values[0] == values[1] and isinstance(values[0][2], dict) and 'Layers' in values[0][2]
-                    if not equivalent and kind == 'forms':
-                        equivalent = forms_storage_metadata_equivalent(role, old, new, values)
+                    if not equivalent:
+                        equivalent = storage_metadata_equivalent(kind, role, old, new, values)
             if equivalent:
                 # Keep storage bytes and identity. A package tag or build-source
                 # label is not a database migration. Other transitions still

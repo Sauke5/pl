@@ -30,6 +30,18 @@ ADMIN_BOOTSTRAP = 'apps/wiki/bootstrap-admin.php'
 
 
 class BookStackPackageTests(unittest.TestCase):
+    def test_nginx_recipe_matches_signed_package_pins(self):
+        recipe = (PORTAL / RECIPE).read_text()
+        nginx = json.loads((PORTAL / METADATA).read_text())['containers']['web']['nginx']
+        key = nginx['signing_key']
+        self.assertIn(f"ADD --checksum=sha256:{key['sha256']} {key['url']} /packages/nginx_signing.rsa.pub", recipe)
+        self.assertIn(f"nginx version: nginx/{nginx['version']}", recipe)
+        for arch, apk_arch in (('amd64', 'x86_64'), ('arm64', 'aarch64')):
+            with self.subTest(arch=arch):
+                digest = nginx['packages_sha256'][arch]
+                url = f"{nginx['repository']}/{apk_arch}/nginx-{nginx['apk_version']}.apk"
+                self.assertIn(f'ADD --checksum=sha256:{digest} {url} /packages/nginx.apk', recipe)
+
     def test_browser_decimal_limit_matches_php_binary_100_mib(self):
         recipe = (PORTAL / RECIPE).read_text()
         limit = re.search(r'^ENV FILE_UPLOAD_SIZE_LIMIT=([0-9.]+)\s', recipe, re.M)

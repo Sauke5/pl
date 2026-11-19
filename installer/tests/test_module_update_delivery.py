@@ -38,6 +38,36 @@ class ModuleUpdateDeliveryTests(unittest.TestCase):
         self.delivery.module_upgrade_helper = Mock(return_value=self.helper)
         self.delivery.stage_module_upgrade = Mock(return_value=({'version': '2.46.2', 'package_version': '0.4.2'}, self.new_descriptor))
 
+    def test_bookstack_rebuild_preserves_the_installed_database_image(self):
+        labels = {'pl.module.id': 'bookstack', 'pl.module.role': 'database',
+                  'pl.module.config.version': '1', 'pl.build.variant': 'upstream-pinned',
+                  'org.opencontainers.image.version': '26.09.2', 'pl.upstream.version': '13.0.2'}
+        old = {'id': 'sha256:' + 'a' * 64, 'architecture': 'amd64', 'ref': 'pl/db:old',
+               'recipe': 'deploy/images/bookstack.Dockerfile', 'labels': {**labels, 'pl.source.sha256': 'c' * 64}}
+        new = {**old, 'id': 'sha256:' + 'b' * 64, 'ref': 'pl/db:new',
+               'labels': {**labels, 'pl.source.sha256': 'd' * 64}}
+        layers = ('sha256:38edd2e18268b5af7d0d0ccefff8a6931e7d087621b719d0237efe1f5e4a1e52',
+                  'sha256:e83ad22eafbdf6359420e1ed9c8019fbc5873dcfffefe080f3121f44e432d975')
+        images = {
+            descriptor['id']: {
+                'Os': 'linux', 'Architecture': 'amd64', 'Config': {'Cmd': ['mariadbd']},
+                'RootFS': {'Type': 'layers', 'Layers': ['sha256:' + 'e' * 64, layer]},
+            }
+            for descriptor, layer in zip((old, new), layers)
+        }
+        candidate = {'database': new, 'web': {'id': 'new-web'}}
+        with patch.object(self.delivery, 'module_registry', return_value={'bookstack': {'database': old}}), \
+                patch.object(self.parent, 'docker', side_effect=lambda *args: d.json_bytes([images[args[-1]]])):
+            self.assertEqual(self.delivery.preserve_storage_images('bookstack', candidate.copy()),
+                             {'database': old, 'web': candidate['web']})
+            for change in (
+                {'Config': {'Cmd': ['different-server']}},
+                {'RootFS': {'Type': 'layers', 'Layers': ['sha256:' + 'f' * 64, layers[1]]}},
+                {'RootFS': {'Type': 'layers', 'Layers': ['sha256:' + 'e' * 64, 'sha256:' + 'f' * 64]}},
+            ):
+                with self.subTest(change=change), patch.dict(images[new['id']], change):
+                    self.assertEqual(self.delivery.preserve_storage_images('bookstack', candidate.copy()), candidate)
+
     def test_used_module_update_keeps_core_version_and_prepares_full_snapshot(self):
         def apply(parent, plan):
             operation = d.read(self.delivery.base / 'operation.json')

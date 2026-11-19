@@ -17134,6 +17134,11 @@
       "size": 5216
     },
     {
+      "path": "docs/releases/0.9.5.json",
+      "sha256": "8653c1c5d4c44e31369ebb9fd4cda63209de30e7b35af9b626ef9148ebb906d7",
+      "size": 782
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -17185,8 +17190,8 @@
     },
     {
       "path": "installer/delivery.py",
-      "sha256": "fe7fc0510ed669bbe4d39cc73d89ddc035c95c687be7b6130ba4265cd2a90708",
-      "size": 128703
+      "sha256": "496bdcf2b213eb555462b792a554ced3acac7e80f9ccc7d3012e5cf8b4716209",
+      "size": 129354
     },
     {
       "path": "installer/delivery.ru.md",
@@ -17310,8 +17315,8 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "762debffd8497c9488fdae408e955157ac569f740386fb799e2836a8b2be9512",
-      "size": 47217
+      "sha256": "8dddbe5e8bdd8ba00b7e76129a3345574e38111d6f14d05c6a15123639ecedf6",
+      "size": 48783
     },
     {
       "path": "installer/netmap-controller.py",
@@ -17355,8 +17360,8 @@
     },
     {
       "path": "installer/package.py",
-      "sha256": "bd880a045eec0c2dde350152aef6e07eb886991826bcb5a6595873ce7f58de9c",
-      "size": 39774
+      "sha256": "9315940dfada4137782ee890a6a56fe4336e8775c16a59a276fc64e31e9d0989",
+      "size": 39771
     },
     {
       "path": "installer/platform-guide.ru.md",
@@ -17415,8 +17420,8 @@
     },
     {
       "path": "installer/tests/test_bookstack_package.py",
-      "sha256": "bb4764183af1616df809028a0e8971baa9dc92164f7f285fdd1bb1f236460d2b",
-      "size": 12013
+      "sha256": "991c1e9ef696a36400b5c6b7ab4774c4553d4225ce2035bcd2ee20b03d58bc16",
+      "size": 12801
     },
     {
       "path": "installer/tests/test_bootstrap.py",
@@ -17630,13 +17635,13 @@
     },
     {
       "path": "installer/tests/test_module_update_delivery.py",
-      "sha256": "9b92364e8c07c0fab69f8faa763fc429ff85db82d206ac426742531ee51a242e",
-      "size": 21238
+      "sha256": "8a1420c5e82288704a00ead32abb30058bb3110bfee9e090ecd387fc8b8d3389",
+      "size": 23384
     },
     {
       "path": "installer/tests/test_module_upgrade.py",
-      "sha256": "100fa6356e764414f4e94e25c6d4a413be4512864c06d747ea8160798dd83f5a",
-      "size": 48008
+      "sha256": "08158a9439a4f1d3558e8fad67db0b1d184df92cb2b9d21209abd30ef3624830",
+      "size": 54531
     },
     {
       "path": "installer/tests/test_native_initial_login.py",
@@ -17840,7 +17845,7 @@
     },
     {
       "path": "monitoring/source/it-portal/Dockerfile",
-      "sha256": "bf296908990d11d4bd8d527c411a6672f1547972af2e593f68d4a24bdf958bb4",
+      "sha256": "e0073af8cd484dae0ec141f164a4dcdc8078ff123ba527370a5f3777234c28af",
       "size": 2950
     },
     {
@@ -18000,22 +18005,22 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/bookstack.Dockerfile",
-      "sha256": "8e5b94fb9667c747fb4d014bae0d4c24ad8e87fe4fa50910d0bd40247a649bb0",
-      "size": 2871
+      "sha256": "5cdb2598ac082f73ef878cf555ba5eceb63d2d7bd9068d5f06e6f8c3b3a21213",
+      "size": 4229
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/bookstack.sources.json",
-      "sha256": "1ceb50ec24a5ff7a22fb68645356a278298b7cd44f9f145cf0cba9a4713a039e",
-      "size": 4326
+      "sha256": "8182211af03e17b1afbf4bae58a9ac7611251e40e403fa2b6b2087eb8ea2a75c",
+      "size": 4970
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/doska.Dockerfile",
-      "sha256": "b2745e6997bae982ac33fa71f50797c36b7ef19700a5a42d3dd60219b8505dca",
+      "sha256": "70f326386394828b36fd43d2045eff612557794463bf4e34cc19bd083f4e1115",
       "size": 3099
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/doska.sources.json",
-      "sha256": "0fec66106b2dbf137ed1d0ef743196783a41c60902d2be9c2098419034132c69",
+      "sha256": "9acfbb8064d7eed0740d4fdccf66878c8b2f95b88cd68be9d7babbc2443327f1",
       "size": 1848
     },
     {
@@ -18170,12 +18175,12 @@
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/wayline.Dockerfile",
-      "sha256": "d5463de19b943440b05c25396b907138209d86c1aae895d2360759f346969c5f",
+      "sha256": "20cd47cd79bd4506170fd7a64dd7a871cecb0a486d2318462f234ead3f490a48",
       "size": 3645
     },
     {
       "path": "monitoring/source/it-portal/deploy/images/wayline.sources.json",
-      "sha256": "576ada4c302433912536a3866af283eddc27b830976bade25d1cacf9bdb45ca3",
+      "sha256": "a13b597fb0def4f49dd7da855ae2d0aa5bd0a416146e6a44a907ba2f73b735e3",
       "size": 2335
     },
     {

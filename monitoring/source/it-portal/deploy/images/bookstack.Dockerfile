@@ -1,4 +1,17 @@
 # syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
+ARG TARGETARCH
+
+FROM scratch AS nginx-signing-key
+ADD --checksum=sha256:ff7cf138acc09f2a5029300ab713fe6a1440605fca72e2bab76a4da9206fec87 https://nginx.org/keys/nginx_signing.rsa.pub /packages/nginx_signing.rsa.pub
+
+FROM nginx-signing-key AS nginx-amd64
+ADD --checksum=sha256:27f15171f56dd0a95b13c7c676a47729d61ed324a2e355bdbbaff42f28c7c437 https://nginx.org/packages/mainline/alpine/v3.24/main/x86_64/nginx-1.31.9-r1.apk /packages/nginx.apk
+
+FROM nginx-signing-key AS nginx-arm64
+ADD --checksum=sha256:cfb9df6745314f0cf56816124c18c1077228f6acce8bfe35b51f61dc0bec3b9a https://nginx.org/packages/mainline/alpine/v3.24/main/aarch64/nginx-1.31.9-r1.apk /packages/nginx.apk
+
+FROM nginx-${TARGETARCH} AS nginx-package
+
 # Community container linked by BookStack's installation documentation.
 # Preserve native BookStack assets, authentication, sessions and migrations.
 FROM ghcr.io/linuxserver/bookstack:v26.09.2-ls293@sha256:2fdeeb1a2028ce7cb1274696237e32b9f849e16b6d77314d08c78356a6016fca AS web
@@ -8,6 +21,15 @@ LABEL org.opencontainers.image.version="26.09.2" \
       pl.module.role="web" \
       pl.module.config.version="1" \
       pl.build.variant="upstream-pinned"
+# Keep LinuxServer's config, including the /config entry point and FastCGI
+# parameters. Install only the signed package using the existing Alpine ABI.
+RUN --network=none --mount=type=bind,from=nginx-package,source=/packages,target=/pinned-nginx \
+    test "$(cut -d. -f1,2 /etc/alpine-release)" = 3.24 && \
+    cp -a /etc/nginx /tmp/pl-nginx-config && \
+    apk --no-network --repositories-file /dev/null --keys-dir /pinned-nginx add /pinned-nginx/nginx.apk && \
+    rm -rf /etc/nginx && mv /tmp/pl-nginx-config /etc/nginx && \
+    rm -f /etc/logrotate.d/nginx.apk-new && \
+    test "$(/usr/sbin/nginx -v 2>&1)" = 'nginx version: nginx/1.31.9'
 COPY apps/wiki/bootstrap-admin.php /usr/local/share/pl/bookstack/bootstrap-admin.php
 COPY deploy/images/bookstack.sources.json /usr/local/share/pl/bookstack/sources.json
 # BookStack's dropzone uses decimal MB; PHP's 100M uses binary MiB.

@@ -15,6 +15,8 @@ import unittest
 import uuid
 from unittest.mock import Mock, patch
 
+import test_bookstack_controller as bookstack_fixture
+
 BASE = Path(__file__).resolve().parents[1]
 
 
@@ -617,6 +619,121 @@ class NativeRebuildTests(unittest.TestCase):
             upgrade.verify(self.parent, value)
         self.assertEqual(signal.getsignal(signal.SIGALRM), previous)
         self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+
+
+class BookStackRebuildTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = fixture = bookstack_fixture.BookStackTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        self.root = fixture.root.resolve()
+        self.installation = fixture.installation
+        self.instance = fixture.instance
+        self.controller = fixture.controller
+        self.old = copy.deepcopy(fixture.images)
+        self.new = copy.deepcopy(self.old)
+        self.new['web'].update(id='sha256:' + 'b' * 64, ref='pl/bookstack-web:0.9.5')
+        self.image_configs = {
+            descriptor[role]['id']: {**fixture.image_config(role), 'Labels': descriptor[role]['labels']}
+            for descriptor in (self.old, self.new) for role in descriptor
+        }
+        self.create_count = 0
+        self.controller.docker = self.docker
+        self.parent = types.SimpleNamespace(root=self.root, installation=self.installation, docker=self.docker,
+                                            module_upgrade_checkpoint=Mock(), application=lambda kind: self.controller)
+        installation = json.loads((self.root / 'state/installation.json').read_bytes())
+        upgrade.files.atomic(self.root / 'state/installation.json', {**installation, 'version': '0.9.5'})
+        fixture.install()
+        self.journal = self.controller.paths(self.instance) / 'state.json'
+        self.original = json.loads(self.journal.read_bytes())
+
+    def docker(self, *args, **kwargs):
+        kind, action = args[:2]
+        if (kind, action) == ('image', 'inspect'):
+            identity = args[-1]
+            return json.dumps([{'Id': identity, 'Architecture': 'amd64', 'Os': 'linux',
+                                'Config': self.image_configs[identity]}]).encode()
+        containers = self.fixture.containers
+        if (kind, action) == ('container', 'ls') and any(a.startswith('label=pl.module=') for a in args):
+            return '\n'.join(obj['Id'] for obj in containers.values()).encode()
+        if (kind, action) == ('container', 'inspect'):
+            return json.dumps([next(obj for name, obj in containers.items() if ref in (name, obj['Id']))
+                               for ref in args[2:]]).encode()
+        result = self.fixture.docker(*args, **kwargs)
+        if (kind, action) == ('container', 'create'):
+            name = args[args.index('--name') + 1]
+            obj = containers[name]
+            self.create_count += 1
+            identifier = hashlib.sha256(f'{name}:{self.create_count}'.encode()).hexdigest()
+            for network in self.fixture.networks.values():
+                if obj['Id'] in network['Containers']:
+                    network['Containers'][identifier] = network['Containers'].pop(obj['Id'])
+            obj['Id'] = identifier
+            obj['Config']['Labels'] = {**self.image_configs[obj['Image']]['Labels'], **obj['Config']['Labels']}
+            return identifier.encode()
+        return result
+
+    def select(self, descriptor):
+        upgrade.files.atomic(self.root / 'private/module-images.json', {
+            'schema': 1, 'installation': self.installation, 'manifest_sha256': 'a' * 64, 'bookstack': descriptor,
+        })
+
+    def stop(self):
+        for obj in list(self.fixture.containers.values()):
+            self.docker('container', 'stop', obj['Id'])
+
+    def prepare(self):
+        value = upgrade.plan(self.parent, 'bookstack', self.old, self.new, scoped=True)
+        operation = str(uuid.uuid4())
+        value['snapshot_operation_id'] = operation
+        folder = self.root / 'private/upgrade-backups' / operation
+        folder.mkdir(mode=0o700, parents=True)
+        item, = value['instances']
+        volumes = [{'name': name, 'archive': f'volume-{index}.tar'} for index, name in enumerate(item['volumes'])]
+        upgrade.files.atomic(folder / 'snapshot.json', {
+            'schema': 2, 'scope': 'module', 'module_id': 'bookstack', 'installation': self.installation,
+            'operation_id': operation, 'from_version': '0.9.5', 'containers': item['containers'], 'volumes': volumes,
+            'files': {name: 'c' * 64 for name in ['installation.tar', *(volume['archive'] for volume in volumes)]},
+        })
+        self.stop()
+        self.select(self.new)
+        return value
+
+    def test_bookstack_apply_retry_and_rollback_retain_private_state_and_storage(self):
+        value = self.prepare()
+        names = {role: self.controller.name(self.instance, '-' + role) for role in self.old}
+        old_ids = {role: self.fixture.containers[name]['Id'] for role, name in names.items()}
+        with patch.object(upgrade, '_create', side_effect=RuntimeError('interrupted after journal update')):
+            with self.assertRaisesRegex(RuntimeError, 'interrupted'):
+                upgrade.apply(self.parent, value)
+        updated = {**self.original, 'images': {'web': self.new['web']['id'], 'database': self.old['database']['id']}}
+        self.assertEqual(json.loads(self.journal.read_bytes()), updated)
+        upgrade.apply(self.parent, value)
+        upgrade.apply(self.parent, value)
+        self.assertEqual(self.fixture.containers[names['database']]['Id'], old_ids['database'])
+        for obj in self.fixture.containers.values():
+            self.docker('container', 'start', obj['Id'])
+        self.assertTrue(upgrade.verify(self.parent, value)['verified'])
+        self.stop()
+        self.select(self.old)
+        with self.assertRaisesRegex(ValueError, 'BookStack state'):
+            upgrade.rollback(self.parent, value)
+        upgrade.files.atomic(self.journal, self.original)
+        upgrade.rollback(self.parent, value)
+        self.assertEqual(self.controller.state(self.instance), self.original)
+        self.assertEqual(self.fixture.containers[names['database']]['Id'], old_ids['database'])
+        for obj in self.fixture.containers.values():
+            self.docker('container', 'start', obj['Id'])
+        self.assertTrue(upgrade.verify(self.parent, value, direction='rollback')['verified'])
+
+    def test_bookstack_apply_does_not_select_images_before_all_guards_pass(self):
+        value = self.prepare()
+        value['instances'][0]['binds_sha256'] = 'd' * 64
+        before = self.journal.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'bound configuration'):
+            upgrade.apply(self.parent, value)
+        self.assertEqual(self.journal.read_bytes(), before)
+        self.parent.module_upgrade_checkpoint.assert_not_called()
 
 
 class F12EdgeUpgradeTests(unittest.TestCase):

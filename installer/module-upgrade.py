@@ -220,6 +220,10 @@ def _state(c, kind, instance):
     return state
 
 
+def _bookstack_state_with_images(state, descriptor):
+    return {**state, 'images': {role: descriptor[role]['id'] for role in ROLES['bookstack']}}
+
+
 def f12_segment(c, instance, name):
     prefix = c.names(instance)
     if name == prefix:
@@ -691,8 +695,24 @@ def _execute(parent, value, direction):
         raise ValueError('Native instance inventory changed since module preflight')
     checks = []
     c = _controller(parent, kind, descriptor) if paths else None
+    bookstack_upgrade = kind == 'bookstack' and direction == 'apply' and bool(value['changed_roles'])
+    old_controller = _controller(parent, kind, value['old_descriptor']) if paths and bookstack_upgrade else None
+    state_updates = []
     for item in value['instances']:
-        if digest(_state(c, kind, item['instance_id'])) != item['state_sha256']:
+        instance = item['instance_id']
+        if bookstack_upgrade:
+            path = c.paths(instance) / 'state.json'
+            if digest(_record(path)) == item['state_sha256']:
+                native = _state(old_controller, kind, instance)
+                state_updates.append((path, item['state_sha256'], _bookstack_state_with_images(native, descriptor)))
+            else:
+                # A retry can find the journal already selecting the new image
+                # IDs. Validate it with the new controller and compare every
+                # other field against the original sealed digest.
+                native = _bookstack_state_with_images(_state(c, kind, instance), value['old_descriptor'])
+        else:
+            native = _state(c, kind, instance)
+        if digest(native) != item['state_sha256']:
             raise ValueError('Native private state was not preserved or restored')
         objects = []
         for spec in item['containers']:
@@ -709,6 +729,10 @@ def _execute(parent, value, direction):
     planned_ids = {obj['Id'] for _, _, obj, _ in checks if obj is not None}
     if {obj['Id'] for obj in _inventory(parent, kind=kind)} != planned_ids:
         raise ValueError('Unplanned owned native module containers exist')
+    if any(digest(_record(path)) != previous_sha for path, previous_sha, _ in state_updates):
+        raise ValueError('BookStack journal changed immediately before image selection')
+    for path, _, updated in state_updates:
+        files.atomic(path, updated)
     for item, spec, obj, status in checks:
         if status.startswith('adopt-'):
             _remember(parent, value, spec, obj, status.removeprefix('adopt-'))
@@ -788,7 +812,10 @@ def verify(parent, value, *, direction='apply'):
         c = _controller(parent, kind, descriptor) if value['instances'] else None
         deadline = time.monotonic() + 120
         for item in value['instances']:
-            if digest(_state(c, kind, item['instance_id'])) != item['state_sha256']:
+            native = _state(c, kind, item['instance_id'])
+            if kind == 'bookstack' and direction == 'apply':
+                native = _bookstack_state_with_images(native, value['old_descriptor'])
+            if digest(native) != item['state_sha256']:
                 raise ValueError('Native state changed during artifact verification')
             if _binding_digest(parent, item['bind_sources']) != item['binds_sha256']:
                 raise ValueError('Native configuration changed during artifact verification')

@@ -38,7 +38,7 @@ WORKDIR /app
 EXPOSE 1337
 ENTRYPOINT ["node", "dist/index.js"]
 
-FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5 AS web
+FROM nginx:1.31.9-alpine@sha256:90b6bd2aec278b16b98221d64deb1d6d35d164567f507ab0716e6053878315aa AS web
 RUN apk add --upgrade --no-cache libexpat=2.10.0-r0 pcre2=10.49-r0 tiff=4.7.2-r0
 ARG DOSKA_VERSION=2.46.2
 LABEL org.opencontainers.image.version="${DOSKA_VERSION}" pl.module.id="doska" pl.module.role="web" pl.module.config.version="1" pl.build.variant="source-build"

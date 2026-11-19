@@ -47,7 +47,7 @@ COPY apps/wayline/web/ ./
 ENV VITE_BASE_PATH=/wayline/ VITE_PLATFORM_AUTH=true VITE_PLATFORM_URL=""
 RUN npm run build
 
-FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5 AS gateway
+FROM nginx:1.31.9-alpine@sha256:90b6bd2aec278b16b98221d64deb1d6d35d164567f507ab0716e6053878315aa AS gateway
 RUN apk add --upgrade --no-cache libexpat=2.10.0-r0
 ARG WAYLINE_VERSION=0.1.0
 LABEL org.opencontainers.image.version="${WAYLINE_VERSION}" pl.module.id="wayline" pl.module.role="gateway" pl.module.config.version="1" pl.build.variant="source-build"

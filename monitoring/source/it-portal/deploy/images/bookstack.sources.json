@@ -48,6 +48,19 @@
       "tag": "v26.09.2-ls293",
       "image": "ghcr.io/linuxserver/bookstack:v26.09.2-ls293@sha256:2fdeeb1a2028ce7cb1274696237e32b9f849e16b6d77314d08c78356a6016fca",
       "documentation": "https://docs.linuxserver.io/images/docker-bookstack/",
+      "nginx": {
+        "version": "1.31.9",
+        "apk_version": "1.31.9-r1",
+        "repository": "https://nginx.org/packages/mainline/alpine/v3.24/main",
+        "signing_key": {
+          "url": "https://nginx.org/keys/nginx_signing.rsa.pub",
+          "sha256": "ff7cf138acc09f2a5029300ab713fe6a1440605fca72e2bab76a4da9206fec87"
+        },
+        "packages_sha256": {
+          "amd64": "27f15171f56dd0a95b13c7c676a47729d61ed324a2e355bdbbaff42f28c7c437",
+          "arm64": "cfb9df6745314f0cf56816124c18c1077228f6acce8bfe35b51f61dc0bec3b9a"
+        }
+      },
       "architectures": [
         "amd64",
         "arm64"
@@ -77,7 +90,7 @@
     "secrets": "APP_KEY plus database/root/admin passwords generated per instance; app key persists across enable",
     "network": "owned per-instance network for web and database; web alone joins existing core ingress; no DB host port",
     "resource_budget": "2 x 512 MiB, 1 CPU, 256 pids; writable rootfs required by upstream init; no privileged/socket/host paths",
-    "wrapper_lineage": "Pinned LinuxServer BookStack software and native MariaDB retained; Pl adds only private initial administrator bootstrap after native migrations."
+    "wrapper_lineage": "Pinned LinuxServer BookStack software and native MariaDB retained. PL installs a signed NGINX package while preserving LinuxServer configuration and adds private initial administrator bootstrap after native migrations."
   },
   "required_acceptance": [
     "pinned image availability/provenance and native BookStack/PHP/MariaDB version readback",
