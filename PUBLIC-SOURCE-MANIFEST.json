@@ -17129,6 +17129,11 @@
       "size": 4974
     },
     {
+      "path": "docs/releases/0.9.4.json",
+      "sha256": "8a0b24c63abfed123625c90f90ae37cacee78bda837d1abe0cab0bc6c93c3d40",
+      "size": 5216
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -17300,8 +17305,8 @@
     },
     {
       "path": "installer/module-origin.py",
-      "sha256": "59fd1f1d2bf0d503467d5bd50c0db609b5bc5bacc914aabb93af0637e8f29b34",
-      "size": 27563
+      "sha256": "fcf1fb23e05dd0eec229243ea995b4f4bb8cc0fe433d8fc439fc2c5c6b914b44",
+      "size": 27914
     },
     {
       "path": "installer/module-upgrade.py",
@@ -17615,8 +17620,8 @@
     },
     {
       "path": "installer/tests/test_module_origin.py",
-      "sha256": "25467a4246530f7f65196e87e9e02c19ec4c3ec1973ed73b898918d63b80b026",
-      "size": 22546
+      "sha256": "a9add8eb893cdb1e1d1fe724758186a9e0cbea8e0505c8f19d6dd2fc26e1202c",
+      "size": 23229
     },
     {
       "path": "installer/tests/test_module_proxy.py",

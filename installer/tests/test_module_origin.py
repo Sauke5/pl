@@ -175,6 +175,7 @@ class OriginTests(unittest.TestCase):
     def test_bookstack_uses_verified_native_tool_once_then_recreates_web_preserving_keys_and_data(self):
         fixture,parent=self.fixture('bookstack');old,new='https://pl.example','https://new.example:9443'
         c=fixture.controller;before=c.state(fixture.instance);volumes=set(fixture.volumes)
+        web_id = c.inspect(fixture.instance, 'web')['Id']
         native_tool=b'verified pinned upstream command fixture'
         with patch.object(origin,'cp_file',return_value=native_tool),patch.object(origin,'BOOKSTACK_TOOL_HASH',origin.sha(native_tool)),patch.object(origin,'core_sql',return_value=b'0'):
             plan=origin.plan(parent,{'public_url':old},{'public_url':new},False)
@@ -196,8 +197,12 @@ class OriginTests(unittest.TestCase):
         opener=types.SimpleNamespace(open=lambda *args,**kw:Response(b'{"database":true,"cache":true,"session":true}'))
         with patch.object(origin.urllib.request,'build_opener',return_value=opener):origin.apply(parent,plan)
         self.assertEqual(c.state(fixture.instance),{**before,'origin':new});self.assertEqual(set(fixture.volumes),volumes)
-        self.assertEqual([command[7:] for command in commands],[('bookstack:update-url',old+'/wiki',new+'/wiki','--force'),('cache:clear',)])
-        self.assertTrue(all(command[2:4]==('--user','1000:1000') for command in commands))
+        artisan = ('container', 'exec', web_id, '/command/with-contenv', '/command/s6-setuidgid',
+                   'abc', 'php', '/app/www/artisan')
+        self.assertEqual(commands, [
+            (*artisan, 'bookstack:update-url', old + '/wiki', new + '/wiki', '--force'),
+            (*artisan, 'cache:clear'),
+        ])
         self.assertEqual(plan['instances'][0]['recreate'],['web'])
         fixture.calls.clear()
         with patch.object(origin,'cp_file',return_value=b'foreign command'),self.assertRaises(origin.OriginMigrationRequired):
@@ -231,13 +236,22 @@ class OriginTests(unittest.TestCase):
         for changed in (value.replace(b'DOMAIN = old.example',b'DOMAIN = custom.example'),value+b'[server]\n',value.replace(b'ROOT_URL = ',b'OTHER_URL = ')):
             with self.assertRaises(ValueError):origin.gitea_config(changed,old,new)
 
-    def test_container_fences_ignore_only_generated_hostname_and_private_port_number(self):
+    def test_container_fences_allow_generated_hostname_and_private_port_number(self):
         original={'Id':'a'*64,'Image':'sha256:'+'1'*64,'Config':{'Hostname':'a'*12,'Env':['KANEO_API_URL=https://old/doska/api','KANEO_CLIENT_URL=https://old/doska','DOSKA_DIRECTORY_ORIGIN=https://old']},'HostConfig':{'PortBindings':{'1337/tcp':[{'HostIp':'127.0.0.1','HostPort':'32001'}]},'CapDrop':['ALL']},'Mounts':[]}
         after=copy.deepcopy(original);after['Id']='b'*64;after['Config']['Hostname']='b'*12;after['HostConfig']['PortBindings']['1337/tcp'][0]['HostPort']='32002'
         after['Config']['Env']=['KANEO_API_URL=https://new/doska/api','KANEO_CLIENT_URL=https://new/doska','DOSKA_DIRECTORY_ORIGIN=https://new']
         self.assertEqual(origin.next_container_fingerprint(original,'doska','https://new'),origin.container_fingerprint(after))
         changed=copy.deepcopy(after);changed['HostConfig']['CapAdd']=['SYS_ADMIN']
         self.assertNotEqual(origin.container_fingerprint(after),origin.container_fingerprint(changed))
+
+    def test_container_fingerprint_compares_the_docker_oom_default_across_lifecycle_states(self):
+        created = {'HostConfig': {'OomKillDisable': False}}
+        exited = {'HostConfig': {'OomKillDisable': None}}
+        oom_killer_disabled = {'HostConfig': {'OomKillDisable': True}}
+
+        self.assertEqual(origin.container_fingerprint(created), origin.container_fingerprint(exited))
+        self.assertNotEqual(origin.container_fingerprint(created),
+                            origin.container_fingerprint(oom_killer_disabled))
 
     def test_cp_file_refuses_native_symlinks_or_extra_configuration_files(self):
         def archive(symlink=False,extra=False):

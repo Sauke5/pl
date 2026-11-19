@@ -79,11 +79,14 @@ def clear(parent):
 
 
 def container_fingerprint(obj):
-    """Ignore only Docker-generated hostname and assigned loopback port numbers."""
+    """Compare Docker configuration across creation, startup and recreation."""
     config=copy.deepcopy(obj.get('Config',{}))
     hostname=config.get('Hostname','')
     if hostname==obj.get('Id','')[:12]:config['Hostname']=''
     host=copy.deepcopy(obj.get('HostConfig',{}))
+    # Docker can report the default as false or null over the container lifetime.
+    if host.get('OomKillDisable') is None:
+        host['OomKillDisable'] = False
     for bindings in (host.get('PortBindings') or {}).values():
         for binding in bindings or []:
             if binding.get('HostIp')=='127.0.0.1' and (binding.get('HostPort')=='' or str(binding.get('HostPort','')).isdigit()):
@@ -358,8 +361,12 @@ def bookstack_url(parent,item,old,new):
             except (ValueError,OSError,urllib.error.URLError):
                 if time.monotonic()>=deadline:raise ValueError('BookStack readiness before URL migration is unconfirmed') from None
                 time.sleep(.5)
-        parent.docker('container','exec','--user','1000:1000',web['Id'],'php','/app/www/artisan','bookstack:update-url',old+'/wiki',new+'/wiki','--force',timeout=180)
-        parent.docker('container','exec','--user','1000:1000',web['Id'],'php','/app/www/artisan','cache:clear',timeout=60)
+        # LinuxServer resolves FILE__ secrets into the s6 environment before
+        # starting BookStack. Load that environment and use its service account.
+        artisan = ('container', 'exec', web['Id'], '/command/with-contenv', '/command/s6-setuidgid',
+                   'abc', 'php', '/app/www/artisan')
+        parent.docker(*artisan, 'bookstack:update-url', old + '/wiki', new + '/wiki', '--force', timeout=180)
+        parent.docker(*artisan, 'cache:clear', timeout=60)
     finally:
         parent.docker('container','stop','--time','30',web['Id'],database['Id'],timeout=90)
 
