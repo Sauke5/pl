@@ -34,6 +34,8 @@ STORAGE = {'forms': {'mongo', 'keydb'}, 'doska': {'database'},
 IMAGE_FIELDS = {'id', 'architecture', 'ref', 'recipe', 'labels'}
 F12_PXE_LABEL = 'pl.f12.pxe.version'
 IMAGE_DEFAULTS = ('User', 'Env', 'Entrypoint', 'Cmd', 'WorkingDir', 'ExposedPorts', 'Volumes', 'Healthcheck', 'StopSignal')
+NGINX_BUILD_ROLES = {('doska', 'web'), ('wayline', 'gateway')}
+NGINX_BUILD_ENV = {'NGINX_VERSION', 'ACME_VERSION'}
 LEGACY_FINGERPRINT_CORES = {'0.5.0-rc.1', '0.5.1', '0.5.2'}
 NETMAP_TRANSITIONS = (
     ('1.0.0', '1.1.0'), ('1.0.0', '1.2.0'), ('1.1.0', '1.2.0'),
@@ -97,7 +99,24 @@ def _roles(kind, descriptor):
     return result
 
 
-def _transition(parent, kind, old, new):
+def _nginx_env_updates(kind, role, before, after):
+    if ((kind, role) not in NGINX_BUILD_ROLES or not isinstance(before, list)
+            or not isinstance(after, list) or len(before) != len(after)):
+        return {}
+    updates = {}
+    for old, new in zip(before, after):
+        if old == new:
+            continue
+        name, _, old_version = old.partition('=')
+        new_name, _, new_version = new.partition('=')
+        if (name != new_name or name not in NGINX_BUILD_ENV or name in updates
+                or not all(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) for version in (old_version, new_version))):
+            return {}
+        updates[name] = new
+    return updates
+
+
+def _transition(parent, kind, old, new, *, env_updates=None):
     previous, candidate = _roles(kind, old), _roles(kind, new)
     descriptors = {'module_id': kind, 'old_descriptor': old, 'new_descriptor': new}
     pair = _shape_versions(descriptors)
@@ -144,7 +163,12 @@ def _transition(parent, kind, old, new):
                 labels.pop('org.opencontainers.image.version', None)
             values.append({**{k: config.get(k) for k in IMAGE_DEFAULTS}, 'Labels': labels})
         if values[0] != values[1]:
-            raise UnsupportedTransition('Native runtime defaults changed; an explicit migration is required')
+            before, after = (value.pop('Env') for value in values)
+            updates = _nginx_env_updates(kind, role, before, after)
+            if values[0] != values[1] or not updates:
+                raise UnsupportedTransition('Native runtime defaults changed; an explicit migration is required')
+            if env_updates is not None:
+                env_updates[role] = updates
     return changed
 
 
@@ -406,6 +430,11 @@ def _fingerprint_matches(value, obj, expected, *, shape=False):
     return False
 
 
+def _shape_matches(value, obj, spec, direction):
+    expected = spec.get('apply_shape', spec['shape']) if direction == 'apply' else spec['shape']
+    return _fingerprint_matches(value, obj, expected, shape=True)
+
+
 def _owned(parent, kind, instance, obj):
     labels = obj.get('Config', {}).get('Labels') or {}
     if (not re.fullmatch(r'[0-9a-f]{64}', obj.get('Id', ''))
@@ -454,7 +483,8 @@ def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
     state, registry = _registry(parent)
     if registry.get(kind) != old_descriptor:
         raise ValueError('Installed native descriptor changed before module preflight')
-    changed = _transition(parent, kind, old_descriptor, new_descriptor)
+    env_updates = {}
+    changed = _transition(parent, kind, old_descriptor, new_descriptor, env_updates=env_updates)
     paths = _paths(parent, kind)
     result = {'schema': 1, 'fingerprint_version': 2, 'installation': parent.installation, 'root': str(parent.root), 'module_id': kind,
               'core_version': state.get('version'), 'core_manifest_sha256': registry['manifest_sha256'],
@@ -467,6 +497,7 @@ def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
     if not paths and _inventory(parent, kind=kind):
         raise ValueError('Owned module containers have no complete native state')
     c = _controller(parent, kind, old_descriptor) if paths else None
+    shape_options = {'shape': True, 'version_pair': _shape_versions(result), 'pxe_transition': _pxe_transition(result)}
     expected_ids = set()
     for path in paths:
         instance = files.identifier(path.name); native = _state(c, kind, instance)
@@ -498,10 +529,18 @@ def plan(parent, kind, old_descriptor, new_descriptor, *, scoped=False):
             _owned(parent, kind, instance, obj)
             _launch_contract(parent, c, kind, instance, role, native, obj)
             expected_ids.add(obj['Id'])
-            item['containers'].append({'role': role, 'id': obj['Id'], 'name': obj['Name'].removeprefix('/'), 'image': obj['Image'],
+            spec = {'role': role, 'id': obj['Id'], 'name': obj['Name'].removeprefix('/'), 'image': obj['Image'],
                 'running': all(running), 'fingerprint': _fingerprint(obj, kind),
-                'shape': _fingerprint(obj, kind, shape=True, version_pair=_shape_versions(result), pxe_transition=_pxe_transition(result)),
-                'env_sha256': digest(sorted(obj.get('Config', {}).get('Env') or [])), 'mounts_sha256': digest(obj.get('Mounts', []))})
+                'shape': _fingerprint(obj, kind, **shape_options),
+                'env_sha256': digest(sorted(obj.get('Config', {}).get('Env') or [])), 'mounts_sha256': digest(obj.get('Mounts', []))}
+            if role in env_updates:
+                # The running container has passed the exact old launch contract.
+                # Seal the expected new values while retaining the old rollback shape.
+                config = obj['Config']
+                env = [env_updates[role].get(entry.partition('=')[0], entry) for entry in config['Env']]
+                replacement = {**obj, 'Config': {**config, 'Env': env}}
+                spec['apply_shape'] = _fingerprint(replacement, kind, **shape_options)
+            item['containers'].append(spec)
         result['instances'].append(item)
     if {obj['Id'] for obj in _inventory(parent, kind=kind)} != expected_ids:
         raise ValueError('Unplanned or orphaned owned module containers exist')
@@ -611,7 +650,7 @@ def _classify(parent, value, item, spec, obj):
         checked = _inspect(c, value['module_id'], item['instance_id'], spec['role'], spec['name'])
         if (checked is not None and checked['Id'] == obj['Id']
                 and obj['Image'] == _roles(value['module_id'], descriptor)[spec['role']]['id']
-                and _fingerprint_matches(value, obj, spec['shape'], shape=True)):
+                and _shape_matches(value, obj, spec, direction)):
             return 'adopt-' + direction
     raise ValueError('Unproved container cannot be removed or adopted by module rollback')
 
@@ -660,7 +699,7 @@ def _create(parent, value, item, spec, descriptor, direction):
     obj = _inspect(c, kind, instance, role, spec['name'])
     if (obj is None or obj.get('State', {}).get('Running')
             or obj.get('Name') != '/' + spec['name'] or obj['Image'] != _roles(kind, descriptor)[role]['id']
-            or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
+            or not _shape_matches(value, obj, spec, direction)):
         raise ValueError('Native replacement changed its preserved launch contract')
     _remember(parent, value, spec, obj, direction)
     return obj
@@ -718,7 +757,7 @@ def _execute(parent, value, direction):
         for spec in item['containers']:
             obj = _raw(parent, spec['name']); status = _classify(parent, value, item, spec, obj)
             if (obj is not None and direction == 'apply' and status in ('apply', 'adopt-apply')
-                    and not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
+                    and not _shape_matches(value, obj, spec, direction)):
                 raise ValueError('Existing native replacement changed its preserved launch contract')
             checks.append((item, spec, obj, status))
             if obj is not None: objects.append(obj)
@@ -833,7 +872,7 @@ def verify(parent, value, *, direction='apply'):
                                 permitted.add(spec['id'])  # An untouched original needs no reconstruction.
                         if (obj['Id'] not in permitted or obj['Image'] != _roles(kind, descriptor)[spec['role']]['id']
                                 or obj.get('State', {}).get('Running') is not item['running']
-                                or not _fingerprint_matches(value, obj, spec['shape'], shape=True)):
+                                or not _shape_matches(value, obj, spec, direction)):
                             raise ValueError('Native images, ownership or original running state were not preserved')
                     if item['running']:
                         if kind in ('prometheus', 'xray', 'alertmanager', 'syslog', 'f12', 'ocserv'):

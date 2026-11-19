@@ -17139,6 +17139,11 @@
       "size": 782
     },
     {
+      "path": "docs/releases/0.9.6.json",
+      "sha256": "0e9804eab6f4789b99db40c595fcd7ddf0d4efe0e7d718ceddc81a955fe9ce75",
+      "size": 820
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -17315,8 +17320,8 @@
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "8dddbe5e8bdd8ba00b7e76129a3345574e38111d6f14d05c6a15123639ecedf6",
-      "size": 48783
+      "sha256": "5d3ab8eee769632b0fe0a9114b736deac65adb7afb0c2dca9426be7e51fa70bb",
+      "size": 50668
     },
     {
       "path": "installer/netmap-controller.py",
@@ -17640,8 +17645,8 @@
     },
     {
       "path": "installer/tests/test_module_upgrade.py",
-      "sha256": "08158a9439a4f1d3558e8fad67db0b1d184df92cb2b9d21209abd30ef3624830",
-      "size": 54531
+      "sha256": "7d9eda04a81f2ab680bf6d3d030b3a3c4b2c0c251c72a52ed752564caf76db4c",
+      "size": 58223
     },
     {
       "path": "installer/tests/test_native_initial_login.py",

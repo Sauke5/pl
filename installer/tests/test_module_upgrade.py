@@ -401,6 +401,67 @@ class NativeRebuildTests(unittest.TestCase):
                 self.assertFalse(any(call[:2] in (('container', 'stop'), ('container', 'rm'), ('container', 'create')) for call in self.calls))
                 self.images[self.new['api']['id']] = image
 
+    def test_nginx_rebuild_verifies_exact_new_and_rollback_environments(self):
+        old_versions = ['NGINX_VERSION=1.30.6', 'ACME_VERSION=0.4.1']
+        new_versions = ['NGINX_VERSION=1.31.9', 'ACME_VERSION=0.4.2']
+        self.images[self.old['web']['id']]['Config']['Env'].extend(old_versions)
+        self.images[self.new['web']['id']]['Config']['Env'].extend(new_versions)
+        for instance in self.instances:
+            self.containers[self.controller.name(instance, '-web')]['Config']['Env'].extend(old_versions)
+        before_files, data = self.native_files(), copy.deepcopy(self.userdata)
+        database_ids = {self.controller.name(i, '-database'): self.containers[self.controller.name(i, '-database')]['Id']
+                        for i in self.instances}
+
+        value, _ = self.prepare_scoped()
+        upgrade.apply(self.parent, value)
+        for item in value['instances']:
+            if item['running']:
+                for spec in item['containers']:
+                    self.docker('container', 'start', spec['name'])
+        stopped = next(item for item in value['instances'] if not item['running'])
+        web = next(spec for spec in stopped['containers'] if spec['role'] == 'web')
+        config = self.containers[web['name']]['Config']
+        actual = config['Env']
+        self.assertTrue(set(new_versions) <= set(actual))
+        config['Env'] = [entry.replace('ACME_VERSION=0.4.2', 'ACME_VERSION=0.4.3') for entry in actual]
+        with self.assertRaisesRegex(ValueError, 'unconfirmed'):
+            upgrade.verify(self.parent, value)
+        config['Env'] = actual
+        self.assertTrue(upgrade.verify(self.parent, value)['verified'])
+
+        for item in value['instances']:
+            if item['running']:
+                for spec in item['containers']:
+                    self.docker('container', 'stop', spec['name'])
+        self.restore_registry()
+        upgrade.rollback(self.parent, value)
+        for item in value['instances']:
+            for spec in item['containers']:
+                obj = self.containers[spec['name']]
+                if spec['role'] == 'web':
+                    self.assertTrue(set(old_versions) <= set(obj['Config']['Env']))
+                if item['running']:
+                    self.docker('container', 'start', spec['name'])
+        self.assertTrue(upgrade.verify(self.parent, value, direction='rollback')['verified'])
+        self.assertEqual({name: self.containers[name]['Id'] for name in database_ids}, database_ids)
+        self.assertEqual(self.native_files(), before_files)
+        self.assertEqual(self.userdata, data)
+
+    def test_nginx_rebuild_rejects_other_image_defaults_before_stop(self):
+        self.images[self.old['web']['id']]['Config']['Env'] = ['LANG=C.UTF-8', 'NGINX_VERSION=1.30.6', 'ACME_VERSION=0.4.1']
+        new = self.images[self.new['web']['id']]['Config']
+        before = copy.deepcopy(new)
+        new_env = ['LANG=C.UTF-8', 'NGINX_VERSION=1.31.9', 'ACME_VERSION=0.4.2']
+        for update in ({'Env': ['LANG=en_US.UTF-8', *new_env[1:]]}, {'Env': new_env[1:]},
+                       {'Env': [*new_env, 'EXTRA=1']}, {'Env': [*new_env[:2], 'ACME_VERSION=custom']},
+                       {'Env': new_env, 'Entrypoint': ['/custom-entrypoint']}):
+            with self.subTest(update=update):
+                self.images[self.new['web']['id']]['Config'] = {**before, **update}
+                self.calls.clear()
+                with self.assertRaisesRegex(upgrade.UnsupportedTransition, 'runtime defaults'):
+                    upgrade.plan(self.parent, 'doska', self.old, self.new)
+                self.assertTrue(all(call[:2] == ('image', 'inspect') for call in self.calls))
+
     def test_mixed_or_foreign_native_roles_are_rejected_without_any_write(self):
         obj = self.containers[self.controller.name(self.instances[0], '-api')]
         obj['State']['Running'] = False
