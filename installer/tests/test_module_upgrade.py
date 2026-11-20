@@ -158,7 +158,7 @@ class NativeRebuildTests(unittest.TestCase):
                 self.containers[name] = {'Id': identifier, 'Name': '/' + name, 'Image': image, 'Config': config, 'Mounts': mounts,
                     'State': {'Running': False, 'Status': 'created'},
                     'HostConfig': {'PortBindings': ports, 'ReadonlyRootfs': True, 'CapDrop': ['ALL'], 'NetworkMode': network,
-                        'OomKillDisable': False, 'Mounts': host_mounts,
+                        'Dns': None, 'OomKillDisable': False, 'Mounts': host_mounts,
                         'Memory': 512 * 1024**2, 'NanoCpus': 1_000_000_000, 'PidsLimit': 256, 'Init': True,
                         'Tmpfs': dict(args[i + 1].split(':', 1) for i, value in enumerate(args) if value == '--tmpfs'),
                         'LogConfig': {'Type': 'local', 'Config': {'max-size': '1m', 'max-file': '2'}},
@@ -536,6 +536,31 @@ class NativeRebuildTests(unittest.TestCase):
         upgrade.rollback(self.parent, value)
         self.assertFalse(any(call[:2] in (('container', 'rm'), ('container', 'create')) for call in self.calls))
 
+    def test_empty_dns_allows_scoped_update_and_rollback(self):
+        for instance in self.instances:
+            self.containers[self.controller.name(instance, '-web')]['HostConfig']['Dns'] = []
+        files_before, data_before = self.native_files(), copy.deepcopy(self.userdata)
+        plan, _ = self.prepare_scoped()
+        web_shapes = [spec['shape'] for item in plan['instances'] for spec in item['containers'] if spec['role'] == 'web']
+
+        upgrade.apply(self.parent, plan)
+        running = [spec['name'] for item in plan['instances'] if item['running'] for spec in item['containers']]
+        for name in running:
+            self.docker('container', 'start', name)
+        self.assertTrue(upgrade.verify(self.parent, plan)['verified'])
+
+        for name in running:
+            self.docker('container', 'stop', name)
+        self.restore_registry()
+        upgrade.rollback(self.parent, plan)
+        for name in running:
+            self.docker('container', 'start', name)
+        self.assertTrue(upgrade.verify(self.parent, plan, direction='rollback')['verified'])
+        self.assertEqual([spec['shape'] for item in plan['instances'] for spec in item['containers']
+                          if spec['role'] == 'web'], web_shapes)
+        self.assertEqual(self.native_files(), files_before)
+        self.assertEqual(self.userdata, data_before)
+
     def test_new_canonical_ledger_survives_created_false_then_started_null(self):
         value = self.prepare(); self.assertEqual(value['fingerprint_version'], 2)
         upgrade.apply(self.parent, value)
@@ -602,6 +627,30 @@ class NativeRebuildTests(unittest.TestCase):
             self.assertFalse(upgrade._fingerprint_matches(legacy, absent, expected, shape=shape))
         self.assertIsNone(original['HostConfig']['OomKillDisable'])
         self.assertIs(current['HostConfig']['OomKillDisable'], False, 'Fingerprinting must not mutate inspect')
+
+    def test_empty_dns_matches_both_formats_in_existing_fingerprints(self):
+        container = self.containers[self.controller.name(self.instances[0], '-web')]
+        for version in (1, 2):
+            plan = {'fingerprint_version': version, 'module_id': 'doska', 'core_version': '0.5.2'}
+            for shape in (False, True):
+                for old_dns, new_dns in ((None, []), ([], None)):
+                    with self.subTest(version=version, shape=shape, old_dns=old_dns):
+                        original = copy.deepcopy(container)
+                        original['HostConfig'].update(Dns=old_dns, OomKillDisable=None)
+                        expected = upgrade._fingerprint(original, 'doska', shape=shape, version=version)
+                        current = copy.deepcopy(original)
+                        current['HostConfig'].update(Dns=new_dns, OomKillDisable=False)
+                        self.assertTrue(upgrade._fingerprint_matches(plan, current, expected, shape=shape))
+                        self.assertEqual(current['HostConfig']['Dns'], new_dns)
+                        for dns in (['192.0.2.53'], [''], '', False, {}):
+                            drift = copy.deepcopy(current)
+                            drift['HostConfig']['Dns'] = dns
+                            self.assertFalse(upgrade._fingerprint_matches(plan, drift, expected, shape=shape))
+                        drift = copy.deepcopy(current)
+                        del drift['HostConfig']['Dns']
+                        self.assertFalse(upgrade._fingerprint_matches(plan, drift, expected, shape=shape))
+                        drift['HostConfig'].update(Dns=new_dns, CapAdd=['NET_ADMIN'])
+                        self.assertFalse(upgrade._fingerprint_matches(plan, drift, expected, shape=shape))
 
     def test_oom_compatibility_does_not_adopt_ownership_or_launch_contract_drift(self):
         value = self.legacy_prepare(); upgrade.apply(self.parent, value); self.legacy_created_records(value)

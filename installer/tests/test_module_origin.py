@@ -253,6 +253,29 @@ class OriginTests(unittest.TestCase):
         self.assertNotEqual(origin.container_fingerprint(created),
                             origin.container_fingerprint(oom_killer_disabled))
 
+    def test_address_migration_checks_old_plan_with_either_empty_dns_representation(self):
+        original = {'Name': '/wiki-web', 'Id': 'a' * 64, 'Image': 'sha256:' + '1' * 64,
+                    'Config': {'Env': ['APP_URL=https://old.example/wiki']},
+                    'HostConfig': {'Dns': [], 'CapDrop': ['ALL']}, 'Mounts': []}
+        item = {'name': 'wiki-web', 'image': original['Image'],
+                'before': origin.container_fingerprint(original),
+                'after': origin.next_container_fingerprint(original, 'bookstack', 'https://new.example')}
+        observed = copy.deepcopy(original)
+        observed['HostConfig']['Dns'] = None
+        parent = types.SimpleNamespace(docker=lambda *args: json.dumps([observed]))
+
+        self.assertEqual(origin.raw_container(parent, item), observed)
+        observed['Config']['Env'] = ['APP_URL=https://new.example/wiki']
+        self.assertEqual(origin.raw_container(parent, item), observed)
+
+        observed['HostConfig']['CapDrop'] = []
+        with self.assertRaisesRegex(ValueError, 'changed outside the migration plan'):
+            origin.raw_container(parent, item)
+        observed['HostConfig']['CapDrop'] = ['ALL']
+        observed['HostConfig']['Dns'] = ['192.0.2.53']
+        with self.assertRaisesRegex(ValueError, 'changed outside the migration plan'):
+            origin.raw_container(parent, item)
+
     def test_cp_file_refuses_native_symlinks_or_extra_configuration_files(self):
         def archive(symlink=False,extra=False):
             output=io.BytesIO()

@@ -17144,6 +17144,11 @@
       "size": 820
     },
     {
+      "path": "docs/releases/0.9.7.json",
+      "sha256": "0d826ebb9adde404735e8dc28d8d1ae11c9f137051d88f06176d832213562a8f",
+      "size": 1036
+    },
+    {
       "path": "installer/LICENSES.txt",
       "sha256": "23637104cd1e020cbfada2f95cd098e1da0649c7c13da72186f9a524710384f8",
       "size": 4618
@@ -17315,13 +17320,13 @@
     },
     {
       "path": "installer/module-origin.py",
-      "sha256": "fcf1fb23e05dd0eec229243ea995b4f4bb8cc0fe433d8fc439fc2c5c6b914b44",
-      "size": 27914
+      "sha256": "19f1b611bdd475ce1f81bd30631b021ef83efdc324fcb4d5063b4a7f1ae2f15b",
+      "size": 28149
     },
     {
       "path": "installer/module-upgrade.py",
-      "sha256": "5d3ab8eee769632b0fe0a9114b736deac65adb7afb0c2dca9426be7e51fa70bb",
-      "size": 50668
+      "sha256": "7c790662780a2c56b148fae488a0f3a631c1dcd1030a78f068fe589aa5c827fb",
+      "size": 50804
     },
     {
       "path": "installer/netmap-controller.py",
@@ -17630,8 +17635,8 @@
     },
     {
       "path": "installer/tests/test_module_origin.py",
-      "sha256": "a9add8eb893cdb1e1d1fe724758186a9e0cbea8e0505c8f19d6dd2fc26e1202c",
-      "size": 23229
+      "sha256": "5a7b5566f41bf18c85d7aeb0132fdd87e159b7e4b8a1992f11a03bc31191ef31",
+      "size": 24614
     },
     {
       "path": "installer/tests/test_module_proxy.py",
@@ -17645,8 +17650,8 @@
     },
     {
       "path": "installer/tests/test_module_upgrade.py",
-      "sha256": "7d9eda04a81f2ab680bf6d3d030b3a3c4b2c0c251c72a52ed752564caf76db4c",
-      "size": 58223
+      "sha256": "407093f2cac0aa0000f5768eb1965191e9f15681d0ba4e1894e8990818c08611",
+      "size": 61387
     },
     {
       "path": "installer/tests/test_native_initial_login.py",
@@ -17840,8 +17845,8 @@
     },
     {
       "path": "installer/xray-controller.py",
-      "sha256": "5b883cce1c7172dd17dced69fdc3f3f672f0f75b3860decfb91077aeb163c692",
-      "size": 53863
+      "sha256": "3a47693e0a60db26c32cb984c247f5b66bf2bfb24689ffad72c36bc094860376",
+      "size": 54192
     },
     {
       "path": "monitoring/source/it-portal/.dockerignore",

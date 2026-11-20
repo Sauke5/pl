@@ -115,9 +115,13 @@ def raw_container(parent,item):
     if not isinstance(objects,list) or len(objects)!=1:raise ValueError('Native container unavailable')
     obj=objects[0]
     if (obj.get('Name')!='/'+item['name'] or obj.get('Image')!=item['image']
-            or not re.fullmatch(r'[0-9a-f]{64}',obj.get('Id',''))
-            or container_fingerprint(obj) not in {item['before'],item['after']}):
+            or not re.fullmatch(r'[0-9a-f]{64}',obj.get('Id',''))):
         raise ValueError('Native container changed outside the migration plan')
+    expected = {item['before'], item['after']}
+    if container_fingerprint(obj) not in expected:
+        alternate = files.alternate_empty_dns(obj)
+        if alternate is None or container_fingerprint(alternate) not in expected:
+            raise ValueError('Native container changed outside the migration plan')
     return obj
 
 

@@ -41,6 +41,15 @@ def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode() + b'\n'
 
 
+def alternate_empty_dns(obj):
+    """Return the other Docker representation of an unset DNS override."""
+    host = obj.get('HostConfig', {})
+    dns = host.get('Dns')
+    if 'Dns' not in host or not (dns is None or dns == []):
+        return None
+    return {**obj, 'HostConfig': {**host, 'Dns': [] if dns is None else None}}
+
+
 def directory(path, create=True, mode=0o700):
     if path.is_symlink() or (path.exists() and not path.is_dir()):
         raise ValueError('Unsafe Xray directory')

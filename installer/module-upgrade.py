@@ -415,19 +415,28 @@ def _fingerprint(obj, kind, *, shape=False, version=2, version_pair=None, pxe_tr
 
 
 def _fingerprint_matches(value, obj, expected, *, shape=False):
-    version = _fingerprint_version(value); kind = value['module_id']
-    if _fingerprint(obj, kind, shape=shape, version=version, version_pair=_shape_versions(value), pxe_transition=_pxe_transition(value)) == expected:
+    version = _fingerprint_version(value)
+    kind = value['module_id']
+    options = {'shape': shape, 'version': version, 'version_pair': _shape_versions(value),
+               'pxe_transition': _pxe_transition(value)}
+
+    def matches(inspected):
+        if _fingerprint(inspected, kind, **options) == expected:
+            return True
+        host = inspected.get('HostConfig', {})
+        oom = host.get('OomKillDisable')
+        if version != 1 or 'OomKillDisable' not in host or not (oom is None or oom is False):
+            return False
+        # Beta journals can contain either representation of the unset policy.
+        alternate = copy.deepcopy(inspected)
+        alternate['HostConfig']['OomKillDisable'] = False if oom is None else None
+        return _fingerprint(alternate, kind, **options) == expected
+
+    if matches(obj):
         return True
-    if version == 1:
-        host = obj.get('HostConfig', {})
-        if 'OomKillDisable' in host and (host['OomKillDisable'] is None or host['OomKillDisable'] is False):
-            # Existing beta plans contain running-null spec hashes and may also
-            # contain created-false ledger hashes. Read exactly those two forms
-            # without rewriting their authenticated plan or relaxing any ID.
-            alternate = copy.deepcopy(obj)
-            alternate['HostConfig']['OomKillDisable'] = False if host['OomKillDisable'] is None else None
-            return _fingerprint(alternate, kind, shape=shape, version=1) == expected
-    return False
+    # Preserve the hashes already recorded in plans and checkpoints.
+    alternate = files.alternate_empty_dns(obj)
+    return alternate is not None and matches(alternate)
 
 
 def _shape_matches(value, obj, spec, direction):
